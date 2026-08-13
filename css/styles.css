@@ -1,0 +1,369 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #87CEEB;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    touch-action: none;
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+canvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    background-color: #87CEEB;
+}
+
+#painel-comandos, #painel-direito {
+    position: absolute;
+    top: 20px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e2e8f0;
+    box-sizing: border-box;
+    width: 192px;
+    z-index: 10;
+    max-height: 92vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#painel-comandos {
+    left: 20px;
+}
+
+#painel-direito {
+    right: 20px;
+}
+
+#painel-comandos::-webkit-scrollbar, #painel-direito::-webkit-scrollbar {
+    display: none;
+}
+
+/* --- Cabeçalho do painel + minimizar/maximizar --- */
+
+#painel-cabecalho, #painel-direito-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+#painel-cabecalho h2, #painel-direito-cabecalho h2 {
+    margin: 0;
+    flex: 1;
+    border-bottom: 2px solid #ef4444;
+}
+
+#btn-painel, #btn-painel-direito {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    line-height: 1;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: #475569;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.15s;
+}
+
+#btn-painel:hover, #btn-painel-direito:hover {
+    background: #cbd5e1;
+    color: #1e293b;
+}
+
+/* Estado minimizado: só sobra a barra de título. */
+#painel-comandos.minimizado, #painel-direito.minimizado {
+    width: auto;
+    padding: 10px 12px;
+    max-height: none;
+    overflow: visible;
+}
+
+#painel-comandos.minimizado #painel-conteudo, #painel-direito.minimizado #painel-direito-conteudo {
+    display: none;
+}
+
+#painel-comandos.minimizado #painel-cabecalho h2, #painel-direito.minimizado #painel-direito-cabecalho h2 {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+/* --- Painel PlayerBT Debug: árvore/condições/nó activo em tempo real --- */
+
+#painel-playerbt {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    background: rgba(15, 23, 42, 0.94);
+    color: #e2e8f0;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    border: 1px solid #334155;
+    box-sizing: border-box;
+    width: 420px;
+    max-height: 40vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    z-index: 10;
+}
+
+#painel-playerbt::-webkit-scrollbar { display: none; }
+
+#painel-playerbt-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+#painel-playerbt-cabecalho h2 {
+    margin: 0;
+    flex: 1;
+    color: #e2e8f0;
+    border-bottom: 2px solid #ef4444;
+}
+
+#btn-painel-playerbt {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    line-height: 1;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: #e2e8f0;
+    background: #334155;
+    border: 1px solid #475569;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.15s;
+}
+
+#btn-painel-playerbt:hover {
+    background: #475569;
+}
+
+#painel-playerbt.minimizado {
+    width: auto;
+    padding: 10px 12px;
+    max-height: none;
+    overflow: visible;
+}
+
+#painel-playerbt.minimizado #painel-playerbt-conteudo {
+    display: none;
+}
+
+#painel-playerbt.minimizado #painel-playerbt-cabecalho h2 {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+#painel-playerbt-conteudo {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.btdebug-col {
+    flex: 1;
+    min-width: 0;
+}
+
+.btdebug-col h3 {
+    margin: 0 0 4px 0;
+    font-size: 11px;
+    color: #93c5fd;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#painel-playerbt-conteudo pre {
+    margin: 0;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 32vh;
+    overflow-y: auto;
+}
+
+h2 {
+    margin: 8px 0 3px 0;
+    font-size: 11px;
+    color: #1e293b;
+    font-weight: 800;
+    text-transform: uppercase;
+    border-bottom: 2px solid #3b82f6;
+    padding-bottom: 2px;
+    letter-spacing: 0;
+    word-break: break-word;
+}
+
+.linha-sep {
+    border: 0;
+    border-top: 1px solid #e2e8f0;
+    margin: 8px 0;
+}
+
+label {
+    font-size: 9px;
+    font-weight: bold;
+    color: #475569;
+    display: block;
+    margin-top: 4px;
+    margin-bottom: 1px;
+    line-height: 1.25;
+}
+
+select,
+input[type=range] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 2px 3px;
+    margin-bottom: 2px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+.val-skill {
+    color: #3b82f6;
+    font-size: 9px;
+    float: right;
+    font-weight: bold;
+}
+
+.btn-sector {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 2px;
+    font-size: 9px;
+    background: #94a3b8;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: center;
+    font-weight: bold;
+    transition: 0.2s;
+    border-radius: 4px;
+}
+
+.btn-sector.active {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-sector:hover {
+    opacity: 0.9;
+}
+
+button.btn-action {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 3px;
+    font-size: 10px;
+    line-height: 1.2;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button.btn-action:hover {
+    background: #059669;
+}
+
+button.btn-action:active {
+    transform: scale(0.95);
+}
+
+#alerta-golo {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    font-size: 80px;
+    font-weight: 900;
+    color: #f59e0b;
+    text-shadow: 4px 4px 0px #ef4444, 0 0 30px rgba(245, 158, 11, 0.8);
+    font-style: italic;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 100;
+}
+
+#hud-info {
+    /* Retirados absolute, top e right. O container fica normal dentro do novo painel */
+    background: transparent;
+    color: #475569;
+    padding: 0;
+    border-radius: 0;
+    font-family: monospace;
+    font-size: 11px;
+    pointer-events: none;
+    border: none;
+}
+
+#hud-paused {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    color: #f59e0b;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 14px;
+    z-index: 100;
+    pointer-events: none;
+    border: 1px solid #f59e0b;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    display: none;
+}
+
+#placar {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    color: #ecf0f1;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 16px;
+    z-index: 100;
+    pointer-events: none;
+    border: 1px solid #ecf0f1;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    font-variant-numeric: tabular-nums;
+}
