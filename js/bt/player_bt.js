@@ -141,17 +141,29 @@ function findThroughBall(ctx) {
         const dist = p.model.position.distanceTo(mateAlvo);
         if (dist < 12 || dist > PassModel.throughBallMaxDist) continue;
 
-        // Espaço livre à frente dele: nenhum adversário entre ele e o alvo.
-        const alvoZ = (linhaNoNosso + PassModel.throughBallDepth) * p.dirZ;
-        const alvoX = mateAlvo.x * 0.85;
-        _v1.set(alvoX, 0, alvoZ);
+        // Espaço livre à frente dele. Com a grid espacial, em vez de só
+        // testar "está livre?" num ponto fixo (mateAlvo.x*0.85), procura o
+        // centro do espaço mais livre ali perto e mira nesse ponto — o
+        // lançamento passa a ir para o espaço de verdade, não uma
+        // aproximação. Sem a grid, cai no loop antigo sobre os adversários.
+        let alvoZ = (linhaNoNosso + PassModel.throughBallDepth) * p.dirZ;
+        let alvoX = mateAlvo.x * 0.85;
+        const oppTeamKey = (p.team === 'TeamA') ? 'TeamB' : 'TeamA';
 
-        let livre = true;
-        for (const opp of ctx.opponents) {
-            if (opp.role === 'gk') continue;
-            if (opp.model.position.distanceTo(_v1) < 6.0) { livre = false; break; }
+        if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
+            const livreSpot = SpatialGrid.findFreeSpace(alvoX, alvoZ, 6, oppTeamKey);
+            if (!livreSpot) continue;
+            if (SpatialGrid.occupancy(livreSpot.x, livreSpot.z, 1, oppTeamKey) > 0) continue;
+            alvoX = livreSpot.x; alvoZ = livreSpot.z;
+        } else {
+            _v1.set(alvoX, 0, alvoZ);
+            let livre = true;
+            for (const opp of ctx.opponents) {
+                if (opp.role === 'gk') continue;
+                if (opp.model.position.distanceTo(_v1) < 6.0) { livre = false; break; }
+            }
+            if (!livre) continue;
         }
-        if (!livre) continue;
 
         const nota = 100 - dist * 0.5 + (linhaNoNosso - mateZ) * 2.0;
         if (nota > melhorNota) { melhorNota = nota; melhor = { mate: mate, alvoX: alvoX, alvoZ: alvoZ }; }

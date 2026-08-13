@@ -987,7 +987,28 @@ class FootballPlayer {
                 // logo a seguir ao próprio chute.
                 let isCross = (Match.ballVel.y > 2.0 && Match.ball.position.y > 1.2 && Math.abs(Match.ball.position.z) > 24 && !Match.ballCarrier && Match.lastTouchedPlayer !== this);
 
-                if (isCross) {
+                /*
+                Bola solta, lenta, perto dele — passe atrás do próprio time
+                ou bola perdida do adversário, tanto faz: ele SEMPRE apanha
+                com as mãos, nunca controla com o pé. Antes isto só existia
+                dentro do ramo "!isAttacking && bolaNaArea" — um passe atrás
+                enquanto o próprio time tinha posse nunca disparava o
+                'apanhar', e a bola acabava só grudada ao pé dele (resolvida
+                por resolveBallContact() como qualquer jogador de linha).
+                */
+                const semDono = !Match.ballCarrier;
+                const mansinha = Match.ballVel.length() < BallControl.easySpeed;
+                const distBolaAgora = gkCorpo.position.distanceTo(Match.ball.position);
+
+                if (semDono && mansinha && distBolaAgora < 10.0) {
+                    alvoGkX = Match.ball.position.x;
+                    alvoGkZ = Match.ball.position.z;
+                    speedLerp = 5.5;
+                    if (distBolaAgora < 1.2) {
+                        this.gkEstado = 'apanhar';
+                        this.gkTempoMergulho = 0;
+                    }
+                } else if (isCross) {
                     alvoGkZ = ownGoalZCenter(this.team) + (Match.ball.position.z - ownGoalZCenter(this.team)) * 0.55;
                     alvoGkX = Match.ball.position.x * 0.65;
                     speedLerp = 4.0;
@@ -1294,6 +1315,7 @@ class FootballPlayer {
             gkCorpo.rotation.y = lerpTo(gkCorpo.rotation.y, rotAlvo, 0.06);
 
             if (t >= GoalkeeperPose.segurarDur) {
+                this.releaseFromHands();
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
             }
@@ -1319,6 +1341,39 @@ class FootballPlayer {
         window.bolaChutada = false;
         this.gkEstado = 'segurando';
         this.gkTempoMergulho = 0;
+    }
+
+    /*
+    Fim dos 8s de espera com a bola na mão: só duas opções a partir daqui —
+    passe curto para um companheiro próximo sem pressão, ou chutão pra
+    frente se houver adversário perto. Nunca controla com o pé.
+    */
+    releaseFromHands() {
+        const opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        let distAdversarioMaisPerto = 999;
+        for (const opp of opponents) {
+            if (opp.role === 'gk') continue;
+            const d = this.model.position.distanceTo(opp.model.position);
+            if (d < distAdversarioMaisPerto) distAdversarioMaisPerto = d;
+        }
+        const semPressao = distAdversarioMaisPerto > 10.0;
+
+        const alvo = semPressao ? (this.findPassTarget('def') || this.findPassTarget('mid')) : null;
+        if (alvo) {
+            const alvoPos = alvoDePasse(alvo);
+            _v1.set(alvoPos.x, 0, alvoPos.z);
+            const dist = this.model.position.distanceTo(_v1);
+            _v2.subVectors(_v1, this.model.position).normalize();
+            Match.ballVel.copy(_v2).multiplyScalar(Math.max(10.0, dist * 1.1));
+            Match.ballVel.y = 0.5;
+            this.hasBall = false;
+            this.touchLock = BallControl.touchLock;
+            Match.ballCarrier = null;
+            Match.intendedReceiver = alvo;
+            if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'curto');
+        } else {
+            this.puntBall();
+        }
     }
 }
 

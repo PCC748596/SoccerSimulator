@@ -775,7 +775,7 @@ const Match = {
         }
         
         this.updateBall();
-        if (typeof SpatialGrid !== 'undefined') SpatialGrid.update();
+        if (typeof SpatialGrid !== 'undefined') SpatialGrid.update(dt);
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);
         this.runTeamAI();
 
@@ -1023,8 +1023,9 @@ const Match = {
         let bestDist = 999;
         const considerar = (p) => {
             if (p.touchLock > 0) return;
-            // O guarda-redes não disputa bola rápida por aqui — isso é updateGK().
-            if (p.role === 'gk' && speed >= BallControl.easySpeed) return;
+            // O guarda-redes nunca controla a bola com o pé por aqui — só
+            // apanha com as mãos, sempre via updateGK() (gkEstado 'apanhar').
+            if (p.role === 'gk') return;
             const d = p.model.position.distanceTo(this.ball.position);
             if (d < bestDist) { bestDist = d; best = p; }
         };

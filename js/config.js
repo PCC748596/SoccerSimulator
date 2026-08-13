@@ -621,7 +621,15 @@ cobrir — têm de tapar o caminho da baliza. A linha fechava 30.3 m com a bola 
 centro contra 31.6 m com ela na ala, ou seja praticamente nada.
 */
 const MarkingModel = {
-    distancia: 2.2,       // metros do atacante, do lado da baliza
+    /*
+    distancia agora depende do Defensive Pressure (painel esquerdo) — Low
+    marca mais solto (4m), High mais colado (2m). Antes era um valor fixo
+    (2.2) que ignorava esse ajuste por completo.
+    */
+    distanciaPorPressao: { low: 4.0, balanced: 3.0, high: 2.0 },
+    get distancia() {
+        return this.distanciaPorPressao[Tatics.pressaoDefensiva] ?? this.distanciaPorPressao.balanced;
+    },
 
     /*
     biasMax / coberturaBiasMax — o quanto a marcação pode desviar o jogador
@@ -638,9 +646,19 @@ const MarkingModel = {
 
     Agora a marcação é sempre um DESVIO limitado a estes metros, tal como
     `desviar()` nas folhas ofensivas — o TeamBT continua a mandar, a
-    marcação só o inclina.
+    marcação só o inclina. Só que com um tecto fixo de 5m, quando o SLOT
+    zonal (bloco/linha) ainda não tinha alcançado o atacante que acabou de
+    receber um passe — o que demora, a linha tem tecto e lag próprios — a
+    correcção nunca fechava a distância: o marcador ficava sempre uns
+    metros curto, e se o slot recuava (bloco a reorganizar) o alvo parecia
+    "fugir" mesmo com marcingTarget correcto. Sob pressão mais alta o
+    marcador pode quebrar mais forma pra ficar colado; sob Low, menos.
     */
-    biasMax: 5.0,          // marcação directa (defendZonal, defendCB, defendFullBack)
+    biasMaxPorPressao: { low: 5.0, balanced: 7.0, high: 10.0 },
+    get biasMax() {
+        return this.biasMaxPorPressao[Tatics.pressaoDefensiva] ?? this.biasMaxPorPressao.balanced;
+    },
+
     coberturaBiasMax: 6.0, // cair para cobertura/eixo (mais folga: é reposicionamento, não marcação)
 
     larguraCentro: 0.35,  // factor de largura da última linha com a bola no eixo
@@ -749,31 +767,39 @@ const Tatics = {
     pressaoDefensiva: 'balanced',
     setores: ['esq', 'dir'],
 
+    // Cada sector liga/desliga independentemente agora (antes era sempre
+    // exactamente 2 de 3, um forçava o outro a sair) — nunca deixa ficar
+    // com zero activos.
     toggleSector: function (sector) {
-        if (this.setores.includes(sector)) {
-            return;
+        const idx = this.setores.indexOf(sector);
+        if (idx >= 0) {
+            if (this.setores.length <= 1) return;
+            this.setores.splice(idx, 1);
+        } else {
+            this.setores.push(sector);
         }
-        const removed = this.setores.shift();
-        const removedEl = document.getElementById('sec-' + removed);
-        if (removedEl) removedEl.classList.remove('active');
-
-        this.setores.push(sector);
-        const activeEl = document.getElementById('sec-' + sector);
-        if (activeEl) activeEl.classList.add('active');
+        const el = document.getElementById('sec-' + sector);
+        if (el) el.classList.toggle('active', this.setores.includes(sector));
         Match.assignFormations();
     },
 
+    /*
+    Sector activado tem 80% de chance contra um desactivado; entre dois
+    activados é 50/50 (é só escolher ao calhas dentro do grupo activo).
+    Se o centro estiver desactivado, ele só aparece nos 20% "desactivados"
+    — na prática vira passagem de troca de lado, não destino, porque o
+    carryTargetX é re-sorteado a cada ~1s (ver CARRY em fsm.js) e volta a
+    puxar para esq/dir quase de seguida.
+    */
     getWeightedSectorX: function (teamDir = 1) {
-        const r = Math.random();
-        let chosenSector = 'cen';
+        const todos = ['esq', 'cen', 'dir'];
+        const activos = todos.filter(s => this.setores.includes(s));
+        const inactivos = todos.filter(s => !this.setores.includes(s));
 
-        if (this.setores.includes('esq') && this.setores.includes('dir')) {
-            chosenSector = (r < 0.5) ? 'esq' : 'dir';
-        } else if (this.setores.includes('esq') && this.setores.includes('cen')) {
-            chosenSector = (r < 0.5) ? 'esq' : 'cen';
-        } else if (this.setores.includes('dir') && this.setores.includes('cen')) {
-            chosenSector = (r < 0.5) ? 'dir' : 'cen';
-        }
+        let pool = activos.length ? activos : todos;
+        if (inactivos.length > 0 && Math.random() > 0.8) pool = inactivos;
+
+        const chosenSector = pool[Math.floor(Math.random() * pool.length)];
 
         if (chosenSector === 'esq') {
             return -19 * teamDir + (Math.random() - 0.5) * 8;
