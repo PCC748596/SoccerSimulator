@@ -775,6 +775,7 @@ const Match = {
         }
         
         this.updateBall();
+        if (typeof SpatialGrid !== 'undefined') SpatialGrid.update();
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);
         this.runTeamAI();
 

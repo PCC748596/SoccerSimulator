@@ -161,6 +161,13 @@ function togglePositionBT() {
     }
 }
 
+function toggleSpatialGrid() {
+    if (typeof SpatialGrid === 'undefined') return;
+    SpatialGrid.setDebug(!SpatialGrid.debug);
+    document.getElementById('btn-spatialgrid').innerText = 'Spatial Grid: ' + (SpatialGrid.debug ? 'ON' : 'OFF');
+    document.getElementById('btn-spatialgrid').classList.toggle('active', SpatialGrid.debug);
+}
+
 // Dispara a simulação em lote a partir do botão do painel — parâmetros
 // modestos por omissão para não prender a página por muito tempo; para
 // lotes maiores, usar Sim.run({...}) directamente na consola.

@@ -150,6 +150,7 @@
                 <button type="button" class="btn-sector" id="btn-playerpos" onclick="togglePlayerPOS()">PlayerPOS: OFF</button>
                 <button type="button" class="btn-sector" id="btn-teambtpos" onclick="toggleTeamBTPos()">Team BT POS: OFF</button>
                 <button type="button" class="btn-sector" id="btn-positionbt" onclick="togglePositionBT()">Position BT: OFF</button>
+                <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">Spatial Grid: OFF</button>
             </div>
 
             <hr class="linha-sep">
@@ -200,6 +201,9 @@
 
     <!-- Perception System: informa o BT, não decide (ver js/perception.js) -->
     <script src="js/perception.js"></script>
+
+    <!-- Grid espacial do campo (2x2m), usada pra achar espaço livre / ocupação -->
+    <script src="js/spatial_grid.js"></script>
 
     <!-- Decisão em 3 níveis: equipa -> posição -> jogador -->
     <script src="js/bt/core.js"></script>
