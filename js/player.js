@@ -415,6 +415,26 @@ class FootballPlayer {
         if (this.touchLock > 0) this.touchLock = Math.max(0, this.touchLock - dt);
 
         /*
+        Freeze do kickoff: runBehaviorTree/fsm ficavam a correr por jogador
+        mesmo com o Match.runTeamAI() travado (Match.update trava só o nível
+        de equipa), e o PlayerBT sozinho já reposicionava toda a gente —
+        incluindo o taker/apoio, que se afastavam da bola antes do toque
+        inicial. Aqui pára tudo: sem decisão, sem movimento, só idle.
+        */
+        if (Match.kickoffActive) {
+            this.velocity.set(0, 0, 0);
+            // Bola fica presa no centro (não gruda no pé do taker) — ele fica
+            // só encostado. O lerp para o pé (usado no jogo normal) ia
+            // arrastando a bola do centro pra fora durante os 4s de espera.
+            // GK usa pose própria (updateGK), não o animateBones de jogador
+            // de campo — chamá-lo aqui deixava o guarda-redes preso na pose
+            // de mergulho/salto anterior (ajoelhado, de costas).
+            if (this.role === 'gk') this.resetBonesToDefault();
+            else this.animateBones(dt);
+            return;
+        }
+
+        /*
         decisionTimer só reinicia numa posse NOVA (bola perdida para o
         adversário, ou primeira vez que a apanha) — não a cada toque de
         condução do CARRY. O toque solta hasBall por um instante
@@ -951,7 +971,11 @@ class FootballPlayer {
                 let isAttacking = (Match.possessionTeam === this.team);
                 let bolaNaArea = (Math.abs(Match.ball.position.x) < 20.16 && Match.ball.position.z * this.dirZ < -36.5);
                 
-                let isCross = (Match.ballVel.y > 2.0 && Match.ball.position.y > 1.2 && Math.abs(Match.ball.position.z) > 24 && !Match.ballCarrier);
+                // Exclui a bola que ele mesmo acabou de chutar (relançamento/
+                // reposição) — sem isto, um pontapé de baliza contava como
+                // cruzamento a entrar na própria área e o GK saltava/mergulhava
+                // logo a seguir ao próprio chute.
+                let isCross = (Match.ballVel.y > 2.0 && Match.ball.position.y > 1.2 && Math.abs(Match.ball.position.z) > 24 && !Match.ballCarrier && Match.lastTouchedPlayer !== this);
 
                 if (isCross) {
                     alvoGkZ = ownGoalZCenter(this.team) + (Match.ball.position.z - ownGoalZCenter(this.team)) * 0.55;

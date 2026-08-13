@@ -472,6 +472,19 @@ const PlayerBT = sel('PlayerRoot',
                     const alcanceDesarme = (p.pos === 'CB') ? 2.8 : 2.5;
                     if (d < alcanceDesarme || d >= 4.5) return false;
 
+                    // Só entra de frente (0-45°) ou de lado (45-90°) em relação
+                    // à direcção de movimento do portador — carrinho por trás
+                    // não vale (ficava dando de costas, longe da bola).
+                    const carrierDir = c.velocity.lengthSq() > 0.1
+                        ? c.velocity.clone().normalize()
+                        : new THREE.Vector3(0, 0, 1).applyQuaternion(c.model.quaternion);
+                    const toDefensor = new THREE.Vector3().subVectors(p.model.position, c.model.position);
+                    toDefensor.y = 0;
+                    if (toDefensor.lengthSq() < 0.0001) return false;
+                    toDefensor.normalize();
+                    const angulo = carrierDir.angleTo(toDefensor);
+                    if (angulo > Math.PI / 2) return false;
+
                     let taxa = 0;
                     if (p.pos === 'CB') taxa = 8.4;
                     else if (p.pos === 'LB' || p.pos === 'RB') taxa = 6.6;

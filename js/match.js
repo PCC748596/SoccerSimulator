@@ -617,11 +617,11 @@ const Match = {
         this.ball.position.set(0, 0.15, 0);
 
         this.players[0].model.position.set(0, ALTURA_BASE_Y, -48);
-        this.players[0].model.rotation.y = 0;
+        lookAtBola(this.players[0].model, this.ball.position);
         this.players[0].fsm.changeState('IDLE');
 
         this.opponents[0].model.position.set(0, ALTURA_BASE_Y, 48);
-        this.opponents[0].model.rotation.y = Math.PI;
+        lookAtBola(this.opponents[0].model, this.ball.position);
         this.opponents[0].fsm.changeState('IDLE');
 
         // Reset do estado por-instância de cada GK.
@@ -644,9 +644,21 @@ const Match = {
                 p.isCross = false;
                 if (p.role !== 'gk') {
                     let z = p.baseTarget.z;
+                    if (p.role === 'def') {
+                        // Linha de defesa respeita o ajuste "Linha Defensiva"
+                        // do painel também na saída, não só durante o jogo —
+                        // TeamShape.linhaDefensiva está no referencial de
+                        // ataque, por isso converte para mundo por *dir.
+                        const cap = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
+                        z = cap * dir;
+                    }
                     if (z * dir > -margem) z = -margem * dir; // força para o campo de defesa
                     p.model.position.set(p.baseTarget.x, ALTURA_BASE_Y, z);
                     p.hasBall = false;
+                    // Sem isto ficavam com a rotação da jogada anterior — de
+                    // costas, de lado, o que calhasse — em vez de virados
+                    // para a bola antes do kickoff.
+                    lookAtBola(p.model, this.ball.position);
                 }
                 // dynamicTarget é o que o MOVE_TO_POS persegue (steerArrive);
                 // sem isto ele ficava com o alvo antigo da jogada anterior e
@@ -665,17 +677,48 @@ const Match = {
 
         const atacantes = takerList.filter(p => p.role === 'atk');
         const taker = atacantes[0] || takerList.find(p => p.role !== 'gk');
-        const apoio = atacantes[1] || takerList.find(p => p.role === 'mid');
+
+        // Apoio sorteado entre o outro atacante e os meio-campistas — cada
+        // saída escolhe um companheiro diferente, não sempre o mesmo.
+        const candidatosApoio = takerList.filter(p => p !== taker && (p.role === 'atk' || p.role === 'mid'));
+        const apoio = candidatosApoio.length
+            ? candidatosApoio[Math.floor(Math.random() * candidatosApoio.length)]
+            : takerList.find(p => p.role === 'mid');
 
         if (taker) {
-            taker.model.position.set(0.5, ALTURA_BASE_Y, -attDir * 0.5);
+            // Ele é quem dá a saída — pode ficar no campo de ataque, encostado
+            // à bola (~0.4m), diferente do resto da equipa que fica atrás.
+            taker.model.position.set(0, ALTURA_BASE_Y, attDir * 0.4);
             taker.fsm.changeState('IDLE');
         }
         if (apoio) {
-            apoio.model.position.set(-0.5, ALTURA_BASE_Y, -attDir * 4);
+            // Posição varia a cada saída — perto do taker, mas nunca igual.
+            const apoioX = (Math.random() - 0.5) * 6;
+            const apoioDist = 3 + Math.random() * 3;
+            apoio.model.position.set(apoioX, ALTURA_BASE_Y, -attDir * apoioDist);
             apoio.fsm.changeState('IDLE');
+            lookAtBola(apoio.model, this.ball.position);
+            // alvoDePasse mira o tacticalTarget do BT (posição da jogada
+            // ANTERIOR, ainda não recalculada) em vez de onde ele está agora
+            // — sem isto o passe de saída ia para o meio do campo adversário.
+            apoio.tacticalTarget = apoio.model.position.clone();
         }
         if (taker) lookAtBola(taker.model, apoio ? apoio.model.position : this.ball.position);
+
+        // Time que NÃO dá a saída fica todo fora do círculo central — só o
+        // taker (e o apoio, na prática) podem ficar perto da bola.
+        const raioCirculo = 9.15 + 0.5;
+        const naoKickList = startA ? this.opponents : this.players;
+        naoKickList.forEach(p => {
+            if (p.role === 'gk') return;
+            const pos = p.model.position;
+            const dist = Math.hypot(pos.x, pos.z);
+            if (dist < raioCirculo && dist > 0.001) {
+                const k = raioCirculo / dist;
+                pos.x *= k; pos.z *= k;
+                p.dynamicTarget = pos.clone();
+            }
+        });
 
         this.ballCarrier = taker || takerList[0];
         this.lastTouchedTeam = startA ? 'TeamA' : 'TeamB';
@@ -1327,12 +1370,14 @@ const Match = {
             let defGK = defendingPlayers.find(p => p.role === 'gk');
             if (defGK) {
                 defGK.model.position.set(0, ALTURA_BASE_Y, flagZ);
+                lookAtBola(defGK.model, this.ball.position);
                 defGK.fsm.changeState('SET_PIECE_WAIT');
             }
 
             let attGK = attackingPlayers.find(p => p.role === 'gk');
             if (attGK) {
                 attGK.model.position.set(0, ALTURA_BASE_Y, -flagZ);
+                lookAtBola(attGK.model, this.ball.position);
                 attGK.fsm.changeState('SET_PIECE_WAIT');
             }
 
@@ -1355,6 +1400,18 @@ const Match = {
             taker.model.position.set(0, ALTURA_BASE_Y, kickZ - defDir * 1.5);
             lookAtBola(taker.model, new THREE.Vector3(0, ALTURA_BASE_Y, kickZ));
             taker.fsm.changeState('SET_PIECE_TAKER');
+
+            // O GR de quem NÃO bate fica parado no seu próprio lugar durante
+            // o pontapé de baliza — mas sem isto ele ficava preso no estado
+            // (e na rotação) que tinha em IDLE antes do lance ser assinalado,
+            // já que agora Match.state === 'GOAL_KICK' tira-o do updateGK e
+            // ninguém mais o mandava olhar para a bola nem mudava o estado.
+            let defGK = defendingPlayers.find(p => p.role === 'gk');
+            if (defGK) {
+                lookAtBola(defGK.model, this.ball.position);
+                defGK.fsm.changeState('SET_PIECE_WAIT');
+                defGK.dynamicTarget.copy(defGK.model.position);
+            }
 
             let defenders = defendingPlayers.filter(p => p.role !== 'gk');
             // Todos a pelo menos 18m do ponto do pontapé — a área tem 16.5m

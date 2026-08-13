@@ -344,6 +344,10 @@ class PlayerFSM {
                     Match.ballCarrier = null;
                     Match.ballVel.copy(forward).multiplyScalar(touchPow);
                     Match.ballVel.y = 0;
+                    // Empurrão extra fixo, à parte da velocidade — a bola cai
+                    // uns 0.5m mais à frente do jogador logo no toque, e não
+                    // só depende do quanto ela desliza depois pela física.
+                    Match.ball.position.add(forward.clone().multiplyScalar(0.5));
                     Match.lastTouchedTeam = p.team;
                     Match.lastTouchedPlayer = p;
                     window.bolaChutada = false;
