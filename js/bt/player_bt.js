@@ -314,11 +314,13 @@ function actHoldPosition(ctx) {
     ficar tudo escondido atrás de "MOVE_TO_POS":
         marcando um adversário específico  -> MARKING
         sem par, a fechar a linha da bola  -> BLOCKING (p.isCovering)
-        equipa tem a bola, sem ser o portador -> SUPPORT
+        equipa tem a bola, à frente dela    -> FWR_SUPPORT
+        equipa tem a bola, atrás dela       -> AFT_SUPPORT
         resto (posição genérica, fora de fase de bola) -> MOVE_TO_POS
     */
     if (ctx.bb && ctx.bb.isAttacking) {
-        p.fsm.changeState('SUPPORT');
+        // zoneAhead/ballZ já no referencial de ataque — comparação directa.
+        p.fsm.changeState(ctx.zoneAhead > ctx.bb.ballZ ? 'FWR_SUPPORT' : 'AFT_SUPPORT');
     } else if (p.markingTarget) {
         p.fsm.changeState('MARKING');
     } else if (p.isCovering) {

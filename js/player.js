@@ -216,13 +216,20 @@ class FootballPlayer {
             let optPos = alvoDePasse(opt);
             let dist = this.model.position.distanceTo(optPos);
 
+            /*
+            Tectos de distância eram curtos demais (46m no balanceado) para
+            um campo de 106m — um atacante completamente livre mas longe
+            (ex.: CARRY ainda no meio-campo, CF já lançado lá à frente)
+            nunca sequer ENTRAVA na lista de candidatos, por mais aberto que
+            estivesse. Alargado para cobrir o campo quase todo.
+            */
             let inStyleRange = false;
             if (Tatics.passe === 'curto') {
-                inStyleRange = (dist >= 3.0 && dist <= 28.0);
+                inStyleRange = (dist >= 3.0 && dist <= 32.0);
             } else if (Tatics.passe === 'longo') {
-                inStyleRange = (dist >= 20.0 && dist <= 55.0);
+                inStyleRange = (dist >= 20.0 && dist <= 70.0);
             } else {
-                inStyleRange = (dist >= 4.0 && dist <= 46.0);
+                inStyleRange = (dist >= 4.0 && dist <= 60.0);
             }
             if (!inStyleRange) continue;
 
@@ -242,7 +249,14 @@ class FootballPlayer {
 
             let score = 100;
 
-            score += Math.min(50, (minOppDist - safetyLimit) * 15);
+            /*
+            Bónus por estar livre de marcação — era Math.min(50, ...), um
+            teto que tratava "levemente livre" e "completamente sozinho no
+            campo" quase da mesma forma. Pedido explícito: quem está sem
+            marcação tem de ter pontuação de passe GRANDE, não só "um pouco
+            melhor". Tecto subido para 110 e a inclinação mais acentuada.
+            */
+            score += Math.min(110, (minOppDist - safetyLimit) * 22);
 
             let optSec = getSectorOfX(optPos.x);
             if (Tatics.setores.includes(optSec)) {

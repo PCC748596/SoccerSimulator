@@ -203,15 +203,18 @@ class PlayerFSM {
                 p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
                 break;
             /*
-            MARKING / BLOCKING / SUPPORT — mesma locomoção do MOVE_TO_POS
-            (o alvo já vem calculado do nível 2: marcar(), cobertura ou
-            posicionamento de apoio). Estados próprios só para aparecerem
-            como tal no debug/labels — antes tudo isto ficava disfarçado de
-            "MOVE_TO_POS" e parecia que só 3 estados existiam de facto.
+            MARKING / BLOCKING / FWR_SUPPORT / AFT_SUPPORT — mesma locomoção
+            do MOVE_TO_POS (o alvo já vem calculado do nível 2: marcar(),
+            cobertura ou posicionamento de apoio). Estados próprios só para
+            aparecerem como tal no debug/labels — antes tudo isto ficava
+            disfarçado de "MOVE_TO_POS" e parecia que só 3 estados existiam.
+            FWR_SUPPORT/AFT_SUPPORT distinguem o apoio à frente da bola do
+            apoio atrás (opção de recuo) — ver actHoldPosition.
             */
             case 'MARKING':
             case 'BLOCKING':
-            case 'SUPPORT':
+            case 'FWR_SUPPORT':
+            case 'AFT_SUPPORT':
                 p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
                 break;
             /* =============================================================

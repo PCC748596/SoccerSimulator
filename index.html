@@ -11,119 +11,130 @@
 <body>
     <div id="painel-comandos">
         <div id="painel-cabecalho">
-            <h2 id="app-title" style="font-size: 0.85em; font-weight: bold; margin: 0; padding: 0;">SOCCER SIM | FPS: --</h2>
+            <h2 id="app-title" style="font-size: 0.85em; font-weight: bold; margin: 0; padding: 0;">SOCCER SIM | FPS: --
+            </h2>
             <button type="button" id="btn-painel" title="Minimizar / maximizar (X)"
                 onclick="togglePainel()">&minus;</button>
         </div>
 
         <div id="painel-conteudo">
-        <button class="btn-action" onclick="Match.resetPlay()">Reset KickOff</button>
+            <button class="btn-action" onclick="Match.resetPlay()">Reset KickOff</button>
 
-        <label>Formação</label>
-        <select id="t-formacao" onchange="Tatics.update()">
-            <option value="442">4-4-2</option>
-            <option value="433">4-3-3</option>
-            <option value="4231">4-2-3-1</option>
-        </select>
+            <label>Formação</label>
+            <select id="t-formacao" onchange="Tatics.update()">
+                <option value="442">4-4-2</option>
+                <option value="433">4-3-3</option>
+                <option value="4231">4-2-3-1</option>
+            </select>
 
-        <label>Estilo de Jogo</label>
-        <select id="t-estilo" onchange="Tatics.update()">
-            <option value="balanceado">Balanceado</option>
-            <option value="ataque">Ataque</option>
-            <option value="defesa">Defesa</option>
-        </select>
+            <label>Estilo de Jogo</label>
+            <select id="t-estilo" onchange="Tatics.update()">
+                <option value="balanceado">Balanceado</option>
+                <option value="ataque">Ataque</option>
+                <option value="defesa">Defesa</option>
+            </select>
 
-        <label>Estilo de Passe</label>
-        <select id="t-passe" onchange="Tatics.update()">
-            <option value="curto">Curto</option>
-            <option value="balanceado" selected>Misto</option>
-            <option value="longo">Longo</option>
-        </select>
+            <label>Estilo de Passe</label>
+            <select id="t-passe" onchange="Tatics.update()">
+                <option value="curto">Curto</option>
+                <option value="balanceado" selected>Misto</option>
+                <option value="longo">Longo</option>
+            </select>
 
-        <label>Linha Defensiva (Off-Side)</label>
-        <select id="t-linha" onchange="Tatics.update()">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-        </select>
+            <label>Linha Defensiva (Off-Side)</label>
+            <select id="t-linha" onchange="Tatics.update()">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+            </select>
 
-        <label>Width Compactness</label>
-        <select id="t-compactness" onchange="Tatics.update()">
-            <option value="large">Large (70%)</option>
-            <option value="median" selected>Medium (60%)</option>
-            <option value="short">Small (50%)</option>
-        </select>
+            <label>Width Compactness</label>
+            <select id="t-compactness" onchange="Tatics.update()">
+                <option value="large">Large (70%)</option>
+                <option value="median" selected>Medium (60%)</option>
+                <option value="short">Small (50%)</option>
+            </select>
 
-        <label>Length Compactness</label>
-        <select id="t-length-compactness" onchange="Tatics.update()">
-            <option value="large">Large (40m)</option>
-            <option value="median" selected>Medium (30m)</option>
-            <option value="short">Small (20m)</option>
-        </select>
+            <label>Length Compactness</label>
+            <select id="t-length-compactness" onchange="Tatics.update()">
+                <option value="large">Large (40m)</option>
+                <option value="median" selected>Medium (30m)</option>
+                <option value="short">Small (20m)</option>
+            </select>
 
-        <label>Defensive Pressure</label>
-        <select id="t-pressao-def" onchange="Tatics.update()">
-            <option value="low">Low (6s)</option>
-            <option value="balanced" selected>Balanced (4s)</option>
-            <option value="high">High (2s)</option>
-        </select>
+            <label>Defensive Pressure</label>
+            <select id="t-pressao-def" onchange="Tatics.update()">
+                <option value="low">Low (6s)</option>
+                <option value="balanced" selected>Balanced (4s)</option>
+                <option value="high">High (2s)</option>
+            </select>
 
-        <label>Setor do campo (2)</label>
-        <div style="display: flex; gap: 4px; margin-bottom: 8px;">
-            <button type="button" class="btn-sector active" id="sec-esq"
-                onclick="Tatics.toggleSector('esq')">Left</button>
-            <button type="button" class="btn-sector" id="sec-cen"
-                onclick="Tatics.toggleSector('cen')">Center</button>
-            <button type="button" class="btn-sector active" id="sec-dir" onclick="Tatics.toggleSector('dir')">Right</button>
-        </div>
+            <label>Setor do campo (2)</label>
+            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <button type="button" class="btn-sector active" id="sec-esq"
+                    onclick="Tatics.toggleSector('esq')">Left</button>
+                <button type="button" class="btn-sector" id="sec-cen"
+                    onclick="Tatics.toggleSector('cen')">Center</button>
+                <button type="button" class="btn-sector active" id="sec-dir"
+                    onclick="Tatics.toggleSector('dir')">Right</button>
+            </div>
 
-        <hr class="linha-sep">
+            <hr class="linha-sep">
 
-        <label>Câmara (zoom: scroll)</label>
-        <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-            <button type="button" class="btn-sector btn-cam" id="cam-orbit"
-                onclick="Match.setCameraMode('orbit')">Órbita Livre</button>
-            <button type="button" class="btn-sector active btn-cam" id="cam-center"
-                onclick="Match.setCameraMode('center')">TV Centro (4)</button>
-            <button type="button" class="btn-sector btn-cam" id="cam-sideline"
-                onclick="Match.setCameraMode('sideline')">Lateral Móvel (5)</button>
-            <button type="button" class="btn-sector btn-cam" id="cam-topdown"
-                onclick="Match.setCameraMode('topdown')">Tática Cima (6)</button>
-        </div>
+            <label>Câmara (zoom: scroll)</label>
+            <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+                <button type="button" class="btn-sector btn-cam" id="cam-orbit"
+                    onclick="Match.setCameraMode('orbit')">Órbita Livre</button>
+                <button type="button" class="btn-sector active btn-cam" id="cam-center"
+                    onclick="Match.setCameraMode('center')">TV Centro (4)</button>
+                <button type="button" class="btn-sector btn-cam" id="cam-sideline"
+                    onclick="Match.setCameraMode('sideline')">Lateral Móvel (5)</button>
+                <button type="button" class="btn-sector btn-cam" id="cam-topdown"
+                    onclick="Match.setCameraMode('topdown')">Tática Cima (6)</button>
+            </div>
 
-        <label>Velocidade (1-3)</label>
-        <div style="display: flex; gap: 4px; margin-bottom: 8px;">
-            <button type="button" class="btn-sector btn-speed" id="spd-0.5" onclick="Match.setSpeed(0.5)">0.5x</button>
-            <button type="button" class="btn-sector active btn-speed" id="spd-1" onclick="Match.setSpeed(1.0)">1.0x</button>
-            <button type="button" class="btn-sector btn-speed" id="spd-1.3" onclick="Match.setSpeed(1.3)">1.3x</button>
-        </div>
+            <label>Velocidade (1-3)</label>
+            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <button type="button" class="btn-sector btn-speed" id="spd-0.5"
+                    onclick="Match.setSpeed(0.5)">0.5x</button>
+                <button type="button" class="btn-sector active btn-speed" id="spd-1"
+                    onclick="Match.setSpeed(1.0)">1.0x</button>
+                <button type="button" class="btn-sector btn-speed" id="spd-1.3"
+                    onclick="Match.setSpeed(1.3)">1.3x</button>
+            </div>
 
-        <hr class="linha-sep">
-        <h2 style="border-bottom: 2px solid #3498db; color: #3498db;">Azul</h2>
-        <label>DEF <span class="val-skill" id="val-def-a">80</span></label>
-        <input type="range" id="skill-def-a" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <hr class="linha-sep">
+            <h2 style="border-bottom: 2px solid #3498db; color: #3498db;">Azul</h2>
+            <label>DEF <span class="val-skill" id="val-def-a">80</span></label>
+            <input type="range" id="skill-def-a" min="50" max="100" step="5" value="80"
+                onchange="Tatics.updateSkills()">
 
-        <label>MED <span class="val-skill" id="val-mid-a">80</span></label>
-        <input type="range" id="skill-mid-a" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <label>MED <span class="val-skill" id="val-mid-a">80</span></label>
+            <input type="range" id="skill-mid-a" min="50" max="100" step="5" value="80"
+                onchange="Tatics.updateSkills()">
 
-        <label>ATA <span class="val-skill" id="val-ata-a">80</span></label>
-        <input type="range" id="skill-ata-a" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <label>ATA <span class="val-skill" id="val-ata-a">80</span></label>
+            <input type="range" id="skill-ata-a" min="50" max="100" step="5" value="80"
+                onchange="Tatics.updateSkills()">
 
-        <label>GR <span class="val-skill" id="val-gk-a">80</span></label>
-        <input type="range" id="skill-gk-a" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <label>GR <span class="val-skill" id="val-gk-a">80</span></label>
+            <input type="range" id="skill-gk-a" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
 
-        <h2 style="border-bottom: 2px solid #e74c3c; color: #e74c3c;">Vermelha</h2>
-        <label>DEF <span class="val-skill" id="val-def-b">80</span></label>
-        <input type="range" id="skill-def-b" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <h2 style="border-bottom: 2px solid #e74c3c; color: #e74c3c;">Vermelha</h2>
+            <label>DEF <span class="val-skill" id="val-def-b">80</span></label>
+            <input type="range" id="skill-def-b" min="50" max="100" step="5" value="80"
+                onchange="Tatics.updateSkills()">
 
-        <label>MED <span class="val-skill" id="val-mid-b">80</span></label>
-        <input type="range" id="skill-mid-b" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <label>MED <span class="val-skill" id="val-mid-b">80</span></label>
+            <input type="range" id="skill-mid-b" min="50" max="100" step="5" value="80"
+                onchange="Tatics.updateSkills()">
 
-        <label>ATA <span class="val-skill" id="val-ata-b">80</span></label>
-        <input type="range" id="skill-ata-b" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <label>ATA <span class="val-skill" id="val-ata-b">80</span></label>
+            <input type="range" id="skill-ata-b" min="50" max="100" step="5" value="80"
+                onchange="Tatics.updateSkills()">
 
-        <label>GR <span class="val-skill" id="val-gk-b">80</span></label>
-        <input type="range" id="skill-gk-b" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+            <label>GR <span class="val-skill" id="val-gk-b">80</span></label>
+            <input type="range" id="skill-gk-b" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
 
         </div><!-- /painel-conteudo -->
     </div>
@@ -137,31 +148,41 @@
 
         <div id="painel-direito-conteudo">
             <div id="hud-info" style="margin-bottom: 10px; font-weight: bold;">
-                <span id="hud-state-a" style="color:#3498db">Construção</span> | <span id="hud-state-b" style="color:#e74c3c">Defesa</span>
+                <span id="hud-state-a" style="color:#3498db">Construção</span> | <span id="hud-state-b"
+                    style="color:#e74c3c">Defesa</span>
             </div>
 
             <hr class="linha-sep">
 
             <label>Visibilidade</label>
             <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                <button type="button" class="btn-sector" id="btn-offside" onclick="toggleOffside()">OffSide: OFF</button>
-                <button type="button" class="btn-sector" id="btn-playernumber" onclick="togglePlayerNumber()">PlayerNumber: OFF</button>
-                <button type="button" class="btn-sector" id="btn-playerbt" onclick="togglePlayerBT()">PlayerBT: OFF</button>
-                <button type="button" class="btn-sector" id="btn-playerpos" onclick="togglePlayerPOS()">PlayerPOS: OFF</button>
-                <button type="button" class="btn-sector" id="btn-teambtpos" onclick="toggleTeamBTPos()">Team BT POS: OFF</button>
-                <button type="button" class="btn-sector" id="btn-positionbt" onclick="togglePositionBT()">Position BT: OFF</button>
-                <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">Spatial Grid: OFF</button>
+                <button type="button" class="btn-sector" id="btn-offside" onclick="toggleOffside()">OffSide:
+                    OFF</button>
+                <button type="button" class="btn-sector" id="btn-playernumber"
+                    onclick="togglePlayerNumber()">PlayerNumber: OFF</button>
+                <button type="button" class="btn-sector" id="btn-playerbt" onclick="togglePlayerBT()">PlayerBT:
+                    OFF</button>
+                <button type="button" class="btn-sector" id="btn-playerpos" onclick="togglePlayerPOS()">PlayerPOS:
+                    OFF</button>
+                <button type="button" class="btn-sector" id="btn-teambtpos" onclick="toggleTeamBTPos()">Team BT POS:
+                    OFF</button>
+                <button type="button" class="btn-sector" id="btn-positionbt" onclick="togglePositionBT()">Position BT:
+                    OFF</button>
+                <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">Spatial
+                    Grid: OFF</button>
             </div>
 
             <hr class="linha-sep">
             <label>Simulação em lote (sem ecrã)</label>
             <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                <button type="button" class="btn-sector" id="btn-fastsim" onclick="runFastSim()">Simulação rápida (10×2min)</button>
+                <button type="button" class="btn-sector" id="btn-fastsim" onclick="runFastSim()">Simulação rápida
+                    (10×2min)</button>
             </div>
         </div>
     </div>
 
-    <div id="placar">RED <span id="placar-a">0</span> x <span id="placar-b">0</span> BLUE | TIME: <span id="placar-tempo">00:00</span></div>
+    <div id="placar">RED <span id="placar-a">0</span> x <span id="placar-b">0</span> BLUE | TIME: <span
+            id="placar-tempo">00:00</span></div>
 
     <div id="painel-playerbt" class="minimizado">
         <div id="painel-playerbt-cabecalho">
@@ -216,6 +237,7 @@
     <script src="js/fsm.js"></script>
     <script src="js/simulate.js"></script>
     <script src="js/main.js"></script>
+    <script src="js/bt/btDebug.js"></script>
 </body>
 
 </html>
