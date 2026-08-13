@@ -90,6 +90,9 @@ class PlayerContext {
     get zoneAhead() { return this.p.model.position.z * this.p.dirZ; }
     // Blackboard da equipa adversária: dá-nos a linha que um lançamento tem de bater.
     get oppBB() { return TeamAI.get(this.p.team === 'TeamA' ? 'TeamB' : 'TeamA'); }
+    // Blackboard da própria equipa — usado por actHoldPosition para escolher
+    // entre MARKING/BLOCKING/SUPPORT.
+    get bb() { return TeamAI.get(this.p.team); }
 }
 
 /* =========================================================================
@@ -304,7 +307,25 @@ function actHoldPosition(ctx) {
         p.speedMult = 4.2 + ((ctx.skill - 50) / 50) * 1.2;
     }
     if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
-    p.fsm.changeState('MOVE_TO_POS');
+
+    /*
+    O nível 2 (defendZonal/marcar em position_bt.js) já decidiu O ALVO
+    (p.dynamicTarget) — aqui só se rotula o que está a acontecer, pra não
+    ficar tudo escondido atrás de "MOVE_TO_POS":
+        marcando um adversário específico  -> MARKING
+        sem par, a fechar a linha da bola  -> BLOCKING (p.isCovering)
+        equipa tem a bola, sem ser o portador -> SUPPORT
+        resto (posição genérica, fora de fase de bola) -> MOVE_TO_POS
+    */
+    if (ctx.bb && ctx.bb.isAttacking) {
+        p.fsm.changeState('SUPPORT');
+    } else if (p.markingTarget) {
+        p.fsm.changeState('MARKING');
+    } else if (p.isCovering) {
+        p.fsm.changeState('BLOCKING');
+    } else {
+        p.fsm.changeState('MOVE_TO_POS');
+    }
 }
 
 function actGoalkeeperPosition(ctx) {

@@ -202,6 +202,18 @@ class PlayerFSM {
             case 'MOVE_TO_POS':
                 p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
                 break;
+            /*
+            MARKING / BLOCKING / SUPPORT — mesma locomoção do MOVE_TO_POS
+            (o alvo já vem calculado do nível 2: marcar(), cobertura ou
+            posicionamento de apoio). Estados próprios só para aparecerem
+            como tal no debug/labels — antes tudo isto ficava disfarçado de
+            "MOVE_TO_POS" e parecia que só 3 estados existiam de facto.
+            */
+            case 'MARKING':
+            case 'BLOCKING':
+            case 'SUPPORT':
+                p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
+                break;
             /* =============================================================
                CARRY — Condução: carregar a bola com toques à frente.
                O jogador solta a bola num toque curto/médio/longo conforme
