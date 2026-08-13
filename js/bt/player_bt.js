@@ -329,7 +329,7 @@ const PlayerBT = sel('PlayerRoot',
         cond('jogoParado', () => Match.state !== 'PLAY'),
         act('esperarLance', (ctx) => {
             const fsm = ctx.p.fsm;
-            if (Match.state === 'CORNER_KICK' || Match.state === 'GOAL_KICK') {
+            if (Match.state === 'CORNER_KICK') {
                 if (fsm.currentState !== 'SET_PIECE_TAKER' && fsm.currentState !== 'SET_PIECE_WAIT') {
                     fsm.changeState('SET_PIECE_WAIT');
                 }

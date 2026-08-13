@@ -759,7 +759,7 @@ const Match = {
             this.updatePlacar();
         }
 
-        if (this.state === 'CORNER_KICK' || this.state === 'GOAL_KICK') {
+        if (this.state === 'CORNER_KICK') {
             this.setPieceTimer += dt;
         }
 
@@ -1268,17 +1268,20 @@ const Match = {
             } else {
                 if (this.state === 'PLAY') {
                     let lastTeam = this.lastTouchedTeam || 'TeamA';
+                    // Saída de bola do goleiro foi removida — se a bola sai
+                    // pela linha de fundo sem ser escanteio, volta pro centro
+                    // do campo (mesmo reinício padrão do kickoff).
                     if (zSinal < 0) {
                         if (lastTeam === 'TeamA') {
                             this.setupSetPiece('CORNER_KICK', 'TeamB');
                         } else {
-                            this.setupSetPiece('GOAL_KICK', 'TeamA');
+                            this.resetPlay();
                         }
                     } else {
                         if (lastTeam === 'TeamB') {
                             this.setupSetPiece('CORNER_KICK', 'TeamA');
                         } else {
-                            this.setupSetPiece('GOAL_KICK', 'TeamB');
+                            this.resetPlay();
                         }
                     }
                 } else {
@@ -1305,7 +1308,6 @@ const Match = {
 
         if (typeof MatchStats !== 'undefined' && MatchStats[team]) {
             if (type === 'CORNER_KICK') MatchStats[team].cantos++;
-            else if (type === 'GOAL_KICK') MatchStats[team].pontapesBaliza++;
         }
 
         let attackingPlayers = (team === 'TeamA') ? this.players : this.opponents;
@@ -1380,75 +1382,6 @@ const Match = {
                 lookAtBola(attGK.model, this.ball.position);
                 attGK.fsm.changeState('SET_PIECE_WAIT');
             }
-
-
-
-        } else if (type === 'GOAL_KICK') {
-            let kickZ = defDir * 47.5;
-            this.ball.position.set(0, 0.15, kickZ);
-
-            // O taker é o GR de quem BATE o pontapé de baliza — attackingPlayers
-            // (nome genérico: "equipa a quem foi atribuído o lance"), não
-            // defendingPlayers (o adversário). Estava trocado: o GR adversário
-            // aparecia dentro da área própria a bater, e como o pontapé segue
-            // o dirZ DELE, ia direito à própria baliza — "gol contra" scriptado.
-            let taker = attackingPlayers.find(p => p.role === 'gk');
-            this.setPieceTaker = taker;
-            // O taker fica 1.5m mais perto do centro do que a bola (kickZ),
-            // ou seja, a bola cai ATRÁS dele nesse eixo — lookAt(centro do
-            // campo) olhava ainda mais para a frente, de costas pra bola.
-            taker.model.position.set(0, ALTURA_BASE_Y, kickZ - defDir * 1.5);
-            lookAtBola(taker.model, new THREE.Vector3(0, ALTURA_BASE_Y, kickZ));
-            taker.fsm.changeState('SET_PIECE_TAKER');
-
-            // O GR de quem NÃO bate fica parado no seu próprio lugar durante
-            // o pontapé de baliza — mas sem isto ele ficava preso no estado
-            // (e na rotação) que tinha em IDLE antes do lance ser assinalado,
-            // já que agora Match.state === 'GOAL_KICK' tira-o do updateGK e
-            // ninguém mais o mandava olhar para a bola nem mudava o estado.
-            let defGK = defendingPlayers.find(p => p.role === 'gk');
-            if (defGK) {
-                lookAtBola(defGK.model, this.ball.position);
-                defGK.fsm.changeState('SET_PIECE_WAIT');
-                defGK.dynamicTarget.copy(defGK.model.position);
-            }
-
-            let defenders = defendingPlayers.filter(p => p.role !== 'gk');
-            // Todos a pelo menos 18m do ponto do pontapé — a área tem 16.5m
-            // de profundidade (kickZ está a 47.5, linha da área a 36.5).
-            // Com 10/5/5 antigos, 4 destes "pressionadores" ficavam DENTRO
-            // da própria área do GR a bater: bastava a bola sair mal
-            // direccionada, ou nem sequer sair, para eles tocarem pra dentro
-            // — "goleiro fica parado, adversário chuta e é gol".
-            let defPositions = [
-                { x: -18, z: kickZ - defDir * 18 },
-                { x: 18, z: kickZ - defDir * 18 },
-                { x: -8, z: kickZ - defDir * 20 },
-                { x: 8, z: kickZ - defDir * 20 },
-                { x: -5, z: kickZ - defDir * 25 },
-                { x: 5, z: kickZ - defDir * 25 },
-                { x: -15, z: kickZ - defDir * 28 },
-                { x: 15, z: kickZ - defDir * 28 },
-                { x: 0, z: kickZ - defDir * 32 },
-                { x: -5, z: kickZ - defDir * 38 }
-            ];
-            defenders.forEach((p, idx) => {
-                let pos = defPositions[idx] || { x: 0, z: kickZ - defDir * 20 };
-                p.model.position.set(pos.x, ALTURA_BASE_Y, pos.z);
-                p.fsm.changeState('SET_PIECE_WAIT');
-                p.dynamicTarget.copy(p.model.position);
-            });
-
-            attackingPlayers.forEach(p => {
-                // GR já posicionado e a SET_PIECE_TAKER acima — não pisar.
-                if (p === taker) return;
-                if (p.role !== 'gk') {
-                    p.model.position.set(p.baseTarget.x * 0.8, ALTURA_BASE_Y, p.baseTarget.z * 0.4);
-                    p.fsm.changeState('SET_PIECE_WAIT');
-                    p.dynamicTarget.copy(p.model.position);
-                }
-            });
-
 
         }
     },

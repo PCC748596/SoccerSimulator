@@ -452,7 +452,7 @@ class FootballPlayer {
             this.decisionTimer = 0;
         }
 
-        if (this.role === 'gk' && Match.state !== 'GOAL_KICK' && Match.state !== 'CORNER_KICK') {
+        if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
             this.updateGK(dt);
         } else {
             this.runBehaviorTree(dt);
@@ -465,7 +465,7 @@ class FootballPlayer {
             Match.ball.position.lerp(this.model.position.clone().add(footOffset), 0.5);
             Match.ball.position.y = 0.15; Match.ballVel.set(0, 0, 0);
         }
-        if (this.role === 'gk' && Match.state !== 'GOAL_KICK' && Match.state !== 'CORNER_KICK') {
+        if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
         } else {
             this.animateBones(dt);
         }
@@ -562,10 +562,20 @@ class FootballPlayer {
         if (d < 2.0) desired.multiplyScalar(maxSpeed * (d / 2.0));
         else desired.multiplyScalar(maxSpeed);
 
+        // Recuar de frente pra bola (backpedal) só faz sentido quando o
+        // deslocamento é mesmo predominantemente para trás. Antes bastava o Z
+        // mudar >2.5m para forçar o corpo a olhar para a bola, mesmo com um
+        // deslocamento em X muito maior (ex.: marcação lateral) — o jogador
+        // corria de lado, de frente pra bola, com a animação de corrida à
+        // frente a não bater com a direcção real do movimento.
         let isRetreating = false;
         if (this.role === 'def' || this.role === 'mid') {
-            if (this.team === 'TeamA' && target.z < this.model.position.z - 2.5) isRetreating = true;
-            if (this.team === 'TeamB' && target.z > this.model.position.z + 2.5) isRetreating = true;
+            const dx = target.x - this.model.position.x;
+            const dz = target.z - this.model.position.z;
+            let backingUp = false;
+            if (this.team === 'TeamA' && target.z < this.model.position.z - 2.5) backingUp = true;
+            if (this.team === 'TeamB' && target.z > this.model.position.z + 2.5) backingUp = true;
+            if (backingUp && Math.abs(dz) > Math.abs(dx)) isRetreating = true;
         }
 
         let lookTarget = target;

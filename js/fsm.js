@@ -193,29 +193,6 @@ class PlayerFSM {
                                 pl.fsm.changeState('MOVE_TO_POS');
                             }
                         });
-                    } else if (Match.state === 'GOAL_KICK') {
-                        let targetZ = p.model.position.z + p.dirZ * 60.0;
-                        let targetX = (Math.random() - 0.5) * 20;
-                        _v1.set(targetX, 0, targetZ);
-                        _v2.subVectors(_v1, Match.ball.position).normalize();
-                        Match.ballVel.copy(_v2).multiplyScalar(22.0);
-                        Match.ballVel.y = 8.5;
-                        Match.state = 'PLAY';
-                        Match.ballCarrier = null;
-                        Match.possessionTeam = p.team;
-                        Match.possessionTimer = 0;
-                        Match.lastTouchedTeam = p.team;
-                        Match.lastTouchedPlayer = p;
-                        Match.players.forEach(pl => {
-                            if (pl.fsm.currentState === 'SET_PIECE_WAIT' || pl.fsm.currentState === 'SET_PIECE_TAKER') {
-                                pl.fsm.changeState('MOVE_TO_POS');
-                            }
-                        });
-                        Match.opponents.forEach(pl => {
-                            if (pl.fsm.currentState === 'SET_PIECE_WAIT' || pl.fsm.currentState === 'SET_PIECE_TAKER') {
-                                pl.fsm.changeState('MOVE_TO_POS');
-                            }
-                        });
                     }
                 }
                 break;

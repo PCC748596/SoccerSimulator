@@ -546,7 +546,12 @@ const CarryModel = {
     spaceCap: 12.0,       // espaço acima disto já não conta mais
     spaceWeight: 1.6,     // quanto vale ter espaço
     progressWeight: 3.2,  // quanto vale progredir para a baliza
-    sectorWeight: 0.18,   // quanto pesa manter o sector táctico do painel
+    // Era 0.18 — no pior caso (tx a ~29m do alvo) só penalizava ~5 pontos,
+    // contra até ~32 do progressWeight. Na prática o progresso pra frente
+    // ganhava sempre e o sector do painel (Left/Center/Right) não tinha
+    // efeito visível: o jogo conduzia sempre pelo meio. Subido para pesar
+    // tanto quanto o progresso no pior caso (~29 * 1.0 ≈ 29).
+    sectorWeight: 1.0,    // quanto pesa manter o sector táctico do painel
 
     /*
     Espaço livre à frente. Medido num corredor que abre para longe (`corredor`
