@@ -11,6 +11,7 @@ const Match = {
     specMesh: null, specData: [], specDummy: new THREE.Object3D(),
     crowdExcitement: 0, crowdTimer: 0,
     currentLookTarget: null, // Usado para interpolação da câmara
+    kickoffActive: false, kickoffTimer: 0, kickoffTaker: null, kickoffApoio: null,
 
     init: function (scene) {
         this.scene = scene;
@@ -589,25 +590,32 @@ const Match = {
         }
     },
 
+    /*
+    Saída de bola padrão (kickoff): bola ao centro, as duas equipas na sua
+    metade de campo (via baseTarget da formação), sorteio de quem inicia, e
+    um jogador dessa equipa junto à bola para tocar para um companheiro
+    posicionado atrás dele. O jogo só "começa" quando esse primeiro toque
+    sai — mas isso já é o comportamento normal do BT (Dominar/CadenceModel)
+    assim que o jogador tem a bola em IDLE, tal como no reinício antigo.
+
+    Usado tanto pelo botão do painel como no reinício automático após golo.
+    */
     resetPlay: function () {
         this.state = 'PLAY'; this.ballVel.set(0, 0, 0);
 
-        this.ballCarrier = this.players[0];
-        this.players[0].hasBall = true;
         this.intendedReceiver = null;
         this.chaserA = null;
         this.chaserB = null;
-
-        this.lastTouchedTeam = 'TeamA';
-        this.lastTouchedPlayer = this.players[0];
         this.setPieceTaker = null;
         this.setPieceTimer = 0;
         this.counterAttackTeam = null;
         this.counterAttackTimer = 0;
 
         document.getElementById('alerta-golo').style.opacity = '0';
+        window.bolaChutada = false;
 
-        this.ball.position.set(0, 0.15, -46.5);
+        this.ball.position.set(0, 0.15, 0);
+
         this.players[0].model.position.set(0, ALTURA_BASE_Y, -48);
         this.players[0].model.rotation.y = 0;
         this.players[0].fsm.changeState('IDLE');
@@ -615,8 +623,6 @@ const Match = {
         this.opponents[0].model.position.set(0, ALTURA_BASE_Y, 48);
         this.opponents[0].model.rotation.y = Math.PI;
         this.opponents[0].fsm.changeState('IDLE');
-
-        window.bolaChutada = false;
 
         // Reset do estado por-instância de cada GK.
         [this.players[0], this.opponents[0]].forEach(gk => {
@@ -630,29 +636,80 @@ const Match = {
             }
         });
 
-        this.players.forEach(p => {
-            p.isCross = false;
-            if (p.role !== 'gk') {
-                p.model.position.set(p.baseTarget.x, ALTURA_BASE_Y, p.baseTarget.z);
-                p.hasBall = false;
-            }
-            p.fsm.changeState('MOVE_TO_POS');
-            p.speedMult = 3.5;
+        // dirA/dirB: sentido de ataque de cada equipa. O campo de defesa é o
+        // lado oposto — por isso o clamp abaixo usa z*dir <= -margem.
+        const margem = 1.5;
+        [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+            list.forEach(p => {
+                p.isCross = false;
+                if (p.role !== 'gk') {
+                    let z = p.baseTarget.z;
+                    if (z * dir > -margem) z = -margem * dir; // força para o campo de defesa
+                    p.model.position.set(p.baseTarget.x, ALTURA_BASE_Y, z);
+                    p.hasBall = false;
+                }
+                // dynamicTarget é o que o MOVE_TO_POS persegue (steerArrive);
+                // sem isto ele ficava com o alvo antigo da jogada anterior e
+                // saía a correr para lá assim que o update() volta a chamar
+                // p.update(dt), mesmo com o runTeamAI travado no kickoff.
+                p.dynamicTarget = p.model.position.clone();
+                p.fsm.changeState('MOVE_TO_POS');
+                p.speedMult = 3.5;
+            });
         });
 
-        this.opponents.forEach(p => {
-            p.isCross = false;
-            if (p.role !== 'gk') {
-                p.model.position.set(p.baseTarget.x, ALTURA_BASE_Y, p.baseTarget.z);
-                p.hasBall = false;
-            }
-            p.fsm.changeState('MOVE_TO_POS');
-            p.speedMult = 3.5;
-        });
+        // Sorteio do time que dá a saída.
+        const startA = Math.random() < 0.5;
+        const takerList = startA ? this.players : this.opponents;
+        const attDir = startA ? 1 : -1;
+
+        const atacantes = takerList.filter(p => p.role === 'atk');
+        const taker = atacantes[0] || takerList.find(p => p.role !== 'gk');
+        const apoio = atacantes[1] || takerList.find(p => p.role === 'mid');
+
+        if (taker) {
+            taker.model.position.set(0.5, ALTURA_BASE_Y, -attDir * 0.5);
+            taker.fsm.changeState('IDLE');
+        }
+        if (apoio) {
+            apoio.model.position.set(-0.5, ALTURA_BASE_Y, -attDir * 4);
+            apoio.fsm.changeState('IDLE');
+        }
+        if (taker) lookAtBola(taker.model, apoio ? apoio.model.position : this.ball.position);
+
+        this.ballCarrier = taker || takerList[0];
+        this.lastTouchedTeam = startA ? 'TeamA' : 'TeamB';
+        this.lastTouchedPlayer = this.ballCarrier;
+        if (this.ballCarrier) this.ballCarrier.hasBall = true;
+
+        // Trava o jogo uns segundos antes do toque inicial: ninguém circula
+        // livremente pelo campo (runTeamAI/BT não corre) até o timer zerar,
+        // e aí o "taker" toca para o apoio — isso é que dá o pontapé de saída.
+        this.kickoffActive = true;
+        this.kickoffTimer = 4.0;
+        this.kickoffTaker = taker;
+        this.kickoffApoio = apoio;
     },
 
     update: function (dt) {
         this.delta = dt;
+
+        if (this.kickoffActive) {
+            this.kickoffTimer -= dt;
+            // Animação de idle continua (respiração/etc.), mas sem BT: os
+            // alvos de movimento não mudam, por isso ninguém sai do lugar.
+            this.players.forEach(p => p.update(dt));
+            this.opponents.forEach(p => p.update(dt));
+            if (this.kickoffTimer <= 0) {
+                this.kickoffActive = false;
+                if (this.kickoffTaker && this.kickoffApoio) {
+                    this.kickoffTaker.initiatePass(this.kickoffApoio);
+                }
+                this.kickoffTaker = null;
+                this.kickoffApoio = null;
+            }
+            return;
+        }
 
         if (this.state === 'PLAY') {
             this.tempoDeJogo += dt;

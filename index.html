@@ -17,6 +17,8 @@
         </div>
 
         <div id="painel-conteudo">
+        <button class="btn-action" onclick="Match.resetPlay()">Reset KickOff</button>
+
         <label>Formação</label>
         <select id="t-formacao" onchange="Tatics.update()">
             <option value="442">4-4-2</option>
@@ -123,7 +125,6 @@
         <label>GR <span class="val-skill" id="val-gk-b">80</span></label>
         <input type="range" id="skill-gk-b" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
 
-        <button class="btn-action" onclick="Match.resetPlay()">Repor no GR A</button>
         </div><!-- /painel-conteudo -->
     </div>
 
