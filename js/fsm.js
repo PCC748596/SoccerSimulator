@@ -26,10 +26,27 @@ function executePassGameplay(p) {
     let distToTarget = _v1.distanceTo(Match.ball.position);
     _v2.subVectors(_v1, Match.ball.position).normalize();
 
+    /*
+    A força do passe sai da BALÍSTICA, não de uma heurística.
+
+    Era `forca = dist * 0.85` com `vy = min(6.5, 2 + dist*0.12)` — números
+    calibrados contra a física antiga (g = 15, arrasto exponencial). Medido
+    com a física real: o primeiro toque caía 4 m antes do alvo num passe de
+    25 m e 17 m antes num de 70 m, e a bola nunca chegava a quem devia. Agora
+    pede-se o ALCANCE e resolve-se a velocidade (ver utils.js).
+
+    Elevação por distância: mais alto no passe curto-longo (para passar por
+    cima de quem está no meio), mais raso no passe muito longo (chega antes).
+    */
     let forcaPasse = 18.0;
+    let usouBalistica = false;
+
     if (ehLancamento) {
-        forcaPasse = distToTarget * PassModel.forceForDistance * 0.55;
+        // Lançamento vai para o ESPAÇO: rasteiro, a chegar ainda a rolar para
+        // o colega correr para ela.
+        forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaLancamento);
         Match.ballVel.y = 0;
+        usouBalistica = true;
     } else if (p.isCross) {
         /*
         Alto ou rasteiro — decidido no findCross (player_bt.js) conforme haja

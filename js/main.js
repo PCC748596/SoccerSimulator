@@ -317,7 +317,9 @@ function animate(time) {
     }
 
     if (!window.isPaused) {
-        Match.update(delta * window.speedMultiplier);
+        // GAME_SPEED é o ritmo base da partida (config.js); o speedMultiplier
+        // continua a ser só o controlo 0.5x/1.0x/1.3x do painel.
+        Match.update(delta * window.speedMultiplier * GAME_SPEED);
     }
 
     if (TeamAI && TeamAI.blackboards) {

@@ -131,6 +131,73 @@ function venceuDuelo(valorA, valorB, baseA = 0.5, escala = 220) {
 }
 
 /*
+=============================================================================
+BALÍSTICA DO PASSE — que velocidade é preciso para a bola CHEGAR ao alvo
+=============================================================================
+As forças de passe eram heurísticas do tipo `forca = dist * 0.85`, calibradas
+contra a física antiga (g = 15, arrasto exponencial só em x/z). Com a física
+real (ver BallPhysics) ficaram todas curtas, e cada vez mais curtas quanto
+mais longo o passe: medido, um passe de 70 m caía aos 52 m.
+
+Aqui resolve-se o problema ao contrário: dado o ALCANCE pretendido, qual a
+velocidade de saída? É a mesma ideia já usada no puntBall do guarda-redes.
+=============================================================================
+*/
+
+/*
+Passe aéreo: velocidade de saída para a bola aterrar a `dist` metros com a
+elevação dada.
+
+Não há fórmula fechada com arrasto quadrático — a de manual
+(`v = √(R·g / sin 2θ)`) ignora-o e erra por defeito até 20 m num passe de
+60 m. Resolve-se por bissecção sobre uma simulação do voo, que é barata
+(acontece uma vez por passe, não por frame).
+*/
+function velocidadeParaAlcance(dist, elev) {
+    const g = BallPhysics.gravidade;
+    const k = BallPhysics.kArrasto;
+    const r = BallPhysics.raio;
+
+    const alcanceDe = (v) => {
+        let x = 0, y = r, vx = v * Math.cos(elev), vy = v * Math.sin(elev);
+        const dt = 1 / 120;
+        for (let i = 0; i < 900; i++) {
+            const s = Math.hypot(vx, vy);
+            if (s > 0.001) { const dv = k * s * s * dt; vx -= vx / s * dv; vy -= vy / s * dv; }
+            if (y > r + 0.001) vy -= g * dt;
+            x += vx * dt; y += vy * dt;
+            if (y <= r && vy < 0) return x;
+        }
+        return x;
+    };
+
+    // Arranca do valor sem arrasto (sempre curto) e abre o intervalo para cima.
+    let lo = Math.sqrt(Math.max(1, dist * g / Math.max(0.2, Math.sin(2 * elev))));
+    let hi = lo * 2.2;
+    for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2;
+        if (alcanceDe(mid) < dist) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
+/*
+Passe rasteiro: velocidade de saída para a bola percorrer `dist` metros e lá
+chegar ainda com `vChegada` m/s (um passe tem de chegar jogável, não morto).
+
+Aqui há fórmula fechada. A desaceleração no chão é `k·v² + μ·g` (arrasto mais
+rolamento); integrando `v·dv / (k·v² + μ·g) = -dx`:
+
+    v0 = √( ( (k·v1² + μ·g)·e^(2·k·x) − μ·g ) / k )
+*/
+function velocidadeRasteiraPara(dist, vChegada) {
+    const k = BallPhysics.kArrasto;
+    const atrito = BallPhysics.atritoRolamento * BallPhysics.gravidade;
+    const alvo = (k * vChegada * vChegada + atrito) * Math.exp(2 * k * dist) - atrito;
+    return Math.sqrt(Math.max(0, alvo / k));
+}
+
+/*
 Este jogador está demasiado perto da linha de fundo para adiantar a bola?
 
 Mede a distância à linha de fundo que ele ATACA (a que fica à frente dele no

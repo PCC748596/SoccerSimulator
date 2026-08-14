@@ -245,6 +245,21 @@ const DribbleCutClip = {
 window.bolaChutada = false;
 
 window.speedMultiplier = 1.0;
+
+/*
+Ritmo base da simulação, à parte do `speedMultiplier`.
+
+O `speedMultiplier` é o controlo do painel (0.5x / 1.0x / 1.3x) — mexer nele
+faria o botão "1.0x" deixar de significar velocidade normal. Este é o ritmo
+do JOGO em si: multiplica o passo de tempo de tudo (jogadores, bola, timers,
+cadências), por isso abranda a partida inteira de forma coerente em vez de
+travar só quem corre.
+
+    1.00  ritmo original
+    0.90  -10% (pedido)
+*/
+const GAME_SPEED = 0.90;
+
 window.cameraMode = 'center';
 window.cameraZoom = 1.0;
 window.isPaused = false;
