@@ -187,6 +187,58 @@ const GoalkeeperKickClip = {
     alturaPe: 0.25
 };
 
+/*
+=============================================================================
+DRIBBLE_CUT_30 — corte lateral em diagonal de 30°, 12 keyframes
+=============================================================================
+Três camadas independentes, aplicadas POR CIMA do ciclo de corrida
+(animateBones já pôs as pernas a correr; isto é um aditivo, não uma pose
+que substitui tudo):
+
+    CORPO    inclinação lateral (pelvis.z) + rotação do quadril (pelvis.y)
+    PERNAS   viés diagonal na perna externa, sobre a passada normal
+    BOLA     dois toques laterais curtos, nos frames 6 e 9
+
+O detalhe que faz parecer natural: o jogador NÃO roda 30° de uma vez. O
+quadril (`quadrilY`) antecipa a mudança e o tronco contra-roda
+(`troncoY`, sinal oposto), por isso o peito continua parcialmente virado
+para a frente enquanto o centro de massa já foi para a diagonal. A rotação
+efectiva do corpo vem da direcção de deslocamento, que roda suavemente.
+
+Frames pedidos:
+     1  corrida normal, bola perto do pé   7  ponto máximo da mudança
+     2  começa a inclinar o corpo          8  corpo acompanha os 30°
+     3  pé externo planta no chão          9  pé externo toca outra vez
+     4  quadril muda de direcção          10  recupera velocidade
+     5  perna interna cruza lateralmente  11  volta à posição de corrida
+     6  bola conduzida para o lado        12  corrida estabilizada
+
+Sinais são para um corte à DIREITA; ao aplicar multiplica-se por `lado`.
+=============================================================================
+*/
+const DribbleCutClip = {
+    angulo: Math.PI / 6,     // 30°
+    duracao: 0.75,           // s do gesto completo
+    toques: [5 / 11, 8 / 11],// frames 6 e 9 — toques laterais alternados
+    // Fracção da passada usada em cada toque lateral (curto, bola perto).
+    forcaToque: 0.55,
+
+    frames: [
+        { leanZ: 0.00, quadrilY: 0.00, troncoY: 0.00, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.00 },
+        { leanZ: 0.08, quadrilY: 0.03, troncoY: -0.02, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.05 },
+        { leanZ: 0.16, quadrilY: 0.06, troncoY: -0.04, coxaExt: 0.25, joelhoExt: 0.15, bracoZ: 0.12 },
+        { leanZ: 0.22, quadrilY: 0.14, troncoY: -0.09, coxaExt: 0.15, joelhoExt: 0.25, bracoZ: 0.18 },
+        { leanZ: 0.26, quadrilY: 0.22, troncoY: -0.14, coxaExt: -0.20, joelhoExt: 0.35, bracoZ: 0.22 },
+        { leanZ: 0.30, quadrilY: 0.28, troncoY: -0.17, coxaExt: -0.10, joelhoExt: 0.20, bracoZ: 0.25 },
+        { leanZ: 0.32, quadrilY: 0.34, troncoY: -0.18, coxaExt: 0.00, joelhoExt: 0.10, bracoZ: 0.26 },
+        { leanZ: 0.26, quadrilY: 0.34, troncoY: -0.12, coxaExt: 0.10, joelhoExt: 0.10, bracoZ: 0.22 },
+        { leanZ: 0.18, quadrilY: 0.30, troncoY: -0.06, coxaExt: 0.20, joelhoExt: 0.18, bracoZ: 0.16 },
+        { leanZ: 0.10, quadrilY: 0.22, troncoY: -0.02, coxaExt: 0.08, joelhoExt: 0.08, bracoZ: 0.10 },
+        { leanZ: 0.04, quadrilY: 0.12, troncoY: 0.00, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.04 },
+        { leanZ: 0.00, quadrilY: 0.00, troncoY: 0.00, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.00 }
+    ]
+};
+
 // window.goleiroEstado, window.goleiroReagiu e window.delayReacaoCalculado
 // foram movidos para propriedades de instância de FootballPlayer (gkEstado,
 // gkReagiu, gkDelayReacao). Cada GK tem o seu próprio estado independente.
@@ -469,7 +521,172 @@ estilos ficam na mesma linha defensiva (ver slotNoBloco em team_bt.js).
 */
 const FullBackStyle = {
     defensive: { comBolaMult: 0.3, avancoMax: 2.0, recuo: 3.0 },
-    offensive: { comBolaMult: 1.8, avancoMax: 15.0, recuo: 3.0 }
+    offensive: { comBolaMult: 1.8, avancoMax: 15.0, recuo: 3.0 },
+    // Full-back Finisher: sobe como o offensive, mas fecha para o eixo em vez
+    // de ficar colado à linha — "joining the attack in high central areas".
+    finisher: { comBolaMult: 1.8, avancoMax: 15.0, recuo: 3.0 }
+};
+
+/*
+=============================================================================
+PLAYING STYLES — traços por jogador
+=============================================================================
+Cada estilo é um conjunto de MODIFICADORES numéricos, não um ramo de código
+próprio. Isso é de propósito: 20 estilos com 20 caminhos especiais seriam
+impossíveis de afinar e de manter coerentes entre si. As folhas do PositionBT
+e do PlayerBT lêem sempre os mesmos campos; o estilo só muda os números.
+
+Campos (todos opcionais, `EstiloBase` dá os valores neutros):
+
+  POSICIONAMENTO (metros, no referencial de ataque)
+    avanco        + sobe / − recua em relação ao slot do bloco
+    largura       + abre para a linha lateral / − fecha para o eixo
+    avancoComBola avanço EXTRA só quando a equipa tem a bola
+    amplitudeZ    quanto o jogador se estica em profundidade (box-to-box)
+
+  COMPORTAMENTO (multiplicadores, 1.0 = neutro)
+    passe         peso dele como alvo de passe (findPassTarget)
+    remate        peso da decisão de rematar
+    cruzar        peso da decisão de cruzar
+    lancar        peso da decisão de lançar
+    conduzir      peso da decisão de conduzir em vez de passar
+    pressao       agressividade no desarme/carrinho e aderência na marcação
+    cadencia      multiplica o tempo de domínio antes de decidir
+
+  BANDEIRAS
+    ombroDefesa   posiciona-se na linha do último defensor (fora-de-jogo no limite)
+    dentroArea    não sai da grande área adversária
+    seguraBola    aguenta a bola de costas em vez de decidir depressa
+    atraiDefesa   corre PARA LONGE da bola a puxar marcação
+    cortaParaDentro  vindo da ala, fecha para o eixo ao receber
+    colaNaLinha   fica encostado à linha lateral
+    juntaSeAoAtaque  defesa que sobe ao ataque
+
+  posicoes      onde o estilo pode ser escolhido (validação/UI)
+=============================================================================
+*/
+const EstiloBase = {
+    avanco: 0, largura: 0, avancoComBola: 0, amplitudeZ: 1.0,
+    passe: 1.0, remate: 1.0, cruzar: 1.0, lancar: 1.0, conduzir: 1.0,
+    pressao: 1.0, cadencia: 1.0,
+    ombroDefesa: false, dentroArea: false, seguraBola: false,
+    atraiDefesa: false, cortaParaDentro: false, colaNaLinha: false,
+    juntaSeAoAtaque: false
+};
+
+const PlayingStyles = {
+    /* --- Avançados ------------------------------------------------------- */
+    goal_poacher: {
+        nome: 'Goal Poacher', posicoes: ['CF', 'SS'],
+        avancoComBola: 4, remate: 1.35, conduzir: 0.7, cadencia: 0.7,
+        ombroDefesa: true
+    },
+    dummy_runner: {
+        nome: 'Dummy Runner', posicoes: ['CF', 'SS', 'AM'],
+        largura: 5, passe: 0.75, remate: 0.9,
+        atraiDefesa: true
+    },
+    fox_in_the_box: {
+        nome: 'Fox in the Box', posicoes: ['CF'],
+        avancoComBola: 6, remate: 1.5, conduzir: 0.5, lancar: 0.6, cadencia: 0.6,
+        dentroArea: true
+    },
+    target_man: {
+        nome: 'Target Man', posicoes: ['CF'],
+        passe: 1.25, conduzir: 0.6, cadencia: 1.6,
+        seguraBola: true
+    },
+
+    /* --- Criativos ------------------------------------------------------- */
+    creative_playmaker: {
+        nome: 'Creative Playmaker', posicoes: ['SS', 'LW', 'RW', 'AM', 'LM', 'RM'],
+        passe: 1.3, lancar: 1.5, conduzir: 1.15, cadencia: 0.85
+    },
+    classic_no10: {
+        nome: 'Classic No. 10', posicoes: ['SS', 'AM', 'CM'],
+        avanco: -3, passe: 1.4, lancar: 1.35, conduzir: 0.55, cadencia: 1.3,
+        amplitudeZ: 0.7
+    },
+    hole_player: {
+        nome: 'Hole Player', posicoes: ['SS', 'AM', 'LM', 'RM', 'CM'],
+        avancoComBola: 9, remate: 1.2, amplitudeZ: 1.3
+    },
+
+    /* --- Alas ------------------------------------------------------------ */
+    prolific_winger: {
+        nome: 'Prolific Winger', posicoes: ['LW', 'RW'],
+        largura: 4, remate: 1.2, cruzar: 1.1,
+        cortaParaDentro: true
+    },
+    roaming_flank: {
+        nome: 'Roaming Flank', posicoes: ['LW', 'RW', 'LM', 'RM'],
+        largura: -4, passe: 1.15, conduzir: 1.2,
+        cortaParaDentro: true
+    },
+    cross_specialist: {
+        nome: 'Cross Specialist', posicoes: ['LW', 'RW', 'LM', 'RM'],
+        largura: 7, cruzar: 1.6, conduzir: 0.9, remate: 0.7,
+        colaNaLinha: true
+    },
+
+    /* --- Meio-campo ------------------------------------------------------ */
+    box_to_box: {
+        nome: 'Box-to-Box', posicoes: ['AM', 'LM', 'RM', 'CM', 'DM'],
+        amplitudeZ: 1.5, avancoComBola: 5, pressao: 1.2
+    },
+    the_destroyer: {
+        nome: 'The Destroyer', posicoes: ['CM', 'DM', 'CB'],
+        avanco: -2, pressao: 1.6, conduzir: 0.6, lancar: 0.7, amplitudeZ: 0.85
+    },
+    orchestrator: {
+        nome: 'Orchestrator', posicoes: ['CM', 'DM'],
+        avanco: -5, passe: 1.35, lancar: 1.4, conduzir: 0.7, cadencia: 1.2
+    },
+    anchor_man: {
+        nome: 'Anchor Man', posicoes: ['DM'],
+        avanco: -7, pressao: 1.25, lancar: 0.5, conduzir: 0.5, amplitudeZ: 0.6
+    },
+
+    /* --- Defesas --------------------------------------------------------- */
+    build_up: {
+        nome: 'Build Up', posicoes: ['CB'],
+        avanco: -4, passe: 1.3, lancar: 1.2, cadencia: 1.25
+    },
+    extra_frontman: {
+        nome: 'Extra Frontman', posicoes: ['CB'],
+        amplitudeZ: 1.4, remate: 1.2,
+        juntaSeAoAtaque: true
+    },
+    offensive_fullback: {
+        nome: 'Offensive Full-back', posicoes: ['LB', 'RB'],
+        cruzar: 1.25, colaNaLinha: true
+    },
+    fullback_finisher: {
+        nome: 'Full-back Finisher', posicoes: ['LB', 'RB'],
+        largura: -5, remate: 1.2, cruzar: 0.8,
+        cortaParaDentro: true
+    },
+    defensive_fullback: {
+        nome: 'Defensive Full-back', posicoes: ['LB', 'RB'],
+        avanco: -2, pressao: 1.2, cruzar: 0.7
+    },
+
+    /* --- Guarda-redes ---------------------------------------------------- */
+    offensive_gk: { nome: 'Offensive Goalkeeper', posicoes: ['GK'] },
+    defensive_gk: { nome: 'Defensive Goalkeeper', posicoes: ['GK'] }
+};
+
+/*
+Estilo por omissão de cada posição, usado no arranque (ver assignFormations).
+São escolhas neutras: o estilo "normal" daquela posição, não o mais exótico.
+*/
+const EstiloPorOmissao = {
+    GK: 'defensive_gk',
+    CB: 'build_up', LB: 'offensive_fullback', RB: 'offensive_fullback',
+    DM: 'anchor_man', CM: 'box_to_box', AM: 'classic_no10',
+    LM: 'roaming_flank', RM: 'roaming_flank',
+    LW: 'prolific_winger', RW: 'prolific_winger',
+    CF: 'goal_poacher', SS: 'creative_playmaker'
 };
 
 /*
@@ -749,7 +966,19 @@ const CarryModel = {
     touchPower: 8.0,      // força base do toque (m/s)
     touchCooldown: 0.4,   // tempo mínimo entre toques (seg)
     touchMaxWait: 0.18,   // espera máx. pela janela da passada antes de forçar o toque (seg)
-    recoverRadius: 0.8    // distância para re-capturar a bola após toque
+    recoverRadius: 0.8,   // distância para re-capturar a bola após toque
+
+    /*
+    Faixa junto à linha de fundo onde NÃO se adianta a bola. Dentro dela o
+    portador continua a correr, mas com a bola no pé: um toque à frente ali
+    põe-na fora pela linha de fundo, e o resultado era pontapé de baliza para
+    o adversário só por conduzir até ao fundo.
+
+    Vale para o toque do CARRY e para os toques laterais do corte (CUT). O
+    leque de direcções também deixa de apontar para dentro da faixa, senão o
+    jogador continuava a correr contra a linha sem nunca poder tocar.
+    */
+    margemLinhaFundo: 6.0
 };
 
 /*
@@ -865,8 +1094,15 @@ const CrossModel = {
     // +20% pedido explicitamente: cruzamentos pouco frequentes.
     chanceBase: 0.54,     // com um alvo na área
     chancePorAlvo: 0.264, // por cada alvo além do primeiro
-    bonusLargura: 0.36,   // acumulado junto à linha lateral
+    // +100% pedido: cruzar DAS LATERAIS DA ÁREA. Os dois termos que dependem
+    // de estar lá (largura junto à linha, e o peso da camada CRUZAMENTO do
+    // SpatialGrid — ver pesoGrid abaixo) dobraram; a chanceBase não, senão
+    // subia também o cruzamento de qualquer sítio.
+    bonusLargura: 0.72,   // acumulado junto à linha lateral
     bonusFundo: 0.42,     // acumulado junto à linha de fundo
+    // Quanto vale a célula da camada CRUZAMENTO (0-100) do SpatialGrid, que é
+    // exactamente a faixa das laterais da área. 0.30 -> 0.60.
+    pesoGrid: 0.60,
     penalPressao: 0.30,   // sob pressão o cruzamento sai mal
     chanceMax: 0.97
 };
@@ -915,6 +1151,27 @@ const CadenceModel = {
     posseSobPressao: 0.6
 };
 
+/*
+Uso dos dados da percepção (ver perception.js) na DECISÃO.
+
+A percepção já calculava `interceptable`/`timeToIntercept`/`interceptionPoint`
+por jogador, mas nada na árvore os lia: o único consumidor era o `claimScore`
+do `pickChaser`, que escolhe UM jogador por equipa. Resultado: uma bola a
+passar rente a um jogador que não fosse nem o chaser nem o destinatário do
+passe era ignorada por ele — ficava parado a ver.
+*/
+const PerceptionModel = {
+    // Só reage quem lá chega depressa. Acima disto é bola para o chaser, não
+    // para toda a gente — senão a equipa inteira colapsa sobre a bola.
+    janelaIntercetar: 1.2,
+    // E só se for claramente melhor do que quem já vai lá (chaser/destinatário),
+    // em segundos de vantagem.
+    margemMelhor: 0.15,
+    // Distância a partir da qual se considera que a bola JÁ passou o
+    // destinatário do passe e ele deixa de ser dono da jogada.
+    passePerdidoDist: 4.0
+};
+
 // Segundos que a equipa SEM bola espera, depois de a perder, antes de
 // reavaliar chaser/marcação — ligado ao selector "Defensive Pressure".
 const DefensivePressureModel = {
@@ -946,6 +1203,10 @@ const Tatics = {
         }
         const el = document.getElementById('sec-' + sector);
         if (el) el.classList.toggle('active', this.setores.includes(sector));
+        // O contador do rótulo era estático no HTML ("Setor do campo (2)") e
+        // nunca acompanhava os botões.
+        const lbl = document.getElementById('lbl-setores');
+        if (lbl) lbl.textContent = 'Setor do campo (' + this.setores.length + ')';
         Match.assignFormations();
     },
 

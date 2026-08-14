@@ -23,6 +23,28 @@ function amostrarClipChuteGR(norm) {
     };
 }
 
+/*
+Amostra o clip do corte diagonal (DribbleCutClip) num tempo normalizado 0..1.
+Mesmo esquema do clip do guarda-redes: interpolação linear entre vizinhos.
+*/
+function amostrarClipCorte(norm) {
+    const fr = DribbleCutClip.frames;
+    const n = fr.length;
+    const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
+    const i = Math.min(n - 2, Math.floor(pos));
+    const u = pos - i;
+    const a = fr[i], b = fr[i + 1];
+    const mix = (k) => a[k] + (b[k] - a[k]) * u;
+    return {
+        leanZ: mix('leanZ'),
+        quadrilY: mix('quadrilY'),
+        troncoY: mix('troncoY'),
+        coxaExt: mix('coxaExt'),
+        joelhoExt: mix('joelhoExt'),
+        bracoZ: mix('bracoZ')
+    };
+}
+
 class FootballPlayer {
     constructor(id, color1, color2, team) {
         this.id = id; this.team = team; this.role = 'def';
@@ -56,6 +78,15 @@ class FootballPlayer {
         this.isCross = false;
         this.isThroughBall = false;
         this.throughBallTarget = null;
+
+        // Corte diagonal de 30° (DRIBBLE_CUT_30) — ver estado CUT em fsm.js.
+        this.cutAtivo = false;
+        this.cutNorm = 0;
+        this.cutLado = 1;
+        this.cutTimer = 0;
+        this.cutToquesFeitos = 0;
+        this.cutDirIni = new THREE.Vector3(0, 0, 1);
+        this.cutVel = 0;
         this.decisionTimer = 0;
         this.carryTouchGrace = 0;
         this.actionState = null;
@@ -94,7 +125,14 @@ class FootballPlayer {
         this.gkEstado = 'idle';
         this.gkStyle = 'defensive';     // estado actual (dinâmico) — ver updateGkStyle em team_bt.js
         this.gkStyleBase = 'defensive'; // traço fixo do jogador, atribuído em match.js
-        this.fbStyle = 'defensive';     // playing style LB/RB — ver FullBackStyle em config.js
+        this.fbStyle = 'defensive';     // espelho do playing style, lido por attackFullBack
+
+        // Playing style (ver PlayingStyles em config.js e playing_styles.js).
+        // `playingStyleFixo` é a escolha explícita e sobrevive a mudanças de
+        // formação; `playingStyle` é a chave em vigor depois da validação.
+        this.playingStyle = null;
+        this.playingStyleFixo = null;
+        this.styleFlags = {};
         this.gkTempoMergulho = 0;
         this.gkDirMergulho = 0;
         this.gkTipoMergulho = 'baixo';
@@ -382,6 +420,13 @@ class FootballPlayer {
                 score += SpatialGrid.layerValueAt('pass', optPos.x, optPos.z, this.team) * 0.4;
             }
 
+            /*
+            Playing style do CANDIDATO: um Target Man ou um Creative Playmaker
+            é procurado mais vezes como destino de passe; um Dummy Runner (que
+            está de propósito a puxar marcação, não a oferecer-se) menos.
+            */
+            if (typeof estiloAtivoDe === 'function') score *= estiloAtivoDe(opt).passe;
+
             let optSec = getSectorOfX(optPos.x);
             if (Tatics.setores.includes(optSec)) {
                 // 30 -> 45 -> 67.5 -> 135 (+100%). Passa a ser o maior termo
@@ -438,7 +483,10 @@ class FootballPlayer {
         const base = ShootingModel.baseRange + (skill / 100) * ShootingModel.skillRange;
         const centralidade = 1 - Math.min(1, Math.abs(this.model.position.x) / ShootingModel.maxOffsetX);
         const porFuncao = (this.role === 'def') ? ShootingModel.defenderFactor : 1.0;
-        return base * porFuncao * (ShootingModel.angleFloor + (1 - ShootingModel.angleFloor) * centralidade);
+        // Peso `remate` do playing style: um Fox in the Box remata de onde um
+        // Cross Specialist ainda estaria a procurar quem cruzar.
+        const porEstilo = (typeof estiloAtivoDe === 'function') ? estiloAtivoDe(this).remate : 1.0;
+        return base * porFuncao * porEstilo * (ShootingModel.angleFloor + (1 - ShootingModel.angleFloor) * centralidade);
     }
 
     initiatePass(targetPlayer) { 
@@ -686,6 +734,10 @@ class FootballPlayer {
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
         } else {
             this.animateBones(dt);
+            // Camada do corte diagonal POR CIMA do ciclo de corrida — tem de
+            // vir depois do animateBones, senão ele reescreve a pelvis e as
+            // pernas no mesmo frame e o corte desaparece.
+            this.aplicarCamadaCorte();
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT e PlayerPOS)
@@ -820,6 +872,38 @@ class FootballPlayer {
         const d1 = Math.abs(t - 0.25);
         const d2 = Math.abs(t - 0.75);
         return Math.min(d1, d2) < tol;
+    }
+
+    /*
+    DRIBBLE_CUT_30, camada CORPO + PERNAS (ver DribbleCutClip em config.js).
+
+    Aditiva de propósito: o ciclo de corrida do animateBones continua a mandar
+    nas passadas, e isto só acrescenta a inclinação lateral, a rotação do
+    quadril e o viés diagonal da perna externa. O tronco contra-roda (troncoY
+    tem sinal oposto ao quadrilY), que é o que mantém o peito parcialmente
+    virado para a frente enquanto o centro de massa já foi para a diagonal.
+    */
+    aplicarCamadaCorte() {
+        if (!this.cutAtivo || !this.rig) return;
+
+        const C = amostrarClipCorte(this.cutNorm);
+        const lado = this.cutLado;
+        const rig = this.rig;
+
+        rig.pelvis.rotation.z += C.leanZ * lado;
+        rig.pelvis.rotation.y += C.quadrilY * lado;
+        rig.chest.rotation.y += C.troncoY * lado;
+
+        // Perna externa é a do lado CONTRÁRIO ao corte: é ela que planta no
+        // chão e empurra o corpo para a nova direcção.
+        const pernaExt = (lado > 0) ? rig.lLeg : rig.rLeg;
+        const joelhoExt = (lado > 0) ? rig.lKnee : rig.rKnee;
+        pernaExt.rotation.x += C.coxaExt;
+        joelhoExt.rotation.x += C.joelhoExt;
+
+        // Braço contrário abre para equilibrar.
+        const bracoOposto = (lado > 0) ? rig.lArm : rig.rArm;
+        bracoOposto.rotation.z += C.bracoZ * lado;
     }
 
     animateBones(dt) {

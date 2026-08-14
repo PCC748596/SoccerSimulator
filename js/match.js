@@ -655,10 +655,12 @@ const Match = {
             this.players[i].role = fData[i].role;
             this.players[i].slot = slotA;
             this.players[i].updateShirt(fData[i].num, fData[i].pos);
-            // Playing styles: TeamA GK ofensivo (sweeper), TeamB GK defensivo;
-            // laterais (LB/RB) de ambas as equipas ofensivos.
-            if (fData[i].role === 'gk') this.players[i].gkStyleBase = 'offensive';
-            if (fData[i].pos === 'LB' || fData[i].pos === 'RB') this.players[i].fbStyle = 'offensive';
+            this.aplicarPlayingStyle(this.players[i], fData[i].pos);
+            // TeamA guarda o GR ofensivo (sweeper); ver aplicarPlayingStyle.
+            if (fData[i].role === 'gk') {
+                this.players[i].gkStyleBase = 'offensive';
+                this.players[i].playingStyle = 'offensive_gk';
+            }
 
             // O adversário ataca ao contrário, mas o slot está no referencial
             // de ataque dele — logo é o mesmo. Só o baseTarget e o u são espelhados.
@@ -670,8 +672,42 @@ const Match = {
             this.opponents[i].role = fData[i].role;
             this.opponents[i].slot = slotB;
             this.opponents[i].updateShirt(fData[i].num, fData[i].pos);
-            if (fData[i].role === 'gk') this.opponents[i].gkStyleBase = 'defensive';
-            if (fData[i].pos === 'LB' || fData[i].pos === 'RB') this.opponents[i].fbStyle = 'offensive';
+            this.aplicarPlayingStyle(this.opponents[i], fData[i].pos);
+            if (fData[i].role === 'gk') {
+                this.opponents[i].gkStyleBase = 'defensive';
+                this.opponents[i].playingStyle = 'defensive_gk';
+            }
+        }
+    },
+
+    /*
+    Atribui o playing style de um jogador.
+
+    Respeita uma escolha já feita (`p.playingStyleFixo`, posta à mão ou pela
+    UI) desde que ela seja válida para a posição — trocar de formação não pode
+    apagar a escolha do utilizador. Sem escolha, cai no estilo por omissão da
+    posição (`EstiloPorOmissao`).
+
+    `gkStyleBase` e `fbStyle` continuam a existir por baixo: são eles que os
+    ramos do GR e do lateral já lêem. Aqui só se garante que ficam coerentes
+    com o estilo escolhido, em vez de serem uma segunda fonte de verdade.
+    */
+    aplicarPlayingStyle: function (p, pos) {
+        if (typeof PlayingStyles === 'undefined') return;
+
+        let chave = p.playingStyleFixo;
+        if (!chave || !estiloValidoPara(chave, pos)) chave = EstiloPorOmissao[pos];
+        if (!chave || !PlayingStyles[chave]) chave = null;
+        p.playingStyle = chave;
+
+        // Espelhos para os sistemas que já existiam antes do catálogo.
+        if (pos === 'LB' || pos === 'RB') {
+            if (chave === 'defensive_fullback') p.fbStyle = 'defensive';
+            else if (chave === 'fullback_finisher') p.fbStyle = 'finisher';
+            else p.fbStyle = 'offensive';
+        }
+        if (pos === 'GK') {
+            p.gkStyleBase = (chave === 'offensive_gk') ? 'offensive' : 'defensive';
         }
     },
 
@@ -1110,6 +1146,30 @@ const Match = {
             }
         }
         else {
+            /*
+            O passe já morreu para o destinatário?
+
+            `intendedReceiver` era posto no passe e só limpo quando alguém
+            tocava na bola. Se ela lhe passasse ao lado, ele continuava a ser
+            o "dono" da jogada — ficava a correr atrás dela pelo ramo Receber,
+            e mais nenhum jogador podia reclamá-la (o podeIntercetar cede-lhe
+            sempre a vez). O resto da equipa via a bola passar e não reagia.
+
+            Consideramos perdido quando a bola já se afasta dele e está a mais
+            de `passePerdidoDist` — aí a jogada volta a ser de quem lá chegar.
+            */
+            const alvo = this.intendedReceiver;
+            if (alvo && this.ballVel.lengthSq() > 0.5) {
+                const dx = ballPos.x - alvo.model.position.x;
+                const dz = ballPos.z - alvo.model.position.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist > PerceptionModel.passePerdidoDist) {
+                    // Afasta-se dele? (a bola vai no sentido oposto ao alvo)
+                    const afasta = (this.ballVel.x * dx + this.ballVel.z * dz) > 0;
+                    if (afasta) this.intendedReceiver = null;
+                }
+            }
+
             if (!this.resolveBallContact() && this.possessionTeam) {
                 this.possessionTimer += this.delta;
             }

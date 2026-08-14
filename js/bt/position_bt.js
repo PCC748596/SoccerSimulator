@@ -487,6 +487,72 @@ const PositionAI = {
         campo, abaixo, se aplicam.
         */
 
+        /*
+        Playing style — camada posicional (ver PlayingStyles em config.js e
+        playing_styles.js). Aplicada AQUI, sobre o alvo já decidido pela folha
+        da posição, e não dentro de cada folha: o estilo é um desvio pessoal
+        por cima do papel táctico, não uma substituição dele.
+
+        Só afecta jogadores de campo — o GR tem o seu próprio ciclo (updateGK).
+        */
+        if (p.role !== 'gk' && typeof estiloAtivoDe === 'function') {
+            const est = estiloAtivoDe(p);
+
+            // Avanço/recuo, no referencial de ataque.
+            let avanco = est.avanco;
+            if (ctx.bb && ctx.bb.isAttacking) avanco += est.avancoComBola;
+            if (avanco !== 0) targetZ += avanco * p.dirZ;
+
+            // Largura: + abre para a linha do LADO DELE, − fecha para o eixo.
+            if (est.largura !== 0) {
+                const ladoEst = Math.sign(p.baseTarget.x) || 1;
+                targetX += est.largura * ladoEst;
+            }
+
+            /*
+            `ombroDefesa` (Goal Poacher): cola-se à linha do último defensor.
+            É um alvo absoluto, não um desvio — a graça do estilo é estar
+            exactamente ali, no limite do fora-de-jogo, e não "um pouco mais à
+            frente do que estaria".
+            */
+            if (est.ombroDefesa && ctx.bb && ctx.bb.isAttacking &&
+                ctx.bb.offsideLimitDir !== null && ctx.bb.offsideLimitDir !== undefined) {
+                targetZ = (ctx.bb.offsideLimitDir - 0.5) * p.dirZ;
+            }
+
+            // `dentroArea` (Fox in the Box): a atacar, não sai da grande área.
+            if (est.dentroArea && ctx.bb && ctx.bb.isAttacking) {
+                if (targetZ * p.dirZ < CrossModel.areaZ) targetZ = CrossModel.areaZ * p.dirZ;
+                targetX = THREE.MathUtils.clamp(targetX, -CrossModel.areaX, CrossModel.areaX);
+            }
+
+            /*
+            `atraiDefesa` (Dummy Runner): afasta-se do portador em vez de se
+            oferecer. É isso que puxa o marcador dele e abre o espaço para
+            outro — o oposto do que qualquer outra folha faz.
+            */
+            if (est.atraiDefesa && ctx.bb && ctx.bb.isAttacking && ctx.bb.carrier && ctx.bb.carrier !== p) {
+                const fx = targetX - ctx.bb.carrier.model.position.x;
+                const fd = Math.abs(fx) || 1;
+                targetX += (fx / fd) * 6.0;
+            }
+
+            // `colaNaLinha` (Cross Specialist) vs `cortaParaDentro`.
+            if (est.colaNaLinha && ctx.bb && ctx.bb.isAttacking) {
+                const ladoEst = Math.sign(p.baseTarget.x) || 1;
+                targetX = ladoEst * Math.max(Math.abs(targetX), CrossModel.alaX + 7);
+            } else if (est.cortaParaDentro && ctx.bb && ctx.bb.isAttacking &&
+                ctx.bb.ballZ * p.dirZ > 15) {
+                targetX *= 0.55;
+            }
+
+            // `amplitudeZ`: estica ou encolhe o afastamento ao meio do bloco.
+            if (est.amplitudeZ !== 1.0 && ctx.bb && ctx.bb.bloco) {
+                const centro = (ctx.bb.bloco.z0 + ctx.bb.bloco.z1) / 2 * ctx.bb.dir;
+                targetZ = centro + (targetZ - centro) * est.amplitudeZ;
+            }
+        }
+
         let tx = Math.max(-32, Math.min(32, targetX));
         let tz = Math.max(-50, Math.min(50, targetZ));
 

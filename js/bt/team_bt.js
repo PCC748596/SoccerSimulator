@@ -487,7 +487,15 @@ function computeBlock(bb) {
 
     /* --- profundidade --------------------------------------------------- */
 
+    /*
+    BUG (auditoria do painel): o `B.profundidadeComBola` (1.22) estava
+    definido no config e documentado ("com bola o bloco estica: há que dar
+    profundidade para jogar"), mas nunca era lido — o bloco tinha exactamente
+    a mesma profundidade a atacar e a defender. O mesmo com
+    `B.amplitudeComBola` (ver largura, mais abaixo).
+    */
     let profundidade = CAMPO_COMP * B.profundidade[compacLength];
+    if (bb.isAttacking) profundidade *= B.profundidadeComBola;
 
     /*
     GR (de qualquer um dos dois lados) com a bola na mão: ninguém pressiona
@@ -563,7 +571,9 @@ function computeBlock(bb) {
 
     /* --- largura -------------------------------------------------------- */
 
+    // Ver a nota da profundidade: o amplitudeComBola também não era lido.
     let largura = CAMPO_LARG * B.amplitude[compac];
+    if (bb.isAttacking) largura *= B.amplitudeComBola;
     const meiaLarg = largura / 2;
 
     // Basculação: o rectângulo desliza para o lado da bola proporcionalmente.
@@ -799,6 +809,8 @@ const TeamAI = {
 
         pickChaser(bb);
         updateGkStyle(bb);
+        // Estilos de jogo: avalia condições e emite eventos nas transições.
+        if (typeof PlayingStyleEvents !== 'undefined') PlayingStyleEvents.tick(bb);
         TeamBT.tick(bb);
         computeCollectiveShape(bb);
         applyPostureTuning(bb);

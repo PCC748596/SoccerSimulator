@@ -130,6 +130,20 @@ function venceuDuelo(valorA, valorB, baseA = 0.5, escala = 220) {
     return Math.random() < chance;
 }
 
+/*
+Este jogador está demasiado perto da linha de fundo para adiantar a bola?
+
+Mede a distância à linha de fundo que ele ATACA (a que fica à frente dele no
+referencial de ataque). Dentro de CarryModel.margemLinhaFundo, adiantar a bola
+punha-a fora e dava pontapé de baliza ao adversário.
+
+Usado pelo toque do CARRY e pelos toques laterais do CUT (fsm.js).
+*/
+function pertoDaLinhaDeFundo(p) {
+    const avanco = p.model.position.z * p.dirZ;
+    return (CAMPO_COMP / 2 - avanco) < CarryModel.margemLinhaFundo;
+}
+
 function chancePorSegundo(taxa, dt) {
     return Math.random() < taxa * dt;
 }

@@ -99,20 +99,35 @@ const Perception = {
         const skill = (p.skillFor ? p.skillFor('SPEED') : 50) / 100;
 
         // Velocidade máxima de perseguição deste jogador — mesma fórmula do
-        // actChaseBall (player_bt.js), para a percepção prever exactamente o
-        // que o jogador é capaz de fazer, não um número inventado à parte.
-        const maxChase = 5.8 + skill * 1.5;
+        // actChaseBall (player_bt.js), incluindo os multiplicadores de
+        // velocidade sem bola. A percepção tem de prever o que o jogador é
+        // MESMO capaz de fazer; com um número à parte, ou ele desistia de
+        // bolas que alcançava ou corria atrás de bolas impossíveis.
+        const maxChase = (5.8 + skill * 1.5) * 1.25 * 0.9;
 
         const px = p.model.position.x, pz = p.model.position.z;
-        // Atrito aproximado (ver Match.updateBall: pow(0.85, dt) por frame,
-        // ~0.15/s de perda de velocidade contínua nesta escala).
-        const drag = 0.15;
+
+        /*
+        Previsão da trajectória com o arrasto REAL (quadrático, ver
+        BallPhysics/updateBall). Antes usava-se um decaimento linear de
+        0.15/s, que era a aproximação do modelo exponencial antigo — com a
+        física nova ficou errado nos dois extremos: subestimava a travagem de
+        uma bola rápida e exagerava a de uma bola lenta, e o ponto de
+        interceptação saía fora sítio.
+
+        Para arrasto quadrático puro no plano, a distância percorrida ao fim
+        de `t` tem solução fechada:  d(t) = ln(1 + k·v0·t) / k
+        */
+        const v0 = Math.hypot(vel.x, vel.z);
+        const k = (typeof BallPhysics !== 'undefined') ? BallPhysics.kArrasto : 0.0135;
+        const ux = v0 > 0.001 ? vel.x / v0 : 0;
+        const uz = v0 > 0.001 ? vel.z / v0 : 0;
 
         let found = false;
         for (let t = 0.1; t <= 2.0; t += 0.1) {
-            const decay = Math.max(0, 1 - drag * t);
-            const bx = ball.x + vel.x * t * decay;
-            const bz = ball.z + vel.z * t * decay;
+            const d = (v0 > 0.001) ? Math.log(1 + k * v0 * t) / k : 0;
+            const bx = ball.x + ux * d;
+            const bz = ball.z + uz * d;
             const reachDist = Math.hypot(bx - px, bz - pz);
             const playerReach = maxChase * t;
 

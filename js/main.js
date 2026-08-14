@@ -212,12 +212,10 @@ function abrirModalSkills(p) {
         ['Interceptação', skills.intercept]
     ];
 
-    // Playing style: GK usa o traço fixo (gkStyleBase), LB/RB usa fbStyle.
-    // Outras posições ainda não têm estilo definido — mostra "-".
-    let estilo = null;
-    if (p.role === 'gk') estilo = p.gkStyleBase;
-    else if (p.pos === 'LB' || p.pos === 'RB') estilo = p.fbStyle;
-    campos.push(['Playing Style', estilo ? (estilo === 'offensive' ? 'Offensive' : 'Defensive') : '-']);
+    // Playing style — nome legível do catálogo (ver PlayingStyles em config.js).
+    const defEstilo = (typeof PlayingStyles !== 'undefined' && p.playingStyle)
+        ? PlayingStyles[p.playingStyle] : null;
+    campos.push(['Playing Style', defEstilo ? defEstilo.nome : '-']);
 
     corpo.innerHTML = campos.map(([nome, val]) =>
         '<div class="skill-linha"><span>' + nome + '</span><b>' + val + '</b></div>'

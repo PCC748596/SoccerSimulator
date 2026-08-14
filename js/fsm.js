@@ -31,9 +31,22 @@ function executePassGameplay(p) {
         forcaPasse = distToTarget * PassModel.forceForDistance * 0.55;
         Match.ballVel.y = 0;
     } else if (p.isCross) {
-        forcaPasse = Math.max(8.0, distToTarget * 0.95);
-        Match.ballVel.y = 6.8;
+        /*
+        Alto ou rasteiro — decidido no findCross (player_bt.js) conforme haja
+        alguém na linha do cruzamento, a distância ao alvo e o jogo aéreo dele.
+
+        Rasteiro sai mais forte e junto ao chão: chega antes e não dá tempo ao
+        guarda-redes de sair. Alto passa por cima de quem está no caminho.
+        */
+        if (p.crossAlto === false) {
+            forcaPasse = Math.max(10.0, distToTarget * 1.15);
+            Match.ballVel.y = 0;
+        } else {
+            forcaPasse = Math.max(8.0, distToTarget * 0.95);
+            Match.ballVel.y = 6.8;
+        }
         p.isCross = false;
+        p.crossAlto = undefined;
     } else if (Tatics.passe === 'longo' || distToTarget > 22.0) {
         forcaPasse = Math.max(7.5, distToTarget * 0.85);
         Match.ballVel.y = Math.min(6.5, 2.0 + distToTarget * 0.12);
@@ -71,6 +84,10 @@ class PlayerFSM {
         if (this.currentState === 'SLIDE_TACKLE' || this.currentState === 'TACKLE' || this.currentState === 'SHOOT' || this.currentState === 'PASS') {
             this.p.resetBonesToDefault();
         }
+        // Sair do CUT por qualquer via (perdeu a bola, desarme, bola parada)
+        // tem de desligar a camada aditiva, senão fica com o corpo torto.
+        if (this.currentState === 'CUT' && newState !== 'CUT') this.p.cutAtivo = false;
+
         this.currentState = newState; this.timer = 0;
 
         if (newState === 'SLIDE_TACKLE') this.enterSlideTackle();
@@ -216,6 +233,10 @@ class PlayerFSM {
             case 'BLOCKING':
             case 'FWR_SUPPORT':
             case 'AFT_SUPPORT':
+            // INTERCEPT: mesma locomoção, estado próprio só para aparecer como
+            // tal no debug. O alvo é o ponto de interceptação calculado pela
+            // percepção (ver actIntercept), não a posição actual da bola.
+            case 'INTERCEPT':
                 p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
                 break;
             /* =============================================================
@@ -237,9 +258,15 @@ class PlayerFSM {
                     let melhorNota = -Infinity;
                     let alvoX = p.carryTargetX, alvoZ = pz + 10 * p.dirZ;
 
+                    // Ponto mais avançado que vale a pena mirar: a faixa junto
+                    // à linha de fundo está fora, senão ele corre contra a
+                    // linha sem nunca poder adiantar a bola.
+                    const avancoMax = CAMPO_COMP / 2 - CarryModel.margemLinhaFundo;
+
                     for (const ang of CarryModel.leque) {
                         const tx = px + Math.sin(ang) * CarryModel.lookAhead;
-                        const tz = pz + Math.cos(ang) * p.dirZ * CarryModel.lookAhead;
+                        let tz = pz + Math.cos(ang) * p.dirZ * CarryModel.lookAhead;
+                        if (tz * p.dirZ > avancoMax) tz = avancoMax * p.dirZ;
                         if (Math.abs(tx) > 31 || Math.abs(tz) > 51) continue;
 
                         let maisPerto = 999;
@@ -269,8 +296,14 @@ class PlayerFSM {
                 }
                 p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult * 0.85);
 
-                // Toques de condução — soltar a bola à frente e correr atrás
-                if (p.hasBall && p.velocity.lengthSq() > 2.0 && this.timer > CarryModel.touchCooldown) {
+                /*
+                Toques de condução — soltar a bola à frente e correr atrás.
+                Perto da linha de fundo não se adianta nada: o toque punha a
+                bola fora e dava pontapé de baliza ao adversário. Continua a
+                correr, mas com a bola no pé (ver pertoDaLinhaDeFundo).
+                */
+                if (p.hasBall && p.velocity.lengthSq() > 2.0 && this.timer > CarryModel.touchCooldown
+                    && !pertoDaLinhaDeFundo(p)) {
                     let forward = p.velocity.clone().normalize();
                     let allOpps = (p.team === 'TeamA') ? Match.opponents : Match.players;
 
@@ -391,18 +424,25 @@ class PlayerFSM {
                     successChance += (skill - 50) * 0.003;
 
                     if (Math.random() < successChance) {
-                        // SUCESSO — toca a bola para o lado e sprinta
+                        /*
+                        SUCESSO — em vez de um empurrão único e volta imediata
+                        ao CARRY, entra no gesto DRIBBLE_CUT_30: o corte de 30°
+                        acontece ao longo de ~0.75 s, com dois toques laterais
+                        curtos e o corpo a rodar gradualmente (ver DribbleCutClip).
+                        */
                         if (typeof MatchStats !== 'undefined') MatchStats[p.team].dribles.sucesso++;
-                        p.hasBall = false;
-                        p.touchLock = 0.15;
-                        p.carryTouchGrace = 0.15 + 0.15;
-                        Match.ballCarrier = null;
-                        Match.ballVel.copy(pushDir).multiplyScalar(DribbleModel.touchPower);
-                        Match.ballVel.y = 0.3;
-                        Match.lastTouchedTeam = p.team;
-                        Match.lastTouchedPlayer = p;
                         p.speedMult = DribbleModel.sprintBoost;
                         window.bolaChutada = false;
+
+                        p.cutAtivo = true;
+                        p.cutNorm = 0;
+                        p.cutTimer = 0;
+                        p.cutToquesFeitos = 0;
+                        p.cutLado = escapeSide;
+                        p.cutDirIni = forward.clone();
+                        p.cutVel = Math.max(4.0, p.velocity.length());
+                        this.changeState('CUT');
+                        break;
                     } else {
                         // FALHOU — bola fica solta, adversário pode roubar
                         p.hasBall = false;
@@ -418,6 +458,66 @@ class PlayerFSM {
 
                     // Volta a CARRY após o toque (o BT decidirá o próximo passo)
                     this.changeState('CARRY');
+                }
+                break;
+
+            /* =============================================================
+               CUT — DRIBBLE_CUT_30: corte lateral em diagonal de 30°.
+
+               O deslocamento roda gradualmente da direcção inicial até aos
+               30°, com dois toques laterais curtos pelo caminho. A pose
+               (inclinação, quadril, perna externa) é a camada aditiva
+               aplicada em player.aplicarCamadaCorte() — aqui só vive o
+               movimento e os toques na bola.
+               ============================================================= */
+            case 'CUT':
+                {
+                    const K = DribbleCutClip;
+                    p.cutTimer += dt;
+                    const norm = Math.min(1, p.cutTimer / K.duracao);
+                    p.cutNorm = norm;
+
+                    /*
+                    Suavização em S (smoothstep): o jogador não roda os 30° de
+                    uma vez. Arranca devagar, gira mais depressa a meio do
+                    gesto (frames 5-8) e assenta na nova direcção no fim.
+                    */
+                    const s = norm * norm * (3 - 2 * norm);
+                    const dir = p.cutDirIni.clone().applyAxisAngle(_vUp, K.angulo * p.cutLado * s);
+
+                    // Perde um pouco de velocidade no plantar do pé e recupera
+                    // no fim (frames 3-6 travam, 10-12 aceleram outra vez).
+                    const fatorVel = 0.78 + 0.22 * Math.abs(2 * norm - 1);
+                    p.velocity.copy(dir).multiplyScalar(p.cutVel * fatorVel);
+
+                    // Toques laterais alternados nos frames 6 e 9.
+                    const toque = K.toques[p.cutToquesFeitos];
+                    if (p.hasBall && toque !== undefined && norm >= toque && !pertoDaLinhaDeFundo(p)) {
+                        p.cutToquesFeitos++;
+                        const passada = misturarAndamento(p.velocity.length()).passada;
+                        // Alterna a abertura do toque: o primeiro leva a bola
+                        // mais para fora, o segundo já a alinha com a corrida.
+                        const abertura = (p.cutToquesFeitos === 1) ? 0.55 : 0.20;
+                        const dirToque = dir.clone()
+                            .applyAxisAngle(_vUp, K.angulo * p.cutLado * abertura)
+                            .normalize();
+
+                        p.hasBall = false;
+                        p.touchLock = BallControl.touchLock;
+                        p.carryTouchGrace = BallControl.touchLock + 0.15;
+                        Match.ballCarrier = null;
+                        Match.ballVel.copy(dirToque).multiplyScalar(p.velocity.length() + passada * K.forcaToque);
+                        Match.ballVel.y = 0;
+                        Match.lastTouchedTeam = p.team;
+                        Match.lastTouchedPlayer = p;
+                        window.bolaChutada = false;
+                    }
+
+                    if (norm >= 1) {
+                        p.cutAtivo = false;
+                        p.dribbleOpponent = null;
+                        this.changeState('CARRY');
+                    }
                 }
                 break;
 

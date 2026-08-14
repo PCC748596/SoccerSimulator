@@ -38,7 +38,7 @@ faz um remate ganhar de um passe, por exemplo.
 ```
 PlayerRoot (selector)
 ├── BolaParada        jogo parado (kickoff, canto) -> IDLE / SET_PIECE_*
-├── AccaoEmCurso       já está em PASS/SHOOT/TACKLE/SLIDE_TACKLE -> deixa acabar
+├── AccaoEmCurso       já está em PASS/SHOOT/TACKLE/SLIDE_TACKLE/CUT -> deixa acabar
 ├── ComBola             SE eu tenho a bola:
 │   ├── Dominar             ainda dentro da janela de cadência -> conduz, não decide
 │   ├── GuardaRedesJoga     SE sou GR -> passe curto / lançamento / segurar
@@ -46,6 +46,7 @@ PlayerRoot (selector)
 │   ├── Cruzar              SE na ala + alvo na área + sorteio -> CRUZA
 │   ├── ConduzirEmEspaco    SE espaço aberto à frente -> CONDUZ
 │   ├── Lancar              SE espaço nas costas da defesa (sorteio) -> LANÇA
+│   ├── PassarGrid          SE window.usarPasseGrid ligado -> PASSA (experimental)
 │   ├── Passar              SE achou alvo por pontuação (sorteio) -> PASSA
 │   └── (fallback) conduzir                                  -> CONDUZ
 └── SemBola             SE eu NÃO tenho a bola:
@@ -80,7 +81,15 @@ na área com o guarda-redes batido e ainda "pensava" 3 segundos.
 
 `emZonaDeRemate(ctx)`: `zoneAhead > 15` (já passou o meio-campo) E distância
 até à baliza dentro de `shootingRange()` E ângulo dentro de
-`ShootingModel.maxOffsetX`. Sem sorteio — se está na zona, remata.
+`ShootingModel.maxOffsetX` E a célula da camada CHUTE do `SpatialGrid` ter
+valor > 0 (fora das zonas autoradas na grelha, não remata). Sem sorteio — se
+está na zona, remata.
+
+O resultado do remate é uma disputa de skills (ver `case 'SHOOT'` em
+`js/fsm.js`): primeiro um teste de bloqueio contra um adversário a menos de
+2.2m (TEC do rematador x MARKING dele) e, passando esse, TEC x GK do
+guarda-redes, que decide se o remate vai ao ângulo (`maxC*0.9`) ou
+meio-centrado (`maxC*0.5`).
 
 ### 3.3 Cruzar
 
@@ -114,11 +123,23 @@ Este é o ramo que estava a preocupar (o CF livre a ser ignorado). A função é
 score = 100
       + até 110  livre de marcação   (quanto mais longe o adversário mais
                                        perto do LIVRE, maior — ver nota abaixo)
-      + 30       se cai num sector do painel (Left/Center/Right) activado
+      + valor da célula da camada PASSE do SpatialGrid x 0.4
+      + 135      se cai num sector do painel (Left/Center/Right) activado
       + 20-55    progressão para a frente (se o passe avança o jogo)
       - |progressão|   se o passe recua
       + bónus de distância conforme o Estilo de Passe (Curto/Misto/Longo)
 ```
+
+O sector é classificado no REFERENCIAL DE ATAQUE (`x * dirZ`), igual ao
+`Tatics.getWeightedSectorX`. Classificar o x do mundo cru fazia com que, para
+a equipa que ataca no sentido oposto, 'esq' do painel virasse o flanco
+contrário ao da condução — os dois sistemas anulavam-se.
+
+Antes de entrar na lista, o candidato passa por um teste de linha de passe:
+o adversário mais perto da recta tem de estar acima de `safetyLimit`, e esse
+limite é escalado pelo duelo Passe x Interceptação (`INTERCEPT` dele contra
+`PASS` de quem passa) — bom interceptador precisa de menos proximidade para
+travar a opção, bom passador arrisca-se mais perto.
 
 Ganha quem tiver a pontuação mais alta. **Corrigido nesta sessão**: o bónus
 por estar livre tinha um tecto baixo (+50) que tratava "um pouco livre" e
@@ -146,8 +167,15 @@ bola.
 
 - **Carrinho**: só dentro de 2.5-4.5m do portador adversário, e só de
   frente (0-45°) ou de lado (45-90°) em relação à direcção de movimento
-  dele — carrinho por trás não vale (corrigido nesta sessão).
-- **Desarme de pé**: dentro de 2.5-2.8m, taxa por segundo (não por frame).
+  dele — carrinho por trás não vale (corrigido nesta sessão). Além disso o
+  jogador tem de já estar perto do portador há pelo menos o tempo do
+  Defensive Pressure (`p.tempoPertoDoPortador` >= 6s/4s/2s): a espera do
+  painel gate a TENTATIVA individual, não só a reatribuição do chaser.
+  O resultado é MARCAÇÃO x TÉCNICA (`venceuDuelo`); perdendo o duelo, o
+  jogador passa ao lado sem tocar na bola.
+- **Desarme de pé**: dentro de 2.5-2.8m, taxa por segundo (não por frame),
+  com o mesmo gate de tempo do Defensive Pressure. Resultado por
+  (VELOCIDADE+FORÇA) do defensor contra (VELOCIDADE+FORÇA) do portador.
 - **Ir à bola**: só o `chaser` designado pelo nível 1 (TeamBT) — evita todo
   mundo correr pra bola ao mesmo tempo.
 - **Receber**: sou o `Match.intendedReceiver` de um passe em curso.
@@ -177,9 +205,43 @@ rotula o que está a acontecer para aparecer certo no debug.
 | Jogador livre não recebe passe | `findPassTarget()` em `js/player.js` — pontuação |
 | Passa cedo/tarde demais | `CadenceModel` em `js/config.js` |
 | Marca muito solto/colado | `MarkingModel.distanciaPorPressao`/`biasMaxPorPressao` em `js/config.js` |
-| Cruza pouco/demais | `CrossModel` em `js/config.js`, condição em `findCross` |
+| Cruza pouco/demais | `CrossModel` em `js/config.js` (`bonusLargura`, `pesoGrid`), condição em `findCross` |
 | Lança pouco (through ball) | `PassModel.throughBallChance`/`throughBallGap` |
 | Conduz demais em vez de passar | `PassModel.carryChance*` |
-| Remata tarde/cedo | `ShootingModel`, `emZonaDeRemate` |
-| Ignora o setor de campo (Left/Center/Right) | `Tatics.getWeightedSectorX` em `js/config.js` |
+| Remata tarde/cedo | `ShootingModel`, `emZonaDeRemate`, camada CHUTE do `SpatialGrid` |
+| Ignora o setor de campo (Left/Center/Right) | `Tatics.getWeightedSectorX` + bónus em `findPassTarget` + `CarryModel.sectorWeight` |
 | Carrinho/desarme errado | folhas `Carrinho`/`Desarme` em `player_bt.js` |
+| Duelo de skills errado | `venceuDuelo()` em `js/utils.js`, `p.skillFor(campo)` em `js/player.js` |
+| Lateral não sobe / sobe demais | `FullBackStyle.avancoMax`, `attackFullBack` em `position_bt.js` |
+| GR sai/não sai da baliza | `GoalkeeperStyle.maxOut`, `updateGkStyle` em `team_bt.js` |
+| Bola voa estranho | `BallPhysics` em `js/config.js` (é física real, não valores à mão) |
+
+## 6. Playing styles
+
+Traços por jogador, atribuídos em `Match.assignFormations` e visíveis no
+modal do painel "Player Skills".
+
+| Estilo | Quem | Onde actua |
+|---|---|---|
+| `gkStyleBase` offensive/defensive | GR | `updateGkStyle` (team_bt) decide o `gkStyle` corrente; `actGoalkeeperPosition` usa `GoalkeeperStyle[...].maxOut` |
+| `fbStyle` offensive/defensive | LB/RB | `attackFullBack` (position_bt) usa `FullBackStyle.avancoMax` em metros |
+
+O GR `defensive` ignora o gatilho de sweeper por completo. O `offensive` vira
+sweeper quando o adversário com bola entra no corredor central (`|x| < 8`) sem
+nenhum defensor nosso entre ele e a nossa baliza. O estilo do lateral só
+actua com bola — sem bola os dois estilos ficam na mesma linha defensiva.
+
+## 7. Eventos (EventBus)
+
+Migração em curso de "polling de estado espalhado por ifs" para eventos
+(`js/event_bus.js`). Feitos até agora:
+
+| Evento | Emitido em | Quem ouve |
+|---|---|---|
+| `GK_CATCH_BALL` | `grabBall()` | Match: liga `gkHoldingBall`, marca `snapPosition` em todos |
+| `GK_RELEASE_BALL` | contacto do chutão do GR | Match: desliga `gkHoldingBall` |
+| `CB_HAS_BALL` | `prepare()` do PlayerBT | Match: `buildOutBias` no CB oposto e nos laterais |
+| `CM_HAS_BALL` | `prepare()` do PlayerBT | Match: adianta RM/LM e RB/LB do lado da jogada |
+| `GK_STYLE_OFFENSIVE` / `GK_STYLE_DEFENSIVE` | `updateGkStyle` | (só notificação, o estado vive em `p.gkStyle`) |
+
+Por fazer: RB/LB e GOAL_KICK.

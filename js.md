@@ -15,14 +15,22 @@ Ordem de carregamento no [index.html](index.html) — **não trocar**:
 ```
 three.min.js (CDN)
   └─ assets/ball_mesh.js
-  └─ config.js → stats.js → utils.js → controls.js
-       → bt/action_state.js → bt/perception.js
+  └─ event_bus.js → joint_limits.js
+       → config.js → stats.js → utils.js → controls.js
+       → bt/action_state.js → perception.js
+       → spatial_grid.js → pass_candidates.js
        → bt/core.js → bt/team_bt.js → bt/position_bt.js → bt/player_bt.js
+       → bt/btDebug.js
        → match.js → player.js → fsm.js → simulate.js → main.js
 ```
 
 (nota: `perception.js` vive em `js/perception.js`, não em `js/bt/` — o diagrama
 acima segue a ordem real de carregamento no `index.html`, não a pasta.)
+
+`event_bus.js` e `joint_limits.js` vêm ANTES do `config.js` de propósito: o
+`config.js` não depende deles, mas quem depende (`match.js`, `player.js`)
+carrega bem depois, e pô-los no topo deixa claro que são infra-estrutura e
+não parte do modelo de jogo.
 
 Fluxo em runtime:
 
@@ -69,13 +77,84 @@ nada), `Action` (efeito; sem retorno = `SUCCESS`). Construtores curtos para as
 árvores ficarem legíveis: `seq()`, `sel()`, `cond()`, `act()`, `not()`, `opt()`.
 `BT.debug = true` grava o caminho percorrido em `bb.trace`.
 
+### `event_bus.js` — pub/sub
+
+`EventBus.on(nome, cb)` / `.off(nome, cb)` / `.emit(nome, dados)`. Existe para
+substituir, por partes, o polling de estado alheio espalhado por ifs
+(`gk.gkEstado === 'apanhar'` lido em três ficheiros diferentes, etc.).
+
+Eventos vivos hoje:
+
+| Evento | Emitido em | Efeito |
+|---|---|---|
+| `GK_CATCH_BALL` | `player.grabBall()` | `Match.gkHoldingBall[team] = true`; marca `p.snapPosition` em TODOS os jogadores (reposicionamento instantâneo no frame seguinte) |
+| `GK_RELEASE_BALL` | contacto do chutão do GR | `Match.gkHoldingBall[team] = false` |
+| `CB_HAS_BALL` | `prepare()` (player_bt) | `buildOutBias`: CB oposto -3m, lateral do lado +3m, lateral oposto +5m |
+| `CM_HAS_BALL` | `prepare()` (player_bt) | RM/LM do lado +5m, RB/LB do lado +10m, CM oposto -4m, RM/LM oposto +3m |
+| `GK_STYLE_OFFENSIVE` / `GK_STYLE_DEFENSIVE` | `updateGkStyle` (team_bt) | notificação; o estado corrente vive em `p.gkStyle` |
+
+`Match.gkHoldingBall` é a cache mantida por estes listeners — quem precisa da
+informação (`afastarDoGuardaRedes`, `commit()`, `pickChaser`, `pickSupportMid`,
+`computeBlock`) lê a cache, não o estado interno do GR.
+
+Por migrar: RB/LB e GOAL_KICK.
+
+### `joint_limits.js` — limites anatómicos
+
+Base de dados de amplitudes de rotação por articulação, mapeada aos ossos
+reais do rig. `JointLimits.clampOmbro(x, y, z)` trata o ombro como junta 3DOF
+acoplada (a abertura máxima depende da elevação) e devolve os ângulos
+corrigidos. Usada pela animação procedural dos braços do guarda-redes —
+mergulho, salto alto e a defesa de pé (`'maos'`).
+
+### `spatial_grid.js` — grelha do campo + camadas de bónus
+
+Grelha 2×2 m sobre o campo. Duas responsabilidades distintas:
+
+1. **Consulta geométrica**: `findFreeSpace(x, z, raio, equipa)` e
+   `occupancy(x, z, raio, equipa)` — usadas pelo lançamento para mirar o
+   espaço real, não uma aproximação.
+2. **Camadas de bónus autoradas** (`SpatialGrid.LAYERS`): cada camada é uma
+   função `(avanco, cx) -> 0..100` que dá valor táctico a cada célula.
+   `layerValueAt(camada, x, z, equipa)` lê essa função no referencial de
+   ataque da equipa.
+
+| Camada | Consumida em | Peso |
+|---|---|---|
+| `pass` | `findPassTarget` (player.js) | × 0.4 |
+| `marking` | marcação (position_bt) | — |
+| `chute` | `emZonaDeRemate` (player_bt) — valor 0 **veta** o remate | gate |
+| `cruzamento` | `findCross` (player_bt) | × `CrossModel.pesoGrid` |
+| `lancamento` | `findThroughBall` (player_bt) | × 0.5 |
+
+**`layerValueAt` espelha por `dir = (team === 'TeamA') ? 1 : -1`** — o `dirZ`
+real de cada equipa. Já esteve invertido, e o efeito era a camada CHUTE valer
+0 na zona de remate real das DUAS equipas: nenhum avançado rematava.
+
+**A camada `lancamento` é hoje um stub (`return 0`)** — está ligada e é lida,
+mas não acrescenta nada até ser autorada.
+
+### `pass_candidates.js` — pontos candidatos de passe (experimental)
+
+`PassCandidates.gerarCandidatos(carrier)` gera um leque radial à volta de cada
+companheiro (raios 2/4/6/8/10 m × 7 ângulos num cone de ±45°) e descarta os
+pontos de menor qualidade: fora do campo, mais perto de um adversário do que
+de um companheiro, a mais de 30 m da bola, em fora-de-jogo, ou com adversário
+dentro de ±20° da linha de passe e mais perto que o ponto.
+
+A mesma função serve dois consumidores: o desenho de debug (botão
+*PlayerPassTarget*, círculos laranja rentes ao relvado) e a decisão de passe
+alternativa `findGridPassTarget`, ligada em `window.usarPasseGrid` (botão
+*PassGrid*). **A lógica antiga (`bestPassTarget`/`findPassTarget`) fica
+intacta por baixo** — o toggle escolhe qual corre.
+
 ### `bt/action_state.js` — sincronização gameplay ↔ animação
 
 Antes, o BT/FSM executava o efeito real de uma acção (bola sai do pé) no mesmo
 frame em que decidia — a animação só apanhava o gesto depois, e a bola parecia
 sair antes do pé "tocar" nela. `ActionState` corrige isto para uma acção de
-cada vez (começou só pelo `PASS`; as outras — chute, cabeceio, desarme,
-condução, captura do GR — ainda não migraram).
+cada vez. Migrados até agora: `PASS` e o chutão do guarda-redes (`gkPunt`).
+Por migrar: chute, cabeceio, desarme, condução.
 
 ```js
 new ActionState(clipKey, { onPrepare, onContact, onFollowThrough })
@@ -411,17 +490,21 @@ Primeiro a carregar. Não depende de nada além do THREE.
 - Dimensões do campo: `CAMPO_LARG` (68), `CAMPO_COMP` (106), `LARGURA_BALIZA` (7.32),
   `ALTURA_BALIZA` (2.44), `ALTURA_BASE_Y`.
 - Vectores/matrizes temporários reutilizados para evitar alocações por frame:
-  `_v1`, `_v2`, `_v3`, `_m1`, `_q1`, `_line1`. **Nunca guardar referências a estes** —
-  são sobrescritos a toda a hora.
+  `_v1`, `_v2`, `_v3`, `_m1`, `_q1`, `_line1`, `_vUp` (eixo Y constante, para rodar
+  direcções no plano do campo). **Nunca guardar referências a `_v1`.._line1`** —
+  são sobrescritos a toda a hora. `_vUp` é a excepção: é constante, nunca escrito.
 - Flags globais em `window`: `speedMultiplier`, `cameraMode`, `cameraZoom`, `isPaused`,
-  `bolaChutada` (sinaliza a ambos os GKs que houve remate — global de propósito).
-  > **`goleiroEstado`, `goleiroReagiu` e `delayReacaoCalculado` continuam globais em
-  > `window`, não por instância.** Uma versão anterior desta doc dizia que tinham
-  > sido convertidos para propriedades de `FootballPlayer` (`gkEstado`/`gkReagiu`/
-  > `gkDelayReacao`) — isso nunca chegou a acontecer no código (ou foi revertido
-  > sem actualizar aqui). Os dois GKs **partilham** este estado: um mergulho do
-  > GK do TeamB ainda pode interferir no estado lido pelo GK do TeamA no mesmo
-  > frame. Corrigir isto (mover para instância) continua por fazer.
+  `bolaChutada` (sinaliza a ambos os GKs que houve remate — global de propósito),
+  `usarPasseGrid` (liga o passe experimental por pontos candidatos).
+  > **Corrigido:** `goleiroEstado`/`goleiroReagiu`/`delayReacaoCalculado` já **não**
+  > são globais. São propriedades de instância de `FootballPlayer`
+  > (`gkEstado`/`gkReagiu`/`gkDelayReacao`), por isso os dois GKs têm estado
+  > independente. Uma versão anterior desta doc dizia o contrário.
+- **`BallPhysics`** — física real da bola, não valores afinados à mão: massa
+  430 g, raio 0.11 m (circunferência 69 cm), `g` 9.81 m/s², ar a 1 atm ao nível
+  do mar (ρ = 1.225 kg/m³), `Cd` 0.25. O `kArrasto` (½·ρ·Cd·A/m) é **calculado**
+  a partir destes, não escrito. `escalaVisual` aumenta só a malha, não a física.
+  Ver a nota do `updateBall` na secção do `match.js`.
 - `TeamSkills` — skills por sector (`def`, `mid`, `ata`, `gk`) das duas equipas,
   ligado aos sliders do painel.
 - **`TeamShape`** — a forma do bloco, em metros. Todos os valores estão no
@@ -444,8 +527,13 @@ Primeiro a carregar. Não depende de nada além do THREE.
 - **`BlockShape`** — **o rectângulo do bloco, em fracções do campo.** É aqui que
   se afina a compactação e a amplitude, um número cada:
   - `profundidade` / `profundidadeComBola` — o comprimento do bloco, por ajuste
-    de compacidade do painel (`short` / `median` / `large`).
-  - `amplitude` / `amplitudeComBola` — a largura. **É a amplitude da equipa.**
+    de compacidade do painel (*Length Compactness*: `short` 20 m / `median` 30 m /
+    `large` 40 m). O multiplicador com bola (1.22) **esteve definido mas nunca
+    lido** — o bloco tinha a mesma profundidade a atacar e a defender. Corrigido
+    na auditoria do painel.
+  - `amplitude` / `amplitudeComBola` — a largura (*Width Compactness*: 50/60/70 %
+    de 68 m). Mesma história do `amplitudeComBola` (1.15): definido, documentado,
+    nunca lido. Também corrigido.
   - `bascular` / `bascularComBola` — quanto o rectângulo acompanha a bola de lado.
   - `avancoAlemDaBola` — a frente do bloco fica à frente da bola no ataque.
     Cuidado com o sinal: escrito como *recuo*, o bloco a atacar ficava mais
@@ -469,7 +557,10 @@ Primeiro a carregar. Não depende de nada além do THREE.
 - **`MarkingModel`** — marcação (`distancia`, `aderencia`, `penalLado`) e
   largura da última linha conforme a bola vem pelo eixo ou pelo corredor.
 - **`CrossModel`** — a zona e a probabilidade de cruzar, e o que conta como
-  "alguém na área".
+  "alguém na área". Os dois termos que dependem de estar mesmo na lateral da
+  área — `bonusLargura` e `pesoGrid` (peso da camada CRUZAMENTO do
+  `SpatialGrid`) — são os que se mexem para cruzar mais/menos DALI, sem
+  aumentar o cruzamento de qualquer sítio (`chanceBase`).
 - **`BallControl`** — recepção, intercepção e desvio. Ver a secção do `match.js`.
 - **`SlideTackleModel`** — o carrinho: fases (`lancamento` → `deslize` →
   `paragem` → `levantar`), o empurrão dado à bola em metros, e a `pose` completa
@@ -482,16 +573,37 @@ Primeiro a carregar. Não depende de nada além do THREE.
   - `espera` — joelhos ligeiramente dobrados, pernas afastadas, mãos prontas (adversário
     com bola a menos de `alertaDist` 25 m).
   - `repouso` — praticamente direito, sem perigo.
-  - `apanhar` — agachado a receber bola mansa/rolando (`window.goleiroEstado === 'apanhar'`).
-  - `segurar` — bola junto ao peito à espera de relançar (`window.goleiroEstado === 'segurando'`).
+  - `apanhar` — agachado a receber bola mansa/rolando (`p.gkEstado === 'apanhar'`).
+  - `segurar` — bola junto ao peito à espera de relançar (`p.gkEstado === 'segurando'`).
+    Tronco e pernas são **os mesmos do `repouso`** (de pé, direito): só os braços
+    diferem, dobrados a fechar a bola no peito.
   Convenção do esqueleto documentada lá: perna `rotation.x > 0` é coxa para
   trás, peito `rotation.x > 0` é inclinar para a frente.
-  Também aqui: `apanharDur` (0.35 s, duração do agachar-e-apanhar) e
-  `segurarDur` (8 s, duração do `segurando` — tempo para as equipas se
-  reorganizarem antes do relançamento).
+  Também aqui:
+  - `apanharDur` 0.35 s — duração do agachar-e-apanhar.
+  - `segurarDur` 8 s — **só fallback**. A duração real é sorteada entre 5 e 8 s
+    a cada captura (`p.gkSegurarDur`, em `grabBall()`).
+  - `mergulhoLateralMin` 2.0 m — **abaixo disto não há mergulho**: fica de pé e
+    leva as mãos à bola (estado `'maos'`). Era 1.2 m, e quase toda a defesa
+    virava mergulho lateral.
+  - `maosDur` 1.0 s — duração do estado `'maos'`.
+- **`GoalkeeperStyle`** — `maxOut` em metros, quanto o GR se afasta da linha:
+  `defensive` 6 (não passa da marca de grande penalidade), `offensive` 20
+  (sweeper). Ver `updateGkStyle` em `bt/team_bt.js`.
+- **`FullBackStyle`** — estilo do lateral. `avancoMax` em **metros** (`defensive`
+  2, `offensive` 15) é o que manda; o `comBolaMult` afina o slot mas sozinho
+  valia 1-3 m e não dava subida visível. Só actua com bola.
+- **`GoalkeeperKickClip`** — GOALKEEPER_KICK_FORWARD_HIGH, os 12 keyframes do
+  chutão do GR, em `t = (frame-1)/11`. Inclui `largaBolaEm`/`alturaMao`/
+  `alturaPe`: a bola desce das mãos ao pé entre a máxima preparação (frame 6) e
+  o contacto (frame 9).
+- **`DribbleCutClip`** — DRIBBLE_CUT_30, corte diagonal de 30°, 12 keyframes em
+  três camadas (corpo / pernas / bola). É **aditivo** sobre o ciclo de corrida.
+  O `quadrilY` e o `troncoY` têm sinais opostos de propósito: o quadril antecipa
+  a mudança e o peito contra-roda, por isso o jogador não gira os 30° de uma vez.
 - **`ActionAnimClips`** — tabela de sincronização gameplay↔animação (ver
-  `bt/action_state.js`): `{ duration, contactTime }` por acção. Só `pass` por
-  agora.
+  `bt/action_state.js`): `{ duration, contactTime }` por acção. Hoje `pass` e
+  `gkPunt`.
 - **`CadenceModel`** — ritmo de decisão com bola: `posseBase` (~3 s, domínio
   antes de decidir) e `posseSobPressao` (~0.6 s, toque de primeira sob
   pressão pesada). Consumido pelo `Dominar` em `bt/player_bt.js`.
@@ -502,9 +614,15 @@ Primeiro a carregar. Não depende de nada além do THREE.
 - `Tatics` — formação, estilo de jogo, estilo de passe, sectores do campo activos,
   **`linhaDefensiva`** (`'low'` | `'medium'` | `'high'`) e **`pressaoDefensiva`**
   (`'low'` | `'balanced'` | `'high'`, selector "Defensive Pressure"):
-  - `toggleSector(sector)` — mantém sempre 2 sectores activos (fila FIFO).
+  - `toggleSector(sector)` — liga/desliga cada sector independentemente, com um
+    mínimo de 1 activo. Actualiza o botão, o contador do rótulo e re-atribui
+    formações.
   - `getWeightedSectorX(teamDir)` — devolve um X enviesado para os sectores escolhidos;
-    é isto que faz a IA jogar mais pela esquerda/centro/direita.
+    é isto que faz a IA jogar mais pela esquerda/centro/direita. **Espelha por
+    `teamDir`**, e quem classificar sectores noutro sítio tem de espelhar
+    também (ver `getSectorOfX` em `findPassTarget`) — misturar referencial de
+    mundo com referencial de ataque faz os dois sistemas apontarem para
+    flancos opostos e anularem-se.
   - `update()` / `updateSkills()` — lêem os `<select>` e sliders do painel.
 - `FormationsData` — posições base normalizadas para `442`, `433` e `4231`.
 
@@ -629,7 +747,7 @@ O objecto `Match`, gestor de estado e de cena.
 | `resolveBallContact()` | **Recepção, intercepção e desvio** da bola solta |
 | `deflectBall(p)` | Toque falhado: a bola sai desviada, mais lenta e disputável |
 | `criarBola(raio)` | Bola da malha do OBJ, ou a procedural se ela faltar |
-| `updateBall()` | Física da bola, atrito, gravidade, detecção de golo/fora |
+| `updateBall()` | Física da bola, arrasto, gravidade, detecção de golo/fora |
 | `setupSetPiece(type, team)` | Organiza cantos e pontapés de baliza |
 | `updatePlacar()` | Escreve `#placar-a/b/tempo` no DOM a partir de `placarA/placarB/tempoDeJogo` |
 
@@ -699,6 +817,37 @@ em `FootballPlayer.updateGK()`.
 Medido (defensores colocados de propósito sobre a linha de passe, portanto é um
 limite superior): passe de 22 m com 1 defensor → 28% intercetado; com 2 → 48%.
 
+### Física da bola (`updateBall`)
+
+Integração semi-implícita: forças primeiro, posição depois. Todas as constantes
+vêm do `BallPhysics` (`config.js`) e são **reais**, não afinadas à mão.
+
+| | modelo antigo | agora |
+|---|---|---|
+| gravidade | 15.0 m/s² | 9.81 |
+| raio | 0.15 m (circunf. 94 cm) | 0.11 (69 cm, FIFA Lei 2) |
+| massa | não existia | 0.430 kg |
+| ar | não existia | ρ = 1.225 kg/m³ (1 atm, nível do mar, 15 °C) |
+| arrasto | `pow(0.85, dt)`, só em x/z | quadrático `½·ρ·Cd·A/m·v²`, nas 3 componentes |
+| chão | `pow(0.55, dt)` | rolamento `μ·g` = 0.98 m/s², constante |
+
+Os dois modelos de perda antigos eram o problema real do voo estranho: um
+decaimento **exponencial** tira uma *fracção* da velocidade por segundo, o que
+travava demais a bola lenta (~15 %/s a 5 m/s) e quase nada a bola rápida (o
+arrasto real a 30 m/s são 12.2 m/s²). E como o arrasto não actuava em Y, subida
+e descida eram simétricas, o que nunca acontece.
+
+O ressalto está separado do rolamento: `restituicao` 0.60 vertical,
+`atritoRessalto` 0.75 horizontal por quique, e só ressalta acima de
+`vMinRessalto` — abaixo disso assenta, em vez de tremer no chão.
+
+`escalaVisual` (1.30) aumenta **só a malha**. Raio de colisão, ressalto e
+rotação continuam nos 0.11 m reais.
+
+> **Se mexeres na gravidade ou no arrasto, as potências de passe/remate mudam
+> de alcance.** Elas são heurísticas (`ballVel.y = min(6.5, 2 + dist*0.12)`,
+> etc.) calibradas contra a física antiga.
+
 **Mexer aqui quando:** câmara, cenário, regras da bola, coesão do bloco, e a
 dificuldade de recepção/intercepção (`BallControl`).
 Para o comportamento colectivo, vai antes a [bt/team_bt.js](js/bt/team_bt.js).
@@ -719,25 +868,48 @@ Tudo o que é individual: decisão, movimento e corpo 3D.
   descanso); `resetBonesToDefault()` volta à pose neutra para evitar glitches;
   `updateShirt(num, pos)` desenha número e posição nas costas via canvas.
 - **Guarda-redes:** `updateGK(dt)` é IA e física à parte — defesas, mergulhos,
-  posicionamento, relançamento. O estado vive em `window.goleiroEstado`
-  (`'idle'` / `'mergulho'` / `'salto_alto'` / `'apanhar'` / `'segurando'`),
-  `window.goleiroTempoMergulho`, `window.goleiroDirMergulho`,
-  `window.goleiroTipoMergulho`, `window.goleiroReagiu`, `window.delayReacaoCalculado`
-  — **globais, partilhados pelos dois GKs** (ver aviso em `config.js` acima).
+  posicionamento, relançamento. O estado é **por instância**: `this.gkEstado`
+  (`'idle'` / `'mergulho'` / `'maos'` / `'salto_alto'` / `'apanhar'` /
+  `'segurando'` / `'chutando'`), `this.gkTempoMergulho`, `this.gkDirMergulho`,
+  `this.gkTipoMergulho`, `this.gkReagiu`, `this.gkDelayReacao`. Os dois GKs não
+  se interferem.
 
   Estados relevantes a partir do momento em que apanha a bola:
   - **`apanhar`** — bola mansa/rolando: pára de deslizar, agacha (em vez de
     agarrar instantaneamente a meio da corrida) e vira-se para a bola
     (`lookAtBola`) enquanto se aproxima.
-  - **`mergulho`** / **`salto_alto`** — defesas com estica; se agarra, chama
-    `grabBall()`.
-  - **`segurando`** — depois de `grabBall()`, 8 s (`GoalkeeperPose.segurarDur`)
-    a segurar a bola junto ao peito antes de poder relançar, tempo para as
-    equipas se reorganizarem (`DefensivePressureModel`/reação do TeamBT
-    também respeitam este intervalo). Assenta a rodar devagar para encarar o
-    campo (`this.dirZ`), porque entra nesta fase com a rotação de onde quer
-    que estivesse a defesa. Só no fim volta a `idle` e liberta o BT/FSM
-    (`runBehaviorTree`/`fsm.update`) para decidir o quê fazer.
+  - **`maos`** — defesa **de pé**. A bola vem a menos de
+    `GoalkeeperPose.mergulhoLateralMin` (2 m) do corpo: não se atira ao chão,
+    só leva as mãos até ela, com os ângulos passados por
+    `JointLimits.clampOmbro`. Os braços abrem **simétricos de propósito** —
+    `lArm`/`rArm` são esquerda/direita **do modelo**, que está rodado por
+    `lookAt` conforme a equipa, por isso mapear "o braço do lado da bola" a
+    partir do x do mundo dá o braço errado para uma das equipas. O contacto é
+    testado nas duas mãos, valendo a mais perto.
+  - **`mergulho`** / **`salto_alto`** — defesas com estica, acima dos 2 m de
+    desvio lateral. Braços procedurais apontam à bola a cada frame (via
+    `JointLimits`) e o ponto de defesa é projectado do ângulo **real** do
+    braço, não de um offset fixo — senão defendia com a barriga. Se agarra,
+    chama `grabBall()`. Há um guard `Match.state !== 'PLAY'` nos dois: sem ele
+    uma defesa em curso "reflectia" uma bola que já era golo, relançando-a da
+    rede para o campo.
+  - **`segurando`** — depois de `grabBall()`, 5-8 s sorteados
+    (`this.gkSegurarDur`; o `GoalkeeperPose.segurarDur` de 8 s ficou só como
+    fallback) a segurar a bola junto ao peito, tempo para as equipas se
+    reorganizarem. A pose é **de pé** (tronco e pernas do `repouso`), não
+    agachada. `grabBall()` faz **snap** dos ossos para essa pose em vez de
+    esperar pelo lerp — senão ficava vários frames com um braço no ar, a meio
+    da transição da pose do mergulho.
+  - **`chutando`** — o gesto GOALKEEPER_KICK_FORWARD_HIGH (12 keyframes, ver
+    `GoalkeeperKickClip`). O relançamento **não** sai quando o tempo de espera
+    acaba: sai no frame do contacto pé-bola, via `ActionState('gkPunt')`, que é
+    também onde o `GK_RELEASE_BALL` é emitido.
+
+  **Estilo (`gkStyleBase`)**: `defensive` nunca sai da linha; `offensive` vira
+  sweeper quando o adversário com bola entra no corredor central sem oposição
+  (ver `updateGkStyle` em `bt/team_bt.js`). O estado corrente fica em
+  `p.gkStyle` e alimenta `GoalkeeperStyle[...].maxOut` no
+  `actGoalkeeperPosition`.
 
   A IA reage agressivamente a **bolas soltas na área**, com passo real
   limitado a `speedLerp` m/s (não fracção exponencial da distância restante —
@@ -748,9 +920,27 @@ Tudo o que é individual: decisão, movimento e corpo 3D.
   um adversário com bola a menos de 25 m, e fica em **repouso** direito no
   resto do tempo. Vira-se sempre para a bola via `lookAtBola` (ver nota
   sobre a convenção de frente do modelo, mais abaixo).
-  Relançamento: curto por `findPassTarget`, ou `puntBall()` (chute longo)
-  se não houver opção e já tiver esperado demais (`decisionTimer > 1.2`).
-- `getSkill()` lê o valor de `TeamSkills` correspondente ao papel do jogador.
+
+  **Relançamento:** `releaseFromHands()` chama sempre `puntBall()` — o ramo de
+  passe curto para um colega sem pressão foi removido a pedido. O `puntBall()`
+  sorteia os ângulos a cada execução: elevação 25-50°, direcção até ±20° da
+  frente. A potência sai da **balística** (`v = √(R·g / sin 2θ)` para um alcance
+  de 38-54 m), não de um número à mão, por isso a bola cai onde deve seja qual
+  for o ângulo sorteado. A direcção parte de `(0,0,dirZ)`, não do x do mundo —
+  funciona igual para as duas equipas.
+- `getSkill()` — média por sector, lida de `TeamSkills`. **Só fallback**, e para
+  gerar elencos novos no `.json`.
+- **`skillFor(campo)`** — a skill INDIVIDUAL do jogador (`p.skills`, de
+  `data/player_skills.json`). É este o método a usar nas decisões.
+  > Normaliza o campo para minúsculas por dentro. As chaves do JSON são
+  > minúsculas (`tec`, `marking`, `speed`, `strength`, `pass`, `intercept`,
+  > `gk`) e as chamadas usam maiúsculas (`skillFor('TEC')`) — sem a
+  > normalização o lookup dava `undefined` e caía **silenciosamente** no
+  > `getSkill()` genérico. Esteve assim, e o efeito era as skills individuais
+  > não existirem no jogo.
+- **`aplicarCamadaCorte()`** — a camada aditiva do corte diagonal
+  (`DribbleCutClip`). Corre **depois** do `animateBones`, senão ele reescreve a
+  pelvis e as pernas no mesmo frame e o corte desaparece.
 
 > **`lookAtBola()` — problema em aberto, não resolvido.** É só um wrapper
 > fino para `model.lookAt(ponto)`, usado em `updateGK`,
@@ -773,8 +963,28 @@ Tudo o que é individual: decisão, movimento e corpo 3D.
 - `PlayerFSM` — `changeState(novo)` e `update(dt)`, que executa a lógica do estado
   ao longo do tempo (ex.: um carrinho decorre ao longo de ~1.5 s).
 
-Estados: `IDLE`, `MOVE_TO_POS`, `DRIBBLE`, `PASS`, `SHOOT`, `TACKLE`,
+Estados: `IDLE`, `MOVE_TO_POS`, `MARKING`, `BLOCKING`, `FWR_SUPPORT`,
+`AFT_SUPPORT`, `CARRY`, `DRIBBLE`, `CUT`, `PASS`, `SHOOT`, `TACKLE`,
 `SLIDE_TACKLE`, `SET_PIECE_TAKER`, `SET_PIECE_WAIT`.
+
+**`CUT`** é o corte diagonal de 30° (DRIBBLE_CUT_30). O `DRIBBLE` bem-sucedido
+entra nele em vez de resolver tudo num frame: a direcção roda por smoothstep ao
+longo de ~0.75 s, com dois toques laterais curtos (frames 6 e 9). Está na lista
+de estados bloqueantes do `AccaoEmCurso` (o BT não pode re-decidir a meio da
+rotação) e o `changeState` desliga `p.cutAtivo` ao sair por qualquer via —
+perda de bola, desarme, bola parada — senão o corpo ficava torto.
+
+**Duelos de skills.** O resultado das disputas vem de `venceuDuelo(a, b, base)`
+(`utils.js`), com `p.skillFor(...)` dos dois lados:
+
+| Acção | Duelo |
+|---|---|
+| `TACKLE` | (VELOCIDADE+FORÇA) def x (VELOCIDADE+FORÇA) atk |
+| `SLIDE_TACKLE` | MARCAÇÃO x TÉCNICA — perdendo, passa ao lado sem tocar na bola |
+| `SHOOT` | bloqueio TÉCNICA x MARCAÇÃO; passando, TÉCNICA x GK decide o canto |
+| cabeceio (`executeHeader`) | MARCAÇÃO no contacto + TÉCNICA x GK na colocação |
+| linha de passe (`findPassTarget`) | PASSE x INTERCEPTAÇÃO escala o `safetyLimit` |
+| recepção (`resolveBallContact`) | TÉCNICA x MARCAÇÃO do marcador a menos de 3 m |
 
 `changeState` tem um hook de entrada: `enterSlideTackle()` escolhe sobre que
 anca o jogador desliza e qual o pé que estica (o do lado da bola; ao acaso se
@@ -873,3 +1083,13 @@ Regra prática: a *decisão* de agir vive em `player.js`, a *execução ao longo
 | Placar / cronómetro no ecrã | `match.js` → `updatePlacar()`, `#placar` no `index.html` |
 | Ver a árvore/condições activas de um jogador em tempo real | `main.js` → painel "PlayerBT Debug" (`updatePainelPlayerBT`) |
 | Guarda-redes de costas para a bola/campo | `utils.js` → `lookAtBola()` — **problema em aberto**, ver a nota na secção do `player.js` |
+| Peso/tamanho/arrasto da bola | `config.js` → `BallPhysics` (valores reais; `escalaVisual` só aumenta a malha) |
+| Bónus tácticos por zona do campo | `spatial_grid.js` → `SpatialGrid.LAYERS` |
+| Fazer sistemas reagirem a algo sem `if` espalhado | `event_bus.js` |
+| Limites de rotação de uma articulação | `joint_limits.js` |
+| Playing style do GR ou do lateral | `config.js` → `GoalkeeperStyle` / `FullBackStyle`; atribuição em `match.js` → `assignFormations()` |
+| Ângulo/força do relançamento do GR | `player.js` → `puntBall()` |
+| Gesto do chutão do GR | `config.js` → `GoalkeeperKickClip` + estado `'chutando'` em `updateGK` |
+| Corte diagonal de 30° no drible | `config.js` → `DribbleCutClip`, `fsm.js` → `case 'CUT'`, `player.js` → `aplicarCamadaCorte()` |
+| Passe experimental por pontos candidatos | `pass_candidates.js` + botões *PlayerPassTarget* / *PassGrid* |
+| Resultado de uma disputa (desarme, remate, cabeceio) | `utils.js` → `venceuDuelo()`, `player.js` → `skillFor()` |

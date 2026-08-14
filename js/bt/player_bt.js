@@ -64,6 +64,23 @@ class PlayerContext {
         if (!p.ultimaPosCarry) p.ultimaPosCarry = new THREE.Vector3();
         p.ultimaPosCarry.copy(p.model.position);
 
+        /*
+        Playing style: ligar ou não NESTE frame.
+
+        O estilo não é um traço permanentemente ligado — é uma forma de jogar
+        que só interessa em certas alturas. Um Goal Poacher colado ao último
+        defensor com a bola na nossa área é um jogador a menos; um Cross
+        Specialist encostado à linha com a bola do lado contrário também.
+
+        Fica aqui, no nível 3, e não numa folha da árvore, porque tem de
+        correr todos os frames independentemente do ramo que venha a ganhar:
+        o estilo comanda o POSICIONAMENTO (nível 2, via estiloAtivoDe no
+        commit) tanto quanto a decisão.
+        */
+        if (typeof avaliarEstilo === 'function' && this.bb) {
+            avaliarEstilo(p, this.bb, dt);
+        }
+
         // Eventos de posse — disparam na transição sem bola -> com bola.
         if (p.hasBall && !p._hadBallPrev && typeof EventBus !== 'undefined') {
             if (p.pos === 'CB') EventBus.emit('CB_HAS_BALL', { p: p });
@@ -301,15 +318,50 @@ function findCross(ctx) {
     // Grid espacial (camada CRUZAMENTO): soma o valor autorado da célula do cruzador.
     if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
         const crossVal = SpatialGrid.layerValueAt('cruzamento', p.model.position.x, p.model.position.z, p.team);
-        chance += (crossVal / 100) * 0.30;
+        chance += (crossVal / 100) * C.pesoGrid;
     }
 
-    return { alvo: alvo, chance: THREE.MathUtils.clamp(chance, 0, C.chanceMax) };
+    /*
+    Alto ou rasteiro?
+
+    Rasteiro é o cruzamento que corta a linha da defesa junto ao chão — melhor
+    quando NÃO há ninguém no caminho e o alvo está perto do primeiro poste,
+    porque chega mais depressa e não dá tempo ao guarda-redes de sair.
+
+    Alto é o que passa POR CIMA de quem está entre a bola e o alvo. Se há
+    gente na linha do cruzamento, rasteiro é bola entregue ao primeiro
+    defensor. Também se prefere alto quando o alvo é longe (segundo poste) ou
+    quando ele ganha bem de cabeça (FORÇA).
+    */
+    _line1.set(p.model.position, alvo.model.position);
+    let bloqueadores = 0;
+    for (const opp of ctx.opponents) {
+        if (opp.role === 'gk') continue;
+        _line1.closestPointToPoint(opp.model.position, true, _v1);
+        if (_v1.distanceTo(opp.model.position) < 1.6) bloqueadores++;
+    }
+
+    const distAlvo = p.model.position.distanceTo(alvo.model.position);
+    // Pontuação do ALTO: quem estiver no caminho pesa muito, distância e jogo
+    // aéreo do alvo pesam menos.
+    let notaAlto = bloqueadores * 0.45
+        + THREE.MathUtils.clamp((distAlvo - 14) / 20, 0, 1) * 0.35
+        + ((alvo.skillFor('STRENGTH') - 50) / 100) * 0.30;
+
+    return {
+        alvo: alvo,
+        chance: THREE.MathUtils.clamp(chance, 0, C.chanceMax),
+        alto: notaAlto >= 0.5,
+        bloqueadores: bloqueadores
+    };
 }
 
 function actCross(ctx) {
-    ctx.p.isCross = true;
-    ctx.p.initiatePass(ctx.cross.alvo);
+    const p = ctx.p;
+    p.isCross = true;
+    // Consumido em executePassGameplay (fsm.js) para escolher a altura.
+    p.crossAlto = ctx.cross.alto;
+    p.initiatePass(ctx.cross.alvo);
 }
 
 function actThroughBall(ctx) {
@@ -354,6 +406,65 @@ function actChaseBall(ctx) {
     if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
     p.dynamicTarget.copy(Match.ball.position);
     p.fsm.changeState('MOVE_TO_POS');
+}
+
+/*
+Vale a pena eu ir a esta bola solta, mesmo não sendo o chaser?
+
+Três perguntas, por esta ordem (a mais barata primeiro):
+    1. há bola solta e eu consigo mesmo chegar-lhe? (percepção)
+    2. chego lá depressa? (janelaIntercetar)
+    3. chego antes de quem já vai lá? (chaser e destinatário do passe)
+
+A terceira é o que impede a equipa toda de largar a posição e correr atrás da
+mesma bola: só reage quem tem vantagem real sobre quem já está encarregue dela.
+*/
+function podeIntercetar(ctx) {
+    const p = ctx.p;
+    if (Match.ballCarrier) return false;                 // bola já tem dono
+    if (Match.state !== 'PLAY') return false;
+
+    const bola = p.blackboard && p.blackboard.ball;
+    if (!bola || !bola.interceptable || !bola.interceptionPoint) return false;
+    if (bola.timeToIntercept > PerceptionModel.janelaIntercetar) return false;
+
+    // O chaser e o destinatário já têm folha própria — não duplicar.
+    if (Match.chaserA === p || Match.chaserB === p) return false;
+    if (Match.intendedReceiver === p) return false;
+
+    const meu = bola.timeToIntercept;
+    const margem = PerceptionModel.margemMelhor;
+
+    // Melhor do que quem já vai lá? Compara com o tempo de interceptação
+    // deles, não com a distância — é a bola que se move, não o alvo.
+    const jaVaoLa = [Match.chaserA, Match.chaserB, Match.intendedReceiver];
+    for (const outro of jaVaoLa) {
+        if (!outro || outro === p) continue;
+        const bOutro = outro.blackboard && outro.blackboard.ball;
+        // Sem dados do outro, assume-se que ele trata disto.
+        const tOutro = (bOutro && bOutro.interceptable) ? bOutro.timeToIntercept : Infinity;
+        if (tOutro <= meu + margem) return false;
+    }
+
+    ctx.pontoIntercepcao = bola.interceptionPoint;
+    return true;
+}
+
+/*
+Corre para onde a bola VAI ESTAR, não para onde ela está.
+
+É esta a diferença entre interceptar e perseguir: o actChaseBall aponta para
+`Match.ball.position` (e por isso corre sempre atrás dela), enquanto aqui o
+alvo é o `interceptionPoint` que a percepção já calculou — o primeiro ponto da
+trajectória a que este jogador consegue chegar a tempo.
+*/
+function actIntercept(ctx) {
+    const p = ctx.p;
+    const ponto = ctx.pontoIntercepcao || Match.ball.position;
+    p.speedMult = (5.8 + ((ctx.skillSpeed - 50) / 50) * 1.5) * 1.25 * 0.9;
+    if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
+    p.dynamicTarget.set(ponto.x, ALTURA_BASE_Y, ponto.z);
+    p.fsm.changeState('INTERCEPT');
 }
 
 function actReceivePass(ctx) {
@@ -457,7 +568,10 @@ const PlayerBT = sel('PlayerRoot',
     seq('AccaoEmCurso',
         cond('estadoBloqueante', (ctx) => {
             const s = ctx.p.fsm.currentState;
-            return s === 'PASS' || s === 'SHOOT' || s === 'TACKLE' || s === 'SLIDE_TACKLE';
+            // CUT é o gesto do corte diagonal (DRIBBLE_CUT_30): dura ~0.75s e
+            // não pode ser interrompido a meio, senão o corpo fica a meio da
+            // rotação e a bola já foi tocada para a diagonal.
+            return s === 'PASS' || s === 'SHOOT' || s === 'TACKLE' || s === 'SLIDE_TACKLE' || s === 'CUT';
         }),
         act('deixarTerminar', () => { })
     ),
@@ -483,6 +597,9 @@ const PlayerBT = sel('PlayerRoot',
                     if (emZonaDeRemate(ctx)) return false;
                     let settling = ctx.underPressure ? CadenceModel.posseSobPressao : CadenceModel.posseBase;
                     settling *= 1.0 - (ctx.skillTec / 100) * 0.25;
+                    // Cadência do estilo: Target Man aguenta a bola (1.6),
+                    // Fox in the Box resolve num toque (0.6).
+                    settling *= estiloAtivoDe(ctx.p).cadencia;
                     if (ctx.p.decisionTimer < settling) return true;
                     ctx.p.decisionTimer = settling;
                     return false;
@@ -519,10 +636,14 @@ const PlayerBT = sel('PlayerRoot',
             ),
 
             // Cruzamento da ala, se houver alguém na área para o receber.
+            // O peso `cruzar` do playing style entra aqui (Cross Specialist
+            // 1.6, Fox in the Box quase nunca cruza).
             seq('Cruzar',
                 cond('valeCruzar', (ctx) => {
                     ctx.cross = findCross(ctx);
-                    return ctx.cross !== null && Math.random() < ctx.cross.chance;
+                    if (!ctx.cross) return false;
+                    const mult = estiloAtivoDe(ctx.p).cruzar;
+                    return Math.random() < Math.min(CrossModel.chanceMax, ctx.cross.chance * mult);
                 }),
                 act('cruzar', actCross)
             ),
@@ -545,6 +666,10 @@ const PlayerBT = sel('PlayerRoot',
             seq('Lancar',
                 cond('haEspacoNasCostas', (ctx) => {
                     if (ctx.underPressure) return false;
+                    // Peso `lancar` do estilo: Orchestrator/Creative lançam
+                    // muito, Anchor Man quase nunca.
+                    const mult = estiloAtivoDe(ctx.p).lancar;
+                    if (mult !== 1.0 && Math.random() > mult) return false;
                     ctx.throughBall = findThroughBall(ctx);
                     return ctx.throughBall !== null;
                 }),
@@ -623,6 +748,8 @@ const PlayerBT = sel('PlayerRoot',
                     else if (p.pos === 'LB' || p.pos === 'RB') taxa = 6.6;
                     else if (p.pos === 'DM') taxa = 6.0;
                     else if (p.role === 'def' || p.role === 'mid') taxa = 3.0;
+                    // Peso `pressao` do estilo: The Destroyer entra muito mais.
+                    taxa *= estiloAtivoDe(p).pressao;
                     return chancePorSegundo(taxa, ctx.dt);
                 }),
                 act('carrinho', actSlideTackle)
@@ -640,9 +767,30 @@ const PlayerBT = sel('PlayerRoot',
                     const esperaMin = DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced;
                     if ((p.tempoPertoDoPortador || 0) < esperaMin) return false;
 
-                    return chancePorSegundo((p.pos === 'CB') ? 9.0 : 4.8, ctx.dt);
+                    // Peso `pressao` do estilo, tal como no carrinho.
+                    const taxaDes = ((p.pos === 'CB') ? 9.0 : 4.8) * estiloAtivoDe(p).pressao;
+                    return chancePorSegundo(taxaDes, ctx.dt);
                 }),
                 act('desarmar', actTackle)
+            ),
+
+            /*
+            Intercetar: a bola vem na minha direcção e eu chego-lhe primeiro.
+
+            Vem ANTES do IrABola de propósito. O chaser é UM por equipa,
+            escolhido pelo nível 1 — quem não fosse chaser nem destinatário do
+            passe não tinha nenhuma folha que reagisse a uma bola a passar-lhe
+            ao lado, e ficava parado a vê-la passar. Os dados já existiam na
+            percepção (interceptable/timeToIntercept/interceptionPoint); não
+            havia era ninguém a lê-los.
+
+            Não é "toda a gente corre para a bola": só entra quem lá chega
+            dentro de PerceptionModel.janelaIntercetar E com vantagem sobre
+            quem já vai lá (ver melhorQueOsOutros).
+            */
+            seq('Intercetar',
+                cond('bolaPassaPorMim', podeIntercetar),
+                act('intercetar', actIntercept)
             ),
 
             // Ir à bola: sou o perseguidor designado pela equipa.
