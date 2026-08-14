@@ -64,9 +64,10 @@ class PlayerContext {
         if (!p.ultimaPosCarry) p.ultimaPosCarry = new THREE.Vector3();
         p.ultimaPosCarry.copy(p.model.position);
 
-        // Evento CB_HAS_BALL — dispara na transição sem bola -> com bola.
-        if (p.hasBall && !p._hadBallPrev && p.pos === 'CB' && typeof EventBus !== 'undefined') {
-            EventBus.emit('CB_HAS_BALL', { p: p });
+        // Eventos de posse — disparam na transição sem bola -> com bola.
+        if (p.hasBall && !p._hadBallPrev && typeof EventBus !== 'undefined') {
+            if (p.pos === 'CB') EventBus.emit('CB_HAS_BALL', { p: p });
+            else if (p.pos === 'CM') EventBus.emit('CM_HAS_BALL', { p: p });
         }
         p._hadBallPrev = p.hasBall;
 
@@ -404,8 +405,9 @@ function actGoalkeeperPosition(ctx) {
     const p = ctx.p;
     p.speedMult = (4.2 + ((ctx.skillSpeed - 50) / 50) * 1.2) * 1.25 * 0.9;
     const targetX = Math.max(-10, Math.min(10, Match.ball.position.x * 0.5));
+    const style = GoalkeeperStyle[p.gkStyle] || GoalkeeperStyle.defensive;
     const targetZ = (p.ownGoalZ + 5 * p.dirZ) +
-        Math.max(0, Math.min(10, (Match.ball.position.z - p.ownGoalZ) * 0.1 * p.dirZ));
+        Math.max(0, Math.min(style.maxOut, (Match.ball.position.z - p.ownGoalZ) * 0.1 * p.dirZ));
     p.dynamicTarget.set(targetX, ALTURA_BASE_Y, targetZ);
     p.fsm.changeState('MOVE_TO_POS');
 }

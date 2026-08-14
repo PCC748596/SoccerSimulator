@@ -343,6 +343,20 @@ const PositionDepthNudge = {
 };
 
 /*
+Playing style do lateral (LB/RB) — só actua com bola: sem bola ambos os
+estilos ficam na mesma linha defensiva (ver slotNoBloco em team_bt.js).
+
+    defensive  fica atrás, quase não sobe mesmo com a equipa a atacar.
+    offensive  sobe bastante para se juntar ao ataque quando a equipa tem bola.
+
+Multiplica o PositionDepthNudge.comBola do lateral.
+*/
+const FullBackStyle = {
+    defensive: { comBolaMult: 0.3 },
+    offensive: { comBolaMult: 1.8 }
+};
+
+/*
 Modelo de remate.
 
 A regra antiga era `distToGoal < max(18, ata/100*22)`: entre skill 50 e 81 o
@@ -451,6 +465,19 @@ const SlideTackleModel = {
         bracoLivreX: -0.50,
         cotoveloLivre: -0.60
     }
+};
+
+/*
+Playing style do GK (ver updateGkStyle em team_bt.js).
+
+    defensive  padrão — fica perto da baliza, no máximo até à marca de
+               grande penalidade (~11 m da linha de fundo: 5 + maxOut).
+    offensive  sweeper-keeper — sai para cobrir o espaço atrás da defesa
+               quando o adversário ataca pelo corredor central sem oposição.
+*/
+const GoalkeeperStyle = {
+    defensive: { maxOut: 6 },
+    offensive: { maxOut: 20 }
 };
 
 /*

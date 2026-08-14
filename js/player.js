@@ -67,6 +67,9 @@ class FootballPlayer {
         // Antes eram window.goleiroEstado etc., partilhados pelos dois GKs,
         // o que fazia um interferir com o estado do outro.
         this.gkEstado = 'idle';
+        this.gkStyle = 'defensive';     // estado actual (dinâmico) — ver updateGkStyle em team_bt.js
+        this.gkStyleBase = 'defensive'; // traço fixo do jogador, atribuído em match.js
+        this.fbStyle = 'defensive';     // playing style LB/RB — ver FullBackStyle em config.js
         this.gkTempoMergulho = 0;
         this.gkDirMergulho = 0;
         this.gkTipoMergulho = 'baixo';
@@ -1530,7 +1533,7 @@ class FootballPlayer {
             _v1.set(gkCorpo.position.x, gkCorpo.position.y, gkCorpo.position.z + this.dirZ * 10);
             lookAtBola(gkCorpo, _v1);
 
-            if (t >= GoalkeeperPose.segurarDur) {
+            if (t >= (this.gkSegurarDur ?? GoalkeeperPose.segurarDur)) {
                 this.releaseFromHands();
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
@@ -1558,6 +1561,8 @@ class FootballPlayer {
         window.bolaChutada = false;
         this.gkEstado = 'segurando';
         this.gkTempoMergulho = 0;
+        // Não precisa esperar sempre os 8s fixos — 5-8s, sorteado a cada captura.
+        this.gkSegurarDur = 5.0 + Math.random() * 3.0;
         /*
         Sem isto, um companheiro já marcado como intendedReceiver de um
         passe/desvio anterior continuava a correr direito pra

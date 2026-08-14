@@ -613,7 +613,14 @@ function slotNoBloco(p, bb) {
     // Ajuste fino por posição específica (lateral à frente do central, médio
     // de ponta sobe mais na construção) — ver PositionDepthNudge.
     const nudge = PositionDepthNudge[p.pos];
-    if (nudge) v += bb.isAttacking ? nudge.comBola : nudge.semBola;
+    if (nudge) {
+        if (bb.isAttacking) {
+            const fbStyle = (p.pos === 'LB' || p.pos === 'RB') ? FullBackStyle[p.fbStyle] : null;
+            v += nudge.comBola * (fbStyle ? fbStyle.comBolaMult : 1);
+        } else {
+            v += nudge.semBola;
+        }
+    }
     v = THREE.MathUtils.clamp(v, 0, 1);
 
     // u: fecha lateralmente em torno do eixo central do bloco (0.5).
@@ -650,6 +657,48 @@ function holdOffsideLine(bb) {
 
         if (p.dynamicTarget.z * bb.dir > bb.defLineDir) {
             p.dynamicTarget.z = bb.defLineDir * bb.dir;
+        }
+    }
+}
+
+/*
+Playing style do GK — Offensive (sweeper, sai da baliza) vs Defensive (fica
+perto da linha, padrão). Dispara evento só na mudança, não todo frame.
+
+Offensive: adversário com a bola no corredor central (|x|<8) e sem nenhum
+defensor nosso entre ele e a nossa baliza.
+Defensive: qualquer outro caso (padrão).
+*/
+function updateGkStyle(bb) {
+    const gk = bb.own.find(pl => pl.role === 'gk');
+    if (!gk) return;
+
+    // Traço fixo do jogador (ver createTeams/assignFormations em match.js).
+    // Defensive nunca sai da linha — ignora o gatilho de sweeper por completo.
+    if (gk.gkStyleBase === 'defensive') {
+        if (gk.gkStyle !== 'defensive') {
+            gk.gkStyle = 'defensive';
+            if (typeof EventBus !== 'undefined') EventBus.emit('GK_STYLE_DEFENSIVE', { gk: gk });
+        }
+        return;
+    }
+
+    let offensive = false;
+    const opp = bb.oppCarrier;
+    if (opp && Math.abs(opp.model.position.x) < 8) {
+        const oppAvanco = opp.model.position.z * bb.dir;
+        const temDefensorPelaFrente = bb.outfield.some(d =>
+            (d.model.position.z * bb.dir) < oppAvanco - 1 &&
+            Math.abs(d.model.position.x - opp.model.position.x) < 10
+        );
+        offensive = !temDefensorPelaFrente;
+    }
+
+    const newStyle = offensive ? 'offensive' : 'defensive';
+    if (gk.gkStyle !== newStyle) {
+        gk.gkStyle = newStyle;
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit(newStyle === 'offensive' ? 'GK_STYLE_OFFENSIVE' : 'GK_STYLE_DEFENSIVE', { gk: gk });
         }
     }
 }
@@ -736,6 +785,7 @@ const TeamAI = {
         bb.gather(match);
 
         pickChaser(bb);
+        updateGkStyle(bb);
         TeamBT.tick(bb);
         computeCollectiveShape(bb);
         applyPostureTuning(bb);

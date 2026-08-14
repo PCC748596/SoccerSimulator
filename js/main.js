@@ -181,7 +181,7 @@ function popularPainelJogadores() {
             const linha = document.createElement('div');
             linha.className = 'linha-jogador';
             linha.innerHTML = '<span>' + p.skills.nome + '</span><span class="lj-fit">FIT ' + p.skills.fitness + '</span>';
-            linha.onclick = () => abrirModalSkills(p.skills);
+            linha.onclick = () => abrirModalSkills(p);
             el.appendChild(linha);
         });
     };
@@ -189,7 +189,8 @@ function popularPainelJogadores() {
     buildLista('lista-jogadores-b', Match.opponents);
 }
 
-function abrirModalSkills(skills) {
+function abrirModalSkills(p) {
+    const skills = p.skills;
     const modal = document.getElementById('modal-skills');
     const titulo = document.getElementById('modal-skills-titulo');
     const corpo = document.getElementById('modal-skills-corpo');
@@ -210,6 +211,14 @@ function abrirModalSkills(skills) {
         ['Passe', skills.pass],
         ['Interceptação', skills.intercept]
     ];
+
+    // Playing style: GK usa o traço fixo (gkStyleBase), LB/RB usa fbStyle.
+    // Outras posições ainda não têm estilo definido — mostra "-".
+    let estilo = null;
+    if (p.role === 'gk') estilo = p.gkStyleBase;
+    else if (p.pos === 'LB' || p.pos === 'RB') estilo = p.fbStyle;
+    campos.push(['Playing Style', estilo ? (estilo === 'offensive' ? 'Offensive' : 'Defensive') : '-']);
+
     corpo.innerHTML = campos.map(([nome, val]) =>
         '<div class="skill-linha"><span>' + nome + '</span><b>' + val + '</b></div>'
     ).join('');

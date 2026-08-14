@@ -61,6 +61,37 @@ const Match = {
                 aplicar(mesmoLado, 3);
                 aplicar(ladoOposto, 5);
             });
+
+            /*
+            Migração por eventos — parte 3: CM. Quando um CM fica com a
+            bola: médio-ala do lado da jogada avança 5m, lateral do mesmo
+            lado avança 10m, CM oposto recua (dá support atrás), médio-ala
+            do lado oposto avança 3m. Mesmo bias temporário (5s) do CB.
+            */
+            EventBus.on('CM_HAS_BALL', (d) => {
+                const p = d.p;
+                const teammates = (p.team === 'TeamA') ? this.players : this.opponents;
+                const outroCM = teammates.find(t => t.pos === 'CM' && t !== p);
+                const rm = teammates.find(t => t.pos === 'RM');
+                const lm = teammates.find(t => t.pos === 'LM');
+                const rb = teammates.find(t => t.pos === 'RB');
+                const lb = teammates.find(t => t.pos === 'LB');
+
+                const ladoJogada = Math.sign(p.model.position.x) || Math.sign(this.ball.position.x) || 1;
+                const mesmoM = (ladoJogada < 0) ? lm : rm;
+                const opostoM = (ladoJogada < 0) ? rm : lm;
+                const mesmoB = (ladoJogada < 0) ? lb : rb;
+
+                const aplicar = (jog, metros) => {
+                    if (!jog) return;
+                    jog.buildOutBias = { x: 0, z: metros * jog.dirZ };
+                    jog.buildOutTimer = 5.0;
+                };
+                aplicar(mesmoM, 5);
+                aplicar(mesmoB, 10);
+                aplicar(outroCM, -4);
+                aplicar(opostoM, 3);
+            });
         }
 
         this.createField();
@@ -624,6 +655,10 @@ const Match = {
             this.players[i].role = fData[i].role;
             this.players[i].slot = slotA;
             this.players[i].updateShirt(fData[i].num, fData[i].pos);
+            // Playing styles: TeamA GK ofensivo (sweeper), TeamB GK defensivo;
+            // laterais (LB/RB) de ambas as equipas ofensivos.
+            if (fData[i].role === 'gk') this.players[i].gkStyleBase = 'offensive';
+            if (fData[i].pos === 'LB' || fData[i].pos === 'RB') this.players[i].fbStyle = 'offensive';
 
             // O adversário ataca ao contrário, mas o slot está no referencial
             // de ataque dele — logo é o mesmo. Só o baseTarget e o u são espelhados.
@@ -635,6 +670,8 @@ const Match = {
             this.opponents[i].role = fData[i].role;
             this.opponents[i].slot = slotB;
             this.opponents[i].updateShirt(fData[i].num, fData[i].pos);
+            if (fData[i].role === 'gk') this.opponents[i].gkStyleBase = 'defensive';
+            if (fData[i].pos === 'LB' || fData[i].pos === 'RB') this.opponents[i].fbStyle = 'offensive';
         }
     },
 
@@ -1437,7 +1474,16 @@ const Match = {
                         }
                     }
                 } else {
-                    this.ballVel.z *= -0.5; this.ball.position.z = 53 * zSinal;
+                    /*
+                    Jogo já parado (GOAL/OUT/bola parada) e a bola volta a
+                    passar a linha de fundo fora da baliza. Antes fazia-se
+                    `ballVel.z *= -0.5` — um ressalto de 50% contra nada, que
+                    relançava com força uma bola já morta (ex.: bola entra na
+                    baliza rente ao poste, o x sai do vão e cai aqui). Sem
+                    jogo a decorrer não há ressalto nenhum: pára a bola.
+                    */
+                    this.ball.position.z = 53 * zSinal;
+                    this.ballVel.set(0, 0, 0);
                 }
             }
         }
