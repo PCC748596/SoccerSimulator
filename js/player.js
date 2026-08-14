@@ -89,11 +89,33 @@ class FootballPlayer {
         this.labelSprite.visible = false;
     }
 
+    /*
+    Genérico (médias do painel esquerdo, por função) — só serve de FALLBACK
+    quando o jogador não tem `skills` individuais (ex.: antes do
+    data/player_skills.js carregar) e como referência pra gerar um time novo
+    no .json (ver tools/gen_player_skills.js). Decisões em jogo usam
+    skillFor(campo), que lê o skill individual real dele.
+    */
     getSkill() {
         if (this.role === 'def') return TeamSkills[this.team].def;
         if (this.role === 'mid') return TeamSkills[this.team].mid;
         if (this.role === 'atk') return TeamSkills[this.team].ata;
         return TeamSkills[this.team].gk;
+    }
+
+    /*
+    Skill individual (data/player_skills.js) por campo — gk/tec/marking/
+    speed/strength/pass/intercept. Sem skills carregados, cai no genérico.
+    As chaves em p.skills são MINÚSCULAS (gerado por tools/gen_player_skills.js)
+    — normaliza aqui pra chamar com 'TEC', 'tec' ou qualquer caixa e não
+    depender de quem chama acertar a grafia exacta.
+    */
+    skillFor(campo) {
+        if (this.skills) {
+            const v = this.skills[String(campo).toLowerCase()];
+            if (typeof v === 'number') return v;
+        }
+        return this.getSkill();
     }
 
     resetBonesToDefault() {
@@ -177,6 +199,48 @@ class FootballPlayer {
     }
 
     /*
+    Passe de pânico: findPassTarget/findPassTargetRelaxed exigem a LINHA
+    inteira até ao colega livre de adversários (minOppDist >= safetyLimit).
+    Se houver um adversário deitado nessa linha — típico de pressão vinda de
+    trás, o marcador fica exactamente entre o portador e o apoio atrás — todo
+    e qualquer candidato falha ali, mesmo com o colega completamente livre no
+    destino. Sem alternativa o jogador cai no fallback (`actCarry`), tenta
+    driblar, é cortado, recupera, tenta outra vez — o ciclo "corta, retoma"
+    reportado. Este ignora a linha por completo e olha só se o PRÓPRIO
+    colega está livre no ponto de chegada — arrisca mais, mas tira a bola de
+    perto em vez de ficar preso.
+    */
+    findPassTargetDesperate() {
+        let teammates = (this.team === 'TeamA') ? Match.players : Match.opponents;
+        let opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        let ownZ = this.model.position.z;
+        let dirZ = this.dirZ;
+
+        let melhor = null, melhorNota = -Infinity;
+        for (const opt of teammates) {
+            if (opt.id === this.id || opt.role === 'gk') continue;
+            const optPos = alvoDePasse(opt);
+            const dist = this.model.position.distanceTo(optPos);
+            if (dist < 3.0 || dist > 35.0) continue;
+
+            let distMarcador = 999;
+            for (const opp of opponents) {
+                if (opp.role === 'gk') continue;
+                const d = optPos.distanceTo(opp.model.position);
+                if (d < distMarcador) distMarcador = d;
+            }
+            if (distMarcador < 2.5) continue; // colega também marcado de perto: não vale a pena
+
+            let nota = distMarcador * 5 - dist * 0.5;
+            const progression = (optPos.z - ownZ) * dirZ;
+            if (progression > 0) nota += 10;
+
+            if (nota > melhorNota) { melhorNota = nota; melhor = opt; }
+        }
+        return melhor;
+    }
+
+    /*
     Nível 3: o cérebro individual. A árvore vive em js/bt/player_bt.js — aqui
     fica só a porta de entrada, para o resto do código continuar a chamar
     player.runBehaviorTree() como sempre.
@@ -206,8 +270,8 @@ class FootballPlayer {
             return 'cen';
         };
 
-        let skillVal = this.getSkill();
-        let safetyLimit = 1.7 + (1.0 - (skillVal / 100)) * 1.5; 
+        let skillVal = this.skillFor('PASS');
+        let safetyLimit = 1.7 + (1.0 - (skillVal / 100)) * 1.5;
 
         let opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
         let ratedCandidates = [];
@@ -234,7 +298,7 @@ class FootballPlayer {
             if (!inStyleRange) continue;
 
             _line1.set(this.model.position, optPos);
-            let minOppDist = 999;
+            let minOppDist = 999, oppMaisPerto = null;
             for (let i = 0; i < opponents.length; i++) {
                 let opp = opponents[i];
                 if (opp.role === 'gk') continue;
@@ -242,10 +306,23 @@ class FootballPlayer {
                 let d = _v1.distanceTo(opp.model.position);
                 if (d < minOppDist) {
                     minOppDist = d;
+                    oppMaisPerto = opp;
                 }
             }
 
-            if (minOppDist < safetyLimit) continue;
+            /*
+            Passe x Interceptação: o adversário mais perto da linha ameaça
+            mais ou menos consoante o INTERCEPT dele contra o PASS de quem
+            está a passar — bom interceptador precisa de menos proximidade
+            pra ser perigo, bom passador arrisca-se mais perto dele.
+            */
+            let safetyEff = safetyLimit;
+            if (oppMaisPerto) {
+                const fatorIntercept = THREE.MathUtils.clamp(
+                    1 + (oppMaisPerto.skillFor('INTERCEPT') - skillVal) / 150, 0.6, 1.6);
+                safetyEff = safetyLimit * fatorIntercept;
+            }
+            if (minOppDist < safetyEff) continue;
 
             let score = 100;
 
@@ -258,9 +335,14 @@ class FootballPlayer {
             */
             score += Math.min(110, (minOppDist - safetyLimit) * 22);
 
+            // Grid espacial (camada PASSE): soma o valor autorado da célula do alvo.
+            if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
+                score += SpatialGrid.layerValueAt('pass', optPos.x, optPos.z, this.team) * 0.4;
+            }
+
             let optSec = getSectorOfX(optPos.x);
             if (Tatics.setores.includes(optSec)) {
-                score += 30;
+                score += 45; // +50% pedido: setores activos (Left/Right) sem efeito real no jogo
             }
 
             /*
@@ -378,6 +460,11 @@ class FootballPlayer {
         this.touchLock = BallControl.touchLock;
         Match.ballCarrier = null;
         Match.intendedReceiver = alvo || null;
+        // Sem isto o próprio GK falhava o filtro anti-falso-positivo de
+        // isCross (lastTouchedPlayer !== this) e saltava logo a seguir ao
+        // seu próprio relançamento, achando que era um cruzamento a chegar.
+        Match.lastTouchedTeam = this.team;
+        Match.lastTouchedPlayer = this;
         if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'lancamento');
     }
 
@@ -392,22 +479,52 @@ class FootballPlayer {
 
         if (inShootingRange) {
             if (typeof MatchStats !== 'undefined') MatchStats[this.team].remates.tentados++;
+
+            // Conectar bem a cabeçada é Técnica x Marcação (marcador mais
+            // perto dele) — base 0.55, favorece quem salta pra bola.
+            const opponentsHead = (this.team === 'TeamA') ? Match.opponents : Match.players;
+            let marcador = null, distMarc = 999;
+            for (const opp of opponentsHead) {
+                if (opp.role === 'gk') continue;
+                const d = opp.model.position.distanceTo(this.model.position);
+                if (d < 2.0 && d < distMarc) { distMarc = d; marcador = opp; }
+            }
+            const cabeceadaLimpa = !marcador || venceuDuelo(this.skillFor('TEC'), marcador.skillFor('MARKING'), 0.55);
+
             let maxC = (LARGURA_BALIZA / 2) - 0.5;
-            let targetGoal = new THREE.Vector3((Math.random() > 0.5 ? 1 : -1) * maxC, Math.random() * 1.5 + 0.3, this.targetGoalZ);
+            let alvoX, alvoY, pow;
+            if (!cabeceadaLimpa) {
+                // Marcador ganhou o salto: cabeçada sai fraca e desviada.
+                alvoX = this.model.position.x + (Math.random() - 0.5) * 5.0;
+                alvoY = 0.3;
+                pow = 5.0 + Math.random() * 3.0;
+            } else {
+                const gkAdversario0 = (this.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
+                // Técnica x GK decide o canto: vencer aponta perto do poste.
+                const venceuGK = gkAdversario0 ? venceuDuelo(this.skillFor('TEC'), gkAdversario0.skillFor('GK'), 0.5) : true;
+                const cantoC = venceuGK ? maxC * 0.88 : maxC * 0.5;
+                alvoX = (Math.random() > 0.5 ? 1 : -1) * cantoC;
+                alvoY = Math.random() * 1.5 + 0.3;
+                pow = 16.0 + ((this.skillFor('TEC') - 50) / 50) * 8.0;
+            }
+
+            let targetGoal = new THREE.Vector3(alvoX, alvoY, cabeceadaLimpa ? this.targetGoalZ : Match.ball.position.z + this.dirZ * 3);
             _v3.subVectors(targetGoal, Match.ball.position).normalize();
-            let pow = 16.0 + ((TeamSkills[this.team].ata - 50) / 50) * 8.0;
             Match.ballVel.copy(_v3).multiplyScalar(pow);
             this.hasBall = false;
             this.touchLock = BallControl.touchLock;
             Match.ballCarrier = null;
-            let defendingTeam = (this.team === 'TeamA') ? 'TeamB' : 'TeamA';
-            // Notifica o GK adversário com o seu delay de reacção próprio.
-            const gkAdversario = (this.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
-            if (gkAdversario) {
-                gkAdversario.gkDelayReacao = 0.45 - ((TeamSkills[defendingTeam].gk - 50) / 50) * 0.35;
-                gkAdversario.gkReagiu = false;
+
+            if (cabeceadaLimpa) {
+                let defendingTeam = (this.team === 'TeamA') ? 'TeamB' : 'TeamA';
+                // Notifica o GK adversário com o seu delay de reacção próprio.
+                const gkAdversario = (this.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
+                if (gkAdversario) {
+                    gkAdversario.gkDelayReacao = 0.45 - ((TeamSkills[defendingTeam].gk - 50) / 50) * 0.35;
+                    gkAdversario.gkReagiu = false;
+                }
+                window.bolaChutada = true;
             }
-            window.bolaChutada = true;
         } else {
             let target = this.findPassTarget('mid') || this.findPassTarget('atk') || this.findPassTarget('def');
             if (target) {
@@ -475,9 +592,20 @@ class FootballPlayer {
         }
 
         if (this.hasBall) {
-            let footOffset = new THREE.Vector3(0, 0, 0.4).applyQuaternion(this.model.quaternion);
-            Match.ball.position.lerp(this.model.position.clone().add(footOffset), 0.5);
-            Match.ball.position.y = 0.15; Match.ballVel.set(0, 0, 0);
+            if (this.role === 'gk') {
+                // GR segura a bola nas mãos, junto ao PEITO (não à cintura) —
+                // não ao nível do pé como no dribble de um jogador de campo
+                // (senão fica só pousada no chão à frente dele).
+                const maoY = this.model.position.y + (this.gkEstado === 'apanhar' ? 0.55 : 1.15);
+                let maoOffset = new THREE.Vector3(0, 0, 0.3).applyQuaternion(this.model.quaternion);
+                Match.ball.position.lerp(this.model.position.clone().add(maoOffset).setY(maoY), 0.5);
+                Match.ballVel.set(0, 0, 0);
+            } else {
+                // +0.4m pedido: bola de domínio mais afastada do jogador, à frente.
+                let footOffset = new THREE.Vector3(0, 0, 0.8).applyQuaternion(this.model.quaternion);
+                Match.ball.position.lerp(this.model.position.clone().add(footOffset), 0.5);
+                Match.ball.position.y = 0.15; Match.ballVel.set(0, 0, 0);
+            }
         }
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
         } else {
@@ -974,7 +1102,7 @@ class FootballPlayer {
             let alvoGkZ = (this.team === 'TeamA') ? -48 : 48;
             let speedLerp = 2.0;
 
-            let gkSkill = TeamSkills[this.team].gk;
+            let gkSkill = this.skillFor('GK');
 
             let bolaVindoPraMim = (this.team === 'TeamA') ? (Match.ballVel.z < -5) : (Match.ballVel.z > 5);
 
@@ -1206,27 +1334,76 @@ class FootballPlayer {
             }
         } else if (this.gkEstado === 'mergulho') {
             this.gkTempoMergulho += dt; let t = this.gkTempoMergulho; let dirX = this.gkDirMergulho; let tipo = this.gkTipoMergulho;
-            let gkSkill = TeamSkills[this.team].gk;
+            let gkSkill = this.skillFor('GK');
             let skillSpeed = 4.0 + ((gkSkill - 50) / 50) * 5.0;
+
+            /*
+            Braços proceduais: em vez de pose fixa (rotation.z=±2.5 sempre,
+            independente de onde a bola realmente está), aponta pra ela a
+            cada frame — sobe mais se ela vier alta, abre mais se estiver
+            longe dos ombros. Clampado pelos limites de JointLimits.shoulder
+            (ombro é 3DOF acoplado, ver clampOmbro).
+            */
+            if (t < 1.2) {
+                const ombroY = gkCorpo.position.y + 0.35;
+                const dyBola = Match.ball.position.y - ombroY;
+                const dxBola = Match.ball.position.x - gkCorpo.position.x;
+
+                let elevX = Math.atan2(Math.max(-0.3, dyBola), 1.0) * 1.6;
+                let abreZ = 1.3 + Math.min(1.4, Math.abs(dxBola) * 0.12);
+                const clamped = (typeof JointLimits !== 'undefined')
+                    ? JointLimits.clampOmbro(elevX, 0, abreZ)
+                    : { x: elevX, z: abreZ };
+
+                gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, clamped.x, 0.3);
+                gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, clamped.x, 0.3);
+                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, clamped.z, 0.3);
+                gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -clamped.z, 0.3);
+            }
 
             if (t < 0.6) {
                 gkCorpo.position.x += dirX * skillSpeed * dt;
-                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, 2.5, 0.2); gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -2.5, 0.2);
                 if (dirX !== 0) {
                     gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + (tipo === 'alto' ? 0.6 : 0.1), 0.2);
-                    gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, dirX * 1.2, 0.2);
+                    // Sinal invertido: saltava pro lado certo (position.x
+                    // += dirX*v está bem) mas o corpo inclinava/virava pro
+                    // lado oposto ao salto.
+                    gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, -dirX * 1.2, 0.2);
                 } else {
                     gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + (tipo === 'alto' ? 0.8 : -0.2), 0.2);
                 }
             } else if (t < 1.2) {
-                if (dirX !== 0) { gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y - 0.15, 0.2); gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, dirX * 1.57, 0.2); }
+                if (dirX !== 0) { gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y - 0.15, 0.2); gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, -dirX * 1.57, 0.2); }
             } else if (t < 1.8) {
-                if (dirX !== 0) { gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 1.2, 0.2); gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, 1.8, 0.2); gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, 1.8, 0.2); }
+                /*
+                Mergulho de LADO já tem o corpo quase todo rodado no roll
+                (pelvis.rotation.z ~1.57, ajustado acima) — somar um pitch
+                (rotation.x) tão grande quanto o de uma queda de frente
+                (1.2) compunha os dois eixos ao mesmo tempo e deixava o
+                boneco "virado"/torcido em vez de deitado de lado. Reduzido
+                bastante só pra dive lateral; queda de frente (dirX===0,
+                sem chegar aqui) não é afectada.
+                */
+                if (dirX !== 0) { gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0.35, 0.2); gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, 1.8, 0.2); gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, 1.8, 0.2); }
             } else if (t < 2.5) {
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.15); gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, 0.15); gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, 0, 0.15);
             } else { this.gkEstado = 'idle'; this.resetBonesToDefault(); }
 
-            if (t < 1.2 && gkCorpo.position.distanceTo(Match.ball.position) < 2.0 && Match.ballVel.lengthSq() > 0) {
+            /*
+            Ponto de defesa tem de ser a mão, não a barriga — projecta a
+            partir do ângulo REAL do braço líder (o do lado do mergulho),
+            já procedural (ver bloco acima), em vez de um offset fixo que
+            ignorava pra onde o braço estava mesmo a apontar.
+            */
+            const bracoRefMerg = (dirX >= 0) ? gkRig.rArm : gkRig.lArm;
+            const alcanceMerg = 0.9;
+            const maoMergX = gkCorpo.position.x + Math.sin(Math.abs(bracoRefMerg.rotation.z)) * alcanceMerg * (dirX || 1);
+            const maoMergY = gkCorpo.position.y + 0.35 + Math.sin(bracoRefMerg.rotation.x) * alcanceMerg;
+            const distMaoMerg = Math.hypot(maoMergX - Match.ball.position.x, maoMergY - Match.ball.position.y, gkCorpo.position.z - Match.ball.position.z);
+            // Bola já lá dentro (atrás da linha): mão nenhuma vai lá buscar —
+            // sem isto uma defesa em curso podia "reflectir" o que já é golo.
+            const jaEntrou = (Match.state !== 'PLAY');
+            if (!jaEntrou && t < 1.2 && distMaoMerg < 1.3 && Match.ballVel.lengthSq() > 0) {
                 let catchChance = 0.35 + (gkSkill - 50) / 100;
                 if (Math.random() < catchChance) {
                     this.grabBall();
@@ -1236,15 +1413,24 @@ class FootballPlayer {
             }
         } else if (this.gkEstado === 'salto_alto') {
             this.gkTempoMergulho += dt; let t = this.gkTempoMergulho;
-            let gkSkill = TeamSkills[this.team].gk;
+            let gkSkill = this.skillFor('GK');
 
             if (t < 0.3) {
                 let jumpH = 0.8 + ((gkSkill - 50) / 50) * 0.6;
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + jumpH, 0.25);
-                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, 2.8, 0.3);
-                gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -2.8, 0.3);
-                gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, -0.5, 0.3);
-                gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, -0.5, 0.3);
+
+                /*
+                Procedural: braços por cima da cabeça, mas inclinam pro lado
+                de onde a bola realmente vem em vez de subir sempre no eixo
+                central. Clampado por JointLimits.shoulder.
+                */
+                const dxBolaSalto = Match.ball.position.x - gkCorpo.position.x;
+                const alvoZSalto = JointLimits.clamp('shoulder', 'z', 2.8 + THREE.MathUtils.clamp(dxBolaSalto * 0.05, -0.3, 0.3));
+                const alvoXSalto = JointLimits.clamp('shoulder', 'x', -0.5);
+                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, alvoZSalto, 0.3);
+                gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -alvoZSalto, 0.3);
+                gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, alvoXSalto, 0.3);
+                gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, alvoXSalto, 0.3);
                 gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, 1.2, 0.3);
                 gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, 1.2, 0.3);
             } else if (t < 0.6) {
@@ -1260,7 +1446,14 @@ class FootballPlayer {
                 this.resetBonesToDefault();
             }
 
-            if (t < 0.7 && gkCorpo.position.distanceTo(Match.ball.position) < 2.2 && Match.ballVel.lengthSq() > 0) {
+            // Mesma correcção do mergulho: projecta a mão a partir do ângulo
+            // REAL do braço (procedural acima), não um offset fixo.
+            const alcanceSalto = 0.95;
+            const maoSaltoX = gkCorpo.position.x + Math.sin(gkRig.rArm.rotation.z) * alcanceSalto;
+            const maoSaltoY = gkCorpo.position.y + 0.35 + Math.cos(gkRig.rArm.rotation.x) * alcanceSalto;
+            const distMaoSalto = Math.hypot(maoSaltoX - Match.ball.position.x, maoSaltoY - Match.ball.position.y, gkCorpo.position.z - Match.ball.position.z);
+            const jaEntrouSalto = (Match.state !== 'PLAY');
+            if (!jaEntrouSalto && t < 0.7 && distMaoSalto < 1.4 && Match.ballVel.lengthSq() > 0) {
                 let catchChance = 0.4 + (gkSkill - 50) / 80;
                 if (Math.random() < catchChance) {
                     this.grabBall();
@@ -1305,7 +1498,13 @@ class FootballPlayer {
             // reorganizam, antes de poder relançar (mão ou pontapé).
             this.gkTempoMergulho += dt;
             const t = this.gkTempoMergulho;
-            const meio = GoalkeeperPose.segurarDur * 0.4;
+            /*
+            Antes ficava 40% dos 8s (3.2s) agachado na pose de 'apanhar' antes
+            de passar para 'segurar' (de pé, braços fechados na bola) — dava a
+            impressão de nunca se levantar. Levanta quase logo a seguir à
+            queda/agachamento do apanhar.
+            */
+            const meio = 0.4;
             const P = t < meio ? GoalkeeperPose.apanhar : GoalkeeperPose.segurar;
 
             gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, P.coxa, 0.25);
@@ -1322,16 +1521,20 @@ class FootballPlayer {
             /*
             Entra nesta fase com a rotação de onde quer que estivesse a
             defesa (mergulho de lado, apanhada de costas) — ninguém a
-            corrigia durante os 8s de espera. Assenta a virar devagar para
-            o campo (direcção de ataque), pronto a relançar.
+            corrigia durante os 8s de espera, e ficava de costas pro campo.
+            Vira já de frente, sempre — usa lookAtBola (o mesmo `.lookAt()`
+            usado em todo o resto do jogo para orientar jogadores; um
+            `rotation.y = 0/PI` calculado à mão aqui dava exactamente o
+            oposto do esperado).
             */
-            const rotAlvo = (this.dirZ === 1) ? 0 : Math.PI;
-            gkCorpo.rotation.y = lerpTo(gkCorpo.rotation.y, rotAlvo, 0.06);
+            _v1.set(gkCorpo.position.x, gkCorpo.position.y, gkCorpo.position.z + this.dirZ * 10);
+            lookAtBola(gkCorpo, _v1);
 
             if (t >= GoalkeeperPose.segurarDur) {
                 this.releaseFromHands();
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
+                if (typeof EventBus !== 'undefined') EventBus.emit('GK_RELEASE_BALL', { team: this.team, gk: this });
             }
         }
         if (dt > 0.0001 && this.gkEstado === 'idle') {
@@ -1355,6 +1558,39 @@ class FootballPlayer {
         window.bolaChutada = false;
         this.gkEstado = 'segurando';
         this.gkTempoMergulho = 0;
+        /*
+        Sem isto, um companheiro já marcado como intendedReceiver de um
+        passe/desvio anterior continuava a correr direito pra
+        Match.ball.position (agora nas mãos do GR) via Receber — passa por
+        cima de tudo, incluindo o afastamento do commit().
+        */
+        Match.intendedReceiver = null;
+        /*
+        Vira já de frente pro campo (mesmo lookAtBola usado no resto do
+        jogo — um rotation.y=0/PI calculado à mão dava de costas).
+        */
+        _v1.set(this.model.position.x, this.model.position.y, this.model.position.z + this.dirZ * 10);
+        lookAtBola(this.model, _v1);
+
+        /*
+        Fecha os braços na hora. Sem isto, um braço que ainda estava na pose
+        do mergulho/salto (esticado bem aberto, rotation.z ~1.5-2.8) só
+        convergia pra pose de 'segurar' devagar (lerp 0.25-0.5/frame) —
+        durante essa transição ficava com um braço erguido/aberto, o outro
+        já fechado na bola, uma pose assimétrica de "um braço no ar".
+        */
+        if (this.rig) {
+            const P = GoalkeeperPose.segurar;
+            this.rig.lLeg.rotation.x = P.coxa; this.rig.rLeg.rotation.x = P.coxa;
+            this.rig.lKnee.rotation.x = P.joelho; this.rig.rKnee.rotation.x = P.joelho;
+            this.rig.lLeg.rotation.z = P.abertura; this.rig.rLeg.rotation.z = -P.abertura;
+            this.rig.lArm.rotation.z = P.bracoZ; this.rig.rArm.rotation.z = -P.bracoZ;
+            this.rig.lArm.rotation.x = P.bracoX; this.rig.rArm.rotation.x = P.bracoX;
+            this.rig.lElbow.rotation.x = P.cotovelo; this.rig.rElbow.rotation.x = P.cotovelo;
+            this.rig.chest.rotation.x = P.chest;
+        }
+
+        if (typeof EventBus !== 'undefined') EventBus.emit('GK_CATCH_BALL', { team: this.team, gk: this });
     }
 
     /*
@@ -1384,6 +1620,8 @@ class FootballPlayer {
             this.touchLock = BallControl.touchLock;
             Match.ballCarrier = null;
             Match.intendedReceiver = alvo;
+            Match.lastTouchedTeam = this.team;
+            Match.lastTouchedPlayer = this;
             if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'curto');
         } else {
             this.puntBall();

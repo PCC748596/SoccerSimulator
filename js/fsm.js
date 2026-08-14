@@ -74,6 +74,7 @@ class PlayerFSM {
         this.currentState = newState; this.timer = 0;
 
         if (newState === 'SLIDE_TACKLE') this.enterSlideTackle();
+        if (newState === 'TACKLE') this.p.tackleResolvido = false;
     }
 
     /*
@@ -386,7 +387,7 @@ class PlayerFSM {
                     // Chance de sucesso: ir para o lado dá bónus
                     let successChance = DribbleModel.successBase + DribbleModel.successSideBonus;
                     // Skill do jogador modifica (+10% para skill > 70, -10% para skill < 40)
-                    let skill = p.getSkill ? p.getSkill() : 50;
+                    let skill = p.skillFor ? p.skillFor('TEC') : 50;
                     successChance += (skill - 50) * 0.003;
 
                     if (Math.random() < successChance) {
@@ -464,18 +465,30 @@ class PlayerFSM {
                     rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, -Math.PI / 2.5, 0.3);
                     rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, Math.PI / 4, 0.3);
                 } else if (tTackle < 0.8) {
-                    if (p.hasBall === false && Match.ballCarrier && Match.ballCarrier.team !== p.team) {
+                    if (p.hasBall === false && Match.ballCarrier && Match.ballCarrier.team !== p.team && Match.ballCarrier.role !== 'gk') {
                         let distToBall = Match.ball.position.distanceTo(p.model.position);
-                        if (distToBall < 1.4) {
-                            Match.ballCarrier.hasBall = false;
-                            Match.ballCarrier.touchLock = BallControl.touchLock;
-                            Match.ballCarrier = null;
-                            Match.ballVel.x = (Math.random() - 0.5) * 15;
-                            Match.ballVel.z = p.dirZ * 15;
-                            Match.ballVel.y = 2.0;
-                            Match.lastTouchedTeam = p.team;
-                            Match.lastTouchedPlayer = p;
-                            if (typeof MatchStats !== 'undefined') MatchStats[p.team].desarmes.sucesso++;
+                        if (distToBall < 1.4 && !p.tackleResolvido) {
+                            p.tackleResolvido = true;
+                            const carrier = Match.ballCarrier;
+                            /*
+                            Desarme de pé é físico — carga de ombro: Velocidade
+                            x Força de cada lado (média dos dois skills),
+                            não Técnica. Base 0.5: disputa justa a skills
+                            iguais.
+                            */
+                            const forcaDef = (p.skillFor('SPEED') + p.skillFor('STRENGTH')) / 2;
+                            const forcaAtk = (carrier.skillFor('SPEED') + carrier.skillFor('STRENGTH')) / 2;
+                            if (venceuDuelo(forcaDef, forcaAtk, 0.5)) {
+                                carrier.hasBall = false;
+                                carrier.touchLock = BallControl.touchLock;
+                                Match.ballCarrier = null;
+                                Match.ballVel.x = (Math.random() - 0.5) * 15;
+                                Match.ballVel.z = p.dirZ * 15;
+                                Match.ballVel.y = 2.0;
+                                Match.lastTouchedTeam = p.team;
+                                Match.lastTouchedPlayer = p;
+                                if (typeof MatchStats !== 'undefined') MatchStats[p.team].desarmes.sucesso++;
+                            }
                         }
                     }
                 } else {
@@ -514,28 +527,42 @@ class PlayerFSM {
                         Match.ball.position.distanceTo(p.model.position) < S.alcanceToque) {
                         p.slideTouched = true;
 
-                        if (Match.ballCarrier && Match.ballCarrier.team !== p.team) {
-                            Match.ballCarrier.hasBall = false;
-                            Match.ballCarrier.touchLock = BallControl.touchLock;
+                        const carrierSlide = Match.ballCarrier;
+                        const alvoValido = carrierSlide && carrierSlide.team !== p.team && carrierSlide.role !== 'gk';
+                        /*
+                        Carrinho é Técnica (drible do portador) x Marcação (do
+                        defensor) — quem lê melhor o corpo do outro. Base 0.45:
+                        um carrinho é um lance arriscado, o portador começa
+                        ligeiramente favorito mesmo a skills iguais.
+                        */
+                        const venceu = alvoValido && venceuDuelo(p.skillFor('MARKING'), carrierSlide.skillFor('TEC'), 0.45);
+
+                        if (venceu) {
+                            carrierSlide.hasBall = false;
+                            carrierSlide.touchLock = BallControl.touchLock;
                             Match.ballCarrier = null;
                             if (typeof MatchStats !== 'undefined') MatchStats[p.team].carrinhos.sucesso++;
                         }
 
-                        // A bola sai na direccao do toque (para onde o pe ia) com
-                        // forca para percorrer `empurraoBola` metros.
-                        _v1.copy(_v2);
-                        _v1.x += (Math.random() - 0.5) * 0.35;
-                        _v1.y = 0;
-                        _v1.normalize();
-                        Match.ballVel.copy(_v1).multiplyScalar(S.empurraoBola * PassModel.forceForDistance);
-                        Match.ballVel.y = S.alturaBola;
+                        if (venceu || !alvoValido) {
+                            // A bola sai na direccao do toque (para onde o pe ia)
+                            // com forca para percorrer `empurraoBola` metros.
+                            _v1.copy(_v2);
+                            _v1.x += (Math.random() - 0.5) * 0.35;
+                            _v1.y = 0;
+                            _v1.normalize();
+                            Match.ballVel.copy(_v1).multiplyScalar(S.empurraoBola * PassModel.forceForDistance);
+                            Match.ballVel.y = S.alturaBola;
+                            Match.intendedReceiver = null;
+                            Match.lastTouchedTeam = p.team;
+                            Match.lastTouchedPlayer = p;
+                            window.bolaChutada = false;
+                        }
+                        // Perdeu o duelo: o portador passa por cima do carrinho
+                        // e segue com a bola, sem ela ser tocada.
 
                         // Esta no chao: nao pode ser ele a recolher a bola.
                         p.touchLock = S.bloqueioAposToque;
-                        Match.intendedReceiver = null;
-                        Match.lastTouchedTeam = p.team;
-                        Match.lastTouchedPlayer = p;
-                        window.bolaChutada = false;
                     }
 
                     if (tSlide >= S.levantar) {
@@ -562,13 +589,41 @@ class PlayerFSM {
                 } else {
                     rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, -Math.PI / 4, 0.3); rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 0, 0.3);
                     if (p.hasBall) {
-                        let maxC = (LARGURA_BALIZA / 2) - 0.5;
-                        _v1.set((Math.random() > 0.5 ? 1 : -1) * maxC, Math.random() > 0.5 ? 2.0 : 0.4, p.targetGoalZ);
-                        let dZ = Math.abs(p.targetGoalZ - Match.ball.position.z);
+                        const opponentsShoot = (p.team === 'TeamA') ? Match.opponents : Match.players;
+                        let bloqueador = null, distBloqueio = 999;
+                        for (const opp of opponentsShoot) {
+                            if (opp.role === 'gk') continue;
+                            const d = opp.model.position.distanceTo(p.model.position);
+                            if (d < 2.2 && d < distBloqueio) { distBloqueio = d; bloqueador = opp; }
+                        }
+                        // Bloqueado: Técnica (chutador) x Marcação (quem está em cima
+                        // dele) — base 0.6, favorece o chutador (defensor tem de
+                        // acertar o corte no timing certo).
+                        const bloqueado = bloqueador && !venceuDuelo(p.skillFor('TEC'), bloqueador.skillFor('MARKING'), 0.6);
 
-                        let pow = 22.0 + ((TeamSkills[p.team].ata - 50) / 50) * 16.0;
+                        let maxC = (LARGURA_BALIZA / 2) - 0.5;
+                        let pow, alvoX, alvoY;
+
+                        if (bloqueado) {
+                            // Bola desviada, curta e fraca — não mira a baliza.
+                            pow = 5.0 + Math.random() * 3.0;
+                            alvoX = p.model.position.x + (Math.random() - 0.5) * 4.0;
+                            alvoY = 0.3;
+                        } else {
+                            const gkDef = (p.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
+                            // Na baliza: Técnica (chutador) x GK — vencer põe a bola
+                            // perto do poste (ângulo difícil); perder deixa mais central.
+                            const venceuGK = gkDef ? venceuDuelo(p.skillFor('TEC'), gkDef.skillFor('GK'), 0.5) : true;
+                            const cantoC = venceuGK ? maxC * 0.9 : maxC * 0.5;
+                            pow = 22.0 + ((p.skillFor('TEC') - 50) / 50) * 16.0;
+                            alvoX = (Math.random() > 0.5 ? 1 : -1) * cantoC;
+                            alvoY = Math.random() > 0.5 ? 2.0 : 0.4;
+                        }
+
+                        _v1.set(alvoX, alvoY, bloqueado ? Match.ball.position.z + p.dirZ * 3 : p.targetGoalZ);
+                        let dZ = Math.abs(_v1.z - Match.ball.position.z);
                         let tA = dZ / pow; let cY = 0.5 * 15.0 * tA * tA;
-                        _v2.set(_v1.x, _v1.y + cY, p.targetGoalZ);
+                        _v2.set(_v1.x, _v1.y + cY, _v1.z);
                         _v3.subVectors(_v2, Match.ball.position).normalize();
                         Match.ballVel.copy(_v3).multiplyScalar(pow);
                         p.hasBall = false; p.touchLock = BallControl.touchLock;
@@ -576,14 +631,16 @@ class PlayerFSM {
                         Match.lastTouchedTeam = p.team;
                         Match.lastTouchedPlayer = p;
 
-                        let defendingTeam = (p.team === 'TeamA') ? 'TeamB' : 'TeamA';
-                        // Notifica o GK adversário via propriedade de instância.
-                        const gkDef = (p.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
-                        if (gkDef) {
-                            gkDef.gkDelayReacao = 0.45 - ((TeamSkills[defendingTeam].gk - 50) / 50) * 0.35;
-                            gkDef.gkReagiu = false;
+                        if (!bloqueado) {
+                            let defendingTeam = (p.team === 'TeamA') ? 'TeamB' : 'TeamA';
+                            // Notifica o GK adversário via propriedade de instância.
+                            const gkDef = (p.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
+                            if (gkDef) {
+                                gkDef.gkDelayReacao = 0.45 - ((TeamSkills[defendingTeam].gk - 50) / 50) * 0.35;
+                                gkDef.gkReagiu = false;
+                            }
+                            window.bolaChutada = true;
                         }
-                        window.bolaChutada = true;
                     }
                 }
                 if (this.timer >= 0.2) {

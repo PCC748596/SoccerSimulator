@@ -20,9 +20,7 @@ canvas {
     background-color: #87CEEB;
 }
 
-#painel-comandos, #painel-direito {
-    position: absolute;
-    top: 20px;
+#painel-comandos, #painel-direito, #painel-jogadores {
     background: rgba(255, 255, 255, 0.96);
     padding: 10px;
     border-radius: 10px;
@@ -30,41 +28,62 @@ canvas {
     border: 1px solid #e2e8f0;
     box-sizing: border-box;
     width: 192px;
-    z-index: 10;
-    max-height: 92vh;
     overflow-y: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
 
 #painel-comandos {
+    position: absolute;
+    top: 20px;
     left: 20px;
+    z-index: 10;
+    max-height: 92vh;
+}
+
+/* #painel-direito e #painel-jogadores empilham dentro de #coluna-direita
+   (flex column) — não são mais posicionados individualmente, senão o
+   segundo painel tinha de adivinhar a altura do primeiro. */
+#coluna-direita {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-end;
+    max-height: 96vh;
 }
 
 #painel-direito {
-    right: 20px;
+    max-height: 55vh;
 }
 
-#painel-comandos::-webkit-scrollbar, #painel-direito::-webkit-scrollbar {
+#painel-jogadores {
+    max-height: 38vh;
+}
+
+#painel-comandos::-webkit-scrollbar, #painel-direito::-webkit-scrollbar, #painel-jogadores::-webkit-scrollbar {
     display: none;
 }
 
 /* --- Cabeçalho do painel + minimizar/maximizar --- */
 
-#painel-cabecalho, #painel-direito-cabecalho {
+#painel-cabecalho, #painel-direito-cabecalho, #painel-jogadores-cabecalho {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 4px;
 }
 
-#painel-cabecalho h2, #painel-direito-cabecalho h2 {
+#painel-cabecalho h2, #painel-direito-cabecalho h2, #painel-jogadores-cabecalho h2 {
     margin: 0;
     flex: 1;
     border-bottom: 2px solid #ef4444;
 }
 
-#btn-painel, #btn-painel-direito {
+#btn-painel, #btn-painel-direito, #btn-painel-jogadores {
     flex: 0 0 auto;
     width: 20px;
     height: 20px;
@@ -80,131 +99,234 @@ canvas {
     transition: 0.15s;
 }
 
-#btn-painel:hover, #btn-painel-direito:hover {
+#btn-painel:hover, #btn-painel-direito:hover, #btn-painel-jogadores:hover {
     background: #cbd5e1;
     color: #1e293b;
 }
 
 /* Estado minimizado: só sobra a barra de título. */
-#painel-comandos.minimizado, #painel-direito.minimizado {
+#painel-comandos.minimizado, #painel-direito.minimizado, #painel-jogadores.minimizado {
     width: auto;
     padding: 10px 12px;
     max-height: none;
     overflow: visible;
 }
 
-#painel-comandos.minimizado #painel-conteudo, #painel-direito.minimizado #painel-direito-conteudo {
+#painel-comandos.minimizado #painel-conteudo,
+#painel-direito.minimizado #painel-direito-conteudo,
+#painel-jogadores.minimizado #painel-jogadores-conteudo {
     display: none;
 }
 
-#painel-comandos.minimizado #painel-cabecalho h2, #painel-direito.minimizado #painel-direito-cabecalho h2 {
+#painel-comandos.minimizado #painel-cabecalho h2,
+#painel-direito.minimizado #painel-direito-cabecalho h2,
+#painel-jogadores.minimizado #painel-jogadores-cabecalho h2 {
     border-bottom: none;
     padding-bottom: 0;
 }
 
-/* --- Painel PlayerBT Debug: árvore/condições/nó activo em tempo real --- */
+/* --- Painel Player Skills (lista + linhas clicáveis) --- */
 
-#painel-playerbt {
-    position: absolute;
-    right: 20px;
-    bottom: 20px;
-    background: rgba(15, 23, 42, 0.94);
-    color: #e2e8f0;
-    padding: 10px;
-    border-radius: 10px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
-    border: 1px solid #334155;
-    box-sizing: border-box;
-    width: 420px;
-    max-height: 40vh;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    z-index: 10;
+#painel-jogadores-conteudo {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
 }
 
-#painel-playerbt::-webkit-scrollbar { display: none; }
+.jogadores-col {
+    flex: 1;
+    min-width: 0;
+}
 
-#painel-playerbt-cabecalho {
+.jogadores-col h3 {
+    margin: 0 0 4px 0;
+    font-size: 11px;
+}
+
+.linha-jogador {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    font-size: 10.5px;
+    padding: 3px 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.linha-jogador:hover {
+    background: #e2e8f0;
+}
+
+.linha-jogador .lj-fit {
+    color: #64748b;
+    flex: 0 0 auto;
+}
+
+/* --- Modal de skills de um jogador --- */
+
+#modal-skills {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#modal-skills.oculto {
+    display: none;
+}
+
+#modal-skills-caixa {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px 18px;
+    width: 300px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+#modal-skills-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+#modal-skills-titulo {
+    margin: 0;
+    border-bottom: none;
+    font-size: 16px;
+}
+
+#btn-modal-skills {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    line-height: 1;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+#btn-modal-skills:hover {
+    background: #cbd5e1;
+}
+
+.skill-linha {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    border-bottom: 1px dashed #e2e8f0;
+    font-size: 13px;
+}
+
+.skill-linha b {
+    color: #1e293b;
+}
+
+.oculto {
+    display: none;
+}
+
+/* --- HUD do portador da bola / marcador mais próximo --- */
+
+.hud-jogador {
+    position: absolute;
+    bottom: 20px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    padding: 8px 12px;
+}
+
+#hud-jogador-esq {
+    left: 20px;
+}
+
+#hud-jogador-dir {
+    right: 20px;
+}
+
+.hud-jog-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.15);
+    flex: 0 0 auto;
+}
+
+.hud-jog-nome {
+    font-weight: 700;
+    font-size: 13px;
+    color: #1e293b;
+}
+
+.hud-jog-stamina-bar {
+    display: flex;
+    gap: 2px;
+    margin-top: 3px;
+}
+
+.hud-jog-stamina-bar .seg {
+    width: 14px;
+    height: 8px;
+    border-radius: 2px;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+}
+
+.hud-jog-stamina-bar .seg.on-red { background: #ef4444; border-color: #dc2626; }
+.hud-jog-stamina-bar .seg.on-orange { background: #f97316; border-color: #ea580c; }
+.hud-jog-stamina-bar .seg.on-yellow { background: #eab308; border-color: #ca8a04; }
+.hud-jog-stamina-bar .seg.on-green { background: #22c55e; border-color: #16a34a; }
+
+/* --- Minimizar/maximizar dos blocos Azul/Vermelha (skills táticas) --- */
+
+.subpainel-cabecalho {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 4px;
 }
 
-#painel-playerbt-cabecalho h2 {
-    margin: 0;
+.subpainel-cabecalho h2 {
+    margin: 8px 0 3px 0;
     flex: 1;
-    color: #e2e8f0;
-    border-bottom: 2px solid #ef4444;
 }
 
-#btn-painel-playerbt {
+.btn-subpainel {
     flex: 0 0 auto;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     line-height: 1;
     padding: 0;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 900;
-    color: #e2e8f0;
-    background: #334155;
-    border: 1px solid #475569;
+    color: #475569;
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
     border-radius: 6px;
     cursor: pointer;
     transition: 0.15s;
 }
 
-#btn-painel-playerbt:hover {
-    background: #475569;
+.btn-subpainel:hover {
+    background: #cbd5e1;
+    color: #1e293b;
 }
 
-#painel-playerbt.minimizado {
-    width: auto;
-    padding: 10px 12px;
-    max-height: none;
-    overflow: visible;
-}
-
-#painel-playerbt.minimizado #painel-playerbt-conteudo {
-    display: none;
-}
-
-#painel-playerbt.minimizado #painel-playerbt-cabecalho h2 {
-    border-bottom: none;
-    padding-bottom: 0;
-}
-
-#painel-playerbt-conteudo {
-    display: flex;
-    gap: 10px;
-    margin-top: 6px;
-}
-
-.btdebug-col {
-    flex: 1;
-    min-width: 0;
-}
-
-.btdebug-col h3 {
-    margin: 0 0 4px 0;
-    font-size: 11px;
-    color: #93c5fd;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-#painel-playerbt-conteudo pre {
-    margin: 0;
-    font-family: 'Consolas', 'Courier New', monospace;
-    font-size: 10px;
-    line-height: 1.35;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 32vh;
-    overflow-y: auto;
-}
 
 h2 {
     margin: 8px 0 3px 0;
@@ -329,25 +451,6 @@ button.btn-action:active {
     border: none;
 }
 
-#hud-paused {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(15, 23, 42, 0.95);
-    color: #f59e0b;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-weight: 900;
-    font-size: 14px;
-    z-index: 100;
-    pointer-events: none;
-    border: 1px solid #f59e0b;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    display: none;
-}
 
 #placar {
     position: absolute;

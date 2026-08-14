@@ -208,7 +208,21 @@ function aproximar(ctx, alvoX, alvoZ, maxDist) {
 
 // Aplica a marcação sobre o posto zonal que a folha já calculou.
 function marcar(ctx, alvo, maxDist) {
-    const m = goalSide(ctx.p, alvo, MarkingModel.distancia);
+    const p = ctx.p;
+
+    /*
+    Grid espacial (camada MARCAÇÃO): zona core perto da própria baliza pede
+    marcação mais colada, longe dela (fora da zona) pede mais folga. Factor
+    0.7x (colado) a 1.3x (folgado) sobre a distância base do Defensive
+    Pressure — a grid afina o valor, não o substitui.
+    */
+    let distancia = MarkingModel.distancia;
+    if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
+        const markVal = SpatialGrid.layerValueAt('marking', alvo.model.position.x, alvo.model.position.z, p.team);
+        distancia *= 1.3 - 0.006 * markVal;
+    }
+
+    const m = goalSide(p, alvo, distancia);
     aproximar(ctx, m.x, m.z, (maxDist === undefined) ? MarkingModel.biasMax : maxDist);
     ctx.isMarking = true;
 }
@@ -258,7 +272,7 @@ function defendFullBack(ctx) {
     if (ultrapassado && bb.ballZ * p.dirZ < 15.0) {
         ctx.targetX = p.baseTarget.x * 0.85;
         ctx.targetZ = p.ownGoalZ + 12.0 * p.dirZ;
-        p.speedMult = 6.0 + ((p.getSkill() - 50) / 50) * 1.5;
+        p.speedMult = (6.0 + ((p.skillFor('SPEED') - 50) / 50) * 1.5) * 1.25 * 0.9; // +25% depois -10% pedidos: sem bola
         return;
     }
 
@@ -461,14 +475,51 @@ const PositionAI = {
         let tx = Math.max(-32, Math.min(32, targetX));
         let tz = Math.max(-50, Math.min(50, targetZ));
 
+        /*
+        Afastar do próprio GR quando ele está com a bola na mão. O nível 1
+        (Match.afastarDoGuardaRedes) já fazia isto sobre p.dynamicTarget,
+        mas este commit() corre DEPOIS, por jogador, todos os frames, e
+        reescreve dynamicTarget do zero — anulava a correcção sempre. Tem de
+        ser aqui, no sítio onde o alvo é mesmo escrito por último.
+        */
+        if (p.role !== 'gk' && Match.gkHoldingBall[p.team]) {
+            const gk = ctx.teammates.find(t => t.role === 'gk');
+            if (gk) {
+                const dx = tx - gk.model.position.x;
+                const dz = tz - gk.model.position.z;
+                const dist = Math.hypot(dx, dz);
+                const raio = 8.0;
+                if (dist < raio) {
+                    if (dist < 0.001) { tx += raio; }
+                    else { const k2 = (raio - dist) / dist; tx += dx * k2; tz += dz * k2; }
+                    tx = Math.max(-32, Math.min(32, tx));
+                    tz = Math.max(-50, Math.min(50, tz));
+                }
+            }
+        }
+
         const dt = (typeof Match !== 'undefined' && Match.delta) ? Match.delta : 0.016;
+
+        // Bias temporário de reorganização (evento CB_HAS_BALL) — soma ao
+        // alvo enquanto o timer não expira, depois desliga sozinho.
+        if (p.buildOutTimer > 0) {
+            tx += p.buildOutBias.x;
+            tz += p.buildOutBias.z;
+            tx = Math.max(-32, Math.min(32, tx));
+            tz = Math.max(-50, Math.min(50, tz));
+            p.buildOutTimer -= dt;
+        }
 
         // Suavização independente do fps: 1 - exp(-taxa*dt). O `0.6 * dt` que
         // aqui estava lia `Match.dt`, que não existe (o campo é Match.delta),
         // por isso o factor ficava congelado em 0.0096 — cerca de 100 s de
         // constante de tempo, e os alvos praticamente não se mexiam.
-        const k = 1 - Math.exp(-PositionSmoothing * dt);
-        
+        let k = 1 - Math.exp(-PositionSmoothing * dt);
+
+        // Reposicionamento instantâneo pedido por evento (ex.: GK_CATCH_BALL)
+        // — salta a suavização normal só neste frame, consome a flag.
+        if (p.snapPosition) { k = 1; p.snapPosition = false; }
+
         // Inicializar tacticalTarget se não existir
         if (!p.tacticalTarget) p.tacticalTarget = new THREE.Vector3(tx, ALTURA_BASE_Y, tz);
 

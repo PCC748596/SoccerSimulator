@@ -13,12 +13,15 @@
         <div id="painel-cabecalho">
             <h2 id="app-title" style="font-size: 0.85em; font-weight: bold; margin: 0; padding: 0;">SOCCER SIM | FPS: --
             </h2>
-            <button type="button" id="btn-painel" title="Minimizar / maximizar (X)"
-                onclick="togglePainel()">&minus;</button>
+            <button type="button" id="btn-painel" title="Minimizar / maximizar (X) — Shift: todos"
+                onclick="togglePainel(undefined, event)">&minus;</button>
         </div>
 
         <div id="painel-conteudo">
-            <button class="btn-action" onclick="Match.resetPlay()">Reset KickOff</button>
+            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.resetPlay()">Reset KickOff</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-pause" onclick="Match.togglePause()">Pause</button>
+            </div>
 
             <label>Formação</label>
             <select id="t-formacao" onchange="Tatics.update()">
@@ -104,46 +107,61 @@
             </div>
 
             <hr class="linha-sep">
-            <h2 style="border-bottom: 2px solid #3498db; color: #3498db;">Azul</h2>
-            <label>DEF <span class="val-skill" id="val-def-a">80</span></label>
-            <input type="range" id="skill-def-a" min="50" max="100" step="5" value="80"
-                onchange="Tatics.updateSkills()">
+            <div class="subpainel-cabecalho">
+                <h2 style="border-bottom: 2px solid #3498db; color: #3498db;">BLUE AVERAGE</h2>
+                <button type="button" class="btn-subpainel" id="btn-skills-a" title="Minimizar / maximizar — Shift: todos"
+                    onclick="toggleSkillsTeam('a', undefined, event)">&plus;</button>
+            </div>
+            <div id="skills-conteudo-a" class="oculto">
+                <label>DEF <span class="val-skill" id="val-def-a">80</span></label>
+                <input type="range" id="skill-def-a" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
 
-            <label>MED <span class="val-skill" id="val-mid-a">80</span></label>
-            <input type="range" id="skill-mid-a" min="50" max="100" step="5" value="80"
-                onchange="Tatics.updateSkills()">
+                <label>MED <span class="val-skill" id="val-mid-a">80</span></label>
+                <input type="range" id="skill-mid-a" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
 
-            <label>ATA <span class="val-skill" id="val-ata-a">80</span></label>
-            <input type="range" id="skill-ata-a" min="50" max="100" step="5" value="80"
-                onchange="Tatics.updateSkills()">
+                <label>ATA <span class="val-skill" id="val-ata-a">80</span></label>
+                <input type="range" id="skill-ata-a" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
 
-            <label>GR <span class="val-skill" id="val-gk-a">80</span></label>
-            <input type="range" id="skill-gk-a" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+                <label>GR <span class="val-skill" id="val-gk-a">80</span></label>
+                <input type="range" id="skill-gk-a" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
+            </div>
 
-            <h2 style="border-bottom: 2px solid #e74c3c; color: #e74c3c;">Vermelha</h2>
-            <label>DEF <span class="val-skill" id="val-def-b">80</span></label>
-            <input type="range" id="skill-def-b" min="50" max="100" step="5" value="80"
-                onchange="Tatics.updateSkills()">
+            <div class="subpainel-cabecalho">
+                <h2 style="border-bottom: 2px solid #e74c3c; color: #e74c3c;">RED AVERAGE</h2>
+                <button type="button" class="btn-subpainel" id="btn-skills-b" title="Minimizar / maximizar — Shift: todos"
+                    onclick="toggleSkillsTeam('b', undefined, event)">&plus;</button>
+            </div>
+            <div id="skills-conteudo-b" class="oculto">
+                <label>DEF <span class="val-skill" id="val-def-b">80</span></label>
+                <input type="range" id="skill-def-b" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
 
-            <label>MED <span class="val-skill" id="val-mid-b">80</span></label>
-            <input type="range" id="skill-mid-b" min="50" max="100" step="5" value="80"
-                onchange="Tatics.updateSkills()">
+                <label>MED <span class="val-skill" id="val-mid-b">80</span></label>
+                <input type="range" id="skill-mid-b" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
 
-            <label>ATA <span class="val-skill" id="val-ata-b">80</span></label>
-            <input type="range" id="skill-ata-b" min="50" max="100" step="5" value="80"
-                onchange="Tatics.updateSkills()">
+                <label>ATA <span class="val-skill" id="val-ata-b">80</span></label>
+                <input type="range" id="skill-ata-b" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
 
-            <label>GR <span class="val-skill" id="val-gk-b">80</span></label>
-            <input type="range" id="skill-gk-b" min="50" max="100" step="5" value="80" onchange="Tatics.updateSkills()">
+                <label>GR <span class="val-skill" id="val-gk-b">80</span></label>
+                <input type="range" id="skill-gk-b" min="50" max="100" step="5" value="80"
+                    onchange="Tatics.updateSkills()">
+            </div>
 
         </div><!-- /painel-conteudo -->
     </div>
 
+    <div id="coluna-direita">
     <div id="painel-direito">
         <div id="painel-direito-cabecalho">
             <h2>Teams States</h2>
-            <button type="button" id="btn-painel-direito" title="Minimizar / maximizar (X)"
-                onclick="togglePainelDireito()">&minus;</button>
+            <button type="button" id="btn-painel-direito" title="Minimizar / maximizar (X) — Shift: todos"
+                onclick="togglePainelDireito(undefined, event)">&minus;</button>
         </div>
 
         <div id="painel-direito-conteudo">
@@ -168,8 +186,12 @@
                     OFF</button>
                 <button type="button" class="btn-sector" id="btn-positionbt" onclick="togglePositionBT()">Position BT:
                     OFF</button>
-                <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">Spatial
-                    Grid: OFF</button>
+                <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">SG
+                    PASS/MARKING: OFF</button>
+                <button type="button" class="btn-sector" id="btn-passcandidates"
+                    onclick="togglePassCandidates()">PlayerPassTarget: OFF</button>
+                <button type="button" class="btn-sector" id="btn-passgrid"
+                    onclick="toggleUsarPasseGrid()">PassGrid (decisão): OFF</button>
             </div>
 
             <hr class="linha-sep">
@@ -181,28 +203,59 @@
         </div>
     </div>
 
-    <div id="placar">RED <span id="placar-a">0</span> x <span id="placar-b">0</span> BLUE | TIME: <span
-            id="placar-tempo">00:00</span></div>
-
-    <div id="painel-playerbt" class="minimizado">
-        <div id="painel-playerbt-cabecalho">
-            <h2>PlayerBT Debug</h2>
-            <button type="button" id="btn-painel-playerbt" title="Minimizar / maximizar"
-                onclick="togglePainelPlayerBT()">&plus;</button>
+    <div id="painel-jogadores">
+        <div id="painel-jogadores-cabecalho">
+            <h2>Player Skills</h2>
+            <button type="button" id="btn-painel-jogadores" title="Minimizar / maximizar — Shift: todos"
+                onclick="togglePainelJogadores(undefined, event)">&minus;</button>
         </div>
-        <div id="painel-playerbt-conteudo">
-            <div class="btdebug-col">
-                <h3 id="btdebug-titulo-a">TeamA —</h3>
-                <pre id="btdebug-trace-a"></pre>
+        <div id="painel-jogadores-conteudo">
+            <div class="jogadores-col">
+                <h3 style="color:#3498db">Blue</h3>
+                <div id="lista-jogadores-a"></div>
             </div>
-            <div class="btdebug-col">
-                <h3 id="btdebug-titulo-b">TeamB —</h3>
-                <pre id="btdebug-trace-b"></pre>
+            <div class="jogadores-col">
+                <h3 style="color:#e74c3c">Red</h3>
+                <div id="lista-jogadores-b"></div>
+            </div>
+        </div>
+    </div>
+    </div><!-- /coluna-direita -->
+
+    <!-- Portador da bola (esquerda) e marcador mais próximo dele (direita) -->
+    <div id="hud-jogador-esq" class="hud-jogador oculto">
+        <div class="hud-jog-logo"></div>
+        <div class="hud-jog-info">
+            <div class="hud-jog-nome">-</div>
+            <div class="hud-jog-stamina-bar">
+                <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
+            </div>
+        </div>
+    </div>
+    <div id="hud-jogador-dir" class="hud-jogador oculto">
+        <div class="hud-jog-logo"></div>
+        <div class="hud-jog-info">
+            <div class="hud-jog-nome">-</div>
+            <div class="hud-jog-stamina-bar">
+                <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
             </div>
         </div>
     </div>
 
-    <div id="hud-paused">PAUSADO (Espaço)</div>
+    <div id="modal-skills" class="oculto" onclick="if(event.target===this) fecharModalSkills()">
+        <div id="modal-skills-caixa">
+            <div id="modal-skills-cabecalho">
+                <h2 id="modal-skills-titulo">-</h2>
+                <button type="button" id="btn-modal-skills" onclick="fecharModalSkills()">&times;</button>
+            </div>
+            <div id="modal-skills-corpo"></div>
+        </div>
+    </div>
+
+    <div id="placar">RED <span id="placar-a">0</span> x <span id="placar-b">0</span> BLUE | TIME: <span
+            id="placar-tempo">00:00</span></div>
+
+
     <div id="alerta-golo">GOOL!</div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
@@ -211,7 +264,16 @@
          browser bloqueia fetch em file:// e isto abre sem servidor. -->
     <script src="assets/ball_mesh.js"></script>
 
+    <!-- Skills fixas de cada jogador (gerado por tools/gen_player_skills.js) -->
+    <script src="data/player_skills.js"></script>
+
     <!-- Simulador: carregado por ordem de dependência -->
+    <!-- EventBus: sistemas reagem a eventos (GK_CATCH_BALL, ...) em vez de
+         polling directo de estado de outro sistema. Migração por partes. -->
+    <script src="js/event_bus.js"></script>
+    <!-- Limites anatómicos de rotação por articulação, adaptados ao rig do
+         modelo — base pra animação procedural (ex.: mergulho do GR). -->
+    <script src="js/joint_limits.js"></script>
     <script src="js/config.js"></script>
     <script src="js/stats.js"></script>
     <script src="js/utils.js"></script>
@@ -225,6 +287,7 @@
 
     <!-- Grid espacial do campo (2x2m), usada pra achar espaço livre / ocupação -->
     <script src="js/spatial_grid.js"></script>
+    <script src="js/pass_candidates.js"></script>
 
     <!-- Decisão em 3 níveis: equipa -> posição -> jogador -->
     <script src="js/bt/core.js"></script>

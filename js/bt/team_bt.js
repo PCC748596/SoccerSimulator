@@ -135,6 +135,24 @@ salta com eles. Em vez disso, quem já é chaser só perde o papel se cair
 para fora das 3 melhores opções deste frame.
 */
 function pickChaser(bb) {
+    /*
+    Guarda-redes adversário já agarrou a bola com as mãos: ninguém pressiona
+    — ele não pode ser desarmado (ver resolveBallContact/FSM), então correr
+    até ele só amontoa gente na área. A equipa larga a marcação individual e
+    volta ao bloco/forma (defendZonal continua a reorganizar sozinho).
+    */
+    if (bb.oppCarrier && bb.oppCarrier.role === 'gk') {
+        bb.chaser = null;
+        return;
+    }
+    // Mesma lógica para o PRÓPRIO GK: com a bola já segura em casa, ninguém
+    // de campo precisa "correr atrás dela" — isso era exactamente o que
+    // mandava o CB mais próximo (chaser) por cima dele via IrABola.
+    if (bb.carrier && bb.carrier.role === 'gk') {
+        bb.chaser = null;
+        return;
+    }
+
     const prevChaser = bb.chaser;
 
     /*
@@ -458,11 +476,24 @@ function computeBlock(bb) {
 
     let profundidade = CAMPO_COMP * B.profundidade[compacLength];
 
-    // O centro do bloco no eixo Z acompanha a bola
-    let blockCenterZ = bb.ballZ * bb.dir;
-    
+    /*
+    GR (de qualquer um dos dois lados) com a bola na mão: ninguém pressiona
+    (ver pickChaser) nem precisa fugir pra dentro da própria área — os dois
+    blocos reorganizam pro MEIO do campo em vez de seguir `ballZ*dir` cru,
+    que arrastava o bloco INTEIRO (incluindo atacantes) até perto do próprio
+    GR quando ele segurava a bola bem no fundo. O resto da função (largura,
+    fora-de-jogo, etc.) continua igual a partir daqui.
+    */
+    const gkComABola = (bb.carrier && bb.carrier.role === 'gk') || (bb.oppCarrier && bb.oppCarrier.role === 'gk');
+
+    // O centro do bloco no eixo Z acompanha a bola — excepto com um GR
+    // segurando a bola, aí vai pro meio do campo (ver acima).
+    let blockCenterZ = gkComABola ? 0 : bb.ballZ * bb.dir;
+
     // A pedido do utilizador: Puxar o bloco à frente ou atrás consoante a postura
-    if (bb.isAttacking) {
+    if (gkComABola) {
+        // sem ajustes de postura — bloco fica centrado no meio-campo.
+    } else if (bb.isAttacking) {
         if (bb.posture === TeamPosture.COUNTER) {
             blockCenterZ += 10.0;
         } else if (bb.posture === TeamPosture.BUILD_UP || bb.posture === TeamPosture.ATTACK_SUSTAINED || bb.posture === TeamPosture.FINAL_THIRD) {

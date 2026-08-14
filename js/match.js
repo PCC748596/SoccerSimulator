@@ -13,9 +13,56 @@ const Match = {
     currentLookTarget: null, // Usado para interpolação da câmara
     kickoffActive: false, kickoffTimer: 0, kickoffTaker: null, kickoffApoio: null,
 
+    // Migração por eventos (ver EventBus) — parte 1: GK. Substitui o polling
+    // directo de gk.gkEstado === 'apanhar'/'segurando' espalhado por vários
+    // ficheiros (match.js afastarDoGuardaRedes, position_bt.js commit).
+    // TeamA/TeamB -> true enquanto o GR dessa equipa está com a bola na mão.
+    gkHoldingBall: { TeamA: false, TeamB: false },
+
     init: function (scene) {
         this.scene = scene;
         this.currentLookTarget = new THREE.Vector3(0, 0, 0);
+
+        if (typeof EventBus !== 'undefined') {
+            EventBus.on('GK_CATCH_BALL', (d) => {
+                this.gkHoldingBall[d.team] = true;
+                // Reposicionamento instantâneo: os dois times reorganizam já
+                // pro PositionBT deles, não esperam o lerp de suavização
+                // normal (PositionSmoothing) convergir devagar ao longo de
+                // vários segundos.
+                for (const p of this.players) p.snapPosition = true;
+                for (const p of this.opponents) p.snapPosition = true;
+            });
+            EventBus.on('GK_RELEASE_BALL', (d) => { this.gkHoldingBall[d.team] = false; });
+
+            /*
+            Migração por eventos — parte 2: CB. Quando um CB fica com a bola,
+            a equipa reorganiza a saída: CB oposto recua 3m, lateral do
+            mesmo lado avança 3m, lateral oposto avança 5m. Bias temporário
+            (5s), consumido em commit() (position_bt.js).
+            */
+            EventBus.on('CB_HAS_BALL', (d) => {
+                const p = d.p;
+                const teammates = (p.team === 'TeamA') ? this.players : this.opponents;
+                const outroCB = teammates.find(t => t.pos === 'CB' && t !== p);
+                const lb = teammates.find(t => t.pos === 'LB');
+                const rb = teammates.find(t => t.pos === 'RB');
+
+                const ladoBase = (p.baseTarget) ? p.baseTarget.x : p.model.position.x;
+                const mesmoLado = (ladoBase < 0) ? lb : rb;
+                const ladoOposto = (ladoBase < 0) ? rb : lb;
+
+                const aplicar = (jog, metros) => {
+                    if (!jog) return;
+                    jog.buildOutBias = { x: 0, z: metros * jog.dirZ };
+                    jog.buildOutTimer = 5.0;
+                };
+                aplicar(outroCB, -3);
+                aplicar(mesmoLado, 3);
+                aplicar(ladoOposto, 5);
+            });
+        }
+
         this.createField();
 
         this.ball = new THREE.Group();
@@ -177,12 +224,19 @@ const Match = {
             if (e.key === '5') this.setCameraMode('sideline');
             if (e.key === '6') this.setCameraMode('topdown');
             if (e.key === ' ' || e.code === 'Space') {
-                window.isPaused = !window.isPaused;
-                document.getElementById('hud-paused').style.display = window.isPaused ? 'block' : 'none';
+                this.togglePause();
                 e.preventDefault();
             }
             if (e.key === 'x' || e.key === 'X') togglePainel();
         });
+    },
+
+    // Também acionado pela tecla Espaço (ver setupKeyboardListeners) — usado
+    // pelo botão Pause/Continue do painel esquerdo.
+    togglePause: function () {
+        window.isPaused = !window.isPaused;
+        const btn = document.getElementById('btn-pause');
+        if (btn) btn.textContent = window.isPaused ? 'Continue' : 'Pause';
     },
 
     setSpeed: function (speed) {
@@ -504,10 +558,18 @@ const Match = {
     },
 
     createTeams: function () {
+        // Skills fixas (data/player_skills.js) — atribuídas por ÍNDICE, não
+        // por posição da formação: a formação pode mudar (442/433/4231),
+        // mas o elenco (jogador 0..10) é sempre o mesmo, ver
+        // tools/gen_player_skills.js.
+        const skillsA = (typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamA : null;
+        const skillsB = (typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamB : null;
+
         for (let i = 0; i < 11; i++) {
             let corCamisa = (i === 0) ? '#f1c40f' : '#3498db';
             let corCalcao = (i === 0) ? '#1e1b18' : '#34495e';
             let p = new FootballPlayer(i, corCamisa, corCalcao, 'TeamA');
+            p.skills = skillsA ? skillsA[i] : null;
             this.players.push(p);
             this.scene.add(p.model);
         }
@@ -516,6 +578,7 @@ const Match = {
             let corCamisa = (i === 0) ? '#e67e22' : '#e74c3c';
             let corCalcao = (i === 0) ? '#111111' : '#ffffff';
             let p = new FootballPlayer(i + 20, corCamisa, corCalcao, 'TeamB');
+            p.skills = skillsB ? skillsB[i] : null;
             this.opponents.push(p);
             this.scene.add(p.model);
         }
@@ -624,7 +687,13 @@ const Match = {
         lookAtBola(this.opponents[0].model, this.ball.position);
         this.opponents[0].fsm.changeState('IDLE');
 
-        // Reset do estado por-instância de cada GK.
+        // Reset do estado por-instância de cada GK. Kickoff pode interromper
+        // um GR a meio dos 8s de segurando — sem isto o gkHoldingBall ficava
+        // preso em true (só GK_RELEASE_BALL, disparado no fim normal do
+        // timer, o desligava) e afastarDoGuardaRedes/commit continuavam a
+        // achar que ele tinha a bola na mão depois do reposicionamento.
+        this.gkHoldingBall.TeamA = false;
+        this.gkHoldingBall.TeamB = false;
         [this.players[0], this.opponents[0]].forEach(gk => {
             if (gk) {
                 gk.gkEstado = 'idle';
@@ -776,6 +845,7 @@ const Match = {
         
         this.updateBall();
         if (typeof SpatialGrid !== 'undefined') SpatialGrid.update(dt);
+        if (typeof PassCandidates !== 'undefined') PassCandidates.update(dt);
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);
         this.runTeamAI();
 
@@ -956,6 +1026,9 @@ const Match = {
         // juntar em z quem tinha sido afastado.
         this.separarAlvos(this.players, true);
         this.separarAlvos(this.opponents, true);
+
+        this.afastarDoGuardaRedes(this.players);
+        this.afastarDoGuardaRedes(this.opponents);
     },
 
     // Quem tem a bola, há quanto tempo, e se isto é um contra-ataque.
@@ -1017,6 +1090,28 @@ const Match = {
     e a intercepção seria certa.
     */
     resolveBallContact: function () {
+        /*
+        Prioridade do guarda-redes na própria área: sem isto, um atacante
+        colado a ele (ex.: cena de disputa junto à baliza) podia ganhar-lhe
+        o toque via disputa genérica abaixo (que só considera jogadores de
+        linha) — o GR ficava eternamente agachado, sem nunca completar o
+        'apanhar' porque a bola era sempre tocada por outro antes. Aqui, se
+        ele estiver mesmo em cima da bola e dentro da própria área, agarra
+        na hora, sem disputa.
+        */
+        const gks = [this.players[0], this.opponents[0]];
+        for (const gk of gks) {
+            if (!gk || gk.role !== 'gk' || gk.touchLock > 0) continue;
+            const d = gk.model.position.distanceTo(this.ball.position);
+            if (d > 1.3) continue;
+            const dentroArea = Math.abs(this.ball.position.x) < 20.16 &&
+                (this.ball.position.z - gk.ownGoalZ) * gk.dirZ < 16.5 &&
+                (this.ball.position.z - gk.ownGoalZ) * gk.dirZ > -1.0;
+            if (!dentroArea) continue;
+            gk.grabBall();
+            return true;
+        }
+
         const speed = this.ballVel.length();
 
         let best = null;
@@ -1040,8 +1135,27 @@ const Match = {
         } else {
             const dificuldade = THREE.MathUtils.clamp(
                 (speed - BallControl.easySpeed) / (BallControl.hardSpeed - BallControl.easySpeed), 0, 1);
-            let hipotese = (best.getSkill() / 100) * (1 - dificuldade);
+            let hipotese = (best.skillFor('TEC') / 100) * (1 - dificuldade);
             if (best === this.intendedReceiver) hipotese += BallControl.receiverBonus;
+
+            /*
+            Técnica x Marcação: marcador colado ao receptor aperta o
+            primeiro toque — reduz a chance de domínio limpo. Só conta se
+            houver marcador mesmo perto (<3m); longe disso não interfere.
+            */
+            const marcadoresBest = (best.team === 'TeamA') ? this.opponents : this.players;
+            let marcadorBest = null, distMarcBest = 999;
+            for (const m of marcadoresBest) {
+                if (m.role === 'gk') continue;
+                const dm = m.model.position.distanceTo(best.model.position);
+                if (dm < distMarcBest) { distMarcBest = dm; marcadorBest = m; }
+            }
+            if (marcadorBest && distMarcBest < 3.0) {
+                const fatorMarc = THREE.MathUtils.clamp(
+                    1 - (marcadorBest.skillFor('MARKING') - best.skillFor('TEC')) / 300, 0.6, 1.15);
+                hipotese *= fatorMarc;
+            }
+
             dominou = Math.random() < hipotese;
             best.touchLock = BallControl.retryLock;
         }
@@ -1117,6 +1231,42 @@ const Match = {
     violações). Em x não há nada que se possa violar — dois defesas na linha
     ficam lado a lado, que é o que se quer.
     */
+    /*
+    Companheiros de linha nunca são afastados do próprio GR em separarAlvos
+    (que só separa jogadores de linha entre si, role!=='gk' excluído dos
+    dois lados) — um alvo de "apoio" perto da baliza podia coincidir com a
+    posição real do GR e o jogador entrava mesmo por cima dele. Empurra o
+    alvo pra fora de um raio mínimo do GR.
+    */
+    afastarDoGuardaRedes: function (teamPlayers) {
+        const gk = teamPlayers.find(p => p.role === 'gk');
+        if (!gk) return;
+        /*
+        Com a bola agarrada nas mãos ele precisa de ângulo de passe — 2.5m só
+        evita pisão de pé, não abre espaço nenhum. Companheiros ficavam
+        encostados nele em vez de se abrirem para receber. Com a bola na mão
+        o raio sobe bastante, forçando-os a afastar-se de verdade e criar
+        linhas de passe.
+
+        Migração por eventos (parte GK): antes lia gk.gkEstado directamente
+        aqui; agora lê Match.gkHoldingBall, mantido por GK_CATCH_BALL/
+        GK_RELEASE_BALL (ver EventBus.on no Match.init).
+        */
+        const comBolaNaMao = Match.gkHoldingBall[gk.team];
+        const raio = comBolaNaMao ? 8.0 : 2.5;
+        for (const p of teamPlayers) {
+            if (p === gk) continue;
+            const dx = p.dynamicTarget.x - gk.model.position.x;
+            const dz = p.dynamicTarget.z - gk.model.position.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist >= raio) continue;
+            if (dist < 0.001) { p.dynamicTarget.x += raio; continue; }
+            const k = (raio - dist) / dist;
+            p.dynamicTarget.x += dx * k;
+            p.dynamicTarget.z += dz * k;
+        }
+    },
+
     separarAlvos: function (teamPlayers, apenasX) {
         const outfield = teamPlayers.filter(p => p.role !== 'gk');
         const n = outfield.length;

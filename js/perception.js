@@ -96,7 +96,7 @@ const Perception = {
 
         const ball = match.ball.position;
         const vel = match.ballVel;
-        const skill = (p.getSkill ? p.getSkill() : 50) / 100;
+        const skill = (p.skillFor ? p.skillFor('SPEED') : 50) / 100;
 
         // Velocidade máxima de perseguição deste jogador — mesma fórmula do
         // actChaseBall (player_bt.js), para a percepção prever exactamente o
@@ -146,7 +146,7 @@ const Perception = {
     claimScore: function (p) {
         const bb = p.blackboard.ball;
         if (!bb.interceptable) return -Infinity;
-        const skill = (p.getSkill ? p.getSkill() : 50) / 100;
+        const skill = (p.skillFor ? p.skillFor('TEC') : 50) / 100;
         return 100 - bb.timeToIntercept * 20 + bb.confidence * 10 + skill * 5;
     }
 };

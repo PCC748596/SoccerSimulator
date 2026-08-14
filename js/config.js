@@ -353,10 +353,13 @@ O ângulo passa a contar: rematar de 15 m junto à linha lateral não é o mesmo
 que de 15 m em frente à baliza.
 */
 const ShootingModel = {
-    baseRange: 10.0,     // alcance a skill 0
-    skillRange: 10.0,    // metros adicionais a skill 100  (=> 18 m a skill 80)
-    maxOffsetX: 20.0,    // além disto o ângulo é mau demais para rematar
-    angleFloor: 0.55,    // fracção do alcance que sobra no pior ângulo
+    // +20% pedido explicitamente: jogadores rematavam pouco (zona/ângulo
+    // curtos demais mandavam a decisão pro Passar/Cruzar antes de chegar
+    // perto o suficiente).
+    baseRange: 12.0,     // alcance a skill 0
+    skillRange: 12.0,    // metros adicionais a skill 100
+    maxOffsetX: 24.0,    // além disto o ângulo é mau demais para rematar
+    angleFloor: 0.66,    // fracção do alcance que sobra no pior ângulo
 
     // Um defesa que suba não remata como um avançado: só de muito perto.
     // Antes o central caía no ramo genérico e rematava em 10.4% das vezes
@@ -385,7 +388,7 @@ const PassModel = {
     throughBallDepth: 9.0,      // metros além da linha onde se põe a bola
     throughBallMaxDist: 45.0,
     // Nem sempre que há espaço se lança: senão o jogo torna-se todo directo.
-    throughBallChance: 0.30,
+    throughBallChance: 0.45, // +50% pedido
 
     /*
     Conversão de distância em força. A bola perde 0.22 (chão) × 0.85 (ar) da
@@ -520,16 +523,22 @@ const GoalkeeperPose = {
         altura: -0.35
     },
 
-    // Bola agarrada junto ao peito, à espera de relançar (estado 'segurando').
+    /*
+    Bola agarrada junto ao PEITO (não à cintura), à espera de relançar
+    (estado 'segurando'). Pés quase alinhados (abertura baixa), braços pra
+    baixo/frente (bracoX menos negativo que antes) e antebraços bem fechados
+    (cotovelo mais dobrado) — cotovelo dobra o antebraço PRA CIMA contra o
+    peito, é o que "fecha a guarda" em cima da bola.
+    */
     segurar: {
-        chest: 0.22,
-        joelho: 0.28,
-        coxa: 0.12,
-        abertura: 0.08,
-        bracoZ: 0.15,
-        bracoX: -1.3,
-        cotovelo: -1.6,
-        altura: -0.05
+        chest: 0.15,
+        joelho: 0.20,
+        coxa: 0.08,
+        abertura: 0.02,
+        bracoZ: 0.05,
+        bracoX: -0.9,
+        cotovelo: -2.0,
+        altura: -0.02
     }
 };
 
@@ -551,7 +560,7 @@ const CarryModel = {
     // ganhava sempre e o sector do painel (Left/Center/Right) não tinha
     // efeito visível: o jogo conduzia sempre pelo meio. Subido para pesar
     // tanto quanto o progresso no pior caso (~29 * 1.0 ≈ 29).
-    sectorWeight: 1.0,    // quanto pesa manter o sector táctico do painel
+    sectorWeight: 1.5,    // quanto pesa manter o sector táctico do painel (+50% pedido: sem ataque pelas laterais mesmo com Left/Right activados)
 
     /*
     Espaço livre à frente. Medido num corredor que abre para longe (`corredor`
@@ -697,10 +706,11 @@ const CrossModel = {
     areaX: 20.5,          // meia-largura da grande área
     fundoZ: 50.0,         // linha de fundo
 
-    chanceBase: 0.45,     // com um alvo na área
-    chancePorAlvo: 0.22,  // por cada alvo além do primeiro
-    bonusLargura: 0.30,   // acumulado junto à linha lateral
-    bonusFundo: 0.35,     // acumulado junto à linha de fundo
+    // +20% pedido explicitamente: cruzamentos pouco frequentes.
+    chanceBase: 0.54,     // com um alvo na área
+    chancePorAlvo: 0.264, // por cada alvo além do primeiro
+    bonusLargura: 0.36,   // acumulado junto à linha lateral
+    bonusFundo: 0.42,     // acumulado junto à linha de fundo
     penalPressao: 0.30,   // sob pressão o cruzamento sai mal
     chanceMax: 0.97
 };

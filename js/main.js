@@ -3,9 +3,22 @@ let lastTime = 0;
 let fpsFrames = 0;
 let fpsLastTime = 0;
 
+/*
+Shift+click em qualquer botão de minimizar/maximizar aplica o mesmo estado a
+TODOS os painéis/modais de uma vez (painel de comandos, direito, jogadores,
+e os sub-painéis BLUE/RED AVERAGE) — em vez de ter de clicar um por um.
+*/
+function toggleTodosPaineis(minimizar) {
+    togglePainel(minimizar);
+    togglePainelDireito(minimizar);
+    togglePainelJogadores(minimizar);
+    toggleSkillsTeam('a', minimizar);
+    toggleSkillsTeam('b', minimizar);
+}
+
 // Minimiza/maximiza o painel de comandos. Também ligado à tecla X
 // (ver Match.setupKeyboardListeners).
-function togglePainel(forcarMinimizado) {
+function togglePainel(forcarMinimizado, evt) {
     const painel = document.getElementById('painel-comandos');
     if (!painel) return;
 
@@ -13,82 +26,38 @@ function togglePainel(forcarMinimizado) {
         ? !painel.classList.contains('minimizado')
         : forcarMinimizado;
 
+    if (evt && evt.shiftKey) { toggleTodosPaineis(minimizar); return; }
+
     painel.classList.toggle('minimizado', minimizar);
 
     const btn = document.getElementById('btn-painel');
     if (btn) btn.innerHTML = minimizar ? '&plus;' : '&minus;';
 }
 
-function togglePainelPlayerBT(forcarMinimizado) {
-    const painel = document.getElementById('painel-playerbt');
-    if (!painel) return;
+function toggleSkillsTeam(letra, forcarMinimizado, evt) {
+    const conteudo = document.getElementById('skills-conteudo-' + letra);
+    const btn = document.getElementById('btn-skills-' + letra);
+    if (!conteudo) return;
 
     const minimizar = (forcarMinimizado === undefined)
-        ? !painel.classList.contains('minimizado')
+        ? !conteudo.classList.contains('oculto')
         : forcarMinimizado;
 
-    painel.classList.toggle('minimizado', minimizar);
+    if (evt && evt.shiftKey) { toggleTodosPaineis(minimizar); return; }
 
-    const btn = document.getElementById('btn-painel-playerbt');
+    conteudo.classList.toggle('oculto', minimizar);
     if (btn) btn.innerHTML = minimizar ? '&plus;' : '&minus;';
 }
 
-/*
-Painel PlayerBT Debug: mostra, por equipa, o caminho percorrido na árvore
-do jogador mais "relevante" no momento (o portador, senão o chaser
-definido pelo TeamBT) — nome do nó + resultado (SUCCESS/FAILURE), na ordem
-em que o BT os avaliou. A última acção com SUCCESS é o comportamento
-realmente activo agora; as condições FAILURE acima dela mostram porque os
-ramos anteriores (de maior prioridade) foram rejeitados.
-
-Lê p.btCtx.trace, preenchido pelo motor de BT (ver BT.debug em core.js) —
-não duplica nada, só formata o que a árvore já regista.
-*/
-function jogadorRelevante(team) {
-    const lista = (team === 'TeamA') ? Match.players : Match.opponents;
-    const carrier = Match.ballCarrier;
-    if (carrier && carrier.team === team) return carrier;
-    const chaser = (team === 'TeamA') ? Match.chaserA : Match.chaserB;
-    if (chaser) return chaser;
-    return lista.find(p => p.role !== 'gk') || null;
-}
-
-function formatarTrace(p) {
-    if (!p || !p.btCtx || !p.btCtx.trace || p.btCtx.trace.length === 0) return '(sem trace)';
-    return p.btCtx.trace.map(linha => {
-        const activo = linha.endsWith(':SUCCESS') && !linha.startsWith('PlayerRoot') &&
-            !linha.startsWith('ComBola') && !linha.startsWith('SemBola') &&
-            !linha.includes('Decisao');
-        return activo ? ('-> ' + linha) : ('   ' + linha);
-    }).join('\n');
-}
-
-function updatePainelPlayerBT() {
-    const painel = document.getElementById('painel-playerbt');
-    if (!painel || painel.classList.contains('minimizado')) return;
-    if (typeof Match === 'undefined' || !Match.players || !Match.players.length) return;
-
-    const pA = jogadorRelevante('TeamA');
-    const pB = jogadorRelevante('TeamB');
-
-    const tituloA = document.getElementById('btdebug-titulo-a');
-    const tituloB = document.getElementById('btdebug-titulo-b');
-    if (tituloA) tituloA.textContent = pA ? `TeamA — #${pA.num} ${pA.pos}` : 'TeamA —';
-    if (tituloB) tituloB.textContent = pB ? `TeamB — #${pB.num} ${pB.pos}` : 'TeamB —';
-
-    const traceA = document.getElementById('btdebug-trace-a');
-    const traceB = document.getElementById('btdebug-trace-b');
-    if (traceA) traceA.textContent = formatarTrace(pA);
-    if (traceB) traceB.textContent = formatarTrace(pB);
-}
-
-function togglePainelDireito(forcarMinimizado) {
+function togglePainelDireito(forcarMinimizado, evt) {
     const painel = document.getElementById('painel-direito');
     if (!painel) return;
 
     const minimizar = (forcarMinimizado === undefined)
         ? !painel.classList.contains('minimizado')
         : forcarMinimizado;
+
+    if (evt && evt.shiftKey) { toggleTodosPaineis(minimizar); return; }
 
     painel.classList.toggle('minimizado', minimizar);
 
@@ -164,8 +133,93 @@ function togglePositionBT() {
 function toggleSpatialGrid() {
     if (typeof SpatialGrid === 'undefined') return;
     SpatialGrid.setDebug(!SpatialGrid.debug);
-    document.getElementById('btn-spatialgrid').innerText = 'Spatial Grid: ' + (SpatialGrid.debug ? 'ON' : 'OFF');
+    document.getElementById('btn-spatialgrid').innerText = 'SG PASS/MARKING: ' + (SpatialGrid.debug ? 'ON' : 'OFF');
     document.getElementById('btn-spatialgrid').classList.toggle('active', SpatialGrid.debug);
+}
+
+function togglePassCandidates() {
+    if (typeof PassCandidates === 'undefined') return;
+    PassCandidates.setDebug(!PassCandidates.debug);
+    document.getElementById('btn-passcandidates').innerText = 'PlayerPassTarget: ' + (PassCandidates.debug ? 'ON' : 'OFF');
+    document.getElementById('btn-passcandidates').classList.toggle('active', PassCandidates.debug);
+}
+
+function toggleUsarPasseGrid() {
+    window.usarPasseGrid = !window.usarPasseGrid;
+    document.getElementById('btn-passgrid').innerText = 'PassGrid (decisão): ' + (window.usarPasseGrid ? 'ON' : 'OFF');
+    document.getElementById('btn-passgrid').classList.toggle('active', window.usarPasseGrid);
+}
+
+function togglePainelJogadores(forcarMinimizado, evt) {
+    const painel = document.getElementById('painel-jogadores');
+    if (!painel) return;
+
+    const minimizar = (forcarMinimizado === undefined)
+        ? !painel.classList.contains('minimizado')
+        : forcarMinimizado;
+
+    if (evt && evt.shiftKey) { toggleTodosPaineis(minimizar); return; }
+
+    painel.classList.toggle('minimizado', minimizar);
+
+    const btn = document.getElementById('btn-painel-jogadores');
+    if (btn) btn.innerHTML = minimizar ? '&plus;' : '&minus;';
+}
+
+/*
+Preenche a lista compacta (nome + fitness) do painel "Player Skills" — só
+uma vez, no arranque, já que as skills são fixas (data/player_skills.js).
+Clicar numa linha abre o modal com o detalhe completo desse jogador.
+*/
+function popularPainelJogadores() {
+    const buildLista = (elId, jogadores) => {
+        const el = document.getElementById(elId);
+        if (!el || !jogadores) return;
+        el.innerHTML = '';
+        jogadores.forEach(p => {
+            if (!p.skills) return;
+            const linha = document.createElement('div');
+            linha.className = 'linha-jogador';
+            linha.innerHTML = '<span>' + p.skills.nome + '</span><span class="lj-fit">FIT ' + p.skills.fitness + '</span>';
+            linha.onclick = () => abrirModalSkills(p.skills);
+            el.appendChild(linha);
+        });
+    };
+    buildLista('lista-jogadores-a', Match.players);
+    buildLista('lista-jogadores-b', Match.opponents);
+}
+
+function abrirModalSkills(skills) {
+    const modal = document.getElementById('modal-skills');
+    const titulo = document.getElementById('modal-skills-titulo');
+    const corpo = document.getElementById('modal-skills-corpo');
+    if (!modal || !titulo || !corpo) return;
+
+    titulo.textContent = skills.nome;
+
+    const campos = [
+        ['ID', skills.id],
+        ['Posição', skills.pos],
+        ['Fitness', skills.fitness],
+        ['Stamina', skills.stamina],
+        ['GK', skills.gk],
+        ['Técnica', skills.tec],
+        ['Marcação', skills.marking],
+        ['Velocidade', skills.speed],
+        ['Força', skills.strength],
+        ['Passe', skills.pass],
+        ['Interceptação', skills.intercept]
+    ];
+    corpo.innerHTML = campos.map(([nome, val]) =>
+        '<div class="skill-linha"><span>' + nome + '</span><b>' + val + '</b></div>'
+    ).join('');
+
+    modal.classList.remove('oculto');
+}
+
+function fecharModalSkills() {
+    const modal = document.getElementById('modal-skills');
+    if (modal) modal.classList.add('oculto');
 }
 
 // Dispara a simulação em lote a partir do botão do painel — parâmetros
@@ -181,6 +235,57 @@ function runFastSim() {
     Sim.run({ jogos: 10, duracaoSeg: 120 }).then(() => {
         if (btn) { btn.innerText = 'Simulação rápida (10×2min)'; btn.disabled = false; }
     });
+}
+
+/*
+HUD com o portador da bola (esquerda) e o adversário mais próximo dele
+(direita) — troca de lado sozinho conforme quem tem a bola muda de equipa.
+Stamina mostrada é a fixa de data/player_skills.js (skills.stamina), não
+tem desgaste ao longo do jogo — é "no início do jogo" como pedido.
+*/
+function preencherHudJogador(elId, p) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!p || !p.skills) { el.classList.add('oculto'); return; }
+
+    const cor = (p.team === 'TeamA') ? '#3498db' : '#e74c3c';
+    el.querySelector('.hud-jog-logo').style.background = cor;
+    el.querySelector('.hud-jog-nome').textContent = p.skills.nome;
+
+    /*
+    Barra em 5 segmentos de 20 pontos, TODOS acesos na mesma cor — a cor
+    depende de quantos segmentos estão cheios: 5 = green, 4 = yellow,
+    3 = orange, 2 ou 1 = red.
+    */
+    const acesos = Math.ceil(THREE.MathUtils.clamp(p.skills.stamina, 0, 100) / 20);
+    const corPorAcesos = { 5: 'on-green', 4: 'on-yellow', 3: 'on-orange', 2: 'on-red', 1: 'on-red', 0: 'on-red' };
+    const corStamina = corPorAcesos[acesos];
+    const segs = el.querySelectorAll('.hud-jog-stamina-bar .seg');
+    segs.forEach((seg, i) => {
+        seg.className = 'seg' + (i < acesos ? ' ' + corStamina : '');
+    });
+    el.querySelector('.hud-jog-stamina-bar').title = 'Stamina ' + p.skills.stamina;
+
+    el.classList.remove('oculto');
+}
+
+function updateHudJogadores() {
+    const carrier = Match.ballCarrier;
+    if (!carrier) {
+        preencherHudJogador('hud-jogador-esq', null);
+        preencherHudJogador('hud-jogador-dir', null);
+        return;
+    }
+
+    const adversarios = (carrier.team === 'TeamA') ? Match.opponents : Match.players;
+    let marcador = null, melhorDist = Infinity;
+    for (const opp of adversarios) {
+        const d = opp.model.position.distanceTo(carrier.model.position);
+        if (d < melhorDist) { melhorDist = d; marcador = opp; }
+    }
+
+    preencherHudJogador('hud-jogador-esq', carrier);
+    preencherHudJogador('hud-jogador-dir', marcador);
 }
 
 function animate(time) {
@@ -216,10 +321,9 @@ function animate(time) {
         if (bbB && bbB.posture) document.getElementById('hud-state-b').innerText = bbB.posture;
     }
 
-    // Throttlado (~5Hz) — é texto de debug, não precisa de 60 escritas de DOM/s.
-    if (!window._btDebugLastUpdate || time - window._btDebugLastUpdate > 200) {
-        window._btDebugLastUpdate = time;
-        updatePainelPlayerBT();
+    if (!window._hudJogadoresLast || time - window._hudJogadoresLast > 200) {
+        window._hudJogadoresLast = time;
+        updateHudJogadores();
     }
 
     if (window.cameraMode === 'orbit') {
@@ -270,6 +374,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         Match.init(scene);
         Tatics.updateSkills();
+        popularPainelJogadores();
         requestAnimationFrame(animate);
     } catch (err) {
         console.error("Erro crítico de inicialização:", err);

@@ -22,7 +22,8 @@ class PlayerContext {
     constructor(player) {
         this.p = player;
         this.dt = 1 / 60;
-        this.skill = 80;
+        this.skillSpeed = 80;
+        this.skillTec = 80;
         this.underPressure = false;
         this.distToBall = 0;
         this.trace = [];
@@ -31,7 +32,12 @@ class PlayerContext {
     prepare(dt) {
         const p = this.p;
         this.dt = dt;
-        this.skill = p.getSkill();
+        // Skills individuais (data/player_skills.js) por contexto — SPEED
+        // pras fórmulas de velocidade, TEC pra cadência de decisão/leitura
+        // de jogo. skillFor() cai no genérico (médias do painel) se o
+        // jogador ainda não tiver skills carregados.
+        this.skillSpeed = p.skillFor('SPEED');
+        this.skillTec = p.skillFor('TEC');
         this.distToBall = p.model.position.distanceTo(Match.ball.position);
         this.trace.length = 0;
 
@@ -57,6 +63,27 @@ class PlayerContext {
         }
         if (!p.ultimaPosCarry) p.ultimaPosCarry = new THREE.Vector3();
         p.ultimaPosCarry.copy(p.model.position);
+
+        // Evento CB_HAS_BALL — dispara na transição sem bola -> com bola.
+        if (p.hasBall && !p._hadBallPrev && p.pos === 'CB' && typeof EventBus !== 'undefined') {
+            EventBus.emit('CB_HAS_BALL', { p: p });
+        }
+        p._hadBallPrev = p.hasBall;
+
+        /*
+        Tempo seguido perto do portador adversário — Defensive Pressure não
+        manda só a DISTÂNCIA de marcação (MarkingModel.distancia: 4/3/2m),
+        manda também quanto tempo aguenta essa distância antes de tentar
+        roubar (DefensivePressureModel: 6/4/2s, Low/Bal/High). Carrinho e
+        Desarme só entravam a rolar dado por segundo sem olhar há quanto
+        tempo estava perto — tentavam a bola assim que chegavam.
+        */
+        const cAdv = Match.ballCarrier;
+        if (cAdv && cAdv.team !== p.team && p.model.position.distanceTo(cAdv.model.position) < 4.5) {
+            p.tempoPertoDoPortador = (p.tempoPertoDoPortador || 0) + dt;
+        } else {
+            p.tempoPertoDoPortador = 0;
+        }
 
         for (const opp of this.opponents) {
             if (opp.role === 'gk') continue;
@@ -168,10 +195,36 @@ function findThroughBall(ctx) {
             if (!livre) continue;
         }
 
-        const nota = 100 - dist * 0.5 + (linhaNoNosso - mateZ) * 2.0;
+        let nota = 100 - dist * 0.5 + (linhaNoNosso - mateZ) * 2.0;
+        if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
+            nota += SpatialGrid.layerValueAt('lancamento', alvoX, alvoZ, p.team) * 0.5;
+        }
         if (nota > melhorNota) { melhorNota = nota; melhor = { mate: mate, alvoX: alvoX, alvoZ: alvoZ }; }
     }
 
+    return melhor;
+}
+
+/*
+Passe pelo algoritmo de pontos candidatos (PassCandidates), experimental —
+liga/desliga em window.usarPasseGrid, lógica antiga (bestPassTarget) intacta
+por baixo. Gera o leque à volta de cada companheiro, filtra os intercetáveis
+(ver pass_candidates.js) e elege o ponto sobrevivente mais perto do centro da
+baliza adversária. Quem "recebe" é o dono do ponto — mira o ESPAÇO, não a
+posição actual dele (mesmo padrão do lançamento).
+*/
+function findGridPassTarget(ctx) {
+    if (typeof PassCandidates === 'undefined') return null;
+    const p = ctx.p;
+    const cands = PassCandidates.gerarCandidatos(p);
+    if (cands.length === 0) return null;
+
+    const golZ = p.targetGoalZ;
+    let melhor = null, melhorD = Infinity;
+    for (const c of cands) {
+        const d = Math.hypot(c.x, c.z - golZ);
+        if (d < melhorD) { melhorD = d; melhor = c; }
+    }
     return melhor;
 }
 
@@ -188,6 +241,16 @@ function bestPassTarget(ctx, preferida) {
     let melhor = p.findPassTarget();
 
     if (!melhor && ctx.underPressure) melhor = p.findPassTargetRelaxed();
+
+    /*
+    Preso sob pressão há mais de 1s sem achar passe nenhum (defensor em cima
+    da linha de qualquer opção): passe de pânico, ignora a linha, só olha se
+    o colega está livre no destino. Sem isto caía sempre no fallback
+    actCarry — corta, retoma, corta, retoma, nunca alcançava quem estava
+    livre.
+    */
+    if (!melhor && ctx.underPressure && p.decisionTimer > 1.0) melhor = p.findPassTargetDesperate();
+
     return melhor;
 }
 // Remate.
@@ -234,6 +297,12 @@ function findCross(ctx) {
         C.bonusLargura * largura + C.bonusFundo * fundo;
     if (ctx.underPressure) chance -= C.penalPressao;
 
+    // Grid espacial (camada CRUZAMENTO): soma o valor autorado da célula do cruzador.
+    if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
+        const crossVal = SpatialGrid.layerValueAt('cruzamento', p.model.position.x, p.model.position.z, p.team);
+        chance += (crossVal / 100) * 0.30;
+    }
+
     return { alvo: alvo, chance: THREE.MathUtils.clamp(chance, 0, C.chanceMax) };
 }
 
@@ -273,14 +342,14 @@ function actSlideTackle(ctx) {
 function actTackle(ctx) {
     const p = ctx.p;
     if (typeof MatchStats !== 'undefined') MatchStats[p.team].desarmes.tentados++;
-    p.speedMult = 8.0;
+    p.speedMult = 8.0 * 1.25 * 0.9; // +25% depois -10% pedidos: velocidade máxima SEM bola
     p.dynamicTarget.copy(Match.ballCarrier.model.position);
     p.fsm.changeState('TACKLE');
 }
 
 function actChaseBall(ctx) {
     const p = ctx.p;
-    p.speedMult = 5.8 + ((ctx.skill - 50) / 50) * 1.5;
+    p.speedMult = (5.8 + ((ctx.skillSpeed - 50) / 50) * 1.5) * 1.25 * 0.9;
     if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
     p.dynamicTarget.copy(Match.ball.position);
     p.fsm.changeState('MOVE_TO_POS');
@@ -288,7 +357,7 @@ function actChaseBall(ctx) {
 
 function actReceivePass(ctx) {
     const p = ctx.p;
-    p.speedMult = 5.8;
+    p.speedMult = 5.8 * 1.25 * 0.9;
     p.dynamicTarget.copy(Match.ball.position);
     p.fsm.changeState('MOVE_TO_POS');
 }
@@ -298,13 +367,14 @@ function actHoldPosition(ctx) {
     const p = ctx.p;
     const dist = p.model.position.distanceTo(p.dynamicTarget);
 
-    // Longe da posição (a recuperar/marcar): velocidade máxima. Perto (já
-    // posicionado, só a ajustar): ritmo moderado — o steerArrive já trava
-    // sozinho perto do alvo, isto é só sobre a velocidade de cruzeiro.
-    if (dist > 6.0) {
-        p.speedMult = 6.6 + ((ctx.skill - 50) / 50) * 1.4;
+    // Longe da posição (a recuperar/marcar): velocidade máxima até uns 2m
+    // do alvo. Dentro disso (já posicionado, só a ajustar): ritmo moderado
+    // — o steerArrive já trava sozinho perto do alvo, isto é só sobre a
+    // velocidade de cruzeiro. +25% pedido: velocidade máxima SEM bola.
+    if (dist > 2.0) {
+        p.speedMult = (6.6 + ((ctx.skillSpeed - 50) / 50) * 1.4) * 1.25 * 0.9;
     } else {
-        p.speedMult = 4.2 + ((ctx.skill - 50) / 50) * 1.2;
+        p.speedMult = (4.2 + ((ctx.skillSpeed - 50) / 50) * 1.2) * 1.25 * 0.9;
     }
     if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
 
@@ -332,7 +402,7 @@ function actHoldPosition(ctx) {
 
 function actGoalkeeperPosition(ctx) {
     const p = ctx.p;
-    p.speedMult = 4.2 + ((ctx.skill - 50) / 50) * 1.2;
+    p.speedMult = (4.2 + ((ctx.skillSpeed - 50) / 50) * 1.2) * 1.25 * 0.9;
     const targetX = Math.max(-10, Math.min(10, Match.ball.position.x * 0.5));
     const targetZ = (p.ownGoalZ + 5 * p.dirZ) +
         Math.max(0, Math.min(10, (Match.ball.position.z - p.ownGoalZ) * 0.1 * p.dirZ));
@@ -354,7 +424,14 @@ function emZonaDeRemate(ctx) {
     const p = ctx.p;
     _v1.set(0, 0, p.targetGoalZ);
     const dist = p.model.position.distanceTo(_v1);
-    return dist < p.shootingRange() && Math.abs(p.model.position.x) < ShootingModel.maxOffsetX;
+    if (!(dist < p.shootingRange() && Math.abs(p.model.position.x) < ShootingModel.maxOffsetX)) return false;
+
+    // Grid espacial (camada CHUTE): fora das zonas autoradas (valor 0) não remata.
+    if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
+        const chuteVal = SpatialGrid.layerValueAt('chute', p.model.position.x, p.model.position.z, p.team);
+        if (chuteVal <= 0) return false;
+    }
+    return true;
 }
 
 const PlayerBT = sel('PlayerRoot',
@@ -403,7 +480,7 @@ const PlayerBT = sel('PlayerRoot',
                     // esperava a janela de cadência inteira antes de chutar.
                     if (emZonaDeRemate(ctx)) return false;
                     let settling = ctx.underPressure ? CadenceModel.posseSobPressao : CadenceModel.posseBase;
-                    settling *= 1.0 - (ctx.skill / 100) * 0.25;
+                    settling *= 1.0 - (ctx.skillTec / 100) * 0.25;
                     if (ctx.p.decisionTimer < settling) return true;
                     ctx.p.decisionTimer = settling;
                     return false;
@@ -472,6 +549,22 @@ const PlayerBT = sel('PlayerRoot',
                 act('lancar', actThroughBall)
             ),
 
+            // Passe pelo algoritmo de pontos candidatos — experimental, só corre
+            // se window.usarPasseGrid estiver ligado (ver toggle no painel).
+            seq('PassarGrid',
+                cond('usarPasseGrid', (ctx) => {
+                    if (!window.usarPasseGrid) return false;
+                    ctx.gridPassPonto = findGridPassTarget(ctx);
+                    return ctx.gridPassPonto !== null;
+                }),
+                act('passarGrid', (ctx) => {
+                    const c = ctx.gridPassPonto;
+                    ctx.p.isThroughBall = true;
+                    ctx.p.throughBallTarget = { x: c.x, z: c.z };
+                    ctx.p.initiatePass(c.mate);
+                })
+            ),
+
             // Passe normal, por pontuação.
             seq('Passar',
                 cond('valeAPenaPassar', (ctx) => {
@@ -502,10 +595,13 @@ const PlayerBT = sel('PlayerRoot',
             seq('Carrinho',
                 cond('vale carrinho', (ctx) => {
                     const p = ctx.p, c = Match.ballCarrier;
-                    if (!c || c.team === p.team || ctx.distToBall >= 12) return false;
+                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 12) return false;
                     const d = p.model.position.distanceTo(c.model.position);
                     const alcanceDesarme = (p.pos === 'CB') ? 2.8 : 2.5;
                     if (d < alcanceDesarme || d >= 4.5) return false;
+
+                    const esperaMin = DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced;
+                    if ((p.tempoPertoDoPortador || 0) < esperaMin) return false;
 
                     // Só entra de frente (0-45°) ou de lado (45-90°) em relação
                     // à direcção de movimento do portador — carrinho por trás
@@ -534,10 +630,14 @@ const PlayerBT = sel('PlayerRoot',
             seq('Desarme',
                 cond('vale desarme', (ctx) => {
                     const p = ctx.p, c = Match.ballCarrier;
-                    if (!c || c.team === p.team || ctx.distToBall >= 12) return false;
+                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 12) return false;
                     const d = p.model.position.distanceTo(c.model.position);
                     const alcance = (p.pos === 'CB') ? 2.8 : 2.5;
                     if (d >= alcance) return false;
+
+                    const esperaMin = DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced;
+                    if ((p.tempoPertoDoPortador || 0) < esperaMin) return false;
+
                     return chancePorSegundo((p.pos === 'CB') ? 9.0 : 4.8, ctx.dt);
                 }),
                 act('desarmar', actTackle)
@@ -590,7 +690,7 @@ const PlayerBT = sel('PlayerRoot',
                     const targetX = (p.id % 2 === 0) ? -side * 5.0 : side * 9.0;
                     const targetZ = (CrossModel.areaZ + 6.0) * p.dirZ;
                     p.dynamicTarget.set(targetX, ALTURA_BASE_Y, targetZ);
-                    p.speedMult = 5.5 + ((ctx.skill - 50) / 50) * 1.2;
+                    p.speedMult = (5.5 + ((ctx.skillSpeed - 50) / 50) * 1.2) * 1.25 * 0.9;
                     p.fsm.changeState('MOVE_TO_POS');
                 })
             ),

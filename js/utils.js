@@ -117,6 +117,19 @@ duas coisas — e a 60 fps dá exactamente o comportamento antigo.
 
     taxa = tentativas por segundo
 */
+/*
+Duelo de skills opostos (Técnica x Marcação, Velocidade x Força, Passe x
+Interceptação, Técnica x GK): devolve true se A vence. baseA é a chance de A
+com os dois skills EMPATADOS (0.5 = justo, <0.5 favorece B por natureza da
+jogada — ex.: um carrinho é arriscado por si só). escala controla quanto a
+diferença de skill pesa: com skills 50-100, uma diferença de 50 pontos muda
+a chance em ~50/escala.
+*/
+function venceuDuelo(valorA, valorB, baseA = 0.5, escala = 220) {
+    const chance = THREE.MathUtils.clamp(baseA + (valorA - valorB) / escala, 0.08, 0.92);
+    return Math.random() < chance;
+}
+
 function chancePorSegundo(taxa, dt) {
     return Math.random() < taxa * dt;
 }
@@ -152,7 +165,24 @@ redes nunca tem tacticalTarget (não passa pelo PositionBT), por isso cai
 na posição actual.
 */
 function alvoDePasse(p) {
-    return p.tacticalTarget || p.model.position;
+    const alvo = p.tacticalTarget;
+    if (!alvo) return p.model.position;
+
+    /*
+    Sem tecto, um alvo do PositionBT muito à frente da posição REAL do
+    colega (típico de pontas/avançados a meio de uma desmarcação longa, ou
+    agora também dos biases temporários — GK_CATCH_BALL/CB_HAS_BALL) fazia
+    o passador mirar um "fantasma" lá à frente enquanto o colega ainda
+    estava fisicamente atrás — parecia um passe para trás sem sentido.
+    Central quase não sofre (o slot dele mal se afasta da posição actual);
+    ponta/avançado em transição longa, sim. Tecto de 10m: além disso, mistura
+    com a posição real em vez de mirar só o alvo.
+    */
+    const real = p.model.position;
+    const dist = alvo.distanceTo(real);
+    const maxLead = 10.0;
+    if (dist <= maxLead) return alvo;
+    return real.clone().lerp(alvo, maxLead / dist);
 }
 
 function applyKeyframeAnimation(player, animName, time) {

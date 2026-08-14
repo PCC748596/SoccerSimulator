@@ -1,18 +1,23 @@
 /*
 =============================================================================
-SPATIAL GRID
+SG PASS/MARKING — grid espacial em camadas
 =============================================================================
 Campo dividido em 25 (largura) x 32 (comprimento) células — ~2.7 x 3.3m
-cada. Cada célula sabe quem está dentro dela
-(por equipa) e traz anotações derivadas — livre, marcada, ponto de apoio,
-valor de passe — mais bónus por tipo de acção (passe, lançamento, chute,
-cruzamento, cabeçada). Reconstruída inteira a cada frame em Match.update():
-com só 22 jogadores e ~1800 células isto é barato, e evita rastrear em que
-célula cada jogador estava no frame anterior para o tirar de lá.
+cada. Cada célula ainda sabe quem está fisicamente dentro dela (usado por
+findFreeSpace/occupancy, ex.: findThroughBall), mas os BÓNUS por célula
+deixaram de ser calculados dinamicamente (influência/ocupação) — agora são
+AUTORADOS por camada, uma por finalidade: PASSE, CRUZAMENTO, CHUTE,
+LANÇAMENTO, MARCAÇÃO, etc. Começando só pelo PASSE.
 
-O objectivo é o jogador com bola poder "ler" as células perto dele para
-decidir — hoje só a estrutura de dados e o debug visual existem; a ligação
-às decisões do BT é o próximo passo (findThroughBall já usa findFreeSpace).
+Convenção de autoria: cada camada é lida no referencial de ataque de CADA
+equipa — avanco = z * dirZ dela, o MESMO dirZ usado em todo o resto do jogo
+(targetGoalZ, ownGoalZ, findThroughBall, etc: TeamA/BLUE dirZ=+1, TeamB/RED
+dirZ=-1). avanco=+53 é sempre a baliza que essa equipa ataca de verdade.
+
+(Correcção: chegou a estar amarrado ao "referencial do RED" isolado, dir=+1
+fixo pro RED e -1 pro BLUE, independente do dirZ real de cada um — resultado
+medido: CHUTE ficava 0 na zona de remate real das DUAS equipas, avançado
+nunca rematava, só tocava pra trás. Alinhar com dirZ resolve.)
 
 Convenção de cor/equipa igual ao placar (ver Match.updatePlacar): TeamA =
 BLUE, TeamB = RED.
@@ -45,17 +50,7 @@ const SpatialGrid = {
     },
 
     blankCell: function () {
-        return {
-            TeamA: [], TeamB: [],
-            free: true,
-            markA: false, markB: false,
-            supportA: false, supportB: false,
-            passA: 0, passB: 0,
-            bonus: {
-                A: { pass: 0, lanc: 0, chute: 0, cruz: 0, cab: 0 },
-                B: { pass: 0, lanc: 0, chute: 0, cruz: 0, cab: 0 }
-            }
-        };
+        return { TeamA: [], TeamB: [] };
     },
 
     idx: function (ix, iz) { return iz * this.cols + ix; },
@@ -68,7 +63,9 @@ const SpatialGrid = {
         return { ix: ix, iz: iz };
     },
 
-    // Chamado uma vez por frame a partir de Match.update().
+    // Chamado uma vez por frame a partir de Match.update(). Só actualiza a
+    // ocupação física (quem está em cada célula) — as camadas de bónus são
+    // estáticas, não precisam de recálculo por frame.
     update: function (dt) {
         if (!this.cells) this.init();
         for (let i = 0; i < this.cells.length; i++) {
@@ -84,8 +81,6 @@ const SpatialGrid = {
             this.cells[this.idx(c.ix, c.iz)].TeamB.push(p);
         }
 
-        this.annotate();
-
         if (this.debug) {
             this._redrawAccum += (dt || 0);
             if (this._redrawAccum >= this._redrawEvery) {
@@ -96,127 +91,121 @@ const SpatialGrid = {
     },
 
     /*
-    Campo de influência: cada jogador "espalha" valor 1.0 na sua própria
-    célula, decaindo linearmente até 0 numa distância de `influenceRaioM`
-    metros — não é só a célula onde ele está, as vizinhas também sobem (e
-    descem de novo se ele sair). Vários jogadores perto empilham (soma),
-    por isso duas defesas encostadas marcam mais forte que uma só. Guardado
-    em dois Float32Array (um por equipa) do tamanho da grid — muito mais
-    barato do que cada célula perguntar "quem está perto de mim" com uma
-    janela fixa (como era antes).
+    =========================================================================
+    CAMADAS — cada uma é uma função (avanco, cx) -> valor, autorada no
+    referencial de ataque (avanco: -53 baliza própria .. +53 baliza
+    adversária; cx: largura, sem espelho — só a Z importa por equipa).
+    =========================================================================
     */
-    influenceRaioM: 12,
+    LAYERS: {
+        /*
+        PASSE: 100 no meio-campo (avanco=0), descendo 5 por célula de
+        distância à medida que se aproxima de qualquer área, com piso 50
+        (não desce mais do que isso, mesmo dentro da área).
+        */
+        pass: function (avanco, cx) {
+            const distCelulas = Math.floor(Math.abs(avanco) / SpatialGrid.cellSizeZ);
+            return Math.max(50, 100 - 5 * distCelulas);
+        },
 
-    splatInfluence: function () {
-        const n = this.cols * this.rows;
-        if (!this.infA || this.infA.length !== n) {
-            this.infA = new Float32Array(n);
-            this.infB = new Float32Array(n);
-        }
-        this.infA.fill(0);
-        this.infB.fill(0);
+        /*
+        MARCAÇÃO: 100 desde a linha de fundo própria até 1 célula fora da
+        própria grande área (à frente dela, ainda dentro da largura da
+        área) — a "zona núcleo". A partir daí desconta 5 por célula em DUAS
+        direcções, que se somam:
+            longitudinal — em direcção à linha central (fora do núcleo em Z)
+            lateral      — em direcção à linha lateral, nas células ao lado
+                           da área mas ainda ao nível dela (fora do núcleo em X)
+        Sem bónus no meio-campo adversário (avanco > 0) — marcação é coisa
+        do terço defensivo.
+        */
+        marking: function (avanco, cx) {
+            if (avanco > 0) return 0;
 
-        // Células já não são quadradas (cellSizeX != cellSizeZ) — o raio de
-        // varrimento em células é diferente por eixo, mas a distância usada
-        // no decaimento é sempre em METROS, não em "células", senão o
-        // círculo de influência saía oval.
-        const raioCelX = Math.max(1, Math.ceil(this.influenceRaioM / this.cellSizeX));
-        const raioCelZ = Math.max(1, Math.ceil(this.influenceRaioM / this.cellSizeZ));
+            const limiteAreaZ = -(53 - 16.5);              // -36.5, linha da própria área
+            const nucleoZ = limiteAreaZ + SpatialGrid.cellSizeZ; // 1 célula à frente da área
+            const nucleoX = 20.16;                          // meia-largura da área
 
-        const splat = (players, arr) => {
-            for (const p of players) {
-                const c = this.cellIndexAt(p.model.position.x, p.model.position.z);
-                for (let dz = -raioCelZ; dz <= raioCelZ; dz++) {
-                    const cz = c.iz + dz;
-                    if (cz < 0 || cz >= this.rows) continue;
-                    for (let dx = -raioCelX; dx <= raioCelX; dx++) {
-                        const cx = c.ix + dx;
-                        if (cx < 0 || cx >= this.cols) continue;
-                        const distM = Math.hypot(dx * this.cellSizeX, dz * this.cellSizeZ);
-                        if (distM > this.influenceRaioM) continue;
-                        arr[this.idx(cx, cz)] += 1 - distM / this.influenceRaioM; // 1 no centro, 0 na borda
-                    }
-                }
+            const distZ = (avanco > nucleoZ) ? Math.floor((avanco - nucleoZ) / SpatialGrid.cellSizeZ) : 0;
+            const distX = (Math.abs(cx) > nucleoX) ? Math.floor((Math.abs(cx) - nucleoX) / SpatialGrid.cellSizeX) : 0;
+
+            return Math.max(0, 100 - 5 * (distZ + distX));
+        },
+        /*
+        CRUZAMENTO: faixa lateral entre a grande área e a linha lateral,
+        junto à linha de fundo adversária. Duas escadinhas independentes,
+        as DUAS na faixa fora da área (nunca para dentro dela):
+            - para DENTRO (1ª coluna a partir da borda da área, mesma
+              profundidade 0-4 fileiras) -> 90
+            - ao longo da própria faixa lateral, da quina da área em diante
+              (fileiras 0-4 -> 100, depois desce fileira a fileira rumo ao
+              meio-campo): fileira 5 -> 80, 6 -> 70, 7 -> 60, daí -> 0
+        */
+        cruzamento: function (avanco, cx) {
+            const rowFromGoal = Math.max(0, Math.floor((53 - avanco) / SpatialGrid.cellSizeZ));
+            const areaXedge = 20.16; // meia-largura da grande área (mesma ref. do MARKING/CHUTE)
+            const distX = Math.abs(cx) - areaXedge;
+
+            if (distX >= 0) {
+                // faixa lateral, fora da área até a linha lateral
+                if (rowFromGoal <= 4) return 100;
+                if (rowFromGoal === 5) return 80;
+                if (rowFromGoal === 6) return 70;
+                if (rowFromGoal === 7) return 60;
+                return 0;
             }
-        };
-        splat(Match.players, this.infA);
-        splat(Match.opponents, this.infB);
+
+            // dentro da área, só a 1ª coluna pra dentro, mesma profundidade da faixa
+            if (rowFromGoal > 4) return 0;
+            const colIn = Math.ceil(-distX / SpatialGrid.cellSizeX);
+            return colIn <= 1 ? 90 : 0;
+        },
+
+        /*
+        CHUTE: zonas concêntricas à frente da baliza adversária (avanco=53),
+        contadas em fileiras (linhas de células) a partir da linha de fundo:
+            fileiras 0-1 (dentro da pequena área)        -> 100
+            fileira 2   (1ª fileira em volta da pequena) -> 90
+            fileiras 3-4 (próximas 2, ainda na grande)   -> 85
+            fileira 5   (1ª fora da grande área)         -> 80
+            fileira 6   (2ª fora da grande área)         -> 75
+            daí em diante -5 por fileira
+        As fileiras 2-6 valem só no corredor de 7 tiles centrado na baliza
+        (|cx| <= 3.5 células); fora do corredor desconta 5 por célula lateral
+        de distância. Piso 50 — abaixo disso o valor cai a zero.
+        */
+        chute: function (avanco, cx) {
+            const rowFromGoal = Math.max(0, Math.floor((53 - avanco) / SpatialGrid.cellSizeZ));
+
+            let base;
+            if (rowFromGoal <= 1) base = 100;
+            else if (rowFromGoal === 2) base = 90;
+            else if (rowFromGoal <= 4) base = 85;
+            else if (rowFromGoal === 5) base = 80;
+            else if (rowFromGoal === 6) base = 75;
+            else base = 75 - 5 * (rowFromGoal - 6);
+
+            const colDistCel = Math.max(0, Math.abs(cx) / SpatialGrid.cellSizeX - 3.5);
+            const valor = base - 5 * Math.floor(colDistCel);
+
+            return valor < 50 ? 0 : valor;
+        },
+
+        lancamento: function (avanco, cx) { return 0; }
     },
 
     /*
-    Anotações por célula, derivadas do campo de influência acima. Fórmulas
-    propositadamente simples (primeira versão) — dá pra afinar depois sem
-    mexer na estrutura:
-
-        free              nenhum jogador (das duas equipas) na célula
-        markA/markB       influência dessa equipa acima do limiar de
-                           marcação (~7-8m de um jogador dela)
-        supportA/supportB célula livre com alguma influência da equipa por
-                           perto, mas abaixo do limiar de marcação
-        passA/passB       0-100, quanto vale essa equipa passar pra aqui:
-                           menos influência adversária por perto (contínua,
-                           soma de vários jogadores), mais progressão no
-                           referencial de ataque dela
-        bonus.*.{pass,lanc,chute,cruz,cab}
-                           valor de contexto por zona do campo (baliza,
-                           grande área, ala), por equipa/direcção de ataque
+    Valor de uma camada numa posição do MUNDO, para uma equipa. team =
+    'TeamA' | 'TeamB'. dir = dirZ REAL dessa equipa (igual ao player.dirZ
+    usado em todo o resto do jogo) — avanco=+53 cai sempre na baliza que ela
+    ataca de verdade. TeamA/BLUE ataca +Z (dir=+1), TeamB/RED ataca -Z
+    (dir=-1).
     */
-    markLimiar: 0.35,
-    supportLimiar: 0.05,
-
-    annotate: function () {
-        this.splatInfluence();
-
-        for (let iz = 0; iz < this.rows; iz++) {
-            for (let ix = 0; ix < this.cols; ix++) {
-                const i = this.idx(ix, iz);
-                const cell = this.cells[i];
-                const cx = this.minX + (ix + 0.5) * this.cellSizeX;
-                const cz = this.minZ + (iz + 0.5) * this.cellSizeZ;
-
-                cell.free = (cell.TeamA.length === 0 && cell.TeamB.length === 0);
-
-                const infA = this.infA[i], infB = this.infB[i];
-                cell.markA = infA > this.markLimiar;
-                cell.markB = infB > this.markLimiar;
-                cell.supportA = cell.free && infA > this.supportLimiar && !cell.markA;
-                cell.supportB = cell.free && infB > this.supportLimiar && !cell.markB;
-
-                cell.passA = this.passValue(cz, 1, infB, infA);
-                cell.passB = this.passValue(cz, -1, infA, infB);
-
-                this.zoneBonus(cell.bonus.A, cx, cz, 1);
-                this.zoneBonus(cell.bonus.B, cx, cz, -1);
-            }
-        }
-    },
-
-    // dir = sentido de ataque da equipa que está a avaliar passar pra aqui.
-    // infAdversaria/infPropria = influência (contínua, soma de vários
-    // jogadores dentro do raio) de cada equipa nesta célula.
-    passValue: function (cz, dir, infAdversaria, infPropria) {
-        const avanco = cz * dir; // referencial de ataque: mais alto = melhor
-        let v = 55 - infAdversaria * 30 - infPropria * 10 + avanco * 0.35;
-        return Math.round(Math.max(0, Math.min(100, v)));
-    },
-
-    // Bónus de contexto por zona do campo, no referencial de ataque de quem
-    // ataca no sentido `dir` (linha da baliza adversária = +53*dir).
-    zoneBonus: function (out, cx, cz, dir) {
-        const avanco = cz * dir;               // -53 baliza própria .. +53 baliza adversária
-        const largura = Math.abs(cx);
-
-        const dentroArea = avanco > (53 - 16.5) && largura < 20.16;
-        const dentroPequenaArea = avanco > (53 - 5.5) && largura < 9.16;
-        const zonaRemate = avanco > (53 - 22) && largura < 18;
-        const ala = largura > 20 && avanco > (53 - 30);
-        const costasDaLinha = avanco > 18; // aprox. final terço, ver findThroughBall p/ linha real
-
-        out.chute = dentroArea ? 40 : (zonaRemate ? 18 : 0);
-        out.cab = dentroPequenaArea ? 45 : (dentroArea ? 20 : 0);
-        out.cruz = ala ? 30 : 0;
-        out.lanc = costasDaLinha ? 25 : 0;
-        out.pass = Math.round(30 + avanco * 0.3);
+    layerValueAt: function (layerName, x, z, team) {
+        const fn = this.LAYERS[layerName];
+        if (!fn) return 0;
+        const dir = (team === 'TeamA') ? 1 : -1;
+        return fn(z * dir, x);
     },
 
     cellAt: function (x, z) {
@@ -270,9 +259,8 @@ const SpatialGrid = {
 
     /* --- Visualização de debug -------------------------------------------
     Fundo transparente (o relvado escuro do campo já fica visível por
-    baixo) + linhas mais claras a cada 2m + texto compacto por célula:
-        linha 1: FREE, ou RM/BM (marcada por Red/Blue)
-        linha 2: R:xx B:xx (valor de passe de cada equipa pra ali)
+    baixo) + linhas mais claras a cada célula + valor de cada camada activa
+    (por agora só PASS; MARKING aparece a 0 até ser autorada).
     ----------------------------------------------------------------------- */
 
     pxPerMeter: 32,
@@ -294,13 +282,8 @@ const SpatialGrid = {
         const mesh = new THREE.Mesh(geo, mat);
         // SÓ o rotation.x deita o plano no chão, alinhado com o campo
         // (68 de largura em X, 106 de comprimento em Z). Rodar a MALHA
-        // inteira (como antes, com rotateZ) troca essas dimensões de eixo —
-        // a malha passa a ocupar 106 em X (que só tem 68 de campo), sobrando
-        // tile fora do campo, e a célula que aparece num ponto do ecrã já
-        // não é a célula calculada pra esse ponto (dados de uma posição
-        // aparecem desenhados noutra) — por isso mudavam "sem ninguém lá".
-        // O giro pedido é só do TEXTO, feito dentro de updateDebugVisual()
-        // por célula (ctx.rotate), não da malha.
+        // inteira troca essas dimensões de eixo — ver histórico no commit
+        // anterior. O giro pedido é só do TEXTO (ctx.rotate), não da malha.
         mesh.rotation.x = -Math.PI / 2;
         mesh.position.y = 0.03;
         mesh.visible = false;
@@ -340,32 +323,43 @@ const SpatialGrid = {
 
         for (let iz = 0; iz < this.rows; iz++) {
             for (let ix = 0; ix < this.cols; ix++) {
-                const cell = this.cells[this.idx(ix, iz)];
                 // Linha 0 do canvas = topo = -Z no mundo (plano roda -90° em
                 // X); inverte a linha pra bater com o campo.
                 const linha = this.rows - 1 - iz;
                 const px = ix * csX + csX / 2;
                 const py = linha * csZ + csZ / 2;
 
-                const marca = (cell.markB ? 'R' : '') + (cell.markA && cell.markB ? ',' : '') + (cell.markA ? 'B' : '');
+                const cx = this.minX + (ix + 0.5) * this.cellSizeX;
+                const cz = this.minZ + (iz + 0.5) * this.cellSizeZ;
 
-                const l1 = 'PASS | R:' + cell.passB + ', B:' + cell.passA;
-                const l2 = 'MARK | ' + (marca || '-');
-                // "->" = lançamento (passe directo nas costas da defesa) — ver bonus.lanc.
-                const l3 = '-> | R:' + cell.bonus.B.lanc + ', B:' + cell.bonus.A.lanc;
+                const passA = this.layerValueAt('pass', cx, cz, 'TeamA');
+                const passB = this.layerValueAt('pass', cx, cz, 'TeamB');
+                const markA = this.layerValueAt('marking', cx, cz, 'TeamA');
+                const markB = this.layerValueAt('marking', cx, cz, 'TeamB');
+                const shotA = this.layerValueAt('chute', cx, cz, 'TeamA');
+                const shotB = this.layerValueAt('chute', cx, cz, 'TeamB');
+                const crossA = this.layerValueAt('cruzamento', cx, cz, 'TeamA');
+                const crossB = this.layerValueAt('cruzamento', cx, cz, 'TeamB');
+
+                const l1 = 'PASS | R:' + passB + ', B:' + passA;
+                const l2 = 'MARK | R:' + markB + ', B:' + markA;
+                const l3 = 'SHOT | R:' + shotB + ', B:' + shotA;
+                const l4 = 'CROSS| R:' + crossB + ', B:' + crossA;
 
                 ctx.save();
                 ctx.translate(px, py);
                 ctx.rotate(textAngle);
 
                 ctx.fillStyle = 'rgba(0,0,0,0.55)';
-                ctx.fillText(l1, 0.6, -csZ * 0.24 + 0.6);
-                ctx.fillText(l2, 0.6, 0.6);
-                ctx.fillText(l3, 0.6, csZ * 0.24 + 0.6);
+                ctx.fillText(l1, 0.6, -csZ * 0.33 + 0.6);
+                ctx.fillText(l2, 0.6, -csZ * 0.11 + 0.6);
+                ctx.fillText(l3, 0.6, csZ * 0.11 + 0.6);
+                ctx.fillText(l4, 0.6, csZ * 0.33 + 0.6);
                 ctx.fillStyle = 'rgba(235,255,235,0.92)';
-                ctx.fillText(l1, 0, -csZ * 0.24);
-                ctx.fillText(l2, 0, 0);
-                ctx.fillText(l3, 0, csZ * 0.24);
+                ctx.fillText(l1, 0, -csZ * 0.33);
+                ctx.fillText(l2, 0, -csZ * 0.11);
+                ctx.fillText(l3, 0, csZ * 0.11);
+                ctx.fillText(l4, 0, csZ * 0.33);
 
                 ctx.restore();
             }

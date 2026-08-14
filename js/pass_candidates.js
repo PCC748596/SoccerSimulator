@@ -1,0 +1,174 @@
+/*
+=============================================================================
+PlayerPassTarget — pontos candidatos para passe (debug visual)
+=============================================================================
+Implementa o algoritmo clássico de geração de pontos candidatos ao redor de
+cada companheiro de equipa (sem bola) do jogador com a posse, filtrando os
+que seriam facilmente interceptados. Só visualização — não decide nada (ver
+findPassTarget em player.js para a decisão real).
+
+Geração (por companheiro, "referencial de ataque": frente = dirZ, lateral = X):
+    j de 5 a 1 (raio = j*2m: 10,8,6,4,2)
+    k de 1 a 7 (ângulo = 120 + 15*k -> desvio de -45° a +45° em torno da
+                direcção de ataque do companheiro)
+
+Descarte de um ponto candidato:
+    - fora do campo;
+    - o jogador mais próximo do ponto é um adversário;
+    - a mais de 30m da bola;
+    - o companheiro está em impedimento (offsideLimitDir do TeamAI) -> descarta
+      TODOS os pontos desse companheiro;
+    - há adversário na linha de passe: dentro de ±20° do ângulo bola->ponto
+      E mais perto da bola do que o próprio ponto.
+=============================================================================
+*/
+const PassCandidates = {
+    debug: false,
+    _group: null,
+    _pool: [],
+    _usados: 0,
+    _redrawAccum: 0,
+    _redrawEvery: 0.2,
+    _geo: null,
+
+    ensureGroup: function () {
+        if (this._group) return;
+        this._group = new THREE.Group();
+        Match.scene.add(this._group);
+        // Círculo achatado sobre o gramado, não uma esfera flutuando no ar.
+        this._geo = new THREE.CircleGeometry(0.22, 10);
+        this._mat = new THREE.MeshBasicMaterial({ color: 0xff8c1a, side: THREE.DoubleSide });
+    },
+
+    getDot: function () {
+        if (this._usados < this._pool.length) {
+            const m = this._pool[this._usados++];
+            m.visible = true;
+            return m;
+        }
+        const mesh = new THREE.Mesh(this._geo, this._mat);
+        mesh.rotation.x = -Math.PI / 2;
+        this._group.add(mesh);
+        this._pool.push(mesh);
+        this._usados++;
+        return mesh;
+    },
+
+    esconderResto: function () {
+        for (let i = this._usados; i < this._pool.length; i++) this._pool[i].visible = false;
+    },
+
+    setDebug: function (on) {
+        this.debug = on;
+        this.ensureGroup();
+        this._group.visible = on;
+        if (on) this.rebuild();
+        else { this._usados = 0; this.esconderResto(); }
+    },
+
+    update: function (dt) {
+        if (!this.debug) return;
+        this._redrawAccum += (dt || 0);
+        if (this._redrawAccum < this._redrawEvery) return;
+        this._redrawAccum = 0;
+        this.rebuild();
+    },
+
+    /*
+    Gera a lista de candidatos sobreviventes para o `carrier` — pura, sem
+    THREE, usada tanto pelo desenho de debug como pela decisão de passe real
+    (ver findGridPassTarget em player_bt.js). Devolve [{x, z, mate}, ...].
+    */
+    gerarCandidatos: function (carrier) {
+        const out = [];
+        if (!carrier) return out;
+
+        const team = carrier.team;
+        const teammates = (team === 'TeamA') ? Match.players : Match.opponents;
+        const opponents = (team === 'TeamA') ? Match.opponents : Match.players;
+        const bb = (typeof TeamAI !== 'undefined') ? TeamAI.get(team) : null;
+        const offsideLimitDir = (bb && bb.offsideLimitDir !== undefined) ? bb.offsideLimitDir : null;
+
+        for (const mate of teammates) {
+            if (mate === carrier || mate.role === 'gk') continue;
+
+            // Impedimento: descarta TODOS os pontos deste companheiro.
+            if (offsideLimitDir !== null) {
+                const mateAdv = mate.model.position.z * mate.dirZ;
+                if (mateAdv > offsideLimitDir) continue;
+            }
+
+            const mx = mate.model.position.x, mz = mate.model.position.z;
+            const fwdZ = mate.dirZ; // frente = ataque (eixo Z, com sinal)
+
+            for (let j = 5; j >= 1; j--) {
+                const raio = j * 2;
+                for (let k = 1; k <= 7; k++) {
+                    const angDeg = 120 + 15 * k;
+                    const offsetRad = (angDeg - 180) * Math.PI / 180; // -45°..+45° em torno da frente
+                    const cosO = Math.cos(offsetRad), sinO = Math.sin(offsetRad);
+
+                    // "Frente" (0,0,fwdZ) rodada por offsetRad em torno de Y.
+                    const px = mx + sinO * raio;
+                    const pz = mz + cosO * raio * fwdZ;
+
+                    if (!this.pontoValido(px, pz, carrier, teammates, opponents)) continue;
+                    out.push({ x: px, z: pz, mate: mate });
+                }
+            }
+        }
+
+        return out;
+    },
+
+    rebuild: function () {
+        this.ensureGroup();
+        this._usados = 0;
+
+        const carrier = Match.ballCarrier;
+        if (!carrier) { this.esconderResto(); return; }
+
+        const cands = this.gerarCandidatos(carrier);
+        for (const c of cands) {
+            const dot = this.getDot();
+            dot.position.set(c.x, 0.05, c.z);
+        }
+
+        this.esconderResto();
+    },
+
+    pontoValido: function (px, pz, carrier, teammates, opponents) {
+        if (Math.abs(px) > CAMPO_LARG / 2 || Math.abs(pz) > CAMPO_COMP / 2) return false;
+
+        const cx = carrier.model.position.x, cz = carrier.model.position.z;
+        const distBola = Math.hypot(px - cx, pz - cz);
+        if (distBola > 30) return false;
+
+        // Jogador mais próximo do ponto: se for adversário, descarta.
+        let melhorD = Infinity, maisPertoOpp = false;
+        for (const o of opponents) {
+            const d = Math.hypot(px - o.model.position.x, pz - o.model.position.z);
+            if (d < melhorD) { melhorD = d; maisPertoOpp = true; }
+        }
+        for (const t of teammates) {
+            const d = Math.hypot(px - t.model.position.x, pz - t.model.position.z);
+            if (d < melhorD) { melhorD = d; maisPertoOpp = false; }
+        }
+        if (maisPertoOpp) return false;
+
+        // Adversário na linha de passe: dentro de ±20° do ângulo bola->ponto
+        // e mais perto da bola do que o próprio ponto candidato.
+        const angPasse = Math.atan2(pz - cz, px - cx);
+        for (const o of opponents) {
+            if (o.role === 'gk') continue;
+            const dO = Math.hypot(o.model.position.x - cx, o.model.position.z - cz);
+            if (dO >= distBola) continue;
+            const angO = Math.atan2(o.model.position.z - cz, o.model.position.x - cx);
+            let diff = Math.abs(angO - angPasse);
+            diff = Math.min(diff, Math.PI * 2 - diff);
+            if (diff <= 20 * Math.PI / 180) return false;
+        }
+
+        return true;
+    }
+};
