@@ -65,6 +65,62 @@ const _v3 = new THREE.Vector3();
 const _m1 = new THREE.Matrix4();
 const _q1 = new THREE.Quaternion();
 const _line1 = new THREE.Line3();
+const _vUp = new THREE.Vector3(0, 1, 0);   // eixo vertical, para rodar direcções no plano do campo
+
+/*
+=============================================================================
+FÍSICA DA BOLA — valores reais, não afinados à mão
+=============================================================================
+O que estava antes em updateBall(), e porque estava errado:
+
+    gravidade   15.0 m/s²        53% acima da real; a bola caía como pedra
+    raio        0.15 m           circunferência 94 cm (regulamento: 68-70)
+    arrasto     pow(0.85, dt)    decaimento EXPONENCIAL, proporcional a v e
+                                 só em x/z. O arrasto real é quadrático (∝v²)
+                                 e trava as três componentes: com o modelo
+                                 antigo uma bola lenta perdia 15%/s (a mais)
+                                 e uma bola a 30 m/s quase não travava (a
+                                 menos). Daí o voo "esquisito".
+    chão        pow(0.55, dt)    45% da velocidade por segundo a rolar. Uma
+                                 bola a rolar perde ~1 m/s por segundo, e
+                                 essa perda é constante (μ·g), não uma
+                                 fracção da velocidade.
+
+Valores agora:
+    massa 430 g          FIFA Lei 2 (410-450 g)
+    circunferência 69 cm FIFA Lei 2 (68-70 cm) → raio 0.11 m
+    ρ = 1.225 kg/m³      ar seco, 1 atm (101 325 Pa), nível do mar, 15 °C
+    Cd = 0.25            bola de futebol em regime turbulento
+    g = 9.81 m/s²
+
+    arrasto:    a = ½·ρ·Cd·A/m · v²  =  0.0135·v²
+                (0.34 m/s² a 5 m/s; 12.2 m/s² a 30 m/s)
+    rolamento:  a = μ·g = 0.98 m/s², constante
+=============================================================================
+*/
+const BallPhysics = {
+    massa: 0.430,           // kg
+    raio: 0.11,             // m (circunferência 69 cm)
+    gravidade: 9.81,        // m/s²
+    densidadeAr: 1.225,     // kg/m³ — 1 atm, nível do mar, 15 °C
+    cd: 0.25,               // coeficiente de arrasto
+    restituicao: 0.60,      // ressalto vertical em relva
+    atritoRessalto: 0.75,   // perda horizontal em cada ressalto
+    atritoRolamento: 0.10,  // μ de rolamento em relva
+    vMinRessalto: 0.6,      // abaixo disto não ressalta, assenta
+    vMinRolar: 0.25,        // abaixo disto pára de vez
+
+    /*
+    Só a MALHA é aumentada, não a física: a bola regulamentar (raio 0.11 m)
+    fica pequena de mais para se ver bem à distância da câmara. O raio de
+    colisão, o ressalto e a rotação continuam a usar o valor real.
+    */
+    escalaVisual: 1.30
+};
+BallPhysics.area = Math.PI * BallPhysics.raio * BallPhysics.raio;
+// ½·ρ·Cd·A/m — multiplicar por v² dá a desaceleração em m/s².
+BallPhysics.kArrasto = 0.5 * BallPhysics.densidadeAr * BallPhysics.cd *
+    BallPhysics.area / BallPhysics.massa;
 
 /*
 Sincronização gameplay↔animação (ActionState, ver js/bt/action_state.js).
@@ -74,7 +130,61 @@ Começa só pelo PASS; os valores replicam exactamente o timing antigo
 (this.timer<0.08 / >=0.2) para não mudar o "feel" ao migrar de arquitectura.
 */
 const ActionAnimClips = {
-    pass: { duration: 0.2, contactTime: 0.4 }
+    pass: { duration: 0.2, contactTime: 0.4 },
+    // Chutão do guarda-redes (ver GoalkeeperKickClip). O contactTime cai
+    // exactamente no keyframe 9 (t = 8/11), o frame do contacto pé-bola.
+    gkPunt: { duration: 1.15, contactTime: 8 / 11 }
+};
+
+/*
+=============================================================================
+GOALKEEPER_KICK_FORWARD_HIGH — chutão do guarda-redes, 12 keyframes
+=============================================================================
+Convenção do esqueleto (a mesma do GoalkeeperPose):
+    coxa   rotation.x > 0  →  perna para TRÁS   (< 0 é para a FRENTE, o chuto)
+    joelho rotation.x > 0  →  dobra para trás   (calcanhar sobe)
+    peito  rotation.x > 0  →  tronco para a FRENTE (< 0 inclina para TRÁS)
+
+Os 12 frames pedidos, distribuídos por igual no tempo normalizado (0..1),
+t = (frame - 1) / 11:
+
+     1  parado com a bola                   7  perna acelera para a frente
+     2  corpo inclina levemente para trás   8  pé desce e avança para a bola
+     3  perna de apoio avança               9  CONTACTO (pé na bola)
+     4  perna de chute começa a recuar     10  pé continua a subir e avançar
+     5  joelho dobra, pé sobe para trás    11  perna termina alta, corpo segue
+     6  máxima preparação                  12  recuperação/equilíbrio
+
+`chute` é a perna que bate (rLeg/rKnee), `apoio` a que fica no chão.
+`bracoX`/`cotovelo` largam a bola a partir do frame 6 e passam a equilibrar.
+=============================================================================
+*/
+const GoalkeeperKickClip = {
+    pernaChute: 'r',    // qual das pernas bate; a outra é a de apoio
+    frames: [
+        // t,      chest, coxaChute, joelhoChute, coxaApoio, joelhoApoio, bracoX, cotovelo, altura
+        { chest: 0.05, coxaChute: 0.05, joelhoChute: 0.12, coxaApoio: 0.05, joelhoApoio: 0.12, bracoX: -0.90, cotovelo: -2.00, altura: 0.00 },
+        { chest: -0.18, coxaChute: 0.08, joelhoChute: 0.15, coxaApoio: 0.02, joelhoApoio: 0.14, bracoX: -0.90, cotovelo: -2.00, altura: 0.00 },
+        { chest: -0.20, coxaChute: 0.12, joelhoChute: 0.20, coxaApoio: -0.35, joelhoApoio: 0.28, bracoX: -0.85, cotovelo: -1.90, altura: 0.00 },
+        { chest: -0.25, coxaChute: 0.35, joelhoChute: 0.55, coxaApoio: -0.20, joelhoApoio: 0.20, bracoX: -0.80, cotovelo: -1.85, altura: -0.02 },
+        { chest: -0.28, coxaChute: 0.60, joelhoChute: 1.30, coxaApoio: -0.10, joelhoApoio: 0.22, bracoX: -0.70, cotovelo: -1.70, altura: -0.03 },
+        { chest: -0.30, coxaChute: 0.75, joelhoChute: 1.70, coxaApoio: -0.05, joelhoApoio: 0.25, bracoX: -0.50, cotovelo: -1.20, altura: -0.04 },
+        { chest: -0.20, coxaChute: 0.20, joelhoChute: 1.20, coxaApoio: 0.00, joelhoApoio: 0.28, bracoX: -0.20, cotovelo: -0.80, altura: -0.02 },
+        { chest: -0.08, coxaChute: -0.40, joelhoChute: 0.60, coxaApoio: 0.02, joelhoApoio: 0.30, bracoX: 0.10, cotovelo: -0.50, altura: 0.00 },
+        { chest: 0.05, coxaChute: -0.85, joelhoChute: 0.15, coxaApoio: 0.04, joelhoApoio: 0.32, bracoX: 0.35, cotovelo: -0.40, altura: 0.02 },
+        { chest: 0.18, coxaChute: -1.25, joelhoChute: 0.05, coxaApoio: 0.06, joelhoApoio: 0.30, bracoX: 0.50, cotovelo: -0.40, altura: 0.06 },
+        { chest: 0.28, coxaChute: -1.50, joelhoChute: 0.00, coxaApoio: 0.08, joelhoApoio: 0.26, bracoX: 0.60, cotovelo: -0.50, altura: 0.08 },
+        { chest: 0.05, coxaChute: -0.10, joelhoChute: 0.14, coxaApoio: 0.05, joelhoApoio: 0.14, bracoX: -0.10, cotovelo: -0.15, altura: 0.00 }
+    ],
+
+    /*
+    A bola desce das mãos até ao pé entre a máxima preparação (frame 6) e o
+    contacto (frame 9) — sem isto ficava agarrada à altura do peito e o pé
+    batia no vazio.
+    */
+    largaBolaEm: 5 / 11,
+    alturaMao: 1.15,
+    alturaPe: 0.25
 };
 
 // window.goleiroEstado, window.goleiroReagiu e window.delayReacaoCalculado
@@ -347,13 +457,19 @@ Playing style do lateral (LB/RB) — só actua com bola: sem bola ambos os
 estilos ficam na mesma linha defensiva (ver slotNoBloco em team_bt.js).
 
     defensive  fica atrás, quase não sobe mesmo com a equipa a atacar.
-    offensive  sobe bastante para se juntar ao ataque quando a equipa tem bola.
+    offensive  sobe pelo corredor a dar apoio quando a equipa tem bola.
 
-Multiplica o PositionDepthNudge.comBola do lateral.
+    comBolaMult  multiplica o PositionDepthNudge.comBola do lateral (ajuste
+                 fino da profundidade dentro do bloco).
+    avancoMax    metros à frente do alvo do PositionBT que ele pode ganhar
+                 quando o corredor está livre (ver attackFullBack). É este
+                 que manda: o comBolaMult sozinho valia ~1-3 m e não dava
+                 subida nenhuma que se visse.
+    recuo        metros que recua quando o corredor está tapado.
 */
 const FullBackStyle = {
-    defensive: { comBolaMult: 0.3 },
-    offensive: { comBolaMult: 1.8 }
+    defensive: { comBolaMult: 0.3, avancoMax: 2.0, recuo: 3.0 },
+    offensive: { comBolaMult: 1.8, avancoMax: 15.0, recuo: 3.0 }
 };
 
 /*
@@ -402,7 +518,7 @@ const PassModel = {
     throughBallDepth: 9.0,      // metros além da linha onde se põe a bola
     throughBallMaxDist: 45.0,
     // Nem sempre que há espaço se lança: senão o jogo torna-se todo directo.
-    throughBallChance: 0.45, // +50% pedido
+    throughBallChance: 0.675, // 0.30 -> 0.45 -> 0.675 (+50% duas vezes)
 
     /*
     Conversão de distância em força. A bola perde 0.22 (chão) × 0.85 (ar) da
@@ -497,6 +613,17 @@ const GoalkeeperPose = {
     // A que distância da própria baliza um adversário com bola o põe em alerta.
     alertaDist: 25.0,
 
+    /*
+    Só se atira ao chão se a bola passar a MAIS de tantos metros ao lado dele.
+    Abaixo disto não há mergulho nenhum: fica de pé e leva as mãos à bola
+    (estado 'maos'), dentro dos limites das juntas. Antes o limiar era 1.2 m e
+    quase toda a defesa virava mergulho lateral — daí o guarda-redes aparecer
+    sempre deitado/torcido de lado mesmo em bolas à altura do peito.
+    */
+    mergulhoLateralMin: 2.0,
+    // Duração (s) do estado 'maos' antes de voltar ao idle.
+    maosDur: 1.0,
+
     // Duração (s) do agachar-e-apanhar quando a bola chega mansa/rolando.
     apanharDur: 0.35,
     // Quanto tempo o GR fica a segurar a bola (agachado a levantar-se) antes
@@ -551,21 +678,23 @@ const GoalkeeperPose = {
     },
 
     /*
-    Bola agarrada junto ao PEITO (não à cintura), à espera de relançar
-    (estado 'segurando'). Pés quase alinhados (abertura baixa), braços pra
-    baixo/frente (bracoX menos negativo que antes) e antebraços bem fechados
-    (cotovelo mais dobrado) — cotovelo dobra o antebraço PRA CIMA contra o
-    peito, é o que "fecha a guarda" em cima da bola.
+    Bola agarrada junto ao PEITO, à espera de relançar (estado 'segurando').
+
+    Tronco e pernas são os do `repouso` — de pé, direito, descontraído: já não
+    fica meio agachado depois de apanhar a bola. Só os braços diferem: braços
+    junto ao corpo (bracoZ baixo), para a frente/baixo (bracoX) e antebraços
+    bem fechados PRA CIMA contra o peito (cotovelo muito dobrado) — é isso que
+    "fecha a guarda" em cima da bola.
     */
     segurar: {
-        chest: 0.15,
-        joelho: 0.20,
-        coxa: 0.08,
-        abertura: 0.02,
+        chest: 0.05,
+        joelho: 0.12,
+        coxa: 0.05,
+        abertura: 0.07,
         bracoZ: 0.05,
         bracoX: -0.9,
         cotovelo: -2.0,
-        altura: -0.02
+        altura: 0.0
     }
 };
 
@@ -587,7 +716,7 @@ const CarryModel = {
     // ganhava sempre e o sector do painel (Left/Center/Right) não tinha
     // efeito visível: o jogo conduzia sempre pelo meio. Subido para pesar
     // tanto quanto o progresso no pior caso (~29 * 1.0 ≈ 29).
-    sectorWeight: 1.5,    // quanto pesa manter o sector táctico do painel (+50% pedido: sem ataque pelas laterais mesmo com Left/Right activados)
+    sectorWeight: 4.5,    // quanto pesa manter o sector táctico do painel (1.0 -> 1.5 -> 2.25 -> 4.5, +100%)
 
     /*
     Espaço livre à frente. Medido num corredor que abre para longe (`corredor`
@@ -834,7 +963,8 @@ const Tatics = {
         const inactivos = todos.filter(s => !this.setores.includes(s));
 
         let pool = activos.length ? activos : todos;
-        if (inactivos.length > 0 && Math.random() > 0.8) pool = inactivos;
+        // 20% -> 10% -> 5% de fuga para sector desactivado.
+        if (inactivos.length > 0 && Math.random() > 0.95) pool = inactivos;
 
         const chosenSector = pool[Math.floor(Math.random() * pool.length)];
 

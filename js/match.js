@@ -100,7 +100,7 @@ const Match = {
         // ballVisual pode ser um Group (malha do OBJ, um mesh por material) ou
         // um Mesh (bola procedural). Ambos têm scale e quaternion, que é tudo o
         // que o updateBall lhes toca.
-        this.ballVisual = this.criarBola(0.14);
+        this.ballVisual = this.criarBola(BallPhysics.raio * BallPhysics.escalaVisual);
         this.ball.add(this.ballVisual); this.scene.add(this.ball);
 
         this.offsideLineA = new THREE.Mesh(new THREE.PlaneGeometry(68, 0.25), new THREE.MeshBasicMaterial({ color: 0x3498db, transparent: true, opacity: 0.65, side: THREE.DoubleSide }));
@@ -714,7 +714,7 @@ const Match = {
         document.getElementById('alerta-golo').style.opacity = '0';
         window.bolaChutada = false;
 
-        this.ball.position.set(0, 0.15, 0);
+        this.ball.position.set(0, BallPhysics.raio, 0);
 
         this.players[0].model.position.set(0, ALTURA_BASE_Y, -48);
         lookAtBola(this.players[0].model, this.ball.position);
@@ -1398,19 +1398,56 @@ const Match = {
     },
 
     updateBall: function () {
-        this.ball.position.add(this.ballVel.clone().multiplyScalar(this.delta));
-        let r = 0.15;
-        if (this.ball.position.y > r) { this.ballVel.y -= 15.0 * this.delta; }
-        if (this.ball.position.y <= r) {
-            this.ball.position.y = r; this.ballVel.y *= -0.6;
-            let groundFriction = Math.pow(0.55, this.delta);
-            this.ballVel.x *= groundFriction; this.ballVel.z *= groundFriction;
-            if (Math.abs(this.ballVel.y) < 0.5) this.ballVel.y = 0;
+        /*
+        Integração semi-implícita: forças primeiro, posição depois. Constantes
+        reais em BallPhysics (config.js) — 430 g, raio 0.11 m, g = 9.81 m/s²,
+        ar a 1 atm ao nível do mar.
+        */
+        const B = BallPhysics;
+        const dt = this.delta;
+        const r = B.raio;
+
+        // Arrasto do ar: quadrático (∝ v²) e nas TRÊS componentes. O modelo
+        // anterior era exponencial e só em x/z — travava demais a bola lenta
+        // e quase nada a bola rápida.
+        if (!this.ballCarrier) {
+            const v = this.ballVel.length();
+            if (v > 0.001) {
+                const dv = Math.min(v, B.kArrasto * v * v * dt);
+                this.ballVel.addScaledVector(this.ballVel, -dv / v);
+            }
         }
 
-        if (!this.ballCarrier) {
-            let airResistance = Math.pow(0.85, this.delta);
-            this.ballVel.x *= airResistance; this.ballVel.z *= airResistance;
+        if (this.ball.position.y > r + 0.001) this.ballVel.y -= B.gravidade * dt;
+
+        this.ball.position.addScaledVector(this.ballVel, dt);
+
+        if (this.ball.position.y <= r) {
+            this.ball.position.y = r;
+
+            // Ressalto: só ressalta se ainda vier com velocidade vertical
+            // suficiente, senão assenta em vez de tremer no chão.
+            if (this.ballVel.y < 0) {
+                if (-this.ballVel.y > B.vMinRessalto) {
+                    this.ballVel.y *= -B.restituicao;
+                    this.ballVel.x *= B.atritoRessalto;
+                    this.ballVel.z *= B.atritoRessalto;
+                } else {
+                    this.ballVel.y = 0;
+                }
+            }
+
+            // Rolamento: desaceleração CONSTANTE (μ·g ≈ 0.98 m/s²), não uma
+            // fracção da velocidade por segundo.
+            const vh = Math.hypot(this.ballVel.x, this.ballVel.z);
+            if (vh > 0.0001) {
+                const dvh = Math.min(vh, B.atritoRolamento * B.gravidade * dt);
+                this.ballVel.x -= (this.ballVel.x / vh) * dvh;
+                this.ballVel.z -= (this.ballVel.z / vh) * dvh;
+                if (Math.hypot(this.ballVel.x, this.ballVel.z) < B.vMinRolar && this.ballVel.y === 0) {
+                    this.ballVel.x = 0; this.ballVel.z = 0;
+                }
+            }
         }
 
         this.ballVisual.scale.set(1, 1, 1);
@@ -1518,7 +1555,7 @@ const Match = {
             let flagX = Math.sign(this.ball.position.x) * 33.5;
             let flagZ = attDir * 52.5;
 
-            this.ball.position.set(flagX, 0.15, flagZ);
+            this.ball.position.set(flagX, BallPhysics.raio, flagZ);
 
             let taker = null;
             let minDist = 999;

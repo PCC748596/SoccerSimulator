@@ -622,7 +622,7 @@ class PlayerFSM {
 
                         _v1.set(alvoX, alvoY, bloqueado ? Match.ball.position.z + p.dirZ * 3 : p.targetGoalZ);
                         let dZ = Math.abs(_v1.z - Match.ball.position.z);
-                        let tA = dZ / pow; let cY = 0.5 * 15.0 * tA * tA;
+                        let tA = dZ / pow; let cY = 0.5 * BallPhysics.gravidade * tA * tA;
                         _v2.set(_v1.x, _v1.y + cY, _v1.z);
                         _v3.subVectors(_v2, Match.ball.position).normalize();
                         Match.ballVel.copy(_v3).multiplyScalar(pow);

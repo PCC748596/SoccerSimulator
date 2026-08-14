@@ -1,3 +1,28 @@
+/*
+Amostra o clip do chutão do guarda-redes (GoalkeeperKickClip) num tempo
+normalizado 0..1, interpolando linearmente entre os dois keyframes vizinhos.
+Devolve um objecto com os mesmos campos de um keyframe.
+*/
+function amostrarClipChuteGR(norm) {
+    const fr = GoalkeeperKickClip.frames;
+    const n = fr.length;
+    const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
+    const i = Math.min(n - 2, Math.floor(pos));
+    const u = pos - i;
+    const a = fr[i], b = fr[i + 1];
+    const mix = (k) => a[k] + (b[k] - a[k]) * u;
+    return {
+        chest: mix('chest'),
+        coxaChute: mix('coxaChute'),
+        joelhoChute: mix('joelhoChute'),
+        coxaApoio: mix('coxaApoio'),
+        joelhoApoio: mix('joelhoApoio'),
+        bracoX: mix('bracoX'),
+        cotovelo: mix('cotovelo'),
+        altura: mix('altura')
+    };
+}
+
 class FootballPlayer {
     constructor(id, color1, color2, team) {
         this.id = id; this.team = team; this.role = 'def';
@@ -73,6 +98,9 @@ class FootballPlayer {
         this.gkTempoMergulho = 0;
         this.gkDirMergulho = 0;
         this.gkTipoMergulho = 'baixo';
+        this.gkAlvoX = 0;      // x previsto da bola, usado pelo estado 'maos'
+        this.gkKickAction = null;  // ActionState do chutão (estado 'chutando')
+        this.gkKickNorm = 0;
         this.gkReagiu = false;
         this.gkDelayReacao = 0;
 
@@ -267,9 +295,20 @@ class FootballPlayer {
 
         if (options.length === 0) return null;
 
+        /*
+        Sector no REFERENCIAL DE ATAQUE (x * dirZ), como o
+        Tatics.getWeightedSectorX já fazia (`-19 * teamDir` para 'esq').
+
+        Antes classificava-se o x do MUNDO cru: para a equipa que ataca no
+        sentido oposto, 'esq' do painel virava o flanco contrário. Resultado:
+        a condução (carryTargetX, mirrored) puxava para um lado e o bónus de
+        passe premiava o outro — as duas metades do sistema a anular-se, e
+        nenhuma das equipas jogava consistentemente pelas pontas.
+        */
         const getSectorOfX = (x) => {
-            if (x < -10) return 'esq';
-            if (x > 10) return 'dir';
+            const xAtk = x * dirZ;
+            if (xAtk < -10) return 'esq';
+            if (xAtk > 10) return 'dir';
             return 'cen';
         };
 
@@ -345,7 +384,10 @@ class FootballPlayer {
 
             let optSec = getSectorOfX(optPos.x);
             if (Tatics.setores.includes(optSec)) {
-                score += 45; // +50% pedido: setores activos (Left/Right) sem efeito real no jogo
+                // 30 -> 45 -> 67.5 -> 135 (+100%). Passa a ser o maior termo
+                // isolado da nota, à frente do bónus de estar livre (tecto 110):
+                // com menos do que isso o colega central livre ganhava sempre.
+                score += 135;
             }
 
             /*
@@ -449,20 +491,37 @@ class FootballPlayer {
         });
         this.fsm.changeState('PASS');
     }
-    // Relançamento longo do GR quando não há opção curta: chuta por cima para a frente.
+    /*
+    Relançamento do GR: chutão para a frente, com os ângulos sorteados a cada
+    execução (pedido do utilizador).
+
+        elevação   25° a 50° acima da horizontal
+        direcção   até 20° para cada lado do "a direito para a frente"
+
+    A potência sai da balística e não de um número à mão: escolhida a
+    distância de queda, `v = sqrt(R*g / sin(2θ))` dá a velocidade que põe a
+    bola lá com a elevação sorteada. `g` é 15 aqui (ver updateBall).
+    */
     puntBall() {
-        const alvo = this.findPassTarget('atk') || this.findPassTarget('mid');
-        _v1.set(alvo ? alvoDePasse(alvo).x : this.model.position.x * 0.4,
-            0, this.ownGoalZ + 40 * this.dirZ);
-        const dist = this.model.position.distanceTo(_v1);
-        _v2.subVectors(_v1, this.model.position).normalize();
-        const power = Math.max(20.0, dist * 1.05);
-        Match.ballVel.copy(_v2).multiplyScalar(power);
-        Match.ballVel.y = Math.min(9.0, 4.0 + dist * 0.08);
+        const gGrav = BallPhysics.gravidade;
+        const elev = THREE.MathUtils.degToRad(25 + Math.random() * 25);
+        const desvio = THREE.MathUtils.degToRad((Math.random() * 2 - 1) * 20);
+
+        // Alcance pretendido: chutão de meio-campo, com alguma variação.
+        const alcance = 38 + Math.random() * 16;
+        const v = Math.min(42, Math.sqrt((alcance * gGrav) / Math.sin(2 * elev)));
+
+        // Frente da equipa (dirZ), rodada pelo desvio lateral sorteado.
+        const horiz = v * Math.cos(elev);
+        _v2.set(0, 0, this.dirZ).applyAxisAngle(_vUp, desvio);
+        Match.ballVel.set(_v2.x * horiz, v * Math.sin(elev), _v2.z * horiz);
+
         this.hasBall = false;
         this.touchLock = BallControl.touchLock;
         Match.ballCarrier = null;
-        Match.intendedReceiver = alvo || null;
+        // Ninguém é destinatário nomeado de um chutão — a bola vai para o
+        // espaço, quem lá chegar disputa (ver resolveBallContact).
+        Match.intendedReceiver = null;
         // Sem isto o próprio GK falhava o filtro anti-falso-positivo de
         // isCross (lastTouchedPlayer !== this) e saltava logo a seguir ao
         // seu próprio relançamento, achando que era um cruzamento a chegar.
@@ -599,15 +658,29 @@ class FootballPlayer {
                 // GR segura a bola nas mãos, junto ao PEITO (não à cintura) —
                 // não ao nível do pé como no dribble de um jogador de campo
                 // (senão fica só pousada no chão à frente dele).
-                const maoY = this.model.position.y + (this.gkEstado === 'apanhar' ? 0.55 : 1.15);
-                let maoOffset = new THREE.Vector3(0, 0, 0.3).applyQuaternion(this.model.quaternion);
+                let maoY = this.model.position.y + (this.gkEstado === 'apanhar' ? 0.55 : 1.15);
+                let avancoBola = 0.3;
+                /*
+                Durante o gesto do chutão a bola tem de descer das mãos até ao
+                pé, senão o pé bate no vazio e ela sai da altura do peito. Cai
+                entre a máxima preparação (largaBolaEm) e o contacto.
+                */
+                if (this.gkEstado === 'chutando') {
+                    const K = GoalkeeperKickClip;
+                    const cont = ActionAnimClips.gkPunt.contactTime;
+                    const u = THREE.MathUtils.clamp(
+                        ((this.gkKickNorm || 0) - K.largaBolaEm) / (cont - K.largaBolaEm), 0, 1);
+                    maoY = this.model.position.y + K.alturaMao + (K.alturaPe - K.alturaMao) * u;
+                    avancoBola = 0.3 + 0.35 * u;
+                }
+                let maoOffset = new THREE.Vector3(0, 0, avancoBola).applyQuaternion(this.model.quaternion);
                 Match.ball.position.lerp(this.model.position.clone().add(maoOffset).setY(maoY), 0.5);
                 Match.ballVel.set(0, 0, 0);
             } else {
                 // +0.4m pedido: bola de domínio mais afastada do jogador, à frente.
                 let footOffset = new THREE.Vector3(0, 0, 0.8).applyQuaternion(this.model.quaternion);
                 Match.ball.position.lerp(this.model.position.clone().add(footOffset), 0.5);
-                Match.ball.position.y = 0.15; Match.ballVel.set(0, 0, 0);
+                Match.ball.position.y = BallPhysics.raio; Match.ballVel.set(0, 0, 0);
             }
         }
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
@@ -1113,13 +1186,25 @@ class FootballPlayer {
                 let tempoAteGolo = Math.abs(gkCorpo.position.z - Match.ball.position.z) / Math.abs(Match.ballVel.z);
                 if (tempoAteGolo > 0 && tempoAteGolo < 1.5) {
                     let interX = Match.ball.position.x + (Match.ballVel.x * tempoAteGolo);
-                    let interY = Match.ball.position.y + Match.ballVel.y * tempoAteGolo - 0.5 * 15.0 * tempoAteGolo * tempoAteGolo;
+                    let interY = Match.ball.position.y + Match.ballVel.y * tempoAteGolo - 0.5 * BallPhysics.gravidade * tempoAteGolo * tempoAteGolo;
                     interX = Math.max(-limitGKX, Math.min(limitGKX, interX)); interY = Math.max(0, Math.min(2.44, interY));
 
-                    this.gkEstado = 'mergulho'; this.gkTempoMergulho = 0;
-                    if (Math.abs(interX - gkCorpo.position.x) < 1.2) { this.gkDirMergulho = 0; }
-                    else { this.gkDirMergulho = Math.sign(interX - gkCorpo.position.x); }
-                    if (interY > 1.6) this.gkTipoMergulho = 'alto'; else if (interY > 0.8) this.gkTipoMergulho = 'meio'; else this.gkTipoMergulho = 'baixo';
+                    /*
+                    Bola perto do corpo não é mergulho: fica de pé e leva as
+                    mãos até ela (ver estado 'maos'). Só se atira ao chão se
+                    ela passar a mais de GoalkeeperPose.mergulhoLateralMin do
+                    lado dele.
+                    */
+                    const lateral = interX - gkCorpo.position.x;
+                    this.gkTempoMergulho = 0;
+                    this.gkAlvoX = interX;
+                    if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
+                        this.gkEstado = 'maos';
+                    } else {
+                        this.gkEstado = 'mergulho';
+                        this.gkDirMergulho = Math.sign(lateral);
+                        if (interY > 1.6) this.gkTipoMergulho = 'alto'; else if (interY > 0.8) this.gkTipoMergulho = 'meio'; else this.gkTipoMergulho = 'baixo';
+                    }
                 }
                 speedLerp = 3.0 + ((gkSkill - 50) / 50) * 6.0;
             } else if (Match.state === 'PLAY') {
@@ -1186,10 +1271,18 @@ class FootballPlayer {
                             let possoEspalmar = (tempoAteMim < 0.6 && window.bolaChutada);
 
                             if (possoEspalmar) {
-                                this.gkEstado = 'mergulho';
+                                // Mesma regra do remate: bola perto do corpo é
+                                // defesa de pé com as mãos, não mergulho.
+                                const lateralEsp = Match.ball.position.x - gkCorpo.position.x;
                                 this.gkTempoMergulho = 0;
-                                this.gkDirMergulho = Math.sign(Match.ball.position.x - gkCorpo.position.x);
-                                this.gkTipoMergulho = Match.ball.position.y > 1.2 ? 'alto' : 'baixo';
+                                this.gkAlvoX = Match.ball.position.x;
+                                if (Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
+                                    this.gkEstado = 'maos';
+                                } else {
+                                    this.gkEstado = 'mergulho';
+                                    this.gkDirMergulho = Math.sign(lateralEsp);
+                                    this.gkTipoMergulho = Match.ball.position.y > 1.2 ? 'alto' : 'baixo';
+                                }
                             } else {
                                 if (carrier && carrier.model.position.distanceTo(gkCorpo.position) < 14.0) {
                                     alvoGkZ = ownGoalZCenter(this.team) + (Match.ball.position.z - ownGoalZCenter(this.team)) * 0.55;
@@ -1414,6 +1507,90 @@ class FootballPlayer {
                     Match.ballVel.z *= -0.5; Match.ballVel.x += (Math.random() - 0.5) * 10; Match.ballVel.y += 3;
                 }
             }
+        } else if (this.gkEstado === 'maos') {
+            /*
+            Defesa de PÉ: a bola vem a menos de mergulhoLateralMin do corpo, e
+            atirar-se ao chão para uma bola que passa ao lado do peito é o que
+            deixava o guarda-redes sempre deitado/torcido. Aqui o corpo fica
+            direito e só os braços vão à bola, dentro dos limites das juntas
+            (JointLimits.clampOmbro).
+
+            Braços simétricos de propósito: `rArm`/`lArm` são o lado ESQUERDO/
+            DIREITO do modelo, e o modelo está rodado por lookAt conforme a
+            equipa — mapear "braço do lado da bola" a partir do x do mundo dá
+            o braço errado para uma das equipas. Abrir os dois na mesma
+            amplitude é correcto para ambas, e o ponto de contacto abaixo
+            escolhe a mão mais perto da bola.
+            */
+            this.gkTempoMergulho += dt;
+            const tM = this.gkTempoMergulho;
+            const gkSkillM = this.skillFor('GK');
+            const Pm = GoalkeeperPose.espera;
+
+            // Um passo curto para o lado da bola — não é deslocação, é ajuste.
+            if (typeof this.gkAlvoX === 'number') {
+                gkCorpo.position.x = lerpTo(gkCorpo.position.x, this.gkAlvoX, 0.12);
+            }
+
+            gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + Pm.altura, 0.25);
+            gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, 0.3);
+            gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, 0, 0.3);
+            gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, Pm.chest, 0.25);
+            gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, Pm.coxa, 0.25);
+            gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, Pm.coxa, 0.25);
+            gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, Pm.joelho, 0.25);
+            gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, Pm.joelho, 0.25);
+            gkRig.lLeg.rotation.z = lerpTo(gkRig.lLeg.rotation.z, Pm.abertura, 0.25);
+            gkRig.rLeg.rotation.z = lerpTo(gkRig.rLeg.rotation.z, -Pm.abertura, 0.25);
+
+            const ombroYm = gkCorpo.position.y + 0.35;
+            const dyM = Match.ball.position.y - ombroYm;
+            const dxM = Match.ball.position.x - gkCorpo.position.x;
+            const alcanceM = 0.9;
+
+            // Elevação pela altura da bola, abertura pelo afastamento lateral.
+            let elevM = Math.atan2(dyM, 0.8) * 1.2;
+            let abreM = 0.20 + Math.min(1.3, Math.abs(dxM) * 0.65);
+            const clM = (typeof JointLimits !== 'undefined')
+                ? JointLimits.clampOmbro(elevM, 0, abreM)
+                : { x: elevM, z: abreM };
+
+            gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, clM.x, 0.4);
+            gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, clM.x, 0.4);
+            gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, clM.z, 0.4);
+            gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -clM.z, 0.4);
+            gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, -0.25, 0.4);
+            gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, -0.25, 0.4);
+
+            /*
+            Ponto de contacto: as duas mãos, projectadas do ângulo REAL do
+            ombro. Vale a que estiver mais perto da bola — assim não é preciso
+            saber qual dos braços é o do lado dela.
+            */
+            const espalhoM = Math.sin(Math.abs(gkRig.lArm.rotation.z)) * alcanceM;
+            const maoYm = ombroYm + Math.sin(gkRig.lArm.rotation.x) * alcanceM;
+            const dxMaoM = Math.min(
+                Math.abs((gkCorpo.position.x + espalhoM) - Match.ball.position.x),
+                Math.abs((gkCorpo.position.x - espalhoM) - Match.ball.position.x)
+            );
+            const distMaoM = Math.hypot(dxMaoM, maoYm - Match.ball.position.y, gkCorpo.position.z - Match.ball.position.z);
+
+            const jaEntrouM = (Match.state !== 'PLAY');
+            if (!jaEntrouM && distMaoM < 1.3 && Match.ballVel.lengthSq() > 0) {
+                // Bola ao alcance do corpo é defesa mais fácil do que um
+                // mergulho esticado: agarra com mais frequência.
+                const catchChanceM = 0.55 + (gkSkillM - 50) / 100;
+                if (Math.random() < catchChanceM) {
+                    this.grabBall();
+                } else {
+                    Match.ballVel.z *= -0.4; Match.ballVel.x += (Math.random() - 0.5) * 6; Match.ballVel.y += 2;
+                }
+            }
+
+            if (tM >= GoalkeeperPose.maosDur) {
+                this.gkEstado = 'idle';
+                this.resetBonesToDefault();
+            }
         } else if (this.gkEstado === 'salto_alto') {
             this.gkTempoMergulho += dt; let t = this.gkTempoMergulho;
             let gkSkill = this.skillFor('GK');
@@ -1502,20 +1679,28 @@ class FootballPlayer {
             this.gkTempoMergulho += dt;
             const t = this.gkTempoMergulho;
             /*
-            Antes ficava 40% dos 8s (3.2s) agachado na pose de 'apanhar' antes
-            de passar para 'segurar' (de pé, braços fechados na bola) — dava a
-            impressão de nunca se levantar. Levanta quase logo a seguir à
-            queda/agachamento do apanhar.
+            Pose única: `segurar` já É a pose de repouso (de pé, direito,
+            pernas descontraídas) com os braços dobrados a fechar a bola no
+            peito. Não há fase agachada nenhuma — antes passava os primeiros
+            0.4s na pose de 'apanhar', o que desfazia o snap feito em
+            grabBall() e voltava a agachá-lo logo depois de agarrar.
+
+            Também se aplicam aqui a abertura das pernas e o bracoZ: sem eles,
+            qualquer pose anterior (mergulho de lado, com os braços abertos em
+            z) ficava por corrigir e só o snap inicial a tapava.
             */
-            const meio = 0.4;
-            const P = t < meio ? GoalkeeperPose.apanhar : GoalkeeperPose.segurar;
+            const P = GoalkeeperPose.segurar;
 
             gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, P.coxa, 0.25);
             gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, P.coxa, 0.25);
             gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, P.joelho, 0.25);
             gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, P.joelho, 0.25);
+            gkRig.lLeg.rotation.z = lerpTo(gkRig.lLeg.rotation.z, P.abertura, 0.25);
+            gkRig.rLeg.rotation.z = lerpTo(gkRig.rLeg.rotation.z, -P.abertura, 0.25);
             gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, P.bracoX, 0.25);
             gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, P.bracoX, 0.25);
+            gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, P.bracoZ, 0.25);
+            gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -P.bracoZ, 0.25);
             gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, P.cotovelo, 0.25);
             gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, P.cotovelo, 0.25);
             gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, P.chest, 0.25);
@@ -1534,10 +1719,68 @@ class FootballPlayer {
             lookAtBola(gkCorpo, _v1);
 
             if (t >= (this.gkSegurarDur ?? GoalkeeperPose.segurarDur)) {
-                this.releaseFromHands();
+                /*
+                A bola já não sai no mesmo instante em que o tempo de espera
+                acaba: entra o gesto do chuto (GOALKEEPER_KICK_FORWARD_HIGH) e
+                é o ActionState que dispara o relançamento no frame do contacto
+                pé-bola — mesmo padrão do passe (ver ActionAnimClips.pass).
+                */
+                this.gkEstado = 'chutando';
+                this.gkTempoMergulho = 0;
+                this.gkKickNorm = 0;
+                this.gkKickAction = new ActionState('gkPunt', {
+                    onContact: () => {
+                        this.releaseFromHands();
+                        if (typeof EventBus !== 'undefined') EventBus.emit('GK_RELEASE_BALL', { team: this.team, gk: this });
+                    }
+                });
+            }
+        } else if (this.gkEstado === 'chutando') {
+            /*
+            GOALKEEPER_KICK_FORWARD_HIGH — 12 keyframes em GoalkeeperKickClip,
+            amostrados por tempo normalizado. O ActionState só trata do tempo e
+            do instante do contacto; a pose é toda aplicada aqui.
+            */
+            const normK = this.gkKickAction ? this.gkKickAction.update(dt, this) : 1;
+            this.gkKickNorm = normK;
+            const K = amostrarClipChuteGR(normK);
+
+            const chuteR = (GoalkeeperKickClip.pernaChute === 'r');
+            const pernaC = chuteR ? gkRig.rLeg : gkRig.lLeg;
+            const joelhoC = chuteR ? gkRig.rKnee : gkRig.lKnee;
+            const pernaA = chuteR ? gkRig.lLeg : gkRig.rLeg;
+            const joelhoA = chuteR ? gkRig.lKnee : gkRig.rKnee;
+
+            pernaC.rotation.x = K.coxaChute;
+            joelhoC.rotation.x = K.joelhoChute;
+            pernaA.rotation.x = K.coxaApoio;
+            joelhoA.rotation.x = K.joelhoApoio;
+            pernaC.rotation.z = 0;
+            pernaA.rotation.z = 0;
+
+            gkRig.chest.rotation.x = K.chest;
+            gkRig.lArm.rotation.x = K.bracoX;
+            gkRig.rArm.rotation.x = K.bracoX;
+            gkRig.lElbow.rotation.x = K.cotovelo;
+            gkRig.rElbow.rotation.x = K.cotovelo;
+            // Braços vão abrindo do fecho na bola (bracoZ 0.05) para o
+            // equilíbrio, à medida que o gesto avança.
+            const abreBraco = 0.05 + 0.45 * normK;
+            gkRig.lArm.rotation.z = abreBraco;
+            gkRig.rArm.rotation.z = -abreBraco;
+
+            gkRig.pelvis.rotation.x = 0;
+            gkRig.pelvis.rotation.z = 0;
+            gkCorpo.position.y = ALTURA_BASE_Y + K.altura;
+
+            // Continua virado para o campo durante todo o gesto.
+            _v1.set(gkCorpo.position.x, gkCorpo.position.y, gkCorpo.position.z + this.dirZ * 10);
+            lookAtBola(gkCorpo, _v1);
+
+            if (!this.gkKickAction || this.gkKickAction.isDone()) {
+                this.gkKickAction = null;
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
-                if (typeof EventBus !== 'undefined') EventBus.emit('GK_RELEASE_BALL', { team: this.team, gk: this });
             }
         }
         if (dt > 0.0001 && this.gkEstado === 'idle') {
@@ -1599,38 +1842,14 @@ class FootballPlayer {
     }
 
     /*
-    Fim dos 8s de espera com a bola na mão: só duas opções a partir daqui —
-    passe curto para um companheiro próximo sem pressão, ou chutão pra
-    frente se houver adversário perto. Nunca controla com o pé.
+    Fim da espera com a bola na mão: chutão para a frente, sempre.
+
+    Antes havia um ramo de passe curto para um colega sem pressão. Saiu a
+    pedido do utilizador — o relançamento é agora sempre o chutão do
+    puntBall(), com elevação e direcção sorteadas lá dentro.
     */
     releaseFromHands() {
-        const opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
-        let distAdversarioMaisPerto = 999;
-        for (const opp of opponents) {
-            if (opp.role === 'gk') continue;
-            const d = this.model.position.distanceTo(opp.model.position);
-            if (d < distAdversarioMaisPerto) distAdversarioMaisPerto = d;
-        }
-        const semPressao = distAdversarioMaisPerto > 10.0;
-
-        const alvo = semPressao ? (this.findPassTarget('def') || this.findPassTarget('mid')) : null;
-        if (alvo) {
-            const alvoPos = alvoDePasse(alvo);
-            _v1.set(alvoPos.x, 0, alvoPos.z);
-            const dist = this.model.position.distanceTo(_v1);
-            _v2.subVectors(_v1, this.model.position).normalize();
-            Match.ballVel.copy(_v2).multiplyScalar(Math.max(10.0, dist * 1.1));
-            Match.ballVel.y = 0.5;
-            this.hasBall = false;
-            this.touchLock = BallControl.touchLock;
-            Match.ballCarrier = null;
-            Match.intendedReceiver = alvo;
-            Match.lastTouchedTeam = this.team;
-            Match.lastTouchedPlayer = this;
-            if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'curto');
-        } else {
-            this.puntBall();
-        }
+        this.puntBall();
     }
 }
 

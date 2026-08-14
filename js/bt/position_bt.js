@@ -111,10 +111,21 @@ function attackCB(ctx) {
     desviar(ctx, ctx.bb.ballX * 0.10, ctx.bb.styleDefenseZShift * 0.3 * ctx.p.dirZ);
 }
 
-// Lateral: sobe pelo corredor se o flanco estiver livre; senão fica curto.
+/*
+Lateral: sobe pelo corredor se o flanco estiver livre; senão fica curto.
+
+O avanço é em METROS (FullBackStyle.avancoMax) e não uma fracção da
+profundidade do bloco: o comBolaMult do slot valia ~1-3 m no total e nunca
+tirava o lateral da linha defensiva, por muito ofensivo que fosse o estilo.
+
+O avanço máximo só se ganha por inteiro quando a equipa já está instalada no
+ataque (bb.advanceFactor) — um lateral não arranca 15 m à frente no primeiro
+frame da posse. Piso de 40% para ele sair do lugar logo na construção.
+*/
 function attackFullBack(ctx) {
     const p = ctx.p;
     const flankSign = Math.sign(p.baseTarget.x);
+    const estilo = FullBackStyle[p.fbStyle] || FullBackStyle.defensive;
 
     let livre = true;
     for (const opp of ctx.opponents) {
@@ -125,8 +136,12 @@ function attackFullBack(ctx) {
         if (noFlanco && aFrente) { livre = false; break; }
     }
 
-    if (livre) desviar(ctx, flankSign * 1.5, 2.0);
-    else desviar(ctx, -flankSign * 1.0, -3.0);
+    if (livre) {
+        const rampa = 0.4 + 0.6 * THREE.MathUtils.clamp(ctx.bb.advanceFactor, 0, 1);
+        desviar(ctx, flankSign * 1.5, estilo.avancoMax * rampa);
+    } else {
+        desviar(ctx, -flankSign * 1.0, -estilo.recuo);
+    }
 }
 
 // Médio interior: procura o espaço entre linhas do lado da bola.
@@ -149,7 +164,7 @@ function attackWideMid(ctx) {
     const lado = Math.sign(p.baseTarget.x) || 1;
     const sector = (Tatics.setores.includes('esq') && p.pos === 'LM') ||
         (Tatics.setores.includes('dir') && p.pos === 'RM');
-    desviar(ctx, lado * (sector ? 3.5 : 1.0) + ctx.bb.ballX * 0.08, 0);
+    desviar(ctx, lado * (sector ? 5.25 : 1.0) + ctx.bb.ballX * 0.08, 0);
 }
 
 // Avançados: os extremos abrem, o ponta-de-lança ataca o eixo.

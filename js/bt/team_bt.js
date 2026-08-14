@@ -343,6 +343,19 @@ function pickSupportMid(bb) {
         return;
     }
 
+    /*
+    Guarda-redes com a bola nas mãos não é construção a sair a jogar: não há
+    linha de passe para oferecer enquanto ele a segura, e supportBuildUp() põe
+    o médio em `ballZ` — ou seja, dentro da própria área, colado ao GR. Era
+    isso que fazia o médio (tipicamente o 8, o mais perto) ignorar o bloco a
+    meio-campo que o computeBlock manda formar nesta situação.
+    */
+    if ((bb.carrier && bb.carrier.role === 'gk') ||
+        (typeof Match !== 'undefined' && Match.gkHoldingBall && Match.gkHoldingBall[bb.team])) {
+        bb.supportMid = null;
+        return;
+    }
+
     // Histerese, como no chaser e na marcação: supportBuildUp() substitui o
     // slot inteiro do médio escolhido, por isso trocar de escolhido a cada
     // frame (dois médios a distâncias parecidas) fazia o alvo saltar entre
