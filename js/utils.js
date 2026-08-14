@@ -198,6 +198,56 @@ function velocidadeRasteiraPara(dist, vChegada) {
 }
 
 /*
+Remate/cabeceio: com que ELEVAÇÃO sair para, à velocidade `v`, a bola passar
+por um ponto a `distH` metros e `altura` metros do chão.
+
+O remate é o caso inverso do passe: a potência já está decidida (é a pancada
+do jogador), o que falta é a mira. A conta antiga era
+`t = dZ / pow; cY = ½·g·t²` — assumia velocidade constante e usava a
+velocidade 3D como se fosse horizontal, por isso subestimava o tempo de voo
+duas vezes. Com o arrasto real (12-22 m/s² à velocidade de um remate) a bola
+chegava sempre abaixo do ponto visado.
+
+Devolve o ângulo em radianos, ou `null` se nem no ângulo óptimo lá chega.
+*/
+function elevacaoParaAlvo(distH, altura, v) {
+    const g = BallPhysics.gravidade;
+    const k = BallPhysics.kArrasto;
+
+    // Altura da bola ao passar por distH, para uma dada elevação.
+    const alturaEm = (elev) => {
+        let x = 0, y = BallPhysics.raio;
+        let vx = v * Math.cos(elev), vy = v * Math.sin(elev);
+        const dt = 1 / 120;
+        for (let i = 0; i < 600; i++) {
+            const s = Math.hypot(vx, vy);
+            if (s > 0.001) { const dv = k * s * s * dt; vx -= vx / s * dv; vy -= vy / s * dv; }
+            vy -= g * dt;
+            const xAnt = x, yAnt = y;
+            x += vx * dt; y += vy * dt;
+            if (x >= distH) {
+                // Interpola no passo em que cruza a distância pedida.
+                const f = (distH - xAnt) / Math.max(1e-6, x - xAnt);
+                return yAnt + (y - yAnt) * f;
+            }
+            if (y < -5) return -Infinity;   // já enterrou muito antes
+        }
+        return -Infinity;
+    };
+
+    // A altura em distH cresce com a elevação até ao óptimo; bissecção no
+    // ramo ascendente (o que dá a trajectória mais tensa, que é a que se quer
+    // num remate).
+    let lo = -0.15, hi = Math.PI / 4;
+    if (alturaEm(hi) < altura) return null;      // nem no máximo lá chega
+    for (let i = 0; i < 16; i++) {
+        const mid = (lo + hi) / 2;
+        if (alturaEm(mid) < altura) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
+/*
 Este jogador está demasiado perto da linha de fundo para adiantar a bola?
 
 Mede a distância à linha de fundo que ele ATACA (a que fica à frente dele no

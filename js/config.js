@@ -753,11 +753,42 @@ const PassModel = {
     throughBallChance: 0.675, // 0.30 -> 0.45 -> 0.675 (+50% duas vezes)
 
     /*
-    Conversão de distância em força. A bola perde 0.22 (chão) × 0.85 (ar) da
-    velocidade por segundo, o que dá um alcance de v0/1.677 metros. Logo, para
-    percorrer D metros é preciso sair a 1.677·D.
+    Conversão de distância em força — OBSOLETA. Vinha do modelo de arrasto
+    antigo ("a bola perde 0.22 × 0.85 da velocidade por segundo"), que já não
+    existe. A força é agora resolvida a partir do alcance pretendido, em
+    velocidadeParaAlcance/velocidadeRasteiraPara (utils.js). Mantida só para
+    não partir quem ainda lhe chame.
     */
-    forceForDistance: 1.68
+    forceForDistance: 1.68,
+
+    /*
+    --- Balística do passe (ver executePassGameplay em fsm.js) --------------
+
+    Acima de `distAereo` o passe vai pelo ar e ATERRA no alvo. A elevação
+    desce com a distância: um passe de 25 m sobe mais para passar por cima de
+    quem está no meio; um de 60 m vai mais raso para chegar depressa.
+    */
+    distAereo: 22.0,
+    elevacaoCurta: 26 * Math.PI / 180,
+    elevacaoLonga: 18 * Math.PI / 180,
+    elevacaoCruzamento: 24 * Math.PI / 180,
+
+    /*
+    Com que velocidade a bola CHEGA ao alvo num passe rasteiro. Tem de chegar
+    jogável: acima de BallControl.easySpeed (7.75) o receptor arrisca falhar o
+    domínio, e a zero morre antes de lá chegar.
+    */
+    vChegadaRasteira: 6.5,
+    vChegadaCruzamento: 8.0,   // cruzamento rasteiro vai mais forte, de propósito
+    vChegadaLancamento: 5.0,   // lançamento é para correr atrás, não para receber parado
+
+    /*
+    Erro máximo no PESO da bola, para skill de passe 0. Escala com
+    (1 - PASS/100): a 80 de PASS o erro é ±3.6%, a 40 é ±10.8%. Substitui o
+    antigo `passBoost`, que aumentava a força em vez da precisão — e com a
+    balística resolvida isso só voltava a pôr a bola longe do alvo.
+    */
+    erroPesoMax: 0.18
 };
 
 /*

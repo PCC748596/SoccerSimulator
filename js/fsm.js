@@ -23,8 +23,22 @@ function executePassGameplay(p) {
 
     _v1.copy(p.passTargetPos);
 
-    let distToTarget = _v1.distanceTo(Match.ball.position);
-    _v2.subVectors(_v1, Match.ball.position).normalize();
+    /*
+    Direcção e distância no PLANO. Antes usava-se a distância 3D e a direcção
+    normalizada em 3D — e depois `ballVel.copy(_v2).multiplyScalar(forca)`
+    escrevia as TRÊS componentes.
+
+    Isso apagava, no mesmo instante, todos os `Match.ballVel.y = ...` que os
+    ramos acima tinham acabado de definir: o `6.8` do cruzamento, o
+    `2 + dist*0.12` do passe longo, tudo. A altura da bola vinha só de
+    `_v2.y`, ou seja da diferença de alturas entre a bola e o alvo — quase
+    zero. Nenhum passe longo nem cruzamento subia alguma vez do chão.
+    */
+    const dxAlvo = _v1.x - Match.ball.position.x;
+    const dzAlvo = _v1.z - Match.ball.position.z;
+    let distToTarget = Math.hypot(dxAlvo, dzAlvo);
+    const dirX = distToTarget > 0.001 ? dxAlvo / distToTarget : 0;
+    const dirZ = distToTarget > 0.001 ? dzAlvo / distToTarget : 1;
 
     /*
     A força do passe sai da BALÍSTICA, não de uma heurística.
@@ -56,33 +70,51 @@ function executePassGameplay(p) {
         guarda-redes de sair. Alto passa por cima de quem está no caminho.
         */
         if (p.crossAlto === false) {
-            forcaPasse = Math.max(10.0, distToTarget * 1.15);
+            forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaCruzamento);
             Match.ballVel.y = 0;
         } else {
-            forcaPasse = Math.max(8.0, distToTarget * 0.95);
-            Match.ballVel.y = 6.8;
+            const elevC = PassModel.elevacaoCruzamento;
+            forcaPasse = velocidadeParaAlcance(distToTarget, elevC);
+            Match.ballVel.y = forcaPasse * Math.sin(elevC);
+            forcaPasse = forcaPasse * Math.cos(elevC);
         }
+        usouBalistica = true;
         p.isCross = false;
         p.crossAlto = undefined;
-    } else if (Tatics.passe === 'longo' || distToTarget > 22.0) {
-        forcaPasse = Math.max(7.5, distToTarget * 0.85);
-        Match.ballVel.y = Math.min(6.5, 2.0 + distToTarget * 0.12);
-    } else if (distToTarget <= 35) {
-        forcaPasse = Math.max(7.0, distToTarget * 0.85);
-        Match.ballVel.y = 0;
-    } else if (distToTarget >= 55) {
-        forcaPasse = Math.max(8.5, distToTarget * 0.85);
-        Match.ballVel.y = 6.2;
+    } else if (Tatics.passe === 'longo' || distToTarget > PassModel.distAereo) {
+        // Passe aéreo: aterra no alvo. A elevação baixa com a distância —
+        // muito longo quer chegar depressa, não ficar meio segundo no ar.
+        const t = THREE.MathUtils.clamp(
+            (distToTarget - PassModel.distAereo) / (60 - PassModel.distAereo), 0, 1);
+        const elev = PassModel.elevacaoCurta + (PassModel.elevacaoLonga - PassModel.elevacaoCurta) * t;
+        const v = velocidadeParaAlcance(distToTarget, elev);
+        Match.ballVel.y = v * Math.sin(elev);
+        forcaPasse = v * Math.cos(elev);
+        usouBalistica = true;
     } else {
-        forcaPasse = Math.max(7.5, distToTarget * 0.85);
-        Match.ballVel.y = 2.5;
+        // Passe rasteiro: chega jogável, não morto nem a queimar.
+        forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaRasteira);
+        Match.ballVel.y = 0;
+        usouBalistica = true;
     }
 
-    let passBoost = 1.0 + ((TeamSkills[p.team].mid - 50) / 100) * 0.4;
-    forcaPasse *= passBoost;
-    forcaPasse *= 1.02;
+    /*
+    Skill do passador entra como PRECISÃO no peso da bola, não como um bónus
+    de força: com a balística resolvida, multiplicar a força por um "boost"
+    só voltava a pôr a bola longe do alvo. Um bom passador acerta o peso;
+    um mau passa curto ou longo.
+    */
+    if (usouBalistica) {
+        const passSkill = p.skillFor ? p.skillFor('PASS') : 50;
+        const erro = 1 + (Math.random() * 2 - 1) * PassModel.erroPesoMax * (1 - passSkill / 100);
+        forcaPasse *= erro;
+        Match.ballVel.y *= erro;
+    } else {
+        forcaPasse *= 1.0 + ((TeamSkills[p.team].mid - 50) / 100) * 0.4;
+    }
 
-    Match.ballVel.copy(_v2).multiplyScalar(forcaPasse);
+    // `forcaPasse` é a componente HORIZONTAL; o y já foi posto acima.
+    Match.ballVel.set(dirX * forcaPasse, Match.ballVel.y, dirZ * forcaPasse);
     p.hasBall = false;
     p.touchLock = BallControl.touchLock;
     Match.ballCarrier = null;
@@ -668,7 +700,15 @@ class PlayerFSM {
                             _v1.x += (Math.random() - 0.5) * 0.35;
                             _v1.y = 0;
                             _v1.normalize();
-                            Match.ballVel.copy(_v1).multiplyScalar(S.empurraoBola * PassModel.forceForDistance);
+                            /*
+                            `forceForDistance` (1.68) vinha do modelo de
+                            arrasto antigo. Com a física real a bola percorria
+                            muito mais do que os `empurraoBola` metros
+                            pretendidos — pede-se agora a velocidade que a põe
+                            a parar ali.
+                            */
+                            const vEmp = velocidadeRasteiraPara(S.empurraoBola, 0);
+                            Match.ballVel.copy(_v1).multiplyScalar(vEmp);
                             Match.ballVel.y = S.alturaBola;
                             Match.intendedReceiver = null;
                             Match.lastTouchedTeam = p.team;
@@ -737,12 +777,30 @@ class PlayerFSM {
                             alvoY = Math.random() > 0.5 ? 2.0 : 0.4;
                         }
 
+                        /*
+                        Mira: resolve a ELEVAÇÃO que põe a bola no ponto
+                        visado à velocidade `pow` (ver elevacaoParaAlvo).
+
+                        A conta antiga compensava a gravidade com
+                        `t = dZ / pow; cY = ½·g·t²` — usava a velocidade 3D
+                        como se fosse horizontal e ignorava o arrasto (12-22
+                        m/s² a esta velocidade), por isso subestimava o tempo
+                        de voo duas vezes e o remate saía sempre por baixo.
+                        */
                         _v1.set(alvoX, alvoY, bloqueado ? Match.ball.position.z + p.dirZ * 3 : p.targetGoalZ);
-                        let dZ = Math.abs(_v1.z - Match.ball.position.z);
-                        let tA = dZ / pow; let cY = 0.5 * BallPhysics.gravidade * tA * tA;
-                        _v2.set(_v1.x, _v1.y + cY, _v1.z);
-                        _v3.subVectors(_v2, Match.ball.position).normalize();
-                        Match.ballVel.copy(_v3).multiplyScalar(pow);
+                        const dxR = _v1.x - Match.ball.position.x;
+                        const dzR = _v1.z - Match.ball.position.z;
+                        const distHR = Math.hypot(dxR, dzR);
+                        const elevR = elevacaoParaAlvo(distHR, _v1.y, pow);
+                        // Sem solução (longe demais para esta potência): sai no
+                        // ângulo de alcance máximo em vez de rasteiro ao chão.
+                        const eR = (elevR === null) ? Math.PI / 5 : elevR;
+                        const vhR = pow * Math.cos(eR);
+                        Match.ballVel.set(
+                            (distHR > 0.001 ? dxR / distHR : 0) * vhR,
+                            pow * Math.sin(eR),
+                            (distHR > 0.001 ? dzR / distHR : p.dirZ) * vhR
+                        );
                         p.hasBall = false; p.touchLock = BallControl.touchLock;
                         Match.ballCarrier = null;
                         Match.lastTouchedTeam = p.team;

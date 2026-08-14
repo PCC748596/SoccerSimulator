@@ -618,9 +618,23 @@ class FootballPlayer {
                 pow = 16.0 + ((this.skillFor('TEC') - 50) / 50) * 8.0;
             }
 
-            let targetGoal = new THREE.Vector3(alvoX, alvoY, cabeceadaLimpa ? this.targetGoalZ : Match.ball.position.z + this.dirZ * 3);
-            _v3.subVectors(targetGoal, Match.ball.position).normalize();
-            Match.ballVel.copy(_v3).multiplyScalar(pow);
+            /*
+            Mesma correcção do remate: mira pela elevação resolvida, e não
+            apontando a direcção 3D ao alvo. Apontar direito ao ponto ignora
+            a queda durante o voo — a bola passava sempre por baixo dele.
+            */
+            const alvoZc = cabeceadaLimpa ? this.targetGoalZ : Match.ball.position.z + this.dirZ * 3;
+            const dxC = alvoX - Match.ball.position.x;
+            const dzC = alvoZc - Match.ball.position.z;
+            const distHC = Math.hypot(dxC, dzC);
+            const elevC = elevacaoParaAlvo(distHC, alvoY, pow);
+            const eC = (elevC === null) ? Math.PI / 5 : elevC;
+            const vhC = pow * Math.cos(eC);
+            Match.ballVel.set(
+                (distHC > 0.001 ? dxC / distHC : 0) * vhC,
+                pow * Math.sin(eC),
+                (distHC > 0.001 ? dzC / distHC : this.dirZ) * vhC
+            );
             this.hasBall = false;
             this.touchLock = BallControl.touchLock;
             Match.ballCarrier = null;
@@ -638,12 +652,22 @@ class FootballPlayer {
         } else {
             let target = this.findPassTarget('mid') || this.findPassTarget('atk') || this.findPassTarget('def');
             if (target) {
-                let distToTarget = target.model.position.distanceTo(this.model.position);
-                _v1.copy(target.model.position);
-                _v2.subVectors(_v1, Match.ball.position).normalize();
-                let power = Math.max(12.0, distToTarget * 1.3);
-                Match.ballVel.copy(_v2).multiplyScalar(power);
-                Match.ballVel.y = (Tatics.passe === 'longo' || distToTarget > 22.0) ? Math.min(6.5, 2.0 + distToTarget * 0.12) : 1.5;
+                // Passe de recurso — mesma balística do passe normal (ver
+                // executePassGameplay em fsm.js), não a heurística antiga.
+                const dxP = target.model.position.x - Match.ball.position.x;
+                const dzP = target.model.position.z - Match.ball.position.z;
+                const distToTarget = Math.hypot(dxP, dzP);
+                const uxP = distToTarget > 0.001 ? dxP / distToTarget : 0;
+                const uzP = distToTarget > 0.001 ? dzP / distToTarget : this.dirZ;
+
+                if (distToTarget > PassModel.distAereo) {
+                    const eP = PassModel.elevacaoCurta;
+                    const vP = velocidadeParaAlcance(distToTarget, eP);
+                    Match.ballVel.set(uxP * vP * Math.cos(eP), vP * Math.sin(eP), uzP * vP * Math.cos(eP));
+                } else {
+                    const vP = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaRasteira);
+                    Match.ballVel.set(uxP * vP, 0, uzP * vP);
+                }
                 this.hasBall = false;
                 this.touchLock = BallControl.touchLock;
                 Match.ballCarrier = null;
