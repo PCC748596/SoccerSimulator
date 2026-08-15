@@ -359,6 +359,76 @@ function preverQuedaDaBola() {
 }
 
 /*
+Onde é que a bola está daqui a `t` segundos.
+
+Mesma física do updateBall. Serve para apontar o salto de cabeceio: prevê-se
+a posição no instante do PICO do salto e só se salta se a bola lá estiver.
+Se ela aterrar antes de `t`, continua a rolar rasteira — o que devolve uma
+altura ao nível do chão e, por isso, "não vale a pena saltar".
+*/
+function preverBolaEm(t) {
+    const B = BallPhysics;
+    let x = Match.ball.position.x, y = Match.ball.position.y, z = Match.ball.position.z;
+    let vx = Match.ballVel.x, vy = Match.ballVel.y, vz = Match.ballVel.z;
+    const dt = 1 / 120;
+    const passos = Math.min(240, Math.round(t / dt));
+
+    for (let i = 0; i < passos; i++) {
+        const s = Math.hypot(vx, vy, vz);
+        if (s > 0.001) {
+            const dv = B.kArrasto * s * s * dt;
+            vx -= vx / s * dv; vy -= vy / s * dv; vz -= vz / s * dv;
+        }
+        vy -= B.gravidade * dt;
+        x += vx * dt; y += vy * dt; z += vz * dt;
+        if (y <= B.raio) { y = B.raio; vy = 0; }
+    }
+    return { x: x, y: y, z: z };
+}
+
+/*
+Onde é que a bola DESCE por uma dada altura — o ponto onde se pode cabecear.
+
+`preverQuedaDaBola` dá o sítio onde ela toca no relvado; quem quer cabecear
+não a quer aí, quer onde ela cruza a altura da testa, que é bastante antes.
+Ir para o ponto de queda era o que punha o jogador parado à espera que a bola
+lhe aterrasse aos pés.
+
+Só conta a passagem em DESCIDA (`vy < 0`): a subida logo a seguir ao pé de
+quem cruzou não é ponto de cabeceio de ninguém.
+
+Devolve `{x, z, tempo}`, ou `null` se a bola nunca chega a essa altura.
+*/
+function preverBolaEmAltura(altura) {
+    const B = BallPhysics;
+    let x = Match.ball.position.x, y = Match.ball.position.y, z = Match.ball.position.z;
+    let vx = Match.ballVel.x, vy = Match.ballVel.y, vz = Match.ballVel.z;
+    const dt = 1 / 120;
+
+    for (let i = 0; i < 480; i++) {
+        const s = Math.hypot(vx, vy, vz);
+        if (s > 0.001) {
+            const dv = B.kArrasto * s * s * dt;
+            vx -= vx / s * dv; vy -= vy / s * dv; vz -= vz / s * dv;
+        }
+        vy -= B.gravidade * dt;
+        const xAnt = x, yAnt = y, zAnt = z;
+        x += vx * dt; y += vy * dt; z += vz * dt;
+
+        if (vy < 0 && yAnt > altura && y <= altura) {
+            const f = (yAnt - altura) / Math.max(1e-6, yAnt - y);
+            return {
+                x: xAnt + (x - xAnt) * f,
+                z: zAnt + (z - zAnt) * f,
+                tempo: (i + f) * dt
+            };
+        }
+        if (y <= B.raio) return null;
+    }
+    return null;
+}
+
+/*
 Este jogador está demasiado perto da linha de fundo para adiantar a bola?
 
 Mede a distância à linha de fundo que ele ATACA (a que fica à frente dele no

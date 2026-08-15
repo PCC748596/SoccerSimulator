@@ -1271,7 +1271,54 @@ const BallControl = {
     peitoDur: 0.55,       // duração (s) do gesto
     peitoQueda: 0.5,      // metros à frente quando domina bem
     peitoRepique: 1.5,    // metros à frente quando falha
-    peitoInclinacao: -0.35 // rotação da cintura (negativo = para trás)
+    /*
+    Só a CINTURA para trás — `chest.rotation.x`, aplicado em
+    player.aplicarCamadaPeito(). A pelvis não se toca: rodá-la deitava o
+    jogador inteiro, pernas incluídas. Ele fica de pé e a prumo, o tronco
+    acima da cintura vai levemente para trás e os braços abrem um pouco.
+    */
+    peitoInclinacao: -0.30, // rotação da cintura (negativo = para trás)
+    peitoBracos: 0.35,      // abertura dos braços (rotation.z, somado à pose)
+
+    /*
+    A bola COLA ao peito antes de cair.
+
+    Antes era teleportada no frame do contacto para `peitoQueda`/`peitoRepique`
+    metros à frente e à altura do chão — nunca se via a bola encostada ao
+    corpo, só a aparecer longe dele. Agora fica presa ao tronco durante
+    `peitoCola` segundos (acompanhando-o se ele ainda estiver a andar) e só
+    depois é largada com velocidade, caindo sozinha à distância pedida.
+    */
+    peitoCola: 0.16,      // segundos com a bola encostada ao peito
+    peitoDistCorpo: 0.26, // distância do centro da bola ao eixo do corpo (m)
+    peitoAltura: 1.20,    // altura do ponto de contacto no peito, dos pés (m)
+    peitoVelYBoa: -1.0,   // velocidade vertical ao largar, domínio bom
+    peitoVelYMa: 1.2      // ... e quando falha (repica para cima)
+};
+
+/*
+Salto para cabecear.
+
+O salto tinha pontaria nenhuma: disparava assim que a bola estivesse entre
+1.2 m e 4.5 m de altura e a menos de 2.5 m em planta, com um pico fixo de
+1.8 m. Como quem vai receber uma bola alta se posiciona no PONTO DE QUEDA, a
+bola só passava por 1.2 m no último instante antes de aterrar — ele saltava
+para uma bola quase no chão, e no topo do salto já não havia bola nenhuma.
+
+Agora o salto é planeado no tempo: prevê-se onde a bola está daqui a
+`duracao/2` (o instante do pico, ver `Math.sin(jt·π)`) e só se salta se nesse
+momento ela estiver ao alcance e ACIMA da cabeça. A altura do salto passa a
+ser a que falta para lhe chegar, não um valor fixo — o contacto acontece no
+ponto mais alto.
+
+Abaixo de `subidaMin` acima da cabeça não se salta: cabeceia-se de pé.
+*/
+const SaltoCabeceio = {
+    duracao: 0.62,        // salto completo (s); o pico fica a meio
+    alturaMax: 0.80,      // subida máxima que as pernas dão (m)
+    alcanceXZ: 1.4,       // distância horizontal máxima à bola, no pico
+    subidaMin: 0.10,      // menos do que isto acima da cabeça: cabeceia de pé
+    cooldown: 1.5         // era 10 s — impedia dois saltos na mesma jogada
 };
 
 /*

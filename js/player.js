@@ -79,6 +79,10 @@ class FootballPlayer {
         this.isThroughBall = false;
         this.throughBallTarget = null;
         this.peitoTimer = 0;   // gesto de domínio no peito (ver CHEST_CONTROL)
+        this.peitoCola = 0;    // segundos que faltam com a bola colada ao peito
+        this.peitoIntens = 0;  // intensidade da pose (ver aplicarCamadaPeito)
+        this.peitoBom = false; // ganhou o sorteio do amortecimento?
+        this.jumpApex = 0;     // subida deste salto (ver SaltoCabeceio)
 
         // Corte diagonal de 30° (DRIBBLE_CUT_30) — ver estado CUT em fsm.js.
         this.cutAtivo = false;
@@ -322,23 +326,18 @@ class FootballPlayer {
     ganhando, a bola morre-lhe meio metro à frente; perdendo, repica 1.5 m e
     fica disputável. Nos dois casos ele sai a jogar a seguir — quem lá chegar
     primeiro fica com ela, como em qualquer bola solta.
+
+    A bola não salta já para essa distância: fica COLADA ao peito durante
+    `peitoCola` segundos e só depois é largada (ver largarDoPeito e o estado
+    CHEST_CONTROL em fsm.js).
     */
     controlarNoPeito() {
         const B = BallControl;
         const bom = venceuDuelo(this.skillFor('TEC'), 50, B.peitoBase);
 
-        // À frente DELE, na direcção para onde está virado.
-        const dist = bom ? B.peitoQueda : B.peitoRepique;
-        _v1.set(0, 0, dist).applyQuaternion(this.model.quaternion);
-
-        Match.ball.position.set(
-            this.model.position.x + _v1.x,
-            bom ? BallPhysics.raio : 0.9,
-            this.model.position.z + _v1.z
-        );
-        // Amortecida: cai (bom) ou repica (falhou). Nunca fica agarrada — o
-        // domínio é o toque seguinte, não este.
-        Match.ballVel.set(0, bom ? 0 : 1.8, 0);
+        this.peitoBom = bom;
+        this.peitoCola = B.peitoCola;
+        this.colarBolaAoPeito();
 
         Match.ballCarrier = null;
         this.hasBall = false;
@@ -356,6 +355,41 @@ class FootballPlayer {
 
         if (typeof MatchStats !== 'undefined') MatchStats.registarRecepcao(this, bom);
         if (typeof EventBus !== 'undefined') EventBus.emit('CHEST_CONTROL', { p: this, bom: bom });
+    }
+
+    /*
+    Encosta a bola ao peito, à frente do tronco e à altura do contacto.
+    Chamado todos os frames enquanto ela está colada, para acompanhar o corpo
+    caso ele ainda esteja a andar ou a rodar.
+    */
+    colarBolaAoPeito() {
+        const B = BallControl;
+        _v1.set(0, 0, B.peitoDistCorpo).applyQuaternion(this.model.quaternion);
+        Match.ball.position.set(
+            this.model.position.x + _v1.x,
+            this.model.position.y + B.peitoAltura,
+            this.model.position.z + _v1.z);
+        Match.ballVel.set(0, 0, 0);
+    }
+
+    /*
+    Larga a bola do peito. Em vez de a teleportar, dá-se-lhe a velocidade que
+    a faz cair à distância pedida em config: resolve-se o tempo de queda da
+    altura do peito com a velocidade vertical de saída (para baixo se dominou,
+    para cima se falhou) e daí sai a componente horizontal.
+    */
+    largarDoPeito() {
+        const B = BallControl;
+        const g = BallPhysics.gravidade;
+        const dist = this.peitoBom ? B.peitoQueda : B.peitoRepique;
+        const vy = this.peitoBom ? B.peitoVelYBoa : B.peitoVelYMa;
+        const queda = Math.max(0.1, B.peitoAltura - BallPhysics.raio);
+        const t = (vy + Math.sqrt(vy * vy + 2 * g * queda)) / g;
+        const vh = dist / Math.max(0.1, t);
+
+        _v1.set(0, 0, 1).applyQuaternion(this.model.quaternion);
+        Match.ballVel.set(_v1.x * vh, vy, _v1.z * vh);
+        this.peitoCola = 0;
     }
 
     /*
@@ -813,6 +847,9 @@ class FootballPlayer {
             // vir depois do animateBones, senão ele reescreve a pelvis e as
             // pernas no mesmo frame e o corte desaparece.
             this.aplicarCamadaCorte();
+            // Idem para a matada no peito: só a cintura para trás e os braços
+            // a abrir, por cima da pose normal de pé.
+            this.aplicarCamadaPeito();
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT e PlayerPOS)
@@ -981,13 +1018,40 @@ class FootballPlayer {
         bracoOposto.rotation.z += C.bracoZ * lado;
     }
 
+    /*
+    Camada da matada no peito. Tem de correr DEPOIS do animateBones: esse
+    reescreve `chest.rotation.x` e o `rotation.z` dos braços em todos os
+    frames, nos dois ramos (parado e em andamento).
+
+    Era por isso que a inclinação saía do corpo todo em vez da cintura: o
+    gesto escrevia peito+braços dentro do fsm, o animateBones apagava-os logo
+    a seguir, e só sobrevivia a `pelvis.rotation.x` (que estava protegida) —
+    e rodar a pelvis deita o jogador inteiro para trás, pernas incluídas.
+
+    Aqui a pelvis não se toca: o jogador fica de pé e a prumo, só o tronco
+    acima da cintura vai para trás e os braços abrem um pouco.
+    */
+    aplicarCamadaPeito() {
+        if (this.fsm.currentState !== 'CHEST_CONTROL') return;
+        const rig = this.rig;
+        if (!rig) return;
+
+        const B = BallControl;
+        const intens = this.peitoIntens || 0;
+
+        rig.chest.rotation.x = B.peitoInclinacao * intens;
+        rig.lArm.rotation.z += B.peitoBracos * intens;
+        rig.rArm.rotation.z -= B.peitoBracos * intens;
+    }
+
     animateBones(dt) {
         let speed = this.velocity.length(); let rig = this.rig;
 
-        // CHEST_CONTROL entra na lista: o gesto inclina a pelvis para trás, e
-        // este bloco zera-a todos os frames — a inclinação nunca aparecia.
+        // CHEST_CONTROL NÃO entra na lista: a matada no peito não mexe na
+        // pelvis (ver aplicarCamadaPeito), o jogador continua de pé e a
+        // prumo — as pernas e a anca devem voltar ao normal como sempre.
         const s = this.fsm.currentState;
-        if (s !== 'TACKLE' && s !== 'SLIDE_TACKLE' && s !== 'SHOOT' && s !== 'CHEST_CONTROL' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
+        if (s !== 'TACKLE' && s !== 'SLIDE_TACKLE' && s !== 'SHOOT' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
             rig.pelvis.rotation.x = lerpTo(rig.pelvis.rotation.x, 0, 0.25);
             rig.pelvis.rotation.y = lerpTo(rig.pelvis.rotation.y, 0, 0.25);
             rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, 0, 0.25);
@@ -1022,22 +1086,37 @@ class FootballPlayer {
             }
         }
 
-        let distToBallXZ = Math.hypot(this.model.position.x - Match.ball.position.x, this.model.position.z - Match.ball.position.z);
-        let ballIsHigh = Match.ball.position.y > 1.2 && Match.ball.position.y < 4.5;
         if (this.jumpCooldown > 0) this.jumpCooldown -= dt;
 
-        if (distToBallXZ < 2.5 && ballIsHigh && !this.hasBall && this.role !== 'gk') {
-            if ((!this.jumpTimer || this.jumpTimer <= 0) && (!this.jumpCooldown || this.jumpCooldown <= 0)) {
-                this.jumpTimer = 0.4;
-                this.jumpCooldown = 10.0; 
+        /*
+        Salto de cabeceio com pontaria NO TEMPO — ver SaltoCabeceio em
+        config.js. Olha-se para onde a bola vai estar no instante do pico
+        (metade da duração do salto) e salta-se só se ela lá estiver ao
+        alcance e acima da cabeça; a subida é a que falta para lhe chegar.
+
+        Antes: gatilho por altura instantânea (1.2-4.5 m) e pico fixo de
+        1.8 m. Saltava para bolas quase no chão e no topo já não lhes tocava.
+        */
+        if (!this.hasBall && this.role !== 'gk' &&
+            this.fsm.currentState !== 'CHEST_CONTROL' &&
+            (!this.jumpTimer || this.jumpTimer <= 0) &&
+            (!this.jumpCooldown || this.jumpCooldown <= 0)) {
+            const S = SaltoCabeceio;
+            const prev = preverBolaEm(S.duracao * 0.5);
+            const subida = prev.y - (ALTURA_BASE_Y + ALTURA_CABECA);
+            const dXZ = Math.hypot(this.model.position.x - prev.x, this.model.position.z - prev.z);
+            if (dXZ < S.alcanceXZ && subida > S.subidaMin && subida < S.alturaMax) {
+                this.jumpTimer = S.duracao;
+                this.jumpApex = subida;
+                this.jumpCooldown = S.cooldown;
             }
         }
 
         let jumpHeight = 0;
         if (this.jumpTimer > 0) {
             this.jumpTimer -= dt;
-            let jt = this.jumpTimer / 0.4; 
-            jumpHeight = Math.sin(jt * Math.PI) * 1.8; 
+            let jt = this.jumpTimer / SaltoCabeceio.duracao;
+            jumpHeight = Math.sin(jt * Math.PI) * (this.jumpApex || SaltoCabeceio.alturaMax);
             this.model.position.y = ALTURA_BASE_Y + jumpHeight;
             rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, -0.4, 0.4); 
             rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, 2.0, 0.4); 

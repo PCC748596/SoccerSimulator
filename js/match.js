@@ -1292,9 +1292,16 @@ const Match = {
 
         Tem de ser testado ANTES da disputa normal — essa resolve tudo como
         toque de pé e punha uma bola a 1.4 m de altura a colar-se ao pé dele.
+
+        Mata-se no peito com os pés no chão. `bestAltura` é medida a partir
+        da base do modelo, que SOBE no salto: uma bola a 1.9 m com o jogador
+        0.55 m no ar dava 1.35 m de "altura de peito" e ele matava-a no ar a
+        meio de um cabeceio. `jumpTimer <= 0` fecha isso — no ar a bola é
+        para cabecear, não para amortecer.
         */
         if (bestAltura >= BallControl.peitoYMin &&
             bestAltura <= BallControl.peitoYMax &&
+            best.jumpTimer <= 0 &&
             best.fsm.currentState !== 'CHEST_CONTROL') {
             best.controlarNoPeito();
             return true;

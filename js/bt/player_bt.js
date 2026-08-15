@@ -514,6 +514,23 @@ function actReceivePass(ctx) {
     const noAr = bola.y > BallPhysics.raio + 0.35 && Match.ballVel.lengthSq() > 1.0;
 
     if (noAr) {
+        /*
+        Bola que ainda vem alta: o ponto de encontro é onde ela DESCE pela
+        altura da testa, não onde aterra. Ir para o ponto de queda deixava-o
+        parado à espera que ela lhe caísse aos pés — e o salto de cabeceio
+        (SaltoCabeceio) disparava no último instante, com a bola já quase no
+        chão. Só vale a pena se lá chegar a tempo; senão, ponto de queda.
+        */
+        const cabeca = preverBolaEmAltura(ALTURA_BASE_Y + ALTURA_CABECA);
+        if (cabeca) {
+            const dCab = Math.hypot(p.model.position.x - cabeca.x, p.model.position.z - cabeca.z);
+            if (dCab <= p.speedMult * cabeca.tempo * 0.95) {
+                p.dynamicTarget.set(cabeca.x, ALTURA_BASE_Y, cabeca.z);
+                p.fsm.changeState('MOVE_TO_POS');
+                return;
+            }
+        }
+
         const queda = preverQuedaDaBola();
         p.dynamicTarget.set(queda.x, ALTURA_BASE_Y, queda.z);
 

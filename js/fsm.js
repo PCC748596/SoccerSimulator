@@ -609,13 +609,24 @@ class PlayerFSM {
             /* =============================================================
                CHEST_CONTROL — matar no peito.
 
-               A bola já foi colocada por controlarNoPeito() (player.js); o
-               que vive aqui é só o gesto: trava, inclina a cintura para trás
-               para a bola bater no peito, e volta ao normal.
+               O gesto: trava, inclina a cintura para trás para a bola bater
+               no peito, e volta ao normal.
+
+               Enquanto `peitoCola` não esgota, a bola vai sendo reencostada
+               ao tronco todos os frames — é isso que a faz ver-se colada ao
+               peito em vez de aparecer logo longe dele. No fim do prazo é
+               largada com velocidade e cai sozinha.
                ============================================================= */
             case 'CHEST_CONTROL':
                 {
                     p.peitoTimer = (p.peitoTimer || 0) + dt;
+
+                    if (p.peitoCola > 0) {
+                        p.peitoCola -= dt;
+                        p.colarBolaAoPeito();
+                        if (p.peitoCola <= 0) p.largarDoPeito();
+                    }
+
                     const nP = Math.min(1, p.peitoTimer / BallControl.peitoDur);
                     p.velocity.multiplyScalar(0.75);
 
@@ -623,18 +634,14 @@ class PlayerFSM {
                     Inclina depressa e desfaz devagar: a bola bate no peito no
                     início do gesto, não no fim. `sin(π·n)` daria o pico a
                     meio — tarde de mais.
+
+                    A pose em si é escrita em player.aplicarCamadaPeito(),
+                    depois do animateBones; aqui só se guarda a intensidade.
                     */
-                    const intens = (nP < 0.3) ? (nP / 0.3) : (1 - (nP - 0.3) / 0.7);
-                    rig.pelvis.rotation.x = lerpTo(rig.pelvis.rotation.x,
-                        BallControl.peitoInclinacao * intens, 0.35);
-                    rig.chest.rotation.x = lerpTo(rig.chest.rotation.x,
-                        BallControl.peitoInclinacao * 0.6 * intens, 0.35);
-                    // Braços abrem um pouco para equilibrar o tronco atrás.
-                    rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, 0.5 * intens, 0.3);
-                    rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -0.5 * intens, 0.3);
+                    p.peitoIntens = (nP < 0.3) ? (nP / 0.3) : (1 - (nP - 0.3) / 0.7);
 
                     if (nP >= 1) {
-                        rig.pelvis.rotation.x = 0;
+                        p.peitoIntens = 0;
                         this.changeState('IDLE');
                     }
                 }
