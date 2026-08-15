@@ -13,10 +13,13 @@ function executePassGameplay(p) {
     // Lançamento: a bola vai para o ESPAÇO, não para o colega. A força é
     // calibrada para lá chegar mesmo (ver PassModel).
     let ehLancamento = false;
+    let lancamentoAlto = false;
     if (p.isThroughBall && p.throughBallTarget) {
         p.isThroughBall = false;
         p.throughBallTarget = null;
         ehLancamento = true;
+        lancamentoAlto = !!p.throughBallAlto;
+        p.throughBallAlto = false;
     }
     // Capturado antes de p.isCross ser limpo mais abaixo.
     const tipoPasseStats = ehLancamento ? 'lancamento' : (p.isCross ? 'cruzamento' : 'passe');
@@ -56,10 +59,24 @@ function executePassGameplay(p) {
     let usouBalistica = false;
 
     if (ehLancamento) {
-        // Lançamento vai para o ESPAÇO: rasteiro, a chegar ainda a rolar para
-        // o colega correr para ela.
-        forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaLancamento);
-        Match.ballVel.y = 0;
+        /*
+        TIPO 2 — LANÇAMENTO. A bola vai para o ESPAÇO à frente do companheiro,
+        nunca para cima dele: o alvo (`throughBallTarget`) já é esse ponto.
+
+        Pelo alto quando há marcadores no corredor (decidido em
+        findThroughBall): passa por cima deles e aterra no mesmo sítio.
+        Rasteiro quando o caminho está limpo — chega mais depressa e ele
+        recebe-a a correr.
+        */
+        if (lancamentoAlto) {
+            const elevL = PassModel.elevacaoLancamento;
+            const vL = velocidadeParaAlcance(distToTarget, elevL);
+            Match.ballVel.y = vL * Math.sin(elevL);
+            forcaPasse = vL * Math.cos(elevL);
+        } else {
+            forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaLancamento);
+            Match.ballVel.y = 0;
+        }
         usouBalistica = true;
     } else if (p.isCross) {
         /*
@@ -73,21 +90,40 @@ function executePassGameplay(p) {
             forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaCruzamento);
             Match.ballVel.y = 0;
         } else {
+            /*
+            TIPO 3 — CRUZAMENTO ALTO. Tem de chegar à altura da CABEÇA dele,
+            ainda no ar, para poder cabecear à baliza.
+
+            `velocidadeParaAlcance` punha a bola no CHÃO no ponto do alvo —
+            chegava sempre baixa de mais para cabecear. Aqui pede-se a
+            velocidade que a põe a `alturaCruzamento` quando lá chega.
+            */
             const elevC = PassModel.elevacaoCruzamento;
-            forcaPasse = velocidadeParaAlcance(distToTarget, elevC);
-            Match.ballVel.y = forcaPasse * Math.sin(elevC);
-            forcaPasse = forcaPasse * Math.cos(elevC);
+            let vC = velocidadeParaAlturaEm(distToTarget, PassModel.alturaCruzamento, elevC);
+            // Longe de mais para chegar à cabeça: manda o melhor que consegue.
+            if (vC === null) vC = velocidadeParaAlcance(distToTarget, elevC);
+            Match.ballVel.y = vC * Math.sin(elevC);
+            forcaPasse = vC * Math.cos(elevC);
         }
         usouBalistica = true;
         p.isCross = false;
         p.crossAlto = undefined;
     } else if (Tatics.passe === 'longo' || distToTarget > PassModel.distAereo) {
-        // Passe aéreo: aterra no alvo. A elevação baixa com a distância —
-        // muito longo quer chegar depressa, não ficar meio segundo no ar.
+        /*
+        TIPO 1 — PASSE PELO ALTO. Passa por cima dos marcadores e cai um pouco
+        ANTES do companheiro (`recuoPasseAlto`), para lhe morrer à frente ou
+        no peito, em vez de nas costas.
+
+        Aterrar exactamente em cima dele obrigava-o a recuar para a apanhar; e
+        como o alvo já vem adiantado do `alvoDePasse` (que antecipa o
+        movimento dele), somavam-se dois avanços e a bola caía longe.
+        */
+        const alcancePasse = Math.max(PassModel.distAereo * 0.6,
+            distToTarget - PassModel.recuoPasseAlto);
         const t = THREE.MathUtils.clamp(
             (distToTarget - PassModel.distAereo) / (60 - PassModel.distAereo), 0, 1);
         const elev = PassModel.elevacaoCurta + (PassModel.elevacaoLonga - PassModel.elevacaoCurta) * t;
-        const v = velocidadeParaAlcance(distToTarget, elev);
+        const v = velocidadeParaAlcance(alcancePasse, elev);
         Match.ballVel.y = v * Math.sin(elev);
         forcaPasse = v * Math.cos(elev);
         usouBalistica = true;

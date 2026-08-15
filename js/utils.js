@@ -198,6 +198,51 @@ function velocidadeRasteiraPara(dist, vChegada) {
 }
 
 /*
+Velocidade de saída para a bola estar a `altura` metros do chão quando chega
+a `distH`, com a elevação dada.
+
+É o que distingue um CRUZAMENTO de um passe pelo alto: o passe aterra no
+ponto, o cruzamento tem de lá chegar à altura da CABEÇA do companheiro, ainda
+no ar, para ele cabecear. Pedir `velocidadeParaAlcance(D)` punha a bola no
+chão em D — chegava sempre baixa de mais para cabecear.
+
+Para uma elevação fixa, a altura em `distH` cresce com a velocidade (com
+pouca velocidade a bola já caiu antes de lá chegar), por isso bissecta-se em
+v. Devolve null se nem à velocidade máxima razoável lá chega.
+*/
+function velocidadeParaAlturaEm(distH, altura, elev) {
+    const g = BallPhysics.gravidade;
+    const k = BallPhysics.kArrasto;
+
+    const alturaEm = (v) => {
+        let x = 0, y = BallPhysics.raio;
+        let vx = v * Math.cos(elev), vy = v * Math.sin(elev);
+        const dt = 1 / 120;
+        for (let i = 0; i < 600; i++) {
+            const s = Math.hypot(vx, vy);
+            if (s > 0.001) { const dv = k * s * s * dt; vx -= vx / s * dv; vy -= vy / s * dv; }
+            vy -= g * dt;
+            const xa = x, ya = y;
+            x += vx * dt; y += vy * dt;
+            if (x >= distH) {
+                const f = (distH - xa) / Math.max(1e-6, x - xa);
+                return ya + (y - ya) * f;
+            }
+            if (y < 0) return -1;      // caiu antes de lá chegar
+        }
+        return -1;
+    };
+
+    let lo = 5, hi = 45;
+    if (alturaEm(hi) < altura) return null;
+    for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2;
+        if (alturaEm(mid) < altura) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+}
+
+/*
 Remate/cabeceio: com que ELEVAÇÃO sair para, à velocidade `v`, a bola passar
 por um ponto a `distH` metros e `altura` metros do chão.
 

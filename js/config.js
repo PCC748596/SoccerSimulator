@@ -812,6 +812,27 @@ const PassModel = {
     elevacaoCurta: 26 * Math.PI / 180,
     elevacaoLonga: 18 * Math.PI / 180,
     elevacaoCruzamento: 24 * Math.PI / 180,
+    elevacaoLancamento: 22 * Math.PI / 180,
+
+    /*
+    --- Os três tipos de bola alta ------------------------------------------
+    A elevação passa por cima dos marcadores nos três; o que os distingue é o
+    PONTO DE MIRA:
+
+    1. PASSE pelo alto      aterra um pouco ANTES do companheiro, para lhe
+                            morrer à frente ou no peito. `recuoPasseAlto` é
+                            esse encurtamento, em metros.
+    2. LANÇAMENTO pelo alto aterra À FRENTE dele, no espaço para onde corre.
+                            O alvo já é o espaço (ver findThroughBall), por
+                            isso aqui só se pede que aterre lá.
+    3. CRUZAMENTO alto      chega à altura da CABEÇA dele, ainda no ar, para
+                            cabecear. Não aterra no ponto — passa por ele a
+                            `alturaCruzamento` do chão.
+    */
+    recuoPasseAlto: 1.5,
+    alturaCruzamento: ALTURA_CABECA,
+    // Adversários a esta distância da linha do passe obrigam a levantar a bola.
+    corredorBloqueio: 1.8,
 
     /*
     Com que velocidade a bola CHEGA ao alvo num passe rasteiro. Tem de chegar

@@ -221,6 +221,26 @@ function findThroughBall(ctx) {
         if (nota > melhorNota) { melhorNota = nota; melhor = { mate: mate, alvoX: alvoX, alvoZ: alvoZ }; }
     }
 
+    /*
+    Rasteiro ou pelo alto? Um lançamento rasteiro por entre a linha adversária
+    é bola entregue ao primeiro que corte. Se há alguém no corredor do passe,
+    levanta-se a bola por cima deles — continua a cair no mesmo sítio, o
+    espaço à frente do companheiro.
+    */
+    if (melhor) {
+        _v1.set(p.model.position.x, 0, p.model.position.z);
+        _v2.set(melhor.alvoX, 0, melhor.alvoZ);
+        _line1.set(_v1, _v2);
+        let naLinha = 0;
+        for (const opp of ctx.opponents) {
+            if (opp.role === 'gk') continue;
+            _line1.closestPointToPoint(opp.model.position, true, _v3);
+            _v3.y = 0;
+            if (_v3.distanceTo(opp.model.position.clone().setY(0)) < PassModel.corredorBloqueio) naLinha++;
+        }
+        melhor.alto = naLinha > 0;
+    }
+
     return melhor;
 }
 
@@ -368,6 +388,9 @@ function actCross(ctx) {
 function actThroughBall(ctx) {
     const lance = ctx.throughBall;
     ctx.p.isThroughBall = true;
+    // Consumido em executePassGameplay: rasteiro por entre a defesa, ou pelo
+    // alto por cima dela (ver findThroughBall).
+    ctx.p.throughBallAlto = !!lance.alto;
     ctx.p.throughBallTarget = { x: lance.alvoX, z: lance.alvoZ };
     ctx.p.initiatePass(lance.mate);
 }
