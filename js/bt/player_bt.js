@@ -187,7 +187,8 @@ function findThroughBall(ctx) {
         if (mateZ < linhaNoNosso - PassModel.throughBallGap) continue;
 
         const dist = p.model.position.distanceTo(mateAlvo);
-        if (dist < 12 || dist > PassModel.throughBallMaxDist) continue;
+        // Lançamento é bola longa: abaixo de distMinLonga é passe normal.
+        if (dist < PassModel.distMinLonga || dist > PassModel.throughBallMaxDist) continue;
 
         // Espaço livre à frente dele. Com a grid espacial, em vez de só
         // testar "está livre?" num ponto fixo (mateAlvo.x*0.85), procura o
@@ -467,10 +468,48 @@ function actIntercept(ctx) {
     p.fsm.changeState('INTERCEPT');
 }
 
+/*
+Receber o passe.
+
+Corria para `Match.ball.position` — a posição ACTUAL da bola. Num passe pelo
+alto isso é um ponto a 3-4 m de altura que se desloca a cada frame: o
+receptor perseguia-a, passava-lhe por baixo e ficava atrás dela. Se vinha de
+frente, então, cruzavam-se a meio caminho.
+
+Agora vai para onde ela vai CAIR (preverQuedaDaBola) e espera lá. O
+steerArrive trava sozinho ao chegar, por isso "parar e esperar" não precisa
+de estado próprio — precisa é de um alvo que não fuja.
+
+Bola rasteira mantém o comportamento antigo: aí a posição actual é o alvo
+certo, e ir para onde ela pára seria deixá-la morrer sozinha.
+*/
 function actReceivePass(ctx) {
     const p = ctx.p;
     p.speedMult = 5.8 * 1.25 * 0.9;
-    p.dynamicTarget.copy(Match.ball.position);
+
+    const bola = Match.ball.position;
+    const noAr = bola.y > BallPhysics.raio + 0.35 && Match.ballVel.lengthSq() > 1.0;
+
+    if (noAr) {
+        const queda = preverQuedaDaBola();
+        p.dynamicTarget.set(queda.x, ALTURA_BASE_Y, queda.z);
+
+        /*
+        Já está no ponto de queda e a bola ainda vem no ar: fica quieto. Sem
+        isto o steerArrive continua a corrigir centímetros e ele fica a
+        oscilar por baixo da bola no momento em que ela chega.
+        */
+        const distQueda = Math.hypot(p.model.position.x - queda.x, p.model.position.z - queda.z);
+        if (distQueda < 1.0) {
+            p.velocity.set(0, 0, 0);
+            p.fsm.changeState('IDLE');
+            lookAtBola(p.model, bola);
+            return;
+        }
+    } else {
+        p.dynamicTarget.copy(bola);
+    }
+
     p.fsm.changeState('MOVE_TO_POS');
 }
 
@@ -571,7 +610,8 @@ const PlayerBT = sel('PlayerRoot',
             // CUT é o gesto do corte diagonal (DRIBBLE_CUT_30): dura ~0.75s e
             // não pode ser interrompido a meio, senão o corpo fica a meio da
             // rotação e a bola já foi tocada para a diagonal.
-            return s === 'PASS' || s === 'SHOOT' || s === 'TACKLE' || s === 'SLIDE_TACKLE' || s === 'CUT';
+            return s === 'PASS' || s === 'SHOOT' || s === 'TACKLE' || s === 'SLIDE_TACKLE' ||
+                s === 'CUT' || s === 'CHEST_CONTROL';
         }),
         act('deixarTerminar', () => { })
     ),

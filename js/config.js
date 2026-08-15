@@ -57,6 +57,15 @@ FUNCTION & OBJECT INDEX
 */
 
 const LARGURA_BALIZA = 7.32; const ALTURA_BALIZA = 2.44; const ALTURA_BASE_Y = 0.0;
+
+/*
+Altura da TESTA acima da base do modelo.
+
+`model.position` está nos PÉS (y = ALTURA_BASE_Y). O rig, à escala 1.8/5.5,
+põe o centro da cabeça a ~1.64 m e a testa a ~1.75 m. Este valor é o ponto de
+contacto de um cabeceio — ver distanciaAoCorpo() em utils.js.
+*/
+const ALTURA_CABECA = 1.72;
 const CAMPO_LARG = 68; const CAMPO_COMP = 106;
 
 const _v1 = new THREE.Vector3();
@@ -117,6 +126,31 @@ const BallPhysics = {
     */
     escalaVisual: 1.30
 };
+
+/*
+=============================================================================
+BARREIRA DO CAMPO — muro de contenção à frente da bancada
+=============================================================================
+Sem isto, uma bola forte para fora saía do estádio e ia rolar por baixo das
+bancadas até parar sozinha (a física real tem pouco atrito de rolamento e o
+`resetPlay` só acontece depois de ela parar).
+
+As bancadas laterais começam em |x| = 38.5 e as de fundo em |z| = 58.5 (ver
+createField). A barreira fica logo à frente delas, com a folga do degrau.
+
+A contenção aplica-se a QUALQUER altura da bola, embora o painel só suba
+`alturaPainel`: acima disso é a rede de protecção (a parte translúcida), que
+existe pela mesma razão nos estádios a sério.
+=============================================================================
+*/
+const BarreiraCampo = {
+    x: 37.0,
+    z: 57.0,
+    alturaPainel: 1.1,      // muro de publicidade, opaco
+    alturaRede: 4.5,        // rede de protecção por cima, translúcida
+    restituicao: 0.35,      // ressalto seco: a bola morre ali, não volta ao meio
+    atrito: 0.6             // perda na componente paralela ao embate
+};
 BallPhysics.area = Math.PI * BallPhysics.raio * BallPhysics.raio;
 // ½·ρ·Cd·A/m — multiplicar por v² dá a desaceleração em m/s².
 BallPhysics.kArrasto = 0.5 * BallPhysics.densidadeAr * BallPhysics.cd *
@@ -133,7 +167,7 @@ const ActionAnimClips = {
     pass: { duration: 0.2, contactTime: 0.4 },
     // Chutão do guarda-redes (ver GoalkeeperKickClip). O contactTime cai
     // exactamente no keyframe 9 (t = 8/11), o frame do contacto pé-bola.
-    gkPunt: { duration: 1.15, contactTime: 8 / 11 }
+    gkPunt: { duration: 0.85, contactTime: 8 / 11 }
 };
 
 /*
@@ -768,7 +802,13 @@ const PassModel = {
     desce com a distância: um passe de 25 m sobe mais para passar por cima de
     quem está no meio; um de 60 m vai mais raso para chegar depressa.
     */
-    distAereo: 22.0,
+    /*
+    Passe/lançamento longo só para alvos a MAIS de 20 m (pedido). Abaixo
+    disso é passe rasteiro normal — uma bola pelo ar para um colega a 12 m
+    só complica a recepção sem ganhar nada.
+    */
+    distMinLonga: 20.0,
+    distAereo: 20.0,
     elevacaoCurta: 26 * Math.PI / 180,
     elevacaoLonga: 18 * Math.PI / 180,
     elevacaoCruzamento: 24 * Math.PI / 180,
@@ -886,6 +926,20 @@ const GoalkeeperPose = {
     mergulhoLateralMin: 2.0,
     // Duração (s) do estado 'maos' antes de voltar ao idle.
     maosDur: 1.0,
+
+    /*
+    --- Tiro de meta -------------------------------------------------------
+    A bola é colocada na quina da PEQUENA ÁREA do lado por onde saiu, o GR
+    caminha até à linha de fundo atrás dela, faz a corrida e chuta.
+    */
+    // Meia-largura da pequena área: 5.5 m para cada lado de cada poste.
+    pequenaAreaX: LARGURA_BALIZA / 2 + 5.5,   // ~9.16
+    pequenaAreaZ: 5.5,                        // profundidade a partir da linha
+    tiroMetaAndar: 2.2,      // m/s a caminhar até à linha de fundo
+    tiroMetaCorrer: 5.5,     // m/s na corrida para a bola
+    tiroMetaRecuo: 2.5,      // quanto atrás da bola fica antes de arrancar
+    tiroMetaDistChuto: 1.1,  // distância à bola em que dispara o gesto
+    tiroMetaTimeout: 6.0,    // segurança: se algo correr mal, chuta na mesma
 
     // Duração (s) do agachar-e-apanhar quando a bola chega mansa/rolando.
     apanharDur: 0.35,
@@ -1177,7 +1231,26 @@ const BallControl = {
     touchLock: 0.35,      // segundos sem poder tocar depois de largar a bola
     retryLock: 0.25,      // segundos até nova tentativa depois de falhar uma
     deflectKeep: 0.45,    // fracção da velocidade que sobra num desvio
-    deflectSpread: 0.6    // quanto o desvio abre a direcção
+    deflectSpread: 0.6,   // quanto o desvio abre a direcção
+
+    /*
+    --- Domínio no peito ---------------------------------------------------
+    Bola à altura do peito não se domina com o pé: o jogador inclina a
+    cintura para trás e deixa-a bater no peito.
+
+    O sorteio decide só a QUALIDADE do amortecimento, não a posse: em
+    qualquer dos casos a bola fica à frente dele e ele sai a jogar. Ganhou,
+    morre-lhe aos pés (0.5 m); perdeu, repica mais longe (1.5 m) e fica
+    disputável.
+    */
+    // Alturas medidas a partir dos PÉS do jogador (ver distanciaAoCorpo).
+    peitoYMin: 0.85,      // altura mínima do contacto para contar como peito
+    peitoYMax: 1.35,      // acima disto é cabeça (ver ALTURA_CABECA), não peito
+    peitoBase: 0.45,      // probabilidade base de amortecer bem
+    peitoDur: 0.55,       // duração (s) do gesto
+    peitoQueda: 0.5,      // metros à frente quando domina bem
+    peitoRepique: 1.5,    // metros à frente quando falha
+    peitoInclinacao: -0.35 // rotação da cintura (negativo = para trás)
 };
 
 /*

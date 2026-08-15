@@ -569,10 +569,50 @@ const Match = {
             }
         }
 
-        buildCorner(-32.0, 52.0, Math.PI / 2);      
-        buildCorner(32.0, 52.0, 0);                 
-        buildCorner(-32.0, -52.0, Math.PI);         
-        buildCorner(32.0, -52.0, 3 * Math.PI / 2);  
+        buildCorner(-32.0, 52.0, Math.PI / 2);
+        buildCorner(32.0, 52.0, 0);
+        buildCorner(-32.0, -52.0, Math.PI);
+        buildCorner(32.0, -52.0, 3 * Math.PI / 2);
+
+        /*
+        Barreira de contenção à frente da bancada (ver BarreiraCampo).
+
+        Quatro paredes que se cruzam nos cantos — não é preciso fechar as
+        quinas à parte, a sobreposição já as tapa. Cada uma tem duas camadas:
+        o painel de publicidade opaco em baixo e a rede de protecção
+        translúcida por cima.
+        */
+        {
+            const BC = BarreiraCampo;
+            const matPainel = new THREE.MeshStandardMaterial({
+                color: 0x1b3a5c, roughness: 0.8, metalness: 0.0
+            });
+            const matRede = new THREE.MeshBasicMaterial({
+                color: 0xdfe6ec, transparent: true, opacity: 0.14,
+                side: THREE.DoubleSide, depthWrite: false
+            });
+            const alturaRedeReal = BC.alturaRede - BC.alturaPainel;
+
+            const paredeBarreira = (larg, prof, px, pz) => {
+                const painel = new THREE.Mesh(
+                    new THREE.BoxGeometry(larg, BC.alturaPainel, prof), matPainel);
+                painel.position.set(px, BC.alturaPainel / 2, pz);
+                painel.receiveShadow = true;
+                campoGrupo.add(painel);
+
+                const rede = new THREE.Mesh(
+                    new THREE.BoxGeometry(larg, alturaRedeReal, prof * 0.4), matRede);
+                rede.position.set(px, BC.alturaPainel + alturaRedeReal / 2, pz);
+                campoGrupo.add(rede);
+            };
+
+            const compTotal = BC.z * 2;
+            const largTotal = BC.x * 2;
+            paredeBarreira(0.4, compTotal, -BC.x, 0);
+            paredeBarreira(0.4, compTotal, BC.x, 0);
+            paredeBarreira(largTotal, 0.4, 0, -BC.z);
+            paredeBarreira(largTotal, 0.4, 0, BC.z);
+        }
 
         seatMesh.instanceMatrix.needsUpdate = true;
         if (seatMesh.instanceColor) seatMesh.instanceColor.needsUpdate = true;
@@ -775,6 +815,11 @@ const Match = {
                 gk.gkTipoMergulho = 'baixo';
                 gk.gkReagiu = false;
                 gk.gkDelayReacao = 0;
+                // Tiro de meta interrompido a meio (golo do outro lado, etc.).
+                gk.gkKickAction = null;
+                gk.gkKickTipo = null;
+                gk.gkTiroFase = 0;
+                gk.gkTiroAlvo = null;
             }
         });
 
@@ -903,6 +948,19 @@ const Match = {
 
         if (this.state === 'CORNER_KICK') {
             this.setPieceTimer += dt;
+        }
+
+        /*
+        Tiro de meta encravado: se o GR não chegar a chutar (foi interrompido,
+        ficou preso num clamp, seja o que for), o jogo não pode ficar parado
+        para sempre. O gesto inteiro leva ~8 s no pior caso.
+        */
+        if (this.state === 'GOAL_KICK') {
+            this.setPieceTimer += dt;
+            if (this.setPieceTimer > 12.0) {
+                this.setPieceTimer = 0;
+                this.resetPlay();
+            }
         }
 
         if (this.counterAttackTimer > 0) {
@@ -1213,18 +1271,34 @@ const Match = {
 
         let best = null;
         let bestDist = 999;
+        let bestAltura = 0;
         const considerar = (p) => {
             if (p.touchLock > 0) return;
             // O guarda-redes nunca controla a bola com o pé por aqui — só
             // apanha com as mãos, sempre via updateGK() (gkEstado 'apanhar').
             if (p.role === 'gk') return;
-            const d = p.model.position.distanceTo(this.ball.position);
-            if (d < bestDist) { bestDist = d; best = p; }
+            // Distância ao CORPO (pés..testa), não à origem do modelo — ver
+            // distanciaAoCorpo em utils.js.
+            const r = distanciaAoCorpo(p, this.ball.position);
+            if (r.dist < bestDist) { bestDist = r.dist; bestAltura = r.alturaContacto; best = p; }
         };
         this.players.forEach(considerar);
         this.opponents.forEach(considerar);
 
         if (!best || bestDist > BallControl.reach) return false;
+
+        /*
+        Bola à altura do peito: não se domina com o pé.
+
+        Tem de ser testado ANTES da disputa normal — essa resolve tudo como
+        toque de pé e punha uma bola a 1.4 m de altura a colar-se ao pé dele.
+        */
+        if (bestAltura >= BallControl.peitoYMin &&
+            bestAltura <= BallControl.peitoYMax &&
+            best.fsm.currentState !== 'CHEST_CONTROL') {
+            best.controlarNoPeito();
+            return true;
+        }
 
         let dominou;
         if (speed < BallControl.easySpeed) {
@@ -1271,7 +1345,13 @@ const Match = {
         this.lastTouchedPlayer = best;
 
 
-        if (best.jumpTimer > 0) {
+        /*
+        Cabeceio quando o contacto foi mesmo na CABEÇA, e não só porque ele
+        estava a saltar. Antes bastava `jumpTimer > 0` — um jogador a saltar
+        com a bola nos pés cabeceava na mesma, e o contacto era medido a
+        partir da origem do modelo (à altura da barriga, no salto).
+        */
+        if (bestAltura > ALTURA_CABECA - 0.35) {
             best.executeHeader();
         } else {
             window.bolaChutada = false;
@@ -1525,6 +1605,37 @@ const Match = {
             this.ballVisual.quaternion.normalize();
         }
 
+        /*
+        Barreira do estádio. Corre ANTES da detecção de golo/linha de fundo,
+        que só olha para |z| > 53 e não sabe nada do que está para lá disso.
+
+        Ressalto seco de propósito (restituicao 0.35 e atrito na componente
+        paralela): a bola tem de morrer junto à bancada, não voltar disparada
+        para o meio do campo.
+        */
+        {
+            const BC = BarreiraCampo;
+            const rB = BallPhysics.raio;
+            if (this.ball.position.x > BC.x - rB) {
+                this.ball.position.x = BC.x - rB;
+                this.ballVel.x *= -BC.restituicao;
+                this.ballVel.z *= BC.atrito;
+            } else if (this.ball.position.x < -BC.x + rB) {
+                this.ball.position.x = -BC.x + rB;
+                this.ballVel.x *= -BC.restituicao;
+                this.ballVel.z *= BC.atrito;
+            }
+            if (this.ball.position.z > BC.z - rB) {
+                this.ball.position.z = BC.z - rB;
+                this.ballVel.z *= -BC.restituicao;
+                this.ballVel.x *= BC.atrito;
+            } else if (this.ball.position.z < -BC.z + rB) {
+                this.ball.position.z = -BC.z + rB;
+                this.ballVel.z *= -BC.restituicao;
+                this.ballVel.x *= BC.atrito;
+            }
+        }
+
         if (Math.abs(this.ball.position.z) > 53) {
             let zSinal = Math.sign(this.ball.position.z);
             if (Math.abs(this.ball.position.x) < (LARGURA_BALIZA / 2 - 0.1) && this.ball.position.y < ALTURA_BALIZA) {
@@ -1554,21 +1665,27 @@ const Match = {
             } else {
                 if (this.state === 'PLAY') {
                     let lastTeam = this.lastTouchedTeam || 'TeamA';
-                    // Saída de bola do goleiro foi removida — se a bola sai
-                    // pela linha de fundo sem ser escanteio, volta pro centro
-                    // do campo (mesmo reinício padrão do kickoff).
-                    if (zSinal < 0) {
-                        if (lastTeam === 'TeamA') {
-                            this.setupSetPiece('CORNER_KICK', 'TeamB');
-                        } else {
-                            this.resetPlay();
-                        }
+                    /*
+                    Bola fora pela linha de fundo:
+                        último toque do ATACANTE  -> tiro de meta para quem
+                                                     defende aquela baliza
+                        último toque do DEFENSOR  -> canto para o atacante
+
+                    Antes, o caso do tiro de meta caía num `resetPlay()` — a
+                    bola voltava ao centro do campo como num recomeço, que não
+                    é o que a regra manda.
+
+                    z < 0 é a baliza do TeamA (dirZ +1 ataca +Z), z > 0 a do
+                    TeamB.
+                    */
+                    const donoDaBaliza = (zSinal < 0) ? 'TeamA' : 'TeamB';
+                    if (lastTeam === donoDaBaliza) {
+                        // Defensor tocou por último: canto para quem ataca.
+                        this.setupSetPiece('CORNER_KICK',
+                            (donoDaBaliza === 'TeamA') ? 'TeamB' : 'TeamA');
                     } else {
-                        if (lastTeam === 'TeamB') {
-                            this.setupSetPiece('CORNER_KICK', 'TeamA');
-                        } else {
-                            this.resetPlay();
-                        }
+                        // Atacante tocou por último: tiro de meta.
+                        this.setupSetPiece('GOAL_KICK', donoDaBaliza);
                     }
                 } else {
                     /*
@@ -1678,6 +1795,64 @@ const Match = {
                 attGK.fsm.changeState('SET_PIECE_WAIT');
             }
 
+        } else if (type === 'GOAL_KICK') {
+            /*
+            Tiro de meta. `team` é quem BATE (a equipa que defende aquela
+            baliza). A bola vai para a quina da pequena área do lado por onde
+            saiu — `attDir` aqui é a direcção de ataque de quem bate, logo a
+            baliza dele está em -attDir.
+            */
+            const G = GoalkeeperPose;
+            const ladoX = Math.sign(this.ball.position.x) || 1;
+            const linhaZ = -attDir * (CAMPO_COMP / 2);            // linha de fundo dele
+            const bolaX = ladoX * G.pequenaAreaX;
+            const bolaZ = linhaZ + attDir * G.pequenaAreaZ;       // para dentro do campo
+
+            this.ball.position.set(bolaX, BallPhysics.raio, bolaZ);
+            this.ballVel.set(0, 0, 0);
+            this.ballCarrier = null;
+
+            const gk = attackingPlayers.find(p => p.role === 'gk');
+            this.setPieceTaker = gk || null;
+
+            if (gk) {
+                gk.hasBall = false;
+                gk.gkEstado = 'tiro_meta';
+                gk.gkTiroFase = 0;              // 0 = caminhar, 1 = corrida
+                gk.gkTempoMergulho = 0;
+                gk.gkKickAction = null;
+                /*
+                Ponto de onde arranca: na linha de fundo, atrás da bola. É o
+                que o utilizador descreveu — caminha até à linha, depois corre
+                e chuta.
+                */
+                gk.gkTiroAlvo = {
+                    x: bolaX + ladoX * 1.0,
+                    z: linhaZ
+                };
+            }
+
+            /*
+            Os outros: os que batem espalham-se para receber, os adversários
+            saem da área (regra). Sem estado de bola parada — a jogada retoma
+            assim que o GR chuta, e nesse instante o jogo volta a 'PLAY'.
+            */
+            attackingPlayers.forEach(p => {
+                if (p.role === 'gk') return;
+                p.hasBall = false;
+                p.fsm.changeState('SET_PIECE_WAIT');
+            });
+            defendingPlayers.forEach(p => {
+                if (p.role === 'gk') return;
+                // Empurra para fora da grande área adversária.
+                const dentroArea = Math.abs(p.model.position.x) < 20.16 &&
+                    (p.model.position.z - linhaZ) * attDir < 16.5;
+                if (dentroArea) {
+                    p.model.position.z = linhaZ + attDir * 17.5;
+                    p.dynamicTarget.copy(p.model.position);
+                }
+                p.fsm.changeState('SET_PIECE_WAIT');
+            });
         }
     },
 };

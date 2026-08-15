@@ -248,6 +248,72 @@ function elevacaoParaAlvo(distH, altura, v) {
 }
 
 /*
+Distância de um ponto ao CORPO do jogador, e não à origem do modelo.
+
+`model.position` está nos PÉS. Medir a distância 3D até lá tratava o jogador
+como um ponto no chão: uma bola à altura da cabeça (1.75 m) ficava sempre a
+mais de 1.75 m "dele", fora do alcance de contacto — e só entrava em alcance
+quando o salto levantava a origem, altura em que o ponto de referência ficava
+à altura da barriga. Era isso que fazia os cabeceios saírem do centro do
+corpo em vez da testa.
+
+Trata-se o jogador como um SEGMENTO vertical dos pés à testa: a altura do
+ponto é limitada a esse intervalo antes de medir. Assim uma bola rasteira
+toca-lhe nos pés, uma bola alta toca-lhe na cabeça, e o salto sobe o segmento
+inteiro sem mudar a natureza da conta.
+
+Devolve também a altura do contacto, para quem precise de saber se foi
+cabeceio (ver resolveBallContact).
+*/
+function distanciaAoCorpo(p, ponto) {
+    const base = p.model.position.y;
+    const topo = base + ALTURA_CABECA;
+    const yContacto = THREE.MathUtils.clamp(ponto.y, base, topo);
+    return {
+        dist: Math.hypot(
+            ponto.x - p.model.position.x,
+            ponto.y - yContacto,
+            ponto.z - p.model.position.z),
+        alturaContacto: yContacto - base
+    };
+}
+
+/*
+Onde é que a bola vai CAIR — o ponto em que ela volta ao chão.
+
+Um passe pelo alto tem a bola a 3-4 m durante meio segundo, longe de onde vai
+aterrar. Quem a fosse receber corria para `Match.ball.position` (a posição
+ACTUAL) e, como essa se afasta a cada frame, acabava por lhe passar por baixo
+e ficar atrás dela.
+
+Simula o voo com a física real (a mesma do updateBall) até tocar no relvado.
+Se a bola já estiver rasteira, devolve simplesmente onde ela está.
+*/
+function preverQuedaDaBola() {
+    const B = BallPhysics;
+    const pos = Match.ball.position;
+    const vel = Match.ballVel;
+
+    if (pos.y <= B.raio + 0.05) return { x: pos.x, z: pos.z, tempo: 0 };
+
+    let x = pos.x, z = pos.z, y = pos.y;
+    let vx = vel.x, vy = vel.y, vz = vel.z;
+    const dt = 1 / 120;
+
+    for (let i = 0; i < 480; i++) {          // até 4 s de voo
+        const s = Math.hypot(vx, vy, vz);
+        if (s > 0.001) {
+            const dv = B.kArrasto * s * s * dt;
+            vx -= vx / s * dv; vy -= vy / s * dv; vz -= vz / s * dv;
+        }
+        vy -= B.gravidade * dt;
+        x += vx * dt; y += vy * dt; z += vz * dt;
+        if (y <= B.raio) return { x: x, z: z, tempo: i * dt };
+    }
+    return { x: x, z: z, tempo: 4.0 };
+}
+
+/*
 Este jogador está demasiado perto da linha de fundo para adiantar a bola?
 
 Mede a distância à linha de fundo que ele ATACA (a que fica à frente dele no

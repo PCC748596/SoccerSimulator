@@ -78,6 +78,7 @@ class FootballPlayer {
         this.isCross = false;
         this.isThroughBall = false;
         this.throughBallTarget = null;
+        this.peitoTimer = 0;   // gesto de domínio no peito (ver CHEST_CONTROL)
 
         // Corte diagonal de 30° (DRIBBLE_CUT_30) — ver estado CUT em fsm.js.
         this.cutAtivo = false;
@@ -139,6 +140,9 @@ class FootballPlayer {
         this.gkAlvoX = 0;      // x previsto da bola, usado pelo estado 'maos'
         this.gkKickAction = null;  // ActionState do chutão (estado 'chutando')
         this.gkKickNorm = 0;
+        this.gkKickTipo = null;    // 'chao' no tiro de meta; null = das mãos
+        this.gkTiroFase = 0;       // 0 caminhar até à linha, 1 corrida
+        this.gkTiroAlvo = null;    // ponto de arranque do tiro de meta
         this.gkReagiu = false;
         this.gkDelayReacao = 0;
 
@@ -307,6 +311,51 @@ class FootballPlayer {
             if (nota > melhorNota) { melhorNota = nota; melhor = opt; }
         }
         return melhor;
+    }
+
+    /*
+    Domínio no peito. Chamado por resolveBallContact quando a bola chega
+    entre `peitoYMin` e `peitoYMax` — não se domina uma bola à altura do
+    peito com o pé.
+
+    O sorteio (TÉCNICA) decide a QUALIDADE do amortecimento, não a posse:
+    ganhando, a bola morre-lhe meio metro à frente; perdendo, repica 1.5 m e
+    fica disputável. Nos dois casos ele sai a jogar a seguir — quem lá chegar
+    primeiro fica com ela, como em qualquer bola solta.
+    */
+    controlarNoPeito() {
+        const B = BallControl;
+        const bom = venceuDuelo(this.skillFor('TEC'), 50, B.peitoBase);
+
+        // À frente DELE, na direcção para onde está virado.
+        const dist = bom ? B.peitoQueda : B.peitoRepique;
+        _v1.set(0, 0, dist).applyQuaternion(this.model.quaternion);
+
+        Match.ball.position.set(
+            this.model.position.x + _v1.x,
+            bom ? BallPhysics.raio : 0.9,
+            this.model.position.z + _v1.z
+        );
+        // Amortecida: cai (bom) ou repica (falhou). Nunca fica agarrada — o
+        // domínio é o toque seguinte, não este.
+        Match.ballVel.set(0, bom ? 0 : 1.8, 0);
+
+        Match.ballCarrier = null;
+        this.hasBall = false;
+        Match.intendedReceiver = null;
+        Match.lastTouchedTeam = this.team;
+        Match.lastTouchedPlayer = this;
+        Match.possessionTeam = this.team;
+        window.bolaChutada = false;
+
+        // Não pode voltar a tocar já no frame seguinte; o repique tem de ter
+        // tempo de acontecer.
+        this.touchLock = B.touchLock;
+        this.peitoTimer = 0;
+        this.fsm.changeState('CHEST_CONTROL');
+
+        if (typeof MatchStats !== 'undefined') MatchStats.registarRecepcao(this, bom);
+        if (typeof EventBus !== 'undefined') EventBus.emit('CHEST_CONTROL', { p: this, bom: bom });
     }
 
     /*
@@ -718,6 +767,8 @@ class FootballPlayer {
         }
 
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
+            // Corre também durante GOAL_KICK: é o updateGK que conduz o gesto
+            // do tiro de meta (estados 'tiro_meta' -> 'chutando').
             this.updateGK(dt);
         } else {
             this.runBehaviorTree(dt);
@@ -933,7 +984,10 @@ class FootballPlayer {
     animateBones(dt) {
         let speed = this.velocity.length(); let rig = this.rig;
 
-        if (this.fsm.currentState !== 'TACKLE' && this.fsm.currentState !== 'SLIDE_TACKLE' && this.fsm.currentState !== 'SHOOT' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
+        // CHEST_CONTROL entra na lista: o gesto inclina a pelvis para trás, e
+        // este bloco zera-a todos os frames — a inclinação nunca aparecia.
+        const s = this.fsm.currentState;
+        if (s !== 'TACKLE' && s !== 'SLIDE_TACKLE' && s !== 'SHOOT' && s !== 'CHEST_CONTROL' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
             rig.pelvis.rotation.x = lerpTo(rig.pelvis.rotation.x, 0, 0.25);
             rig.pelvis.rotation.y = lerpTo(rig.pelvis.rotation.y, 0, 0.25);
             rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, 0, 0.25);
@@ -1615,6 +1669,99 @@ class FootballPlayer {
                     Match.ballVel.z *= -0.5; Match.ballVel.x += (Math.random() - 0.5) * 10; Match.ballVel.y += 3;
                 }
             }
+        } else if (this.gkEstado === 'tiro_meta') {
+            /*
+            Tiro de meta, em duas fases antes do gesto do chuto:
+
+                fase 0  caminha até à linha de fundo, atrás da bola
+                fase 1  corre para a bola e, ao chegar, dispara o gesto
+
+            A bola está no chão (quina da pequena área) — o gesto é o mesmo
+            GOALKEEPER_KICK_FORWARD_HIGH da reposição com as mãos, mas com
+            `gkKickTipo = 'chao'`, que é o que impede a bola de ser agarrada
+            à altura do peito durante a animação e manda chutá-la de onde
+            está.
+            */
+            this.gkTempoMergulho += dt;
+            const tTM = this.gkTempoMergulho;
+            const bolaTM = Match.ball.position;
+            const G = GoalkeeperPose;
+
+            let alvoTMx, alvoTMz, velTM;
+            if (this.gkTiroFase === 0) {
+                alvoTMx = this.gkTiroAlvo ? this.gkTiroAlvo.x : bolaTM.x;
+                alvoTMz = this.gkTiroAlvo ? this.gkTiroAlvo.z : this.ownGoalZ;
+                velTM = G.tiroMetaAndar;
+            } else {
+                // Corre PARA a bola — o chuto sai do movimento, não parado.
+                alvoTMx = bolaTM.x;
+                alvoTMz = bolaTM.z;
+                velTM = G.tiroMetaCorrer;
+            }
+
+            const dxTM = alvoTMx - gkCorpo.position.x;
+            const dzTM = alvoTMz - gkCorpo.position.z;
+            const distTM = Math.hypot(dxTM, dzTM);
+            const passoTM = velTM * dt;
+            let sxTM = 0, szTM = 0;
+            if (distTM > passoTM && distTM > 0.0001) {
+                sxTM = (dxTM / distTM) * passoTM;
+                szTM = (dzTM / distTM) * passoTM;
+            } else {
+                sxTM = dxTM; szTM = dzTM;
+            }
+            gkCorpo.position.x += sxTM;
+            gkCorpo.position.z += szTM;
+
+            // Vira-se para a bola a caminhar, e para o campo na corrida.
+            if (this.gkTiroFase === 0) {
+                _v1.set(bolaTM.x, gkCorpo.position.y, bolaTM.z);
+            } else {
+                _v1.set(gkCorpo.position.x, gkCorpo.position.y, gkCorpo.position.z + this.dirZ * 10);
+            }
+            lookAtBola(gkCorpo, _v1);
+
+            // Ciclo de passada, reaproveitando a pose de andar do GR.
+            {
+                const P = G.andar;
+                const velPlanarTM = dt > 0.0001 ? Math.hypot(sxTM, szTM) / dt : 0;
+                this.animTimer += (velPlanarTM * dt) / 3.0;
+                const tt = ((this.animTimer % 1.0) + 1.0) % 1.0;
+                const pose = getRunPose(tt);
+                const amp = (this.gkTiroFase === 0) ? P.passada : 1.0;
+
+                gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, pose.lHip * amp, 0.4);
+                gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, pose.rHip * amp, 0.4);
+                gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, P.kneeBase + pose.lKnee * amp, 0.4);
+                gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, P.kneeBase + pose.rKnee * amp, 0.4);
+                gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, pose.lArm * 0.6, 0.3);
+                gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, pose.rArm * 0.6, 0.3);
+                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, P.bracos, 0.2);
+                gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -P.bracos, 0.2);
+                gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, P.chest, 0.2);
+                gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.3);
+            }
+
+            if (this.gkTiroFase === 0) {
+                if (distTM < 0.4 || tTM > G.tiroMetaTimeout * 0.5) {
+                    this.gkTiroFase = 1;
+                    this.gkTempoMergulho = 0;
+                }
+            } else if (distTM < G.tiroMetaDistChuto || tTM > G.tiroMetaTimeout) {
+                // Chegou à bola: entra no gesto do chuto, agora a partir do chão.
+                this.gkEstado = 'chutando';
+                this.gkKickTipo = 'chao';
+                this.gkTempoMergulho = 0;
+                this.gkKickNorm = 0;
+                this.gkKickAction = new ActionState('gkPunt', {
+                    onContact: () => {
+                        this.kickFromGround();
+                        if (typeof EventBus !== 'undefined') {
+                            EventBus.emit('GOAL_KICK_TAKEN', { team: this.team, gk: this });
+                        }
+                    }
+                });
+            }
         } else if (this.gkEstado === 'maos') {
             /*
             Defesa de PÉ: a bola vem a menos de mergulhoLateralMin do corpo, e
@@ -1958,6 +2105,42 @@ class FootballPlayer {
     */
     releaseFromHands() {
         this.puntBall();
+    }
+
+    /*
+    Tiro de meta: a bola está no chão, não nas mãos. Mesma balística do
+    puntBall — elevação 25-50°, direcção até ±20° da frente — mas sem o
+    `hasBall` a limpar, porque ele nunca a chegou a segurar.
+
+    É aqui que o jogo volta a 'PLAY': até ao contacto pé-bola o estado é
+    GOAL_KICK e ninguém decide nada.
+    */
+    kickFromGround() {
+        const gGrav = BallPhysics.gravidade;
+        const elev = THREE.MathUtils.degToRad(25 + Math.random() * 25);
+        const desvio = THREE.MathUtils.degToRad((Math.random() * 2 - 1) * 20);
+
+        const alcance = 38 + Math.random() * 16;
+        const v = Math.min(42, Math.sqrt((alcance * gGrav) / Math.sin(2 * elev)));
+        const horiz = v * Math.cos(elev);
+
+        _v2.set(0, 0, this.dirZ).applyAxisAngle(_vUp, desvio);
+        Match.ball.position.y = BallPhysics.raio;
+        Match.ballVel.set(_v2.x * horiz, v * Math.sin(elev), _v2.z * horiz);
+
+        this.touchLock = BallControl.touchLock;
+        Match.ballCarrier = null;
+        Match.intendedReceiver = null;
+        Match.lastTouchedTeam = this.team;
+        Match.lastTouchedPlayer = this;
+        window.bolaChutada = false;
+
+        // A jogada recomeça no instante do toque.
+        Match.state = 'PLAY';
+        Match.setPieceTaker = null;
+        this.gkKickTipo = null;
+
+        if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'lancamento');
     }
 }
 
