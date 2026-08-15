@@ -464,7 +464,16 @@ function podeIntercetar(ctx) {
 
     // Melhor do que quem já vai lá? Compara com o tempo de interceptação
     // deles, não com a distância — é a bola que se move, não o alvo.
-    const jaVaoLa = [Match.chaserA, Match.chaserB, Match.intendedReceiver];
+    //
+    // `bb.intercetorFrame` cobre o caso que chaser/intendedReceiver não
+    // cobriam: DOIS jogadores que não são nem chaser nem destinatário,
+    // ambos elegíveis no MESMO frame — cada um só se comparava contra
+    // chaser/receiver, nunca um contra o outro, e os dois passavam
+    // (ver bug reportado: 2 jogadores em INTERCEPT ao mesmo tempo). Como o
+    // nível 3 corre em sequência por jogador dentro do mesmo frame, quem já
+    // reivindicou fica visível para os próximos da equipa.
+    const bb = ctx.bb;
+    const jaVaoLa = [Match.chaserA, Match.chaserB, Match.intendedReceiver, bb && bb.intercetorFrame];
     for (const outro of jaVaoLa) {
         if (!outro || outro === p) continue;
         const bOutro = outro.blackboard && outro.blackboard.ball;
@@ -474,6 +483,7 @@ function podeIntercetar(ctx) {
     }
 
     ctx.pontoIntercepcao = bola.interceptionPoint;
+    if (bb) bb.intercetorFrame = p;
     return true;
 }
 

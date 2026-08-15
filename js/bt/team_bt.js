@@ -105,6 +105,11 @@ class TeamBlackboard {
         this.isCounter = (match.counterAttackTeam === this.team);
         this.phase = match.possessionTimer < 3 ? 1 : (match.possessionTimer < 6 ? 2 : 3);
 
+        // Reivindicação de "vou intercetar" desta equipa neste frame — ver
+        // podeIntercetar em player_bt.js. Limpa aqui (nível 1, antes do nível
+        // 3 correr para todos os jogadores da equipa).
+        this.intercetorFrame = null;
+
         /*
         Histerese de zona morta para o alerta de flanco: guarda o valor deste
         frame antes de o limpar, para detectFlankThreat decidir com memória

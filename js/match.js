@@ -1487,7 +1487,14 @@ const Match = {
         GK_RELEASE_BALL (ver EventBus.on no Match.init).
         */
         const comBolaNaMao = Match.gkHoldingBall[gk.team];
-        const raio = comBolaNaMao ? 8.0 : 2.5;
+        // 2.5 era só "não pisar o pé" — a cobertura (defendZonal, isCovering)
+        // puxa quem não tem homem pra marcar para o EIXO central perto da
+        // própria baliza, que é exactamente onde o guarda-redes já está;
+        // com raio tão curto ele ia lá quase todo o caminho antes de ser
+        // empurrado (zagueiro "colado" ao GR em jogo corrido, sem a bola na
+        // mão dele). 4.0 dá espaço visível sem exagerar como o 8.0 de
+        // quando ele a segura.
+        const raio = comBolaNaMao ? 8.0 : 4.0;
         for (const p of teamPlayers) {
             if (p === gk) continue;
             const dx = p.dynamicTarget.x - gk.model.position.x;

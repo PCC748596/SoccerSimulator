@@ -618,6 +618,28 @@ class FootballPlayer {
                 const travelTime = THREE.MathUtils.clamp(distEstimate / 17.0, 0.15, 3.0);
                 _v1.x += this.passTarget.velocity.x * travelTime * 0.75;
                 _v1.z += this.passTarget.velocity.z * travelTime * 0.75;
+
+                /*
+                Teto sobre o deslocamento TOTAL face à posição REAL dele
+                agora (auditoria dos passes — pedido explícito, "tá
+                estranho"). `alvo` já é, por si só, um lead (mistura com o
+                tacticalTarget, até 10m — ver alvoDePasse) — somar o lead por
+                velocidade em cima disso, sem teto conjunto, dava dois leads
+                a empilhar no mesmo sentido (ele a correr NA direcção do
+                tacticalTarget, o caso comum) e a bola saía a passar bem à
+                frente dele, sobrando por cima do problema original (chegava
+                atrás). 14m ~ o que um jogador em sprint cobre num passe
+                longo (3s), tecto generoso mas não infinito.
+                */
+                const real = this.passTarget.model.position;
+                const leadX = _v1.x - real.x, leadZ = _v1.z - real.z;
+                const leadDist = Math.hypot(leadX, leadZ);
+                const maxLeadTotal = 14.0;
+                if (leadDist > maxLeadTotal) {
+                    const k = maxLeadTotal / leadDist;
+                    _v1.x = real.x + leadX * k;
+                    _v1.z = real.z + leadZ * k;
+                }
             }
         }
 
