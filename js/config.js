@@ -838,6 +838,30 @@ const PassModel = {
     corredorBloqueio: 1.8,
 
     /*
+    --- Arco do passe normal por faixa de distância (pedido explícito) -----
+
+    <=5m sempre rasteiro. 5-30m pode sair rasteiro OU com um arco raso, com
+    TECTO de altura por faixa — só sobe o necessário para passar por cima de
+    quem estiver no meio, nunca um lançamento. >=30m é sempre pelo alto, com
+    ângulo entre 30° (mais raso, mais rápido) e 45° (mais alto), calculado
+    para o alcance pedido.
+
+    `chanceArco`: acima de 5m, chance de sair com arco em vez de rasteiro —
+    o mesmo passe de 15m tanto pode ser jogado no chão como levantado.
+    */
+    passeArco: {
+        rasteiroMax: 5.0,
+        chanceArco: 0.5,
+        bandas: [
+            { max: 10.0, alturaMax: 0.5 },
+            { max: 20.0, alturaMax: 1.0 },
+            { max: 30.0, alturaMax: 1.5 }
+        ],
+        anguloLongoMin: 30 * Math.PI / 180,
+        anguloLongoMax: 45 * Math.PI / 180
+    },
+
+    /*
     Com que velocidade a bola CHEGA ao alvo num passe rasteiro. Tem de chegar
     jogável: acima de BallControl.easySpeed (7.75) o receptor arrisca falhar o
     domínio, e a zero morre antes de lá chegar.
@@ -1233,6 +1257,7 @@ const CrossModel = {
     areaZ: 34.0,          // linha da grande área
     areaX: 20.5,          // meia-largura da grande área
     fundoZ: 50.0,         // linha de fundo
+    distMin: 10.0,         // abaixo disto é passe curto, não cruzamento pelo ar
 
     // +20% pedido explicitamente: cruzamentos pouco frequentes.
     chanceBase: 0.54,     // com um alvo na área

@@ -1884,9 +1884,21 @@ const Match = {
                     (p.model.position.z - linhaZ) * attDir < 16.5;
                 if (dentroArea) {
                     p.model.position.z = linhaZ + attDir * 17.5;
-                    p.dynamicTarget.copy(p.model.position);
                 }
-                p.fsm.changeState('SET_PIECE_WAIT');
+
+                /*
+                Antes ficavam SET_PIECE_WAIT logo aqui — que zera a velocity
+                todos os frames e só vira para a bola, nunca anda. Quem já
+                estava fora da área ficava plantado onde a bola saiu, sem se
+                reorganizar (ver screenshot: adversário todo desalinhado no
+                tiro de meta). MOVE_TO_POS sobrevive ao BolaParada do
+                PlayerBT durante GOAL_KICK (ver esperarLance em
+                player_bt.js) — usa-se o mesmo caminho de quem bate, só que
+                para a posição de formação normal.
+                */
+                p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, p.baseTarget.z);
+                p.speedMult = 4.0;
+                p.fsm.changeState('MOVE_TO_POS');
             });
         }
     },

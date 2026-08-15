@@ -69,7 +69,7 @@ function executePassGameplay(p) {
         recebe-a a correr.
         */
         if (lancamentoAlto) {
-            const elevL = PassModel.elevacaoLancamento;
+            const elevL = resolverElevacaoPasse(distToTarget, true) ?? PassModel.elevacaoLancamento;
             const vL = velocidadeParaAlcance(distToTarget, elevL);
             Match.ballVel.y = vL * Math.sin(elevL);
             forcaPasse = vL * Math.cos(elevL);
@@ -108,29 +108,35 @@ function executePassGameplay(p) {
         usouBalistica = true;
         p.isCross = false;
         p.crossAlto = undefined;
-    } else if (Tatics.passe === 'longo' || distToTarget > PassModel.distAereo) {
-        /*
-        TIPO 1 — PASSE PELO ALTO. Passa por cima dos marcadores e cai um pouco
-        ANTES do companheiro (`recuoPasseAlto`), para lhe morrer à frente ou
-        no peito, em vez de nas costas.
-
-        Aterrar exactamente em cima dele obrigava-o a recuar para a apanhar; e
-        como o alvo já vem adiantado do `alvoDePasse` (que antecipa o
-        movimento dele), somavam-se dois avanços e a bola caía longe.
-        */
-        const alcancePasse = Math.max(PassModel.distAereo * 0.6,
-            distToTarget - PassModel.recuoPasseAlto);
-        const t = THREE.MathUtils.clamp(
-            (distToTarget - PassModel.distAereo) / (60 - PassModel.distAereo), 0, 1);
-        const elev = PassModel.elevacaoCurta + (PassModel.elevacaoLonga - PassModel.elevacaoCurta) * t;
-        const v = velocidadeParaAlcance(alcancePasse, elev);
-        Match.ballVel.y = v * Math.sin(elev);
-        forcaPasse = v * Math.cos(elev);
-        usouBalistica = true;
     } else {
-        // Passe rasteiro: chega jogável, não morto nem a queimar.
-        forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaRasteira);
-        Match.ballVel.y = 0;
+        /*
+        TIPO 1 — PASSE NORMAL. Forma por faixa de distância (pedido
+        explícito, ver PassModel.passeArco em config.js): <=5m sempre
+        rasteiro; 5-30m sorteia entre rasteiro e um arco raso com tecto de
+        altura por faixa; >=30m sorteia entre rasteiro e lançado, com ângulo
+        entre 30-45°. Estilo de passe "longo" força sempre o arco acima
+        dos 5m (`forcarArco`), como já fazia antes.
+        */
+        const forcarArco = (Tatics.passe === 'longo');
+        const elev = resolverElevacaoPasse(distToTarget, forcarArco);
+
+        if (elev === null) {
+            // Passe rasteiro: chega jogável, não morto nem a queimar.
+            forcaPasse = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaRasteira);
+            Match.ballVel.y = 0;
+        } else {
+            /*
+            Cai um pouco ANTES do companheiro (`recuoPasseAlto`), para lhe
+            morrer à frente ou no peito, em vez de nas costas — aterrar em
+            cima dele obrigava-o a recuar, e como o alvo já vem adiantado do
+            `alvoDePasse` (que antecipa o movimento dele), somavam-se dois
+            avanços e a bola caía longe.
+            */
+            const alcancePasse = Math.max(1.0, distToTarget - PassModel.recuoPasseAlto);
+            const v = velocidadeParaAlcance(alcancePasse, elev);
+            Match.ballVel.y = v * Math.sin(elev);
+            forcaPasse = v * Math.cos(elev);
+        }
         usouBalistica = true;
     }
 

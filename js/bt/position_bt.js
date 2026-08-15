@@ -549,9 +549,22 @@ const PositionAI = {
             }
 
             // `colaNaLinha` (Cross Specialist) vs `cortaParaDentro`.
+            //
+            // Antes puxava para uma linha ABSOLUTA do campo (alaX+7=22m),
+            // ignorando o bloco — que bascula com a bola (ver centroX em
+            // team_bt.js). Com o jogo do lado oposto, o bloco desliza para
+            // lá e o lateral ficava esticado até aos 22m absolutos, bem fora
+            // do rectângulo encolhido/deslocado (anéis do PositionBT saíam
+            // do TeamBT). Agora o tecto é o próprio limite do bloco, não o
+            // campo inteiro.
             if (est.colaNaLinha && ctx.bb && ctx.bb.isAttacking) {
                 const ladoEst = Math.sign(p.baseTarget.x) || 1;
-                targetX = ladoEst * Math.max(Math.abs(targetX), CrossModel.alaX + 7);
+                let tectoAla = CrossModel.alaX + 7;
+                if (ctx.bb.bloco) {
+                    const bordaBloco = ladoEst > 0 ? ctx.bb.bloco.x1 : -ctx.bb.bloco.x0;
+                    tectoAla = Math.min(tectoAla, Math.max(bordaBloco, 0));
+                }
+                targetX = ladoEst * Math.max(Math.abs(targetX), tectoAla);
             } else if (est.cortaParaDentro && ctx.bb && ctx.bb.isAttacking &&
                 ctx.bb.ballZ * p.dirZ > 15) {
                 targetX *= 0.55;

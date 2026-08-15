@@ -681,6 +681,21 @@ class FootballPlayer {
     }
 
     executeHeader() {
+        // De frente para a bola, mesma correcção do controlarNoPeito — sem
+        // isto o corpo ficava com a orientação da última corrida, muitas
+        // vezes atravessado em relação à bola que chega para a cabeçada.
+        lookAtBola(this.model, Match.ball.position);
+
+        // Cola a bola à testa antes de a mandar embora — sem isto o
+        // contacto era aceite até `BallControl.reach` (0.9 m) de distância
+        // real, e a bola aparecia a bater quase 1 m acima da cabeça no
+        // frame da cabeçada.
+        _v1.set(0, 0, 0.22).applyQuaternion(this.model.quaternion);
+        Match.ball.position.set(
+            this.model.position.x + _v1.x,
+            this.model.position.y + ALTURA_CABECA - 0.1,
+            this.model.position.z + _v1.z);
+
         let distToGoal = Math.abs(this.targetGoalZ - this.model.position.z);
         let inShootingRange = (distToGoal < 24 && Math.abs(this.model.position.x) < 16);
 
@@ -986,28 +1001,13 @@ class FootballPlayer {
         if (d < 2.0) desired.multiplyScalar(maxSpeed * (d / 2.0));
         else desired.multiplyScalar(maxSpeed);
 
-        // Recuar de frente pra bola (backpedal) só faz sentido quando o
-        // deslocamento é mesmo predominantemente para trás. Antes bastava o Z
-        // mudar >2.5m para forçar o corpo a olhar para a bola, mesmo com um
-        // deslocamento em X muito maior (ex.: marcação lateral) — o jogador
-        // corria de lado, de frente pra bola, com a animação de corrida à
-        // frente a não bater com a direcção real do movimento.
-        let isRetreating = false;
-        if (this.role === 'def' || this.role === 'mid') {
-            const dx = target.x - this.model.position.x;
-            const dz = target.z - this.model.position.z;
-            let backingUp = false;
-            if (this.team === 'TeamA' && target.z < this.model.position.z - 2.5) backingUp = true;
-            if (this.team === 'TeamB' && target.z > this.model.position.z + 2.5) backingUp = true;
-            if (backingUp && Math.abs(dz) > Math.abs(dx)) isRetreating = true;
-        }
-
-        let lookTarget = target;
-        if (isRetreating && Match.ball) {
-            lookTarget = Match.ball.position;
-        }
-
-        _v1.set(this.model.position.x * 2 - lookTarget.x, this.model.position.y, this.model.position.z * 2 - lookTarget.z);
+        // Corpo vira sempre para a direcção real do movimento (`target`), nunca
+        // para a bola — girar o corpo todo para a bola enquanto o deslocamento
+        // ia para outro lado deixava o jogador a correr de lado/pra trás com a
+        // animação de corrida em frente virada para onde os pés não iam. Olhar
+        // para a bola durante o recuo já fica a cargo só do pescoço/cintura
+        // (ver a camada de "cabeça acompanha a bola" em animateBones).
+        _v1.set(this.model.position.x * 2 - target.x, this.model.position.y, this.model.position.z * 2 - target.z);
         _m1.lookAt(this.model.position, _v1, this.model.up);
         _q1.setFromRotationMatrix(_m1);
         this.model.quaternion.slerp(_q1, Math.min(1.0, 7.0 * Match.delta));
@@ -1174,6 +1174,19 @@ class FootballPlayer {
                 this.jumpTimer = S.duracao;
                 this.jumpApex = subida;
                 this.jumpCooldown = S.cooldown;
+
+                // Vira de frente para onde a bola vai estar no pico do salto
+                // ANTES de saltar — sem isto o corpo ficava com a orientação
+                // da corrida até esse instante (o pescoço só cobre +-80°, e
+                // o lookAtBola do contacto em executeHeader só corrige tarde
+                // de mais, já no ar/depois do salto visualmente feito).
+                //
+                // Só no plano horizontal (y do próprio jogador, não o da
+                // bola): perto do pico a bola pode estar quase 0.8 m em cima
+                // da cabeça a menos de 1.4 m de distância — ângulo de
+                // elevação quase vertical. lookAt a apontar quase para o eixo
+                // "up" é degenerado e distorcia o rig todo (cabeça sumia).
+                lookAtBola(this.model, _v1.set(prev.x, this.model.position.y, prev.z));
             } else if (dXZ < S.alcanceXZ && subida > S.subidaMin && subida <= S.alturaSemPulo) {
                 /*
                 Bola mesmo em cima da cabeça — chega-se só inclinando o
@@ -1184,6 +1197,7 @@ class FootballPlayer {
                 */
                 this.headLeanTimer = 0.30;
                 this.jumpCooldown = 0.4;
+                lookAtBola(this.model, _v1.set(prev.x, this.model.position.y, prev.z));
             }
         }
 
@@ -1314,9 +1328,9 @@ class FootballPlayer {
         const chestMats = [shirtMat, shirtMat, shirtMat, shirtMat, new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(cvsV) }), this.backMat];
 
         const cvsS = document.createElement('canvas'); cvsS.width = 256; cvsS.height = 256; const ctxS = cvsS.getContext('2d');
-        ctxS.fillStyle = '#ffffff'; ctxS.fillRect(0, 0, 256, 256); ctxS.fillStyle = corCamisa; ctxS.fillRect(0, 20, 256, 30); ctxS.fillRect(0, 70, 256, 15); ctxS.strokeStyle = '#2f3640'; ctxS.lineWidth = 4; ctxS.strokeRect(0, 0, 256, 256);
+        ctxS.fillStyle = corCamisa; ctxS.fillRect(0, 0, 256, 256); ctxS.fillStyle = '#ffffff'; ctxS.fillRect(0, 20, 256, 30); ctxS.fillRect(0, 70, 256, 15); ctxS.strokeStyle = '#2f3640'; ctxS.lineWidth = 4; ctxS.strokeRect(0, 0, 256, 256);
         const sockTex = new THREE.CanvasTexture(cvsS);
-        const sockMats = [new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ color: 0xffffff }), new THREE.MeshStandardMaterial({ color: 0xffffff }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex })];
+        const sockMats = [new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ color: corCamisa }), new THREE.MeshStandardMaterial({ color: corCamisa }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex })];
 
         const u = 1.0; const corpo = new THREE.Group();
         const rig = { pelvis: null, chest: null, neck: null, lArm: null, rArm: null, lElbow: null, rElbow: null, lHand: null, rHand: null, lLeg: null, rLeg: null, lKnee: null, rKnee: null, lFoot: null, rFoot: null, olhoEsq: null, olhoDir: null };

@@ -198,6 +198,43 @@ function velocidadeRasteiraPara(dist, vChegada) {
 }
 
 /*
+Decide a FORMA do passe normal (rasteiro vs arco) pela distância ao alvo, e
+devolve a elevação a usar — ver PassModel.passeArco em config.js.
+
+<=5m: sempre rasteiro (devolve null).
+5-30m: sorteia entre rasteiro (null) e um arco raso, com o TECTO de altura
+       da faixa. A elevação vem de `apex/alcance = tan(elev)/4` (física do
+       tiro parabólico sem arrasto, plana) — só o ponto de partida: o
+       alcance real, com arrasto, resolve-se a seguir em
+       velocidadeParaAlcance. Um tecto aproximado, não exacto, chega para o
+       pedido (não deixar subir mais que isto).
+>=30m: sorteia na mesma entre rasteiro (null) e pelo alto — quando sai pelo
+       alto, o ângulo vem entre anguloLongoMin (longe, mais raso e rápido) e
+       anguloLongoMax (perto dos 30m, mais alto), conforme a distância.
+
+`forcarArco` salta o sorteio rasteiro/arco (estilo de passe "longo" — pedido
+p'ra sair sempre pelo alto acima dos 5m, não só às vezes).
+
+Devolve `null` quando é para ir rasteiro.
+*/
+function resolverElevacaoPasse(dist, forcarArco) {
+    const B = PassModel.passeArco;
+    if (dist <= B.rasteiroMax) return null;
+    if (!forcarArco && Math.random() >= B.chanceArco) return null;
+
+    if (dist < B.bandas[B.bandas.length - 1].max) {
+        let alturaMax = B.bandas[B.bandas.length - 1].alturaMax;
+        for (const banda of B.bandas) {
+            if (dist <= banda.max) { alturaMax = banda.alturaMax; break; }
+        }
+        return Math.min(Math.PI / 3, Math.atan(4 * alturaMax / dist));
+    }
+
+    const t = THREE.MathUtils.clamp((dist - 30.0) / 30.0, 0, 1);
+    return B.anguloLongoMax - (B.anguloLongoMax - B.anguloLongoMin) * t;
+}
+
+/*
 Velocidade de saída para a bola estar a `altura` metros do chão quando chega
 a `distH`, com a elevação dada.
 

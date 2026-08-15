@@ -324,6 +324,9 @@ function findCross(ctx) {
         if (m.model.position.z * p.dirZ < C.areaZ) continue;
         const mx = Math.abs(m.model.position.x);
         if (mx > C.areaX) continue;
+        // Perto de mais para cruzamento pelo ar — é um passe curto, não uma
+        // bola lançada por cima de todos (ver CrossModel.distMin).
+        if (m.model.position.distanceTo(p.model.position) < C.distMin) continue;
         alvos++;
         if (mx < melhorX) { melhorX = mx; alvo = m; }
     }
