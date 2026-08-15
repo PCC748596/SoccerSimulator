@@ -55,6 +55,15 @@ const TeamPostureTuning = {
     FLANK_SHIFT: { push: 1.0, lineShift: 0.0 }
 };
 
+// Avanço do bloco (Z, metros) sobre a linha da bola, por Estilo — só entra
+// a atacar (ver computeBlock). Antes o botão do painel praticamente não
+// tinha efeito no bloco fora da Pressão Alta.
+const EstiloBlockOffset = {
+    defesa: 0.0,
+    balanceado: 2.0,
+    ataque: 6.0
+};
+
 /* --- Blackboard --------------------------------------------------------- */
 
 class TeamBlackboard {
@@ -109,6 +118,11 @@ class TeamBlackboard {
         // podeIntercetar em player_bt.js. Limpa aqui (nível 1, antes do nível
         // 3 correr para todos os jogadores da equipa).
         this.intercetorFrame = null;
+
+        // Vãos já escolhidos por colegas neste frame (Fox in the Box/Goal
+        // Poacher) — ver melhorVaoX em position_bt.js. Limpa aqui, antes do
+        // nível 2 correr jogador a jogador.
+        this.vaosReivindicados = [];
 
         /*
         Histerese de zona morta para o alerta de flanco: guarda o valor deste
@@ -377,8 +391,13 @@ function pickSupportMid(bb) {
     // frame (dois médios a distâncias parecidas) fazia o alvo saltar entre
     // o slot normal e "ir buscar a bola" de um jogador para o outro.
     const prev = bb.supportMid;
+    // Só médios CENTRAIS — RM/LM são alas, arrastá-los pro meio pra apoiar a
+    // construção junto ao GR quebra a largura da equipa (é função de um
+    // 6/8, não de um ala). Sem este filtro, um RM/LM que calhasse ser o
+    // "mid" mais perto da bola (ex.: depois de recuar marcando) tinha o slot
+    // inteiro substituído por uma posição central — parecia sem sentido.
     const candidatos = bb.outfield
-        .filter(p => p.role === 'mid')
+        .filter(p => p.role === 'mid' && p.pos !== 'RM' && p.pos !== 'LM')
         .map(p => ({ p, dist: p.model.position.distanceTo(Match.ball.position) }));
     candidatos.sort((a, b) => a.dist - b.dist);
 
@@ -503,15 +522,10 @@ function computeBlock(bb) {
 
     /* --- profundidade --------------------------------------------------- */
 
-    /*
-    BUG (auditoria do painel): o `B.profundidadeComBola` (1.22) estava
-    definido no config e documentado ("com bola o bloco estica: há que dar
-    profundidade para jogar"), mas nunca era lido — o bloco tinha exactamente
-    a mesma profundidade a atacar e a defender. O mesmo com
-    `B.amplitudeComBola` (ver largura, mais abaixo).
-    */
+    // Pedido explícito: bloco do mesmo tamanho independente de quem tem a
+    // bola — profundidadeComBola/amplitudeComBola (esticar a atacar) tirados
+    // de propósito, não é comportamento pedido nesta conversa.
     let profundidade = CAMPO_COMP * B.profundidade[compacLength];
-    if (bb.isAttacking) profundidade *= B.profundidadeComBola;
 
     /*
     GR (de qualquer um dos dois lados) com a bola na mão: ninguém pressiona
@@ -536,6 +550,12 @@ function computeBlock(bb) {
         } else if (bb.posture === TeamPosture.BUILD_UP || bb.posture === TeamPosture.ATTACK_SUSTAINED || bb.posture === TeamPosture.FINAL_THIRD) {
             blockCenterZ += 5.0;
         }
+        // Estilo (painel Defesa/Balanceado/Ataque) — antes só entrava na
+        // condição da Pressão Alta; fora isso "Balanceado" e "Ataque"
+        // produziam o MESMO bloco. Agora cada opção desloca visivelmente:
+        // Balanceado já fica um pouco à frente da linha da bola (+2),
+        // Ataque mais (+6), Defesa nem tanto (0).
+        blockCenterZ += EstiloBlockOffset[Tatics.estilo] ?? EstiloBlockOffset.balanceado;
     } else {
         if (bb.posture === TeamPosture.LOW_BLOCK) {
             blockCenterZ -= 6.0;
@@ -587,9 +607,7 @@ function computeBlock(bb) {
 
     /* --- largura -------------------------------------------------------- */
 
-    // Ver a nota da profundidade: o amplitudeComBola também não era lido.
     let largura = CAMPO_LARG * B.amplitude[compac];
-    if (bb.isAttacking) largura *= B.amplitudeComBola;
     const meiaLarg = largura / 2;
 
     // Basculação: o rectângulo desliza para o lado da bola proporcionalmente.

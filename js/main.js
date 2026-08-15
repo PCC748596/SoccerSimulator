@@ -186,9 +186,14 @@ function togglePainelJogadores(forcarMinimizado, evt) {
 }
 
 /*
-Preenche a lista compacta (nome + fitness) do painel "Player Skills" — só
-uma vez, no arranque, já que as skills são fixas (data/player_skills.js).
-Clicar numa linha abre o modal com o detalhe completo desse jogador.
+Preenche a lista compacta (nome + fitness + Playing Style) do painel "Player
+Skills" — só uma vez, no arranque, já que as skills são fixas
+(data/player_skills.js).
+
+Clicar no nome abre o modal com o detalhe completo do jogador. Clicar no
+estilo liga/desliga (p.playingStyleDesligado — ver estiloAtivoDe em
+playing_styles.js): desligado, o jogador usa só o PositionBT puro, sem nenhum
+desvio de estilo, pra dar pra regular o nível 2 isolado do nível 3.
 */
 function popularPainelJogadores() {
     const buildLista = (elId, jogadores) => {
@@ -199,8 +204,34 @@ function popularPainelJogadores() {
             if (!p.skills) return;
             const linha = document.createElement('div');
             linha.className = 'linha-jogador';
-            linha.innerHTML = '<span>' + p.skills.nome + '</span><span class="lj-fit">FIT ' + p.skills.fitness + '</span>';
-            linha.onclick = () => abrirModalSkills(p);
+
+            const nomeSpan = document.createElement('span');
+            nomeSpan.textContent = p.skills.nome;
+            nomeSpan.onclick = () => abrirModalSkills(p);
+            linha.appendChild(nomeSpan);
+
+            const estiloSpan = document.createElement('span');
+            estiloSpan.className = 'lj-estilo';
+            estiloSpan.title = 'Playing Style — clicar para ligar/desligar';
+            const atualizarEstiloSpan = () => {
+                estiloSpan.textContent = p.playingStyleDesligado ? 'OFF' : 'ON';
+                estiloSpan.classList.toggle('lj-estilo-off', !!p.playingStyleDesligado);
+                estiloSpan.classList.toggle('lj-estilo-on', !p.playingStyleDesligado);
+            };
+            atualizarEstiloSpan();
+            estiloSpan.onclick = (ev) => {
+                ev.stopPropagation();
+                p.playingStyleDesligado = !p.playingStyleDesligado;
+                atualizarEstiloSpan();
+            };
+            linha.appendChild(estiloSpan);
+
+            const fitSpan = document.createElement('span');
+            fitSpan.className = 'lj-fit';
+            fitSpan.textContent = 'FIT ' + p.skills.fitness;
+            fitSpan.onclick = () => abrirModalSkills(p);
+            linha.appendChild(fitSpan);
+
             el.appendChild(linha);
         });
     };
@@ -231,14 +262,37 @@ function abrirModalSkills(p) {
         ['Interceptação', skills.intercept]
     ];
 
-    // Playing style — nome legível do catálogo (ver PlayingStyles em config.js).
-    const defEstilo = (typeof PlayingStyles !== 'undefined' && p.playingStyle)
-        ? PlayingStyles[p.playingStyle] : null;
-    campos.push(['Playing Style', defEstilo ? defEstilo.nome : '-']);
-
     corpo.innerHTML = campos.map(([nome, val]) =>
         '<div class="skill-linha"><span>' + nome + '</span><b>' + val + '</b></div>'
     ).join('');
+
+    /*
+    Playing Style — linha própria, clicável: liga/desliga o estilo (ver
+    estiloAtivoDe em playing_styles.js). Mesmo toggle da lista compacta
+    (lj-estilo em popularPainelJogadores), só que aqui dentro do modal.
+    */
+    const linhaEstilo = document.createElement('div');
+    linhaEstilo.className = 'skill-linha skill-linha-estilo';
+    const nomeEstilo = document.createElement('span');
+    nomeEstilo.textContent = 'Playing Style';
+    const valEstilo = document.createElement('b');
+    const atualizarValEstilo = () => {
+        const defEstilo = (typeof PlayingStyles !== 'undefined' && p.playingStyle)
+            ? PlayingStyles[p.playingStyle] : null;
+        valEstilo.textContent = (defEstilo ? defEstilo.nome : '-') +
+            (p.playingStyleDesligado ? ' (OFF)' : ' (ON)');
+        valEstilo.style.color = p.playingStyleDesligado ? '#94a3b8' : '#16a34a';
+    };
+    atualizarValEstilo();
+    linhaEstilo.style.cursor = 'pointer';
+    linhaEstilo.title = 'Clicar para ligar/desligar o Playing Style';
+    linhaEstilo.onclick = () => {
+        p.playingStyleDesligado = !p.playingStyleDesligado;
+        atualizarValEstilo();
+    };
+    linhaEstilo.appendChild(nomeEstilo);
+    linhaEstilo.appendChild(valEstilo);
+    corpo.appendChild(linhaEstilo);
 
     modal.classList.remove('oculto');
 }

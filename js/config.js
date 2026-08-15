@@ -743,13 +743,18 @@ const PlayingStyles = {
 Estilo por omissão de cada posição, usado no arranque (ver assignFormations).
 São escolhas neutras: o estilo "normal" daquela posição, não o mais exótico.
 */
+/*
+Entradas com lista (não string): estilo varia pelo índice do jogador entre os
+da mesma posição nesta formação — ver aplicarPlayingStyle em match.js. Pedido
+explícito: CM(1)/CM(2) e CF(1)/CF(2) não são clones, cada um cobre um papel.
+*/
 const EstiloPorOmissao = {
     GK: 'defensive_gk',
-    CB: 'build_up', LB: 'offensive_fullback', RB: 'offensive_fullback',
-    DM: 'anchor_man', CM: 'box_to_box', AM: 'classic_no10',
+    CB: ['build_up', 'extra_frontman'], LB: 'offensive_fullback', RB: 'offensive_fullback',
+    DM: 'anchor_man', CM: ['box_to_box', 'orchestrator'], AM: 'classic_no10',
     LM: 'roaming_flank', RM: 'roaming_flank',
     LW: 'prolific_winger', RW: 'prolific_winger',
-    CF: 'goal_poacher', SS: 'creative_playmaker'
+    CF: ['fox_in_the_box', 'dummy_runner'], SS: 'creative_playmaker'
 };
 
 /*
@@ -1440,7 +1445,12 @@ const GoalkeeperDive = {
 const SaltoCabeceio = {
     duracao: 0.62,        // salto completo (s); o pico fica a meio
     alturaMax: 0.80,      // subida máxima que as pernas dão (m)
-    alcanceXZ: 1.4,       // distância horizontal máxima à bola, no pico
+    // Tem de ficar <= BallControl.reach (0.9): esse é o raio que REGISTA o
+    // contacto de verdade (match.js/distanciaAoCorpo). Estava em 1.4 —
+    // saltava para bolas até 1.4m, mas entre 0.9-1.4m o contacto nunca
+    // registava: a bola passava perto (~0.5m de folga, visível), nunca
+    // colava na cabeça, nunca disparava executeHeader. Salto em vão.
+    alcanceXZ: 0.8,       // distância horizontal máxima à bola, no pico
     subidaMin: 0.10,      // acima disto já é bola de cabeça (abaixo é peito)
 
     /*

@@ -113,9 +113,30 @@ aos adversários"):
 
 `zAlvo` já vem no referencial do MUNDO (não do ataque) — quem chama resolve
 isso. Devolve 0 (centro) se não há adversários de campo para comparar.
+
+Também evita convergir com um COLEGA que já reivindicou um vão perto neste
+mesmo frame (`bb.vaosReivindicados`, limpo em TeamBlackboard.gather) — sem
+isto, dois atacantes com o mesmo estilo (ex.: dois Fox in the Box) calculavam
+cada um o "melhor" vão sem saber do outro, e batiam os dois no mesmo ponto.
+
+Preferência pelo PRÓPRIO lado: sem isto, dois CF cruzavam sem necessidade —
+o vão da direita calhava ligeiramente mais aberto e mandava lá o CF da
+esquerda (e vice-versa), todos os frames, os dois a passar um pelo outro.
+Um pequeno bónus (2m) para candidatos do lado em que ele já está resolve os
+quase-empates sem impedir uma troca de lado genuína, quando a diferença é
+grande de verdade.
 */
 function melhorVaoX(ctx, zAlvo, candidatosX) {
-    let melhorX = 0, melhorDist = -1;
+    const bb = ctx.bb;
+    /*
+    Lado preferido: o da JOGADA (bola), não o lado onde o jogador já está.
+    Antes usava só a posição actual dele — com a bola presa num lado, o vão
+    "mais livre" no lado OPOSTO ganhava, e o CF ia atrás dele: alvo do lado
+    contrário ao da jogada, sem ligação nenhuma com o que estava a acontecer.
+    */
+    const meuLado = (bb && Math.abs(bb.ballX) > 3 ? Math.sign(bb.ballX) : 0) ||
+        Math.sign(ctx.p.model.position.x) || Math.sign(ctx.p.baseTarget.x) || 1;
+    let melhorX = 0, melhorNota = -Infinity;
     for (const x of candidatosX) {
         let minD = Infinity;
         for (const opp of ctx.opponents) {
@@ -123,7 +144,19 @@ function melhorVaoX(ctx, zAlvo, candidatosX) {
             const d = Math.hypot(opp.model.position.x - x, opp.model.position.z - zAlvo);
             if (d < minD) minD = d;
         }
-        if (minD > melhorDist) { melhorDist = minD; melhorX = x; }
+        if (bb && bb.vaosReivindicados) {
+            for (const cx of bb.vaosReivindicados) {
+                const d = Math.abs(cx - x);
+                if (d < minD) minD = d;
+            }
+        }
+        let nota = minD;
+        if (Math.sign(x) === meuLado) nota += 4.0;
+        if (nota > melhorNota) { melhorNota = nota; melhorX = x; }
+    }
+    if (bb) {
+        if (!bb.vaosReivindicados) bb.vaosReivindicados = [];
+        bb.vaosReivindicados.push(melhorX);
     }
     return melhorX;
 }
@@ -604,16 +637,25 @@ const PositionAI = {
             }
 
             /*
-            `fechaComBolaCentral` (Roaming Flank): "abre pelas pontas, mas se
-            o jogo vai para o meio ele fecha mais, para dar opção de passe" —
-            pedido explícito. Antes (`cortaParaDentro`) fechava quando a bola
-            estava FUNDO no ataque, não quando estava CENTRAL — um cruzamento
-            perto da linha de fundo não é "jogo pelo meio". Fecha em função
-            de |ballX| (quanto mais perto do eixo, mais fecha), não de ballZ.
+            `fechaComBolaCentral` (Roaming Flank): pedido explícito (2ª
+            correcção) — fica na PONTA por padrão, só busca o meio quando não
+            consegue prosseguir pelo lado (corredor tapado por um adversário
+            à frente), não só porque a bola está central. A 1ª versão fechava
+            proporcional a |ballX|, agressiva de mais — fechava mesmo com o
+            corredor livre. Mesma checagem de "corredor livre" do
+            attackFullBack.
             */
-            if (est.fechaComBolaCentral && ctx.bb) {
-                const centralidade = THREE.MathUtils.clamp(1 - Math.abs(ctx.bb.ballX) / 16.0, 0, 1);
-                targetX *= (1 - 0.5 * centralidade);
+            if (est.fechaComBolaCentral && ctx.bb && ctx.bb.isAttacking) {
+                const ladoEst = Math.sign(p.baseTarget.x) || 1;
+                let tapado = false;
+                for (const opp of ctx.opponents) {
+                    if (opp.role === 'gk') continue;
+                    const noFlanco = (Math.sign(opp.model.position.x) === ladoEst && Math.abs(opp.model.position.x) > 10.0);
+                    const aFrente = (opp.model.position.z * p.dirZ > p.model.position.z * p.dirZ) &&
+                        (opp.model.position.z * p.dirZ < p.model.position.z * p.dirZ + 12.0);
+                    if (noFlanco && aFrente) { tapado = true; break; }
+                }
+                if (tapado) targetX *= 0.5;
             }
 
             // `amplitudeZ`: estica ou encolhe o afastamento ao meio do bloco.

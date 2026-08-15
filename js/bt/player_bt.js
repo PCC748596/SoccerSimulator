@@ -619,7 +619,12 @@ function actGoalkeeperPosition(ctx) {
    A ÁRVORE
    ========================================================================= */
 
-const temBola = (ctx) => ctx.p.hasBall;
+// carryTouchGrace cobre a janela entre o toque à frente na condução e o
+// jogador retomar o toque — sem isto, o instante em que hasBall fica false
+// (touchLock, para ninguém tocar de novo cedo demais) já bastava para o BT
+// achar que ele "perdeu a bola" e mandá-lo para SemBola/MOVE_TO_POS,
+// abandonando a bola que ele mesmo tinha acabado de tocar à frente.
+const temBola = (ctx) => ctx.p.hasBall || ctx.p.carryTouchGrace > 0;
 const ehGK = (ctx) => ctx.p.role === 'gk';
 
 // Zona/ângulo de finalizar — usado por Rematar E por Dominar (para não fazer
@@ -752,6 +757,33 @@ const PlayerBT = sel('PlayerRoot',
                     return Math.random() < Math.min(CrossModel.chanceMax, ctx.cross.chance * mult);
                 }),
                 act('cruzar', actCross)
+            ),
+
+            /*
+            Passe pra frente, dentro do campo de visão (mesmo cone de ângulos
+            da condução, CarryModel.leque — até ±57° do eixo de ataque).
+
+            Vem ANTES de ConduzirEmEspaco: só conduz sozinho se não houver
+            colega bem posicionado à frente dentro desse cone. Passe lateral/
+            para trás fica de fora daqui (ver bestPassTarget mais abaixo, que
+            cobre isso sob pressão).
+            */
+            seq('PassarEmFrente',
+                cond('haPasseEmFrente', (ctx) => {
+                    const p = ctx.p;
+                    const alvo = p.findPassTarget();
+                    if (!alvo) return false;
+                    const optPos = alvoDePasse(alvo);
+                    const dz = (optPos.z - p.model.position.z) * p.dirZ;
+                    if (dz <= 0) return false;
+                    const dx = Math.abs(optPos.x - p.model.position.x);
+                    const ang = Math.atan2(dx, dz);
+                    const anguloMax = CarryModel.leque[CarryModel.leque.length - 1];
+                    if (ang > anguloMax) return false;
+                    ctx.passTarget = alvo;
+                    return true;
+                }),
+                act('passar', actPass)
             ),
 
             /*

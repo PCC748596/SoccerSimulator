@@ -1118,6 +1118,20 @@ class FootballPlayer {
         rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, B.peitoInclinacao * intens, 0.4);
         rig.lArm.rotation.z += B.peitoBracos * intens;
         rig.rArm.rotation.z -= B.peitoBracos * intens;
+
+        /*
+        Braços erguem-se um pouco pra trás e o cotovelo dobra pra dentro —
+        referência: newModel.md, bloco 'chest_trap' (shoulderGrp.rotation.x
+        e elbowGrp.rotation.y). Só braço, não perna/pelvis — mantém a regra
+        de "só o tronco" já pedida.
+        */
+        rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, -0.2 * intens, 0.4);
+        rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, -0.2 * intens, 0.4);
+        // Cotovelo é dobradiça em rotation.x neste rig (ver o resto do
+        // ficheiro), não .y como no newModel.md — eixo diferente, mesma ideia.
+        rig.lElbow.rotation.x = lerpTo(rig.lElbow.rotation.x, -0.4 * intens, 0.4);
+        rig.rElbow.rotation.x = lerpTo(rig.rElbow.rotation.x, -0.4 * intens, 0.4);
+
         rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, 0.15 * intens, 0.4);
         rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 0.15 * intens, 0.4);
     }

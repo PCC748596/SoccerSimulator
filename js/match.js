@@ -126,10 +126,10 @@ const Match = {
 
         this.passTargetVisual = new THREE.Mesh(
             new THREE.CircleGeometry(0.5, 32),
-            new THREE.MeshBasicMaterial({ color: 0x0088ff, side: THREE.DoubleSide })
+            new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide })
         );
         this.passTargetVisual.rotation.x = -Math.PI / 2;
-        this.passTargetVisual.position.y = 0.05;
+        this.passTargetVisual.position.y = 0.12;
         this.passTargetVisual.visible = false;
         this.scene.add(this.passTargetVisual);
 
@@ -688,6 +688,11 @@ const Match = {
         const zMax = Math.max(...campo.map(f => f.z));
         const zSpan = (zMax - zMin) || 1;
 
+        // Conta quantos jogadores já passaram por esta posição nesta
+        // formação, pra dar estilos diferentes ao 1º e ao 2º do mesmo posto
+        // (ver EstiloPorOmissao — CM(1) != CM(2), CF(1) != CF(2), etc).
+        const contagemPos = {};
+
         for (let i = 0; i < 11; i++) {
             const slotA = (fData[i].role === 'gk') ? null : {
                 u: (fData[i].x + 1) / 2,
@@ -698,7 +703,9 @@ const Match = {
             this.players[i].role = fData[i].role;
             this.players[i].slot = slotA;
             this.players[i].updateShirt(fData[i].num, fData[i].pos);
-            this.aplicarPlayingStyle(this.players[i], fData[i].pos);
+            const idxPos = contagemPos[fData[i].pos] || 0;
+            contagemPos[fData[i].pos] = idxPos + 1;
+            this.aplicarPlayingStyle(this.players[i], fData[i].pos, idxPos);
             // TeamA guarda o GR ofensivo (sweeper); ver aplicarPlayingStyle.
             if (fData[i].role === 'gk') {
                 this.players[i].gkStyleBase = 'offensive';
@@ -715,7 +722,7 @@ const Match = {
             this.opponents[i].role = fData[i].role;
             this.opponents[i].slot = slotB;
             this.opponents[i].updateShirt(fData[i].num, fData[i].pos);
-            this.aplicarPlayingStyle(this.opponents[i], fData[i].pos);
+            this.aplicarPlayingStyle(this.opponents[i], fData[i].pos, idxPos);
             if (fData[i].role === 'gk') {
                 this.opponents[i].gkStyleBase = 'defensive';
                 this.opponents[i].playingStyle = 'defensive_gk';
@@ -731,17 +738,28 @@ const Match = {
     apagar a escolha do utilizador. Sem escolha, cai no estilo por omissão da
     posição (`EstiloPorOmissao`).
 
+    `idxPos` é a ordem deste jogador entre os da MESMA posição nesta
+    formação (0 = primeiro CM, 1 = segundo CM, etc). Quando a entrada de
+    `EstiloPorOmissao` é uma lista, cada ordem cai num estilo diferente — dois
+    CM não jogam iguais (ex.: CM(1) Box-to-Box, CM(2) Orchestrator).
+
     `gkStyleBase` e `fbStyle` continuam a existir por baixo: são eles que os
     ramos do GR e do lateral já lêem. Aqui só se garante que ficam coerentes
     com o estilo escolhido, em vez de serem uma segunda fonte de verdade.
     */
-    aplicarPlayingStyle: function (p, pos) {
+    aplicarPlayingStyle: function (p, pos, idxPos) {
         if (typeof PlayingStyles === 'undefined') return;
 
         let chave = p.playingStyleFixo;
-        if (!chave || !estiloValidoPara(chave, pos)) chave = EstiloPorOmissao[pos];
+        if (!chave || !estiloValidoPara(chave, pos)) {
+            const omissao = EstiloPorOmissao[pos];
+            chave = Array.isArray(omissao) ? omissao[(idxPos || 0) % omissao.length] : omissao;
+        }
         if (!chave || !PlayingStyles[chave]) chave = null;
         p.playingStyle = chave;
+        // Por padrão os estilos começam desligados (toggle no painel Player
+        // Skills liga) — só o PositionBT puro até o utilizador ativar.
+        if (p.playingStyleDesligado === undefined) p.playingStyleDesligado = true;
 
         // Espelhos para os sistemas que já existiam antes do catálogo.
         if (pos === 'LB' || pos === 'RB') {
@@ -1700,7 +1718,7 @@ const Match = {
             }
         }
 
-        if (Math.abs(this.ball.position.z) > 53) {
+        if (Math.abs(this.ball.position.z) - BallPhysics.raio > 53) {
             let zSinal = Math.sign(this.ball.position.z);
             if (Math.abs(this.ball.position.x) < (LARGURA_BALIZA / 2 - 0.1) && this.ball.position.y < ALTURA_BALIZA) {
 
@@ -1786,7 +1804,12 @@ const Match = {
         this.state = type;
         this.setPieceTeam = team;
         this.setPieceTimer = 0;
-        this.ballVel.set(0, 0, 0);
+        // GOAL_KICK é excepção: a bola continua com a velocidade que trazia
+        // até tocar no chão + 3s (ver o teleporte próprio mais abaixo) — zerar
+        // aqui, incondicional pra qualquer bola parada, matava esse
+        // movimento no MESMO frame em que ela saía, antes mesmo de chegar
+        // lá. Os outros tipos (canto, lateral) continuam a travar já.
+        if (type !== 'GOAL_KICK') this.ballVel.set(0, 0, 0);
         this.intendedReceiver = null;
 
         if (typeof MatchStats !== 'undefined' && MatchStats[team]) {

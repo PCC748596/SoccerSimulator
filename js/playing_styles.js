@@ -55,7 +55,9 @@ dele, senão passava o jogo inteiro fora do bloco a não fazer nada. O
 `avaliarEstilo` (nível 3, ver player_bt.prepare) é quem liga e desliga.
 */
 function estiloAtivoDe(p) {
-    if (!p || !p.styleAtivo) return EstiloBase;
+    // Desligado no painel Player Skills: o jogador usa só o PositionBT puro,
+    // sem nenhum desvio de estilo — ver toggle em popularPainelJogadores.
+    if (!p || p.playingStyleDesligado || !p.styleAtivo) return EstiloBase;
     return PlayingStyleUtils.resolve(p.playingStyle);
 }
 

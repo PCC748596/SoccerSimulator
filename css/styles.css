@@ -165,6 +165,25 @@ canvas {
     flex: 0 0 auto;
 }
 
+.linha-jogador .lj-estilo {
+    flex: 0 0 auto;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.linha-jogador .lj-estilo-on {
+    color: #16a34a;
+    background: #dcfce7;
+}
+
+.linha-jogador .lj-estilo-off {
+    color: #94a3b8;
+    background: #f1f5f9;
+}
+
 /* --- Modal de skills de um jogador --- */
 
 #modal-skills {

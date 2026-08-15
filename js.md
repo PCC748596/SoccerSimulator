@@ -314,6 +314,14 @@ Coisas que este nível resolve e que vale a pena conhecer:
 - **`supportBuildUp`** — o nível 1 escolhe (`pickSupportMid`) o médio mais perto
   da bola quando ela está no nosso meio-campo, e esta folha manda-o oferecer-se
   em vez de ocupar a posição normal. É o que impede o passe directo defesa→ataque.
+- **`melhorVaoX(ctx, zAlvo, candidatosX)`** — vão livre entre adversários
+  (Fox in the Box, Goal Poacher), maximin contra os adversários e contra
+  vãos já reivindicados por colegas no mesmo frame (`bb.vaosReivindicados`).
+  O lado preferido em caso de quase-empate é o **lado da bola**
+  (`bb.ballX`), não o lado onde o jogador já está — usar a posição própria
+  fazia o vão "mais livre" do lado OPOSTO à jogada ganhar sempre que a bola
+  estava presa de um lado, e o CF ia atrás dele: alvo sem ligação nenhuma
+  com o que estava a acontecer no jogo. Bónus do lado preferido: 4.0 m.
 - **`ctx.isMarking` tem de ser reposto em cada `bind()`.** O contexto é
   reutilizado entre frames; sem repor, bastava marcar uma vez para as regras que
   dependem dele ficarem desligadas naquele jogador **para o resto do jogo**.
@@ -338,9 +346,18 @@ SemBola
 A ordem do ramo **ComBola** é:
 
 ```
-Dominar → GuardaRedesJoga → Rematar → Cruzar → ConduzirEmEspaco
-        → Lançar → Passar → Conduzir
+Dominar → GuardaRedesJoga → Rematar → Cruzar → PassarEmFrente
+        → ConduzirEmEspaco → Lançar → Passar → Conduzir
 ```
+
+**`PassarEmFrente`** — testa `findPassTarget()` e só aceita o alvo se estiver
+dentro do **cone de visão pra frente** (mesmo ângulo do leque de condução,
+`CarryModel.leque`, ±57° do eixo de ataque) e progredindo (`dz > 0`). Vem
+ANTES de `ConduzirEmEspaco`: só conduz sozinho se não houver colega bem
+posicionado à frente dentro desse cone. Pedido explícito — "pra frente do
+jogador, como um campo de visão; se não tiver passe possível, aí sim conduz".
+Passe lateral/para trás continua de fora daqui (cai no `Passar` mais abaixo,
+sob pressão).
 
 **`Dominar` é cadência, não só o primeiro toque.** `CadenceModel.posseBase`
 (~3 s) antes de decidir passar/rematar/lançar — jogador real domina, olha as
@@ -611,6 +628,13 @@ Primeiro a carregar. Não depende de nada além do THREE.
   (`pickChaser`/`assignMarking`) por nível: `low` 6, `balanced` 4, `high` 2.
   Ligado ao selector "Defensive Pressure" do painel esquerdo
   (`Tatics.pressaoDefensiva`).
+- **`EstiloPorOmissao`** — playing style por omissão de cada posição
+  (`assignFormations`/`aplicarPlayingStyle` em `match.js`). Entradas podem
+  ser uma **lista** em vez de uma string só: nesse caso o estilo varia pela
+  ordem do jogador entre os da mesma posição nesta formação (`idxPos`,
+  contado em `assignFormations`) — CM(1) Box-to-Box / CM(2) Orchestrator,
+  CF(1) Fox in the Box / CF(2) Dummy Runner, CB(1) Build Up / CB(2) Extra
+  Frontman. Pedido explícito: dois jogadores no mesmo posto não são clones.
 - `Tatics` — formação, estilo de jogo, estilo de passe, sectores do campo activos,
   **`linhaDefensiva`** (`'low'` | `'medium'` | `'high'`) e **`pressaoDefensiva`**
   (`'low'` | `'balanced'` | `'high'`, selector "Defensive Pressure"):
@@ -848,6 +872,12 @@ rotação continuam nos 0.11 m reais.
 > de alcance.** Elas são heurísticas (`ballVel.y = min(6.5, 2 + dist*0.12)`,
 > etc.) calibradas contra a física antiga.
 
+**Detecção de golo/saída pela linha de fundo (`updateBall`)** exige a bola
+**inteira** para lá da linha: `Math.abs(ball.position.z) - BallPhysics.raio >
+53`, não só o centro a cruzar 53. Com o centro só, a bola contava golo/fora
+ainda meio de dentro — visualmente errado e a regra real manda a bola
+passar por completo a linha.
+
 **Mexer aqui quando:** câmara, cenário, regras da bola, coesão do bloco, e a
 dificuldade de recepção/intercepção (`BallControl`).
 Para o comportamento colectivo, vai antes a [bt/team_bt.js](js/bt/team_bt.js).
@@ -1015,6 +1045,27 @@ ele a recolhê-la de rastos.
 **Mexer aqui quando:** adicionar uma acção nova ou mudar a duração/execução de uma existente.
 Regra prática: a *decisão* de agir vive em `player.js`, a *execução ao longo do tempo* vive aqui.
 
+## `playing_styles.js` — resolução e eventos dos Playing Styles
+
+O catálogo (`PlayingStyles`, `EstiloBase`, `EstiloPorOmissao`) vive no
+`config.js` — este ficheiro só resolve e liga/desliga.
+
+- `estiloDe(p)` — o estilo DECLARADO do jogador (UI, gatilhos), fundido com
+  `EstiloBase` via `PlayingStyleUtils.resolve` (com cache).
+- `estiloAtivoDe(p)` — o estilo EM VIGOR neste frame; é o que as folhas de
+  `position_bt.js`/`player_bt.js` devem ler. Depende de `p.styleAtivo`
+  (avaliado pelo nível 3, `avaliarEstilo`) **e** de `p.playingStyleDesligado`
+  — devolve `EstiloBase` neutro se qualquer um dos dois desligar. O toggle
+  do painel "Player Skills" (`main.js`) mexe em `playingStyleDesligado`: com
+  o estilo desligado, o jogador usa só o `PositionBT` puro, sem nenhum
+  desvio de estilo, pra regular o nível 2 isolado do nível 3.
+- `PlayingStyleEvents.tick(bb)` — avalia as condições de cada estilo uma vez
+  por equipa por frame e emite evento só quando o estado MUDA
+  (`STYLE_ON`/`STYLE_OFF`), nunca todo frame.
+
+**Mexer aqui quando:** um estilo não liga/desliga quando devia, ou o toggle
+manual do painel não está a bloquear o desvio de estilo.
+
 ## `main.js` — arranque e loop
 
 - Globais da renderização: `scene`, `rendererCore`, `cameraCore`, `orbitControls`, `lastTime`.
@@ -1028,6 +1079,13 @@ Regra prática: a *decisão* de agir vive em `player.js`, a *execução ao longo
   tecla **X**. O visual é a classe CSS `.minimizado` em `#painel-comandos`.
 - Toggles na UI do painel direito: Os números nas costas e nomes de posições (`PlayerPOS`)
   podem ser ativados/desativados no painel de controlo.
+- **Painel "Player Skills"** (`popularPainelJogadores`) — lista compacta por
+  equipa (nome, badge ON/OFF do Playing Style, FIT). O badge é clicável e
+  liga/desliga `p.playingStyleDesligado` (ver `estiloAtivoDe` em
+  `playing_styles.js`); por omissão todo estilo começa **OFF**
+  (`aplicarPlayingStyle` em `match.js`). Clicar no nome ou no FIT abre
+  `abrirModalSkills(p)`, que tem a mesma linha "Playing Style" clicável
+  (`(ON)`/`(OFF)`) dentro do modal — os dois toggles mexem no mesmo campo.
 - **Painel "PlayerBT Debug"** (`#painel-playerbt`, canto inferior direito,
   **minimizado por omissão** — `togglePainelPlayerBT()` para abrir). Mostra o
   `trace` do `PlayerBT` (nó:resultado, na ordem avaliada — `BT.debug=true`
@@ -1088,6 +1146,11 @@ Regra prática: a *decisão* de agir vive em `player.js`, a *execução ao longo
 | Fazer sistemas reagirem a algo sem `if` espalhado | `event_bus.js` |
 | Limites de rotação de uma articulação | `joint_limits.js` |
 | Playing style do GR ou do lateral | `config.js` → `GoalkeeperStyle` / `FullBackStyle`; atribuição em `match.js` → `assignFormations()` |
+| Ligar/desligar o Playing Style de um jogador na UI | `main.js` → painel "Player Skills" (badge ON/OFF) ou modal (`abrirModalSkills`) |
+| Dar estilos diferentes a jogadores na mesma posição | `config.js` → `EstiloPorOmissao` (lista por posição) |
+| Preferir passe pra frente antes de conduzir sozinho | `bt/player_bt.js` → `PassarEmFrente` |
+| CFs/pontas indo pro vão do lado errado da jogada | `bt/position_bt.js` → `melhorVaoX` |
+| Golo/saída contando antes da bola cruzar a linha toda | `match.js` → `updateBall()`, detecção de golo (`- BallPhysics.raio`) |
 | Ângulo/força do relançamento do GR | `player.js` → `puntBall()` |
 | Gesto do chutão do GR | `config.js` → `GoalkeeperKickClip` + estado `'chutando'` em `updateGK` |
 | Corte diagonal de 30° no drible | `config.js` → `DribbleCutClip`, `fsm.js` → `case 'CUT'`, `player.js` → `aplicarCamadaCorte()` |
