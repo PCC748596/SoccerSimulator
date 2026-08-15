@@ -294,8 +294,9 @@ travar só quem corre.
 
     1.00  ritmo original
     0.90  -10% (pedido)
+    0.81  -10% de novo, sobre o 0.90 (pedido)
 */
-const GAME_SPEED = 0.90;
+const GAME_SPEED = 0.81;
 
 window.cameraMode = 'center';
 window.cameraZoom = 1.0;
@@ -667,13 +668,18 @@ const PlayingStyles = {
     /* --- Alas ------------------------------------------------------------ */
     prolific_winger: {
         nome: 'Prolific Winger', posicoes: ['LW', 'RW'],
+        // "abre pelas pontas, e mesmo que o jogo vá para o meio ele fica
+        // mais aberto na ponta esperando a bola para poder cruzar" — nunca
+        // fecha, cola na linha (mesmo mecanismo do Cross Specialist).
         largura: 4, remate: 1.2, cruzar: 1.1,
-        cortaParaDentro: true
+        colaNaLinha: true
     },
     roaming_flank: {
         nome: 'Roaming Flank', posicoes: ['LW', 'RW', 'LM', 'RM'],
+        // "abre pelas pontas, mas se o jogo vai para o meio ele fecha mais
+        // para dar opção de passe" — fecha com a bola CENTRAL, não fundo.
         largura: -4, passe: 1.15, conduzir: 1.2,
-        cortaParaDentro: true
+        fechaComBolaCentral: true
     },
     cross_specialist: {
         nome: 'Cross Specialist', posicoes: ['LW', 'RW', 'LM', 'RM'],
@@ -684,7 +690,8 @@ const PlayingStyles = {
     /* --- Meio-campo ------------------------------------------------------ */
     box_to_box: {
         nome: 'Box-to-Box', posicoes: ['AM', 'LM', 'RM', 'CM', 'DM'],
-        amplitudeZ: 1.5, avancoComBola: 5, pressao: 1.2
+        amplitudeZ: 1.5, avancoComBola: 5, pressao: 1.2,
+        travaNaEntradaArea: true // "da entrada de uma área até a entrada da outra" — não passa da entrada
     },
     the_destroyer: {
         nome: 'The Destroyer', posicoes: ['CM', 'DM', 'CB'],
@@ -711,7 +718,11 @@ const PlayingStyles = {
     },
     offensive_fullback: {
         nome: 'Offensive Full-back', posicoes: ['LB', 'RB'],
-        cruzar: 1.25, colaNaLinha: true
+        // Antes só subia via attackFullBack (nível 2), condicional a corredor
+        // livre + equipa a atacar — sem isso ficava preso na linha, apesar
+        // do estilo. `avanco` é base, sempre activo, contraparte do -2 do
+        // defensive_fullback.
+        avanco: 4, cruzar: 1.25, colaNaLinha: true
     },
     fullback_finisher: {
         nome: 'Full-back Finisher', posicoes: ['LB', 'RB'],
@@ -857,8 +868,8 @@ const PassModel = {
             { max: 20.0, alturaMax: 1.0 },
             { max: 30.0, alturaMax: 1.5 }
         ],
-        anguloLongoMin: 30 * Math.PI / 180,
-        anguloLongoMax: 45 * Math.PI / 180
+        anguloLongoMin: 21 * Math.PI / 180,  // 30° -30%
+        anguloLongoMax: 31.5 * Math.PI / 180 // 45° -30%
     },
 
     /*
@@ -1318,7 +1329,9 @@ const BallControl = {
     disputável.
     */
     // Alturas medidas a partir dos PÉS do jogador (ver distanciaAoCorpo).
-    peitoYMin: 0.85,      // altura mínima do contacto para contar como peito
+    // peitoYMin tem de ser >= peitoAltura (1.20, mais abaixo): bola abaixo do
+    // peito de verdade não faz sentido matar no peito, é toque de pé normal.
+    peitoYMin: 1.15,       // altura mínima do contacto para contar como peito
     peitoYMax: 1.35,      // acima disto é cabeça (ver ALTURA_CABECA), não peito
     peitoBase: 0.45,      // probabilidade base de amortecer bem
     peitoDur: 0.55,       // duração (s) do gesto

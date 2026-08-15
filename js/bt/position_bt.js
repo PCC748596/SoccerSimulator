@@ -101,6 +101,33 @@ function desviar(ctx, dx, dFrente) {
     ctx.targetZ += dFrente * ctx.p.dirZ;
 }
 
+/*
+Vão livre entre adversários, ao longo de uma linha Z fixa — testa uns
+candidatos X e escolhe o mais longe do adversário mais próximo em cada um
+(maximin, não é gradiente nem física, é escolha entre pontos discretos).
+
+Usado por dois estilos (pedido explícito, "não é um ponto fixo, é relativo
+aos adversários"):
+    Fox in the Box  — vão entre 2 zagueiros, dentro da área.
+    Goal Poacher    — brecha na última linha, à espera do lançamento.
+
+`zAlvo` já vem no referencial do MUNDO (não do ataque) — quem chama resolve
+isso. Devolve 0 (centro) se não há adversários de campo para comparar.
+*/
+function melhorVaoX(ctx, zAlvo, candidatosX) {
+    let melhorX = 0, melhorDist = -1;
+    for (const x of candidatosX) {
+        let minD = Infinity;
+        for (const opp of ctx.opponents) {
+            if (opp.role === 'gk') continue;
+            const d = Math.hypot(opp.model.position.x - x, opp.model.position.z - zAlvo);
+            if (d < minD) minD = d;
+        }
+        if (minD > melhorDist) { melhorDist = minD; melhorX = x; }
+    }
+    return melhorX;
+}
+
 // Trinco: fica um pouco atrás do seu slot, como seguro e primeira estação.
 function attackDM(ctx) {
     desviar(ctx, ctx.bb.ballX * 0.12, -3.0);
@@ -521,20 +548,29 @@ const PositionAI = {
             }
 
             /*
-            `ombroDefesa` (Goal Poacher): cola-se à linha do último defensor.
-            É um alvo absoluto, não um desvio — a graça do estilo é estar
-            exactamente ali, no limite do fora-de-jogo, e não "um pouco mais à
-            frente do que estaria".
+            `ombroDefesa` (Goal Poacher): cola-se à linha do último defensor,
+            à espera do lançamento — pedido explícito: não num X fixo, na
+            BRECHA da linha (o vão entre os dois zagueiros mais próximos ali,
+            ver melhorVaoX). Z continua um alvo absoluto (a graça é estar
+            exactamente no limite do fora-de-jogo).
             */
             if (est.ombroDefesa && ctx.bb && ctx.bb.isAttacking &&
                 ctx.bb.offsideLimitDir !== null && ctx.bb.offsideLimitDir !== undefined) {
                 targetZ = (ctx.bb.offsideLimitDir - 0.5) * p.dirZ;
+                targetX = melhorVaoX(ctx, targetZ,
+                    [-16, -12, -8, -4, 0, 4, 8, 12, 16]);
             }
 
-            // `dentroArea` (Fox in the Box): a atacar, não sai da grande área.
+            /*
+            `dentroArea` (Fox in the Box): dentro da grande área, mas no VÃO
+            entre zagueiros — pedido explícito: "numa posição que não tenha
+            adversário, ou entre 2 adversários", não um X qualquer dentro da
+            caixa.
+            */
             if (est.dentroArea && ctx.bb && ctx.bb.isAttacking) {
                 if (targetZ * p.dirZ < CrossModel.areaZ) targetZ = CrossModel.areaZ * p.dirZ;
-                targetX = THREE.MathUtils.clamp(targetX, -CrossModel.areaX, CrossModel.areaX);
+                targetX = melhorVaoX(ctx, targetZ,
+                    [-16, -11, -6.5, -2, 2, 6.5, 11, 16]);
             }
 
             /*
@@ -565,15 +601,37 @@ const PositionAI = {
                     tectoAla = Math.min(tectoAla, Math.max(bordaBloco, 0));
                 }
                 targetX = ladoEst * Math.max(Math.abs(targetX), tectoAla);
-            } else if (est.cortaParaDentro && ctx.bb && ctx.bb.isAttacking &&
-                ctx.bb.ballZ * p.dirZ > 15) {
-                targetX *= 0.55;
+            }
+
+            /*
+            `fechaComBolaCentral` (Roaming Flank): "abre pelas pontas, mas se
+            o jogo vai para o meio ele fecha mais, para dar opção de passe" —
+            pedido explícito. Antes (`cortaParaDentro`) fechava quando a bola
+            estava FUNDO no ataque, não quando estava CENTRAL — um cruzamento
+            perto da linha de fundo não é "jogo pelo meio". Fecha em função
+            de |ballX| (quanto mais perto do eixo, mais fecha), não de ballZ.
+            */
+            if (est.fechaComBolaCentral && ctx.bb) {
+                const centralidade = THREE.MathUtils.clamp(1 - Math.abs(ctx.bb.ballX) / 16.0, 0, 1);
+                targetX *= (1 - 0.5 * centralidade);
             }
 
             // `amplitudeZ`: estica ou encolhe o afastamento ao meio do bloco.
             if (est.amplitudeZ !== 1.0 && ctx.bb && ctx.bb.bloco) {
                 const centro = (ctx.bb.bloco.z0 + ctx.bb.bloco.z1) / 2 * ctx.bb.dir;
                 targetZ = centro + (targetZ - centro) * est.amplitudeZ;
+            }
+
+            /*
+            `travaNaEntradaArea` (Box-to-Box): "da entrada de uma área até a
+            entrada da outra" — pedido explícito. Sem teto, amplitudeZ (1.5x)
+            esticava o alvo para BEM DENTRO da área adversária, um meio-campo
+            a jogar de ponta-de-lança. Trava aqui, depois do amplitudeZ, para
+            cortar só o excesso — nunca empurra para trás quem já estava
+            aquém do teto.
+            */
+            if (est.travaNaEntradaArea && targetZ * p.dirZ > CrossModel.areaZ) {
+                targetZ = CrossModel.areaZ * p.dirZ;
             }
         }
 

@@ -457,22 +457,9 @@ class FootballPlayer {
             let optPos = alvoDePasse(opt);
             let dist = this.model.position.distanceTo(optPos);
 
-            /*
-            Tectos de distância eram curtos demais (46m no balanceado) para
-            um campo de 106m — um atacante completamente livre mas longe
-            (ex.: CARRY ainda no meio-campo, CF já lançado lá à frente)
-            nunca sequer ENTRAVA na lista de candidatos, por mais aberto que
-            estivesse. Alargado para cobrir o campo quase todo.
-            */
-            let inStyleRange = false;
-            if (Tatics.passe === 'curto') {
-                inStyleRange = (dist >= 3.0 && dist <= 32.0);
-            } else if (Tatics.passe === 'longo') {
-                inStyleRange = (dist >= 20.0 && dist <= 70.0);
-            } else {
-                inStyleRange = (dist >= 4.0 && dist <= 60.0);
-            }
-            if (!inStyleRange) continue;
+            // Distância máxima baseada no skill de passe (skill * 0.6)
+            let maxDist = Math.max(10, skillVal * 0.6); 
+            if (dist > maxDist || dist < 2.0) continue;
 
             _line1.set(this.model.position, optPos);
             let minOppDist = 999, oppMaisPerto = null;
@@ -545,18 +532,29 @@ class FootballPlayer {
             */
             let progression = (optPos.z - ownZ) * dirZ;
             if (progression > 0) {
-                score += 20 + Math.min(35, progression * 1.1);
+                let progBonus = 20 + Math.min(35, progression * 1.1);
+                // Lançamento em espaço vazio: ponto extra muito bom se o alvo estiver livre à frente
+                if (minOppDist > 8.0) {
+                    progBonus += 150; 
+                }
+                score += progBonus;
             } else {
                 score -= Math.abs(progression) * 1.0;
             }
 
+            // Pesos de distancia para induzir organicamente as porcentagens pedidas:
             if (Tatics.passe === 'curto') {
-                score += (28 - dist) * 1.5;
+                if (dist <= 30.0) score += 50;
+                else if (dist <= 50.0) score -= 20;
+                else score -= 80;
             } else if (Tatics.passe === 'longo') {
-                score += dist * 1.2;
-            } else {
-                let midDiff = Math.abs(dist - 22.0);
-                score += (22.0 - midDiff) * 0.8;
+                if (dist <= 30.0) score += 20;
+                else if (dist <= 50.0) score += 40;
+                else score += 10;
+            } else { // misto
+                if (dist <= 30.0) score += 30;
+                else if (dist <= 50.0) score += 10;
+                else score -= 10;
             }
 
             ratedCandidates.push({ player: opt, score: score });
@@ -594,27 +592,32 @@ class FootballPlayer {
             _v1.set(this.throughBallTarget.x, 0, this.throughBallTarget.z);
         } else {
             /*
-            Mira o alvo do PositionBT (alvoDePasse), não a posição actual do
-            colega. Simplificação deliberada — até ao PlayingStylesBT, é mais
-            previsível mirar para onde a equipa QUER que ele esteja do que
-            tentar antecipar o movimento actual dele.
+            Ponto de partida: alvo do PositionBT (alvoDePasse) misturado com a
+            posição actual do colega — mantém o "para onde a equipa QUER que
+            ele esteja" como direcção geral, sem mirar um fantasma muito à
+            frente.
 
-            Em passes CURTOS isto chega: o tempo de voo é pequeno, o colega
-            mal se mexe entretanto. Em passes LONGOS o voo dura bem mais de
-            1s — sem lead a bola mira onde ele estava ao passe sair, e como
-            ele continua a correr, chega atrás dele ("o jogador passa pela
-            bola"). Adiciona lead pela velocidade actual do receptor,
-            amortecido (0.6) porque é só uma estimativa — ele pode travar ou
-            mudar de direcção durante o voo.
+            LEAD por tempo de voo (pedido explícito): sem isto, mesmo um
+            passe curto/médio chegava a "onde ele estava ao passe sair" —
+            como ele continua a correr, quase sempre tinha de travar/recuar
+            um instante para a alcançar, cortando o fluir do movimento. Antes
+            só se aplicava lead em passes >22m; agora aplica-se sempre,
+            proporcional ao tempo estimado de voo.
+
+            `pesoVel` (17 m/s) é a velocidade média aproximada de saída da
+            bola — não a física exacta (essa só se resolve depois, em
+            executePassGameplay, e dependeria do alvo que ainda estamos a
+            calcular). Amortecido a 0.75: é só uma estimativa, ele pode
+            travar ou mudar de direcção durante o voo.
             */
             const alvo = alvoDePasse(this.passTarget);
             _v1.set(alvo.x, 0, alvo.z);
 
-            const distEstimate = _v1.distanceTo(Match.ball.position);
-            if (distEstimate > 22 && this.passTarget && this.passTarget.velocity) {
-                const travelTime = distEstimate / 20; // velocidade média aprox. de um passe longo
-                _v1.x += this.passTarget.velocity.x * travelTime * 0.6;
-                _v1.z += this.passTarget.velocity.z * travelTime * 0.6;
+            if (this.passTarget && this.passTarget.velocity) {
+                const distEstimate = _v1.distanceTo(Match.ball.position);
+                const travelTime = THREE.MathUtils.clamp(distEstimate / 17.0, 0.15, 3.0);
+                _v1.x += this.passTarget.velocity.x * travelTime * 0.75;
+                _v1.z += this.passTarget.velocity.z * travelTime * 0.75;
             }
         }
 

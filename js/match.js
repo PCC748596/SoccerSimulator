@@ -828,6 +828,9 @@ const Match = {
         this.golKickProntos = false;
         this.golKickEspera = 0;
         this.golKickAlvoEspera = 0;
+        this.golKickBolaAtraso = 0;
+        this.golKickBolaAlvo = null;
+        this.golKickAguardaChao = false;
 
         // dirA/dirB: sentido de ataque de cada equipa. O campo de defesa é o
         // lado oposto — por isso o clamp abaixo usa z*dir <= -margem.
@@ -963,6 +966,29 @@ const Match = {
         */
         if (this.state === 'GOAL_KICK') {
             this.setPieceTimer += dt;
+
+            /*
+            Bola ainda a "sair" — pedido explícito: continua o movimento até
+            tocar no chão (não um tempo fixo — uma bola no ar demora mais que
+            uma rasteira), SÓ DEPOIS espera 3s, e então vai para a quina da
+            pequena área. Os jogadores já se posicionaram (setupSetPiece),
+            isto é só a bola.
+            */
+            if (this.golKickBolaAlvo) {
+                if (this.golKickAguardaChao) {
+                    if (this.ball.position.y <= BallPhysics.raio + 0.01) {
+                        this.golKickAguardaChao = false;
+                    }
+                } else {
+                    this.golKickBolaAtraso -= dt;
+                    if (this.golKickBolaAtraso <= 0) {
+                        this.ball.position.set(this.golKickBolaAlvo.x, BallPhysics.raio, this.golKickBolaAlvo.z);
+                        this.ballVel.set(0, 0, 0);
+                        this.golKickBolaAlvo = null;
+                    }
+                }
+            }
+
             this.updateGoalKickWait(dt);
             // Orçamento maior que antes: posicionamento + espera de 3-6s +
             // corrida/cobrança cabem lá dentro sem disparar o reset.
@@ -1128,8 +1154,6 @@ const Match = {
     FootballPlayer.update → runBehaviorTree, e comanda a PlayerFSM.
     */
     runTeamAI: function () {
-        if (this.state !== 'PLAY') return;
-
         this.updatePossession();
 
         // O nível 1 escreve marcações nos jogadores das DUAS equipas, por isso
@@ -1138,10 +1162,27 @@ const Match = {
         this.players.forEach(p => { p.markingTarget = null; p.isCovering = false; p.markCount = 0; });
         this.opponents.forEach(o => { o.markingTarget = null; o.isCovering = false; o.markCount = 0; });
 
+        /*
+        Nível 1 (TeamAI.tick, forma do bloco) corre SEMPRE, jogo parado ou
+        não — a própria árvore já tem o ramo 'BolaParada' que põe a postura
+        TeamPosture.SET_PIECE (bloco mais compacto/central) quando
+        `Match.state !== 'PLAY'` (ver team_bt.js). Antes esta função inteira
+        saía logo no `if (this.state !== 'PLAY') return`, e esse ramo nunca
+        chegava a correr — o bloco ficava CONGELADO na forma esticada do
+        último frame de jogo corrido (ex.: bola a caminho da linha de fundo,
+        antes de sair para o tiro de meta). Os jogadores pareciam bem
+        posicionados (setupSetPiece põe-nos directamente), mas o rectângulo
+        de debug do TeamBT continuava lá longe.
+        */
         const bbA = TeamAI.tick('TeamA', this);
         const bbB = TeamAI.tick('TeamB', this);
         this.chaserA = bbA.chaser;
         this.chaserB = bbB.chaser;
+
+        // Nível 2 (onde cada jogador se coloca) e a coesão que depende dele só
+        // fazem sentido em jogo corrido — em bola parada quem posiciona é o
+        // próprio setupSetPiece, directamente.
+        if (this.state !== 'PLAY') return;
 
         this.players.forEach(p => PositionAI.tick(p, bbA));
         this.opponents.forEach(p => PositionAI.tick(p, bbB));
@@ -1703,7 +1744,7 @@ const Match = {
                         // Atacante tocou por último: tiro de meta.
                         this.setupSetPiece('GOAL_KICK', donoDaBaliza);
                     }
-                } else {
+                } else if (!(this.state === 'GOAL_KICK' && this.golKickBolaAlvo)) {
                     /*
                     Jogo já parado (GOAL/OUT/bola parada) e a bola volta a
                     passar a linha de fundo fora da baliza. Antes fazia-se
@@ -1711,6 +1752,13 @@ const Match = {
                     relançava com força uma bola já morta (ex.: bola entra na
                     baliza rente ao poste, o x sai do vão e cai aqui). Sem
                     jogo a decorrer não há ressalto nenhum: pára a bola.
+
+                    Excepto logo a seguir a um tiro de meta recém-apitado
+                    (`golKickBolaAtraso` a contar): aí deixa-se a bola
+                    continuar o movimento fora do campo por um instante,
+                    antes do teleporte para a quina da pequena área (ver
+                    update()) — senão este clamp prendia-a na linha no
+                    mesmo frame em que saiu, antes de o atraso pedido correr.
                     */
                     this.ball.position.z = 53 * zSinal;
                     this.ballVel.set(0, 0, 0);
@@ -1824,8 +1872,19 @@ const Match = {
             const bolaX = ladoX * G.pequenaAreaX;
             const bolaZ = linhaZ + attDir * G.pequenaAreaZ;       // para dentro do campo
 
-            this.ball.position.set(bolaX, BallPhysics.raio, bolaZ);
-            this.ballVel.set(0, 0, 0);
+            /*
+            A bola NÃO teleporta já — continua o movimento que trazia até
+            tocar no chão (`golKickAguardaChao`), só DEPOIS espera 3s
+            (`golKickBolaAtraso`), e só então é puxada para a quina da
+            pequena área e travada (ver o countdown em update() e o guard
+            contra o clamp da linha de fundo em updateBall()). Os jogadores
+            já reagem e se posicionam nesse meio tempo. Pedido explícito —
+            antes ia instantaneamente.
+            */
+            this.golKickBolaAlvo = { x: bolaX, z: bolaZ };
+            this.golKickAguardaChao = true;
+            this.golKickBolaAtraso = 3.0;
+
             this.ballCarrier = null;
             this.golKickProntos = false;
             this.golKickEspera = 0;
