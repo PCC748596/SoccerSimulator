@@ -136,6 +136,17 @@ para fora das 3 melhores opções deste frame.
 */
 function pickChaser(bb) {
     /*
+    Só a equipa que NÃO tem a bola persegue. Sem isto, pickChaser corria
+    igual para as duas equipas (só o caso do GK estava tratado abaixo) — se
+    um companheiro do próprio portador calhasse ser o mais perto da bola
+    (fora o portador), virava chaser da PRÓPRIA equipa e o IrABola (nível 3)
+    mandava-o direito ao portador, por cima do que o PositionBT já lhe tinha
+    dado (ex.: um RB "colava" no colega com a bola em vez de subir no
+    corredor via attackFullBack).
+    */
+    if (bb.isAttacking) { bb.chaser = null; return; }
+
+    /*
     Guarda-redes adversário já agarrou a bola com as mãos: ninguém pressiona
     — ele não pode ser desarmado (ver resolveBallContact/FSM), então correr
     até ele só amontoa gente na área. A equipa larga a marcação individual e

@@ -107,7 +107,7 @@ function toggleTeamBTPos() {
     document.getElementById('btn-teambtpos').innerText = 'Team BT POS: ' + uiLabel;
     document.getElementById('btn-teambtpos').classList.toggle('active', window.teamBTPosState !== 'OFF');
     if (typeof Match !== 'undefined' && Match.passTargetVisual) {
-        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF');
+        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
     }
 }
 
@@ -126,7 +126,26 @@ function togglePositionBT() {
     document.getElementById('btn-positionbt').innerText = 'Position BT: ' + uiLabel;
     document.getElementById('btn-positionbt').classList.toggle('active', window.positionBTToggleState !== 'OFF');
     if (typeof Match !== 'undefined' && Match.passTargetVisual) {
-        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF');
+        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+    }
+}
+
+window.playingStyleBTToggleState = 'OFF';
+function togglePlayingStyleBT() {
+    if (window.playingStyleBTToggleState === 'OFF') window.playingStyleBTToggleState = 'TeamA';
+    else if (window.playingStyleBTToggleState === 'TeamA') window.playingStyleBTToggleState = 'TeamB';
+    else if (window.playingStyleBTToggleState === 'TeamB') window.playingStyleBTToggleState = 'Both';
+    else window.playingStyleBTToggleState = 'OFF';
+
+    let uiLabel = window.playingStyleBTToggleState;
+    if (uiLabel === 'TeamA') uiLabel = 'TeamBlue';
+    else if (uiLabel === 'TeamB') uiLabel = 'TeamRed';
+    else if (uiLabel === 'Both') uiLabel = 'Both';
+
+    document.getElementById('btn-playingstylebt').innerText = 'PlayingStyleBT: ' + uiLabel;
+    document.getElementById('btn-playingstylebt').classList.toggle('active', window.playingStyleBTToggleState !== 'OFF');
+    if (typeof Match !== 'undefined' && Match.passTargetVisual) {
+        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
     }
 }
 

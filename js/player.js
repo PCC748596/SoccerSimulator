@@ -82,7 +82,10 @@ class FootballPlayer {
         this.peitoCola = 0;    // segundos que faltam com a bola colada ao peito
         this.peitoIntens = 0;  // intensidade da pose (ver aplicarCamadaPeito)
         this.peitoBom = false; // ganhou o sorteio do amortecimento?
+        this.peitoHopTimer = 0; // pequeno salto opcional (ver controlarNoPeito)
         this.jumpApex = 0;     // subida deste salto (ver SaltoCabeceio)
+        this.headLeanTimer = 0; // cabeceio de pé, sem saltar (ver animateBones)
+        this.cinturaAlvoY = 0;  // cintura acompanha o giro da cabeça p/ a bola
 
         // Corte diagonal de 30° (DRIBBLE_CUT_30) — ver estado CUT em fsm.js.
         this.cutAtivo = false;
@@ -142,6 +145,8 @@ class FootballPlayer {
         this.gkDirMergulho = 0;
         this.gkTipoMergulho = 'baixo';
         this.gkAlvoX = 0;      // x previsto da bola, usado pelo estado 'maos'
+        this.gkAlvoY = 1.0;    // altura prevista da bola, usada pelo mergulho
+        this.dive = null;      // estado do mergulho em curso (ver js/gk_dive.js)
         this.gkKickAction = null;  // ActionState do chutão (estado 'chutando')
         this.gkKickNorm = 0;
         this.gkKickTipo = null;    // 'chao' no tiro de meta; null = das mãos
@@ -330,13 +335,22 @@ class FootballPlayer {
     A bola não salta já para essa distância: fica COLADA ao peito durante
     `peitoCola` segundos e só depois é largada (ver largarDoPeito e o estado
     CHEST_CONTROL em fsm.js).
+
+    `altura` é o ponto de contacto medido por distanciaAoCorpo (match.js) —
+    decide o pequeno salto opcional (ver peitoPuloLimiar/peitoPuloMax).
     */
-    controlarNoPeito() {
+    controlarNoPeito(altura) {
         const B = BallControl;
         const bom = venceuDuelo(this.skillFor('TEC'), 50, B.peitoBase);
 
+        // De FRENTE para a bola, não de lado — sem isto ficava com a
+        // orientação de quem quer que fosse a última corrida, muitas vezes
+        // atravessado em relação à bola que vinha a chegar.
+        lookAtBola(this.model, Match.ball.position);
+
         this.peitoBom = bom;
         this.peitoCola = B.peitoCola;
+        this.peitoHopTimer = (altura > B.peitoPuloLimiar) ? B.peitoDur : 0;
         this.colarBolaAoPeito();
 
         Match.ballCarrier = null;
@@ -834,8 +848,10 @@ class FootballPlayer {
                 Match.ball.position.lerp(this.model.position.clone().add(maoOffset).setY(maoY), 0.5);
                 Match.ballVel.set(0, 0, 0);
             } else {
-                // +0.4m pedido: bola de domínio mais afastada do jogador, à frente.
-                let footOffset = new THREE.Vector3(0, 0, 0.8).applyQuaternion(this.model.quaternion);
+                // -0.4m pedido: bola de domínio mais colada ao jogador (era 0.8,
+                // que por sua vez tinha sido +0.4 de um valor anterior — volta
+                // a aproximar-se do original).
+                let footOffset = new THREE.Vector3(0, 0, 0.4).applyQuaternion(this.model.quaternion);
                 Match.ball.position.lerp(this.model.position.clone().add(footOffset), 0.5);
                 Match.ball.position.y = BallPhysics.raio; Match.ballVel.set(0, 0, 0);
             }
@@ -850,6 +866,7 @@ class FootballPlayer {
             // Idem para a matada no peito: só a cintura para trás e os braços
             // a abrir, por cima da pose normal de pé.
             this.aplicarCamadaPeito();
+            this.aplicarCamadaCabeceioDePe(dt);
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT e PlayerPOS)
@@ -897,8 +914,10 @@ class FootballPlayer {
         // entre os dois só faz sentido com os dois ligados ao mesmo tempo.
         const showForTeam = (window.teamBTPosState === this.team || window.teamBTPosState === 'Both');
         const showForPos = (window.positionBTToggleState === this.team || window.positionBTToggleState === 'Both');
+        const showForStyle = (window.playingStyleBTToggleState === this.team || window.playingStyleBTToggleState === 'Both');
         const teamTarget = this.slotTarget || this.tacticalTarget || this.dynamicTarget;
         const posTarget = this.tacticalTarget || this.dynamicTarget;
+        const styleTarget = this.dynamicTarget;
 
         if (this.btTargetGroup) {
             if (showForTeam && teamTarget) {
@@ -927,6 +946,29 @@ class FootballPlayer {
                 this.btLine.visible = true;
             } else {
                 this.btLine.visible = false;
+            }
+        }
+
+        if (this.styleTargetGroup) {
+            if (showForStyle && styleTarget) {
+                this.styleTargetGroup.visible = true;
+                this.styleTargetGroup.position.set(styleTarget.x, 0.065, styleTarget.z);
+            } else {
+                this.styleTargetGroup.visible = false;
+            }
+        }
+
+        // Liga o anel do PlayingStyle (nível 3) ao do PositionBT (nível 2) —
+        // só faz sentido com os dois ligados, mesmo padrão da linha acima.
+        if (this.styleLine) {
+            if (showForPos && showForStyle && posTarget && styleTarget) {
+                const arr = this.styleLineGeo.attributes.position.array;
+                arr[0] = posTarget.x; arr[1] = 0.06; arr[2] = posTarget.z;
+                arr[3] = styleTarget.x; arr[4] = 0.06; arr[5] = styleTarget.z;
+                this.styleLineGeo.attributes.position.needsUpdate = true;
+                this.styleLine.visible = true;
+            } else {
+                this.styleLine.visible = false;
             }
         }
 
@@ -1044,6 +1086,29 @@ class FootballPlayer {
         rig.rArm.rotation.z -= B.peitoBracos * intens;
     }
 
+    /*
+    Cabeceio de pé — bola alcançável só com o corpo, sem saltar (ver o
+    gatilho headLeanTimer em animateBones). Inclina o tronco para trás e o
+    pescoço para cima e para trás durante um instante curto; nunca sai do
+    chão. Mesmo padrão de camada aditiva das outras duas (corte, peito).
+    */
+    aplicarCamadaCabeceioDePe(dt) {
+        if (this.headLeanTimer <= 0) return;
+        this.headLeanTimer -= dt;
+        const rig = this.rig;
+        if (!rig) return;
+
+        // Sobe e desfaz com a mesma forma em sino das outras camadas: pico a
+        // meio da janela, não no início nem no fim.
+        const k = Math.max(0, Math.min(1, this.headLeanTimer / 0.30));
+        const intens = Math.sin(k * Math.PI);
+
+        rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, -0.30 * intens, 0.5);
+        if (rig.neck) rig.neck.rotation.x = lerpTo(rig.neck.rotation.x, 0.45 * intens, 0.5);
+        rig.lArm.rotation.z += 0.15 * intens;
+        rig.rArm.rotation.z -= 0.15 * intens;
+    }
+
     animateBones(dt) {
         let speed = this.velocity.length(); let rig = this.rig;
 
@@ -1105,10 +1170,20 @@ class FootballPlayer {
             const prev = preverBolaEm(S.duracao * 0.5);
             const subida = prev.y - (ALTURA_BASE_Y + ALTURA_CABECA);
             const dXZ = Math.hypot(this.model.position.x - prev.x, this.model.position.z - prev.z);
-            if (dXZ < S.alcanceXZ && subida > S.subidaMin && subida < S.alturaMax) {
+            if (dXZ < S.alcanceXZ && subida > S.alturaSemPulo && subida < S.alturaMax) {
                 this.jumpTimer = S.duracao;
                 this.jumpApex = subida;
                 this.jumpCooldown = S.cooldown;
+            } else if (dXZ < S.alcanceXZ && subida > S.subidaMin && subida <= S.alturaSemPulo) {
+                /*
+                Bola mesmo em cima da cabeça — chega-se só inclinando o
+                tronco para trás e o pescoço para cima, sem saltar (ver
+                aplicarCamadaCabeceioDePe). É a opção preferida sempre que
+                dá: um salto inteiro para uma bola que já está ao alcance é
+                que ficava estranho.
+                */
+                this.headLeanTimer = 0.30;
+                this.jumpCooldown = 0.4;
             }
         }
 
@@ -1145,6 +1220,12 @@ class FootballPlayer {
                 let angle = Math.atan2(cross, dot);
                 const maxHeadAngle = (80 * Math.PI) / 180;
                 angle = THREE.MathUtils.clamp(angle, -maxHeadAngle, maxHeadAngle);
+                // A cintura acompanha uma fracção do giro da cabeça — olhar
+                // de lado para a bola não fica só no pescoço, o tronco gira
+                // um pouco também. Guardado para os ramos parado/a mover-se
+                // aplicarem (ver abaixo); dentro do limite anatómico do
+                // tronco (JointLimits.chest.y, ±45°).
+                this.cinturaAlvoY = angle * 0.35;
                 rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, angle, 0.25);
             }
         }
@@ -1158,8 +1239,12 @@ class FootballPlayer {
         }
 
         if (speed < 0.1 && this.fsm.currentState !== 'PASS' && this.fsm.currentState !== 'SHOOT') {
-            this.model.position.y = lerpTo(this.model.position.y, ALTURA_BASE_Y);
-            rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, 0); rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, 0);
+            // O salto leve da matada no peito escreve position.y no próprio
+            // fsm.js (case CHEST_CONTROL), que corre antes disto — não pisar.
+            if (!(this.fsm.currentState === 'CHEST_CONTROL' && this.peitoHopTimer > 0)) {
+                this.model.position.y = lerpTo(this.model.position.y, ALTURA_BASE_Y);
+            }
+            rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, this.cinturaAlvoY || 0); rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, 0);
             rig.pelvis.rotation.y = lerpTo(rig.pelvis.rotation.y, 0); rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, 0);
             rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, 0); rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, 0);
             rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, 0); rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 0);
@@ -1207,6 +1292,9 @@ class FootballPlayer {
             // Tronco: a prumo a andar, inclinado a correr. Era 0.3 rad sempre.
             const inclinacao = movingBackwards ? P.tronco * 0.4 : P.tronco;
             rig.chest.rotation.x = inclinacao + Math.sin(t * Math.PI * 2) * 0.04;
+            // Mesma cintura a acompanhar a cabeça também a correr/andar — sem
+            // isto ficava só parado a olhar de lado com o tronco reto.
+            rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, this.cinturaAlvoY || 0);
 
             this.model.position.y = ALTURA_BASE_Y + P.ressalto;
         }
@@ -1289,8 +1377,10 @@ class FootballPlayer {
             grp.rotation.z = x < 0 ? -Math.PI / 32 : Math.PI / 32; peG.rotation.y = x < 0 ? -Math.PI / 16 : Math.PI / 16; pelvis.add(grp); return { raiz: grp, joelho: joelho, pe: peG };
         }
 
-        const bracoEsq = criarBraco(0.8); rig.lArm = bracoEsq.raiz; rig.lElbow = bracoEsq.cotovelo;
-        const bracoDir = criarBraco(-0.8); rig.rArm = bracoDir.raiz; rig.rElbow = bracoDir.cotovelo;
+        // As mãos entram no rig: o IK precisa da ponta da cadeia, e o teste
+        // de defesa lê a posição REAL dela no mundo (ver js/gk_dive.js).
+        const bracoEsq = criarBraco(0.8); rig.lArm = bracoEsq.raiz; rig.lElbow = bracoEsq.cotovelo; rig.lHand = bracoEsq.mao;
+        const bracoDir = criarBraco(-0.8); rig.rArm = bracoDir.raiz; rig.rElbow = bracoDir.cotovelo; rig.rHand = bracoDir.mao;
         const pernaEsq = criarPerna(0.4); rig.lLeg = pernaEsq.raiz; rig.lKnee = pernaEsq.joelho; rig.lFoot = pernaEsq.pe;
         const pernaDir = criarPerna(-0.4); rig.rLeg = pernaDir.raiz; rig.rKnee = pernaDir.joelho; rig.rFoot = pernaDir.pe;
 
@@ -1332,18 +1422,21 @@ class FootballPlayer {
             }
 
             /*
-            Anel do "Position BT" — mais pequeno, cor da equipa, sem
-            etiqueta — desenhado no alvo do NÍVEL 2 (p.tacticalTarget, já
-            com os desvios das folhas). O btTargetGroup acima passa a ser só
-            o "Team BT POS": o slot puro do nível 1 (p.slotTarget), sem
-            desvios nenhuns. Uma linha liga os centros dos dois — o
-            comprimento dela é literalmente o quanto o PositionBT afastou o
-            jogador do slot do TeamBT.
+            Anel do "Position BT" — cor da equipa, sem etiqueta — desenhado
+            no alvo do NÍVEL 2 (p.tacticalTarget, já com os desvios das
+            folhas). O btTargetGroup acima passa a ser só o "Team BT POS": o
+            slot puro do nível 1 (p.slotTarget), sem desvios nenhuns. Uma
+            linha liga os centros dos dois — o comprimento dela é
+            literalmente o quanto o PositionBT afastou o jogador do slot do
+            TeamBT.
+
+            Tamanho: 2/3 do anel do TeamBT (que vai de 0.8 a 1.0) — mesma
+            proporção parede/raio (0.8), só escalado.
             */
             this.posTargetGroup = new THREE.Group();
             this.posTargetGroup.visible = false;
             let posRing = new THREE.Mesh(
-                new THREE.RingGeometry(0.28, 0.4, 24),
+                new THREE.RingGeometry(0.533, 0.667, 24),
                 new THREE.MeshBasicMaterial({ color: ringColorNum, side: THREE.DoubleSide })
             );
             posRing.rotation.x = -Math.PI / 2;
@@ -1358,6 +1451,35 @@ class FootballPlayer {
             this.btLine.visible = false;
             if (typeof Match !== 'undefined' && Match.scene) {
                 Match.scene.add(this.btLine);
+            }
+
+            /*
+            Anel do "PlayingStyle" — 1/3 do anel do TeamBT, mesma proporção.
+            Desenhado no alvo do NÍVEL 3 (p.dynamicTarget): a posição que o
+            PlayerBT realmente mandou perseguir, já depois das folhas que
+            leem estiloAtivoDe() (ver playing_styles.js) e dos comportamentos
+            específicos de posição/perto da bola. A linha que liga este anel
+            ao do PositionBT mostra o quanto o nível 3 — incluindo o efeito
+            do PlayingStyle — se afastou do alvo tático puro do nível 2.
+            */
+            this.styleTargetGroup = new THREE.Group();
+            this.styleTargetGroup.visible = false;
+            let styleRing = new THREE.Mesh(
+                new THREE.RingGeometry(0.267, 0.333, 20),
+                new THREE.MeshBasicMaterial({ color: ringColorNum, side: THREE.DoubleSide })
+            );
+            styleRing.rotation.x = -Math.PI / 2;
+            this.styleTargetGroup.add(styleRing);
+            if (typeof Match !== 'undefined' && Match.scene) {
+                Match.scene.add(this.styleTargetGroup);
+            }
+
+            this.styleLineGeo = new THREE.BufferGeometry();
+            this.styleLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+            this.styleLine = new THREE.Line(this.styleLineGeo, new THREE.LineBasicMaterial({ color: ringColorNum }));
+            this.styleLine.visible = false;
+            if (typeof Match !== 'undefined' && Match.scene) {
+                Match.scene.add(this.styleLine);
             }
         } else if (this.pos !== pos) {
             let btCtx = this.btTargetGroup.children[1].material.map.image.getContext('2d');
@@ -1443,7 +1565,9 @@ class FootballPlayer {
                         this.gkEstado = 'maos';
                     } else {
                         this.gkEstado = 'mergulho';
+                        this.dive = null;   // arranca um mergulho novo (GkDive)
                         this.gkDirMergulho = Math.sign(lateral);
+                        this.gkAlvoY = interY;
                         if (interY > 1.6) this.gkTipoMergulho = 'alto'; else if (interY > 0.8) this.gkTipoMergulho = 'meio'; else this.gkTipoMergulho = 'baixo';
                     }
                 }
@@ -1521,7 +1645,9 @@ class FootballPlayer {
                                     this.gkEstado = 'maos';
                                 } else {
                                     this.gkEstado = 'mergulho';
+                                    this.dive = null;
                                     this.gkDirMergulho = Math.sign(lateralEsp);
+                                    this.gkAlvoY = Match.ball.position.y;
                                     this.gkTipoMergulho = Match.ball.position.y > 1.2 ? 'alto' : 'baixo';
                                 }
                             } else {
@@ -1670,84 +1796,20 @@ class FootballPlayer {
                 this.fsm.update(dt);
             }
         } else if (this.gkEstado === 'mergulho') {
-            this.gkTempoMergulho += dt; let t = this.gkTempoMergulho; let dirX = this.gkDirMergulho; let tipo = this.gkTipoMergulho;
-            let gkSkill = this.skillFor('GK');
-            let skillSpeed = 4.0 + ((gkSkill - 50) / 50) * 5.0;
-
             /*
-            Braços proceduais: em vez de pose fixa (rotation.z=±2.5 sempre,
-            independente de onde a bola realmente está), aponta pra ela a
-            cada frame — sobe mais se ela vier alta, abre mais se estiver
-            longe dos ombros. Clampado pelos limites de JointLimits.shoulder
-            (ombro é 3DOF acoplado, ver clampOmbro).
+            O mergulho inteiro vive em js/gk_dive.js: fases, centro de massa
+            balistico, rotacao de eixo unico por quaterniao e bracos por IK.
+
+            O que estava aqui era um deslize lateral (position.x += v*dt) com
+            a rotacao composta em Euler na pelvis, e o teste da defesa a
+            estimar por trigonometria onde a mao estaria. Ver o cabecalho do
+            gk_dive.js para o porque de cada uma das tres substituicoes.
             */
-            if (t < 1.2) {
-                const ombroY = gkCorpo.position.y + 0.35;
-                const dyBola = Match.ball.position.y - ombroY;
-                const dxBola = Match.ball.position.x - gkCorpo.position.x;
-
-                let elevX = Math.atan2(Math.max(-0.3, dyBola), 1.0) * 1.6;
-                let abreZ = 1.3 + Math.min(1.4, Math.abs(dxBola) * 0.12);
-                const clamped = (typeof JointLimits !== 'undefined')
-                    ? JointLimits.clampOmbro(elevX, 0, abreZ)
-                    : { x: elevX, z: abreZ };
-
-                gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, clamped.x, 0.3);
-                gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, clamped.x, 0.3);
-                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, clamped.z, 0.3);
-                gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -clamped.z, 0.3);
+            if (!this.dive) {
+                GkDive.iniciar(this, this.gkAlvoX, this.gkAlvoY || 1.0,
+                    this.gkTipoMergulho, this.gkDirMergulho);
             }
-
-            if (t < 0.6) {
-                gkCorpo.position.x += dirX * skillSpeed * dt;
-                if (dirX !== 0) {
-                    gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + (tipo === 'alto' ? 0.6 : 0.1), 0.2);
-                    // Sinal invertido: saltava pro lado certo (position.x
-                    // += dirX*v está bem) mas o corpo inclinava/virava pro
-                    // lado oposto ao salto.
-                    gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, -dirX * 1.2, 0.2);
-                } else {
-                    gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + (tipo === 'alto' ? 0.8 : -0.2), 0.2);
-                }
-            } else if (t < 1.2) {
-                if (dirX !== 0) { gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y - 0.15, 0.2); gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, -dirX * 1.57, 0.2); }
-            } else if (t < 1.8) {
-                /*
-                Mergulho de LADO já tem o corpo quase todo rodado no roll
-                (pelvis.rotation.z ~1.57, ajustado acima) — somar um pitch
-                (rotation.x) tão grande quanto o de uma queda de frente
-                (1.2) compunha os dois eixos ao mesmo tempo e deixava o
-                boneco "virado"/torcido em vez de deitado de lado. Reduzido
-                bastante só pra dive lateral; queda de frente (dirX===0,
-                sem chegar aqui) não é afectada.
-                */
-                if (dirX !== 0) { gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0.35, 0.2); gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, 1.8, 0.2); gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, 1.8, 0.2); }
-            } else if (t < 2.5) {
-                gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.15); gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, 0.15); gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, 0, 0.15);
-            } else { this.gkEstado = 'idle'; this.resetBonesToDefault(); }
-
-            /*
-            Ponto de defesa tem de ser a mão, não a barriga — projecta a
-            partir do ângulo REAL do braço líder (o do lado do mergulho),
-            já procedural (ver bloco acima), em vez de um offset fixo que
-            ignorava pra onde o braço estava mesmo a apontar.
-            */
-            const bracoRefMerg = (dirX >= 0) ? gkRig.rArm : gkRig.lArm;
-            const alcanceMerg = 0.9;
-            const maoMergX = gkCorpo.position.x + Math.sin(Math.abs(bracoRefMerg.rotation.z)) * alcanceMerg * (dirX || 1);
-            const maoMergY = gkCorpo.position.y + 0.35 + Math.sin(bracoRefMerg.rotation.x) * alcanceMerg;
-            const distMaoMerg = Math.hypot(maoMergX - Match.ball.position.x, maoMergY - Match.ball.position.y, gkCorpo.position.z - Match.ball.position.z);
-            // Bola já lá dentro (atrás da linha): mão nenhuma vai lá buscar —
-            // sem isto uma defesa em curso podia "reflectir" o que já é golo.
-            const jaEntrou = (Match.state !== 'PLAY');
-            if (!jaEntrou && t < 1.2 && distMaoMerg < 1.3 && Match.ballVel.lengthSq() > 0) {
-                let catchChance = 0.35 + (gkSkill - 50) / 100;
-                if (Math.random() < catchChance) {
-                    this.grabBall();
-                } else {
-                    Match.ballVel.z *= -0.5; Match.ballVel.x += (Math.random() - 0.5) * 10; Match.ballVel.y += 3;
-                }
-            }
+            GkDive.update(this, dt, gkCorpo, gkRig);
         } else if (this.gkEstado === 'tiro_meta') {
             /*
             Tiro de meta, em duas fases antes do gesto do chuto:
@@ -1821,8 +1883,17 @@ class FootballPlayer {
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.3);
             }
 
+            /*
+            A cobrança em si (fase 1: correr e chutar) só arranca depois de
+            quem bate estar posicionado E terem passado 3-6s — ver
+            updateGoalKickWait em match.js. Até lá o GR já chegou à linha de
+            fundo (distTM<0.4) mas fica ali, à espera, em vez de correr logo
+            para a bola. `tiroMetaTimeout` continua como rede de segurança
+            absoluta, para nunca travar o jogo indefinidamente.
+            */
+            const podeCobrar = Match.golKickProntos && Match.golKickEspera >= Match.golKickAlvoEspera;
             if (this.gkTiroFase === 0) {
-                if (distTM < 0.4 || tTM > G.tiroMetaTimeout * 0.5) {
+                if ((distTM < 0.4 && podeCobrar) || tTM > G.tiroMetaTimeout) {
                     this.gkTiroFase = 1;
                     this.gkTempoMergulho = 0;
                 }
@@ -1832,7 +1903,7 @@ class FootballPlayer {
                 this.gkKickTipo = 'chao';
                 this.gkTempoMergulho = 0;
                 this.gkKickNorm = 0;
-                this.gkKickAction = new ActionState('gkPunt', {
+                this.gkKickAction = new ActionState('gkPuntChao', {
                     onContact: () => {
                         this.kickFromGround();
                         if (typeof EventBus !== 'undefined') {
@@ -2129,15 +2200,23 @@ class FootballPlayer {
     Não larga logo para o BT/FSM decidir — entra em 'segurando' para as
     equipas terem tempo de se reorganizar antes do relançamento.
     */
-    grabBall() {
+    grabBall(manterPose) {
         Match.ballVel.set(0, 0, 0);
         this.hasBall = true;
         Match.ballCarrier = this;
         Match.possessionTeam = this.team;
         Match.possessionTimer = 0;
         window.bolaChutada = false;
-        this.gkEstado = 'segurando';
-        this.gkTempoMergulho = 0;
+        /*
+        `manterPose`: agarrou a meio de um mergulho. A posse conta já, mas o
+        estado e a orientação ficam quietos — quem manda no corpo até ele se
+        levantar é o GkDive, que passa a 'segurando' no fim. Sem isto o
+        mergulho era interrompido a meio do voo e ele aparecia de pé.
+        */
+        if (!manterPose) {
+            this.gkEstado = 'segurando';
+            this.gkTempoMergulho = 0;
+        }
         // Não precisa esperar sempre os 8s fixos — 5-8s, sorteado a cada captura.
         this.gkSegurarDur = 5.0 + Math.random() * 3.0;
         /*
@@ -2151,8 +2230,10 @@ class FootballPlayer {
         Vira já de frente pro campo (mesmo lookAtBola usado no resto do
         jogo — um rotation.y=0/PI calculado à mão dava de costas).
         */
-        _v1.set(this.model.position.x, this.model.position.y, this.model.position.z + this.dirZ * 10);
-        lookAtBola(this.model, _v1);
+        if (!manterPose) {
+            _v1.set(this.model.position.x, this.model.position.y, this.model.position.z + this.dirZ * 10);
+            lookAtBola(this.model, _v1);
+        }
 
         /*
         Fecha os braços na hora. Sem isto, um braço que ainda estava na pose
@@ -2161,7 +2242,7 @@ class FootballPlayer {
         durante essa transição ficava com um braço erguido/aberto, o outro
         já fechado na bola, uma pose assimétrica de "um braço no ar".
         */
-        if (this.rig) {
+        if (this.rig && !manterPose) {
             const P = GoalkeeperPose.segurar;
             this.rig.lLeg.rotation.x = P.coxa; this.rig.rLeg.rotation.x = P.coxa;
             this.rig.lKnee.rotation.x = P.joelho; this.rig.rKnee.rotation.x = P.joelho;

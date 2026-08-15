@@ -167,7 +167,10 @@ const ActionAnimClips = {
     pass: { duration: 0.2, contactTime: 0.4 },
     // Chutão do guarda-redes (ver GoalkeeperKickClip). O contactTime cai
     // exactamente no keyframe 9 (t = 8/11), o frame do contacto pé-bola.
-    gkPunt: { duration: 0.85, contactTime: 8 / 11 }
+    gkPunt: { duration: 0.85, contactTime: 8 / 11 },
+    // Tiro de meta: mesmo gesto (GOALKEEPER_KICK_FORWARD_HIGH), mais rápido —
+    // vem do chão numa cobrança, não da espera com a bola nas mãos.
+    gkPuntChao: { duration: 0.65, contactTime: 8 / 11 }
 };
 
 /*
@@ -960,7 +963,10 @@ const GoalkeeperPose = {
     tiroMetaCorrer: 5.5,     // m/s na corrida para a bola
     tiroMetaRecuo: 2.5,      // quanto atrás da bola fica antes de arrancar
     tiroMetaDistChuto: 1.1,  // distância à bola em que dispara o gesto
-    tiroMetaTimeout: 6.0,    // segurança: se algo correr mal, chuta na mesma
+    // Segurança absoluta: se algo correr mal (posicionamento nunca completa,
+    // etc.) chuta na mesma. Tem de caber posicionamento + espera de 3-6s +
+    // corrida — era 6.0, insuficiente só para a espera nova.
+    tiroMetaTimeout: 16.0,
 
     // Duração (s) do agachar-e-apanhar quando a bola chega mansa/rolando.
     apanharDur: 0.35,
@@ -1161,17 +1167,33 @@ const MarkingModel = {
 
     Agora a marcação é sempre um DESVIO limitado a estes metros, tal como
     `desviar()` nas folhas ofensivas — o TeamBT continua a mandar, a
-    marcação só o inclina. Só que com um tecto fixo de 5m, quando o SLOT
-    zonal (bloco/linha) ainda não tinha alcançado o atacante que acabou de
-    receber um passe — o que demora, a linha tem tecto e lag próprios — a
-    correcção nunca fechava a distância: o marcador ficava sempre uns
-    metros curto, e se o slot recuava (bloco a reorganizar) o alvo parecia
-    "fugir" mesmo com marcingTarget correcto. Sob pressão mais alta o
-    marcador pode quebrar mais forma pra ficar colado; sob Low, menos.
+    marcação só o inclina. Sob pressão mais alta o marcador pode quebrar
+    mais forma pra ficar colado; sob Low, menos.
+
+    O tecto varia também por SETOR do campo (def/mid/atk, terços iguais —
+    ver biasMaxPara), não só por Defensive Pressure. Perto da PRÓPRIA
+    baliza a disciplina de forma pesa mais do que colar no homem: um CB
+    arrastado 10m fora da área por um adversário a fazer um desvio custa
+    caro (buraco na área), por isso o tecto ali é o mais apertado. No
+    terço de ataque marcar "à letra" pesa menos do que manter a forma —
+    tecto mais folgado, quebra mais para não perder o homem.
     */
-    biasMaxPorPressao: { low: 5.0, balanced: 7.0, high: 10.0 },
-    get biasMax() {
-        return this.biasMaxPorPressao[Tatics.pressaoDefensiva] ?? this.biasMaxPorPressao.balanced;
+    biasMaxPorSetor: {
+        atk: { low: 5.0, balanced: 7.0, high: 10.0 },
+        mid: { low: 4.0, balanced: 6.0, high: 8.0 },
+        def: { low: 3.0, balanced: 5.0, high: 6.0 }
+    },
+
+    /*
+    `zoneAhead` já vem no referencial de ataque do MARCADOR (alvo.z * p.dirZ,
+    mesma convenção de stats.js/PlayerContext) — terços a ±CAMPO_COMP/6, tal
+    como a contagem de posse por terço em stats.js.
+    */
+    biasMaxPara(zoneAhead) {
+        const terco = CAMPO_COMP / 6;
+        const setor = (zoneAhead < -terco) ? 'def' : (zoneAhead > terco) ? 'atk' : 'mid';
+        const porPressao = this.biasMaxPorSetor[setor];
+        return porPressao[Tatics.pressaoDefensiva] ?? porPressao.balanced;
     },
 
     coberturaBiasMax: 6.0, // cair para cobertura/eixo (mais folga: é reposicionamento, não marcação)
@@ -1245,7 +1267,13 @@ O guarda-redes não entra por aqui a alta velocidade: as defesas dele são
 tratadas em FootballPlayer.updateGK().
 */
 const BallControl = {
-    reach: 1.3,           // raio de contacto com a bola, em metros
+    /*
+    Raio de contacto com a bola, medido ao CORPO (ver distanciaAoCorpo), não
+    à origem do modelo. Era 1.3 m: a bola podia estar a mais de um metro do
+    corpo e mesmo assim contar como dominada, o que a fazia parecer solta ao
+    lado do jogador em vez de no pé dele. -0.4 m aperta o domínio.
+    */
+    reach: 0.9,           // raio de contacto com a bola, em metros
     easySpeed: 7.75,      // abaixo disto domina-se sempre (a regra antiga)
     hardSpeed: 30.0,      // acima disto é praticamente impossível dominar
     receiverBonus: 0.35,  // vantagem de quem é o destinatário do passe
@@ -1293,7 +1321,20 @@ const BallControl = {
     peitoDistCorpo: 0.26, // distância do centro da bola ao eixo do corpo (m)
     peitoAltura: 1.20,    // altura do ponto de contacto no peito, dos pés (m)
     peitoVelYBoa: -1.0,   // velocidade vertical ao largar, domínio bom
-    peitoVelYMa: 1.2      // ... e quando falha (repica para cima)
+    peitoVelYMa: 1.2,     // ... e quando falha (repica para cima)
+
+    /*
+    Pequeno salto opcional na matada no peito. Só para bolas que chegam mais
+    altas dentro da faixa de peito — perto do chão não há razão para saltar.
+
+    O salto é 1/3 do salto de cabeceio (SaltoCabeceio.alturaMax=0.80/3≈0.27):
+    como a bola fica COLADA ao tronco (colarBolaAoPeito usa
+    model.position.y + peitoAltura todos os frames enquanto `peitoCola`
+    corre), ela sobe e desce com o corpo — nunca ultrapassa esse 1/3, que é
+    a "altura máxima do pulo" pedida.
+    */
+    peitoPuloLimiar: 0.98, // altura de contacto (dos pés) acima da qual salta
+    peitoPuloMax: 0.27     // pico do salto (m) — 1/3 de SaltoCabeceio.alturaMax
 };
 
 /*
@@ -1313,11 +1354,64 @@ ponto mais alto.
 
 Abaixo de `subidaMin` acima da cabeça não se salta: cabeceia-se de pé.
 */
+/*
+Mergulho do guarda-redes (ver js/gk_dive.js).
+
+Substitui o mergulho antigo, que era `gkCorpo.position.x += dirX * v * dt` —
+um deslize lateral imposto por frame, sem agachar, sem impulso e sem voo, com
+o corpo já rodado antes de sair do sítio. E a rotação era composta em Euler
+(`pelvis.rotation.z` do lado + `pelvis.rotation.x` do pitch), o que torcia o
+boneco: dois eixos aplicados em sequência não dão a queda num plano só.
+
+Agora: fases (ler, impulso, voo, chão, levantar), centro de massa balístico
+(`p = p0 + v0·t + ½g·t²`) e UMA rotação à volta de UM eixo — o eixo frontal
+do próprio modelo. Com um só eixo é geometricamente impossível ficar torto.
+*/
+const GoalkeeperDive = {
+    tempoLer: 0.05,        // reacção: transferência de peso antes de sair
+    tempoImpulso: 0.12,    // agachar e estender as pernas
+    tempoChao: 0.35,       // deslizar no relvado depois de aterrar
+    tempoLevantar: 0.75,   // pôr-se de pé
+
+    vooMin: 0.28,          // duração mínima/máxima do voo (s)
+    vooMax: 0.62,
+    velLateral: 6.0,       // velocidade lateral base do salto (m/s)
+    velLateralSkill: 4.0,  // ± conforme a skill de GK
+    vySubidaMax: 4.5,      // velocidade vertical máxima do impulso (m/s)
+
+    alcanceBraco: 0.75,    // quanto a mão chega além do corpo — o corpo não
+                           // precisa de percorrer a distância toda
+    alturaDeitado: 0.42,   // y da origem do modelo com ele deitado de lado
+    atritoChao: 3.5,       // desaceleração do deslize no relvado (m/s²)
+
+    // Ângulo do tombo, por tipo de defesa. Uma bola rasteira não precisa de
+    // deitar tanto como uma no ângulo.
+    anguloMax: { baixo: 1.22, meio: 1.48, alto: 1.75 },   // 70° / 85° / 100°
+
+    fracContacto: 0.55,    // fracção do voo em que a mão deve chegar ao alvo
+    raioMao: 0.42,         // raio de contacto da mão com a bola
+    apanhaBase: 0.35,      // probabilidade base de AGARRAR (senão espalma)
+    ombroY: 1.35,          // altura do ombro acima da origem, de pé
+
+    // Pose das pernas em voo: estendidas e ligeiramente abertas.
+    coxaVoo: -0.25, joelhoVoo: 0.55, aberturaVoo: 0.18,
+
+    pesoIK: 0.45           // suavização do IK dos braços por frame
+};
+
 const SaltoCabeceio = {
     duracao: 0.62,        // salto completo (s); o pico fica a meio
     alturaMax: 0.80,      // subida máxima que as pernas dão (m)
     alcanceXZ: 1.4,       // distância horizontal máxima à bola, no pico
-    subidaMin: 0.10,      // menos do que isto acima da cabeça: cabeceia de pé
+    subidaMin: 0.10,      // acima disto já é bola de cabeça (abaixo é peito)
+
+    /*
+    Entre subidaMin e alturaSemPulo a bola está mesmo em cima da cabeça —
+    alcança-se só inclinando o tronco para trás e esticando o pescoço, sem
+    saltar (ver aplicarCamadaCabeceioDePe em player.js). O salto só entra
+    quando ela está mesmo fora de alcance parado.
+    */
+    alturaSemPulo: 0.30,
     cooldown: 1.5         // era 10 s — impedia dois saltos na mesma jogada
 };
 

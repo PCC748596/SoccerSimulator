@@ -637,6 +637,19 @@ const PlayerBT = sel('PlayerRoot',
                 if (fsm.currentState !== 'SET_PIECE_TAKER' && fsm.currentState !== 'SET_PIECE_WAIT') {
                     fsm.changeState('SET_PIECE_WAIT');
                 }
+            } else if (Match.state === 'GOAL_KICK') {
+                /*
+                GOAL_KICK deixa MOVE_TO_POS sobreviver: quem bate posiciona-se
+                "como no chute do goleiro", um pouco mais adiantado (ver
+                setupSetPiece), e esta folha só decidiria de novo se voltasse
+                a chamar changeState — o que apagaria o dynamicTarget calculado
+                no setup. Chegando ao alvo, match.js muda para SET_PIECE_WAIT.
+                */
+                if (fsm.currentState !== 'SET_PIECE_TAKER' &&
+                    fsm.currentState !== 'SET_PIECE_WAIT' &&
+                    fsm.currentState !== 'MOVE_TO_POS') {
+                    fsm.changeState('SET_PIECE_WAIT');
+                }
             } else {
                 fsm.changeState('IDLE');
             }

@@ -7,6 +7,9 @@ const Match = {
     possessionTeam: null, possessionTimer: 0,
     lastTouchedTeam: 'TeamA', lastTouchedPlayer: null,
     setPieceTaker: null, setPieceTimer: 0,
+    // Tiro de meta: espera 3-6s depois de todos posicionados (ver
+    // updateGoalKickWait / setupSetPiece).
+    golKickProntos: false, golKickEspera: 0, golKickAlvoEspera: 0,
     counterAttackTeam: null, counterAttackTimer: 0,
     specMesh: null, specData: [], specDummy: new THREE.Object3D(),
     crowdExcitement: 0, crowdTimer: 0,
@@ -822,6 +825,9 @@ const Match = {
                 gk.gkTiroAlvo = null;
             }
         });
+        this.golKickProntos = false;
+        this.golKickEspera = 0;
+        this.golKickAlvoEspera = 0;
 
         // dirA/dirB: sentido de ataque de cada equipa. O campo de defesa é o
         // lado oposto — por isso o clamp abaixo usa z*dir <= -margem.
@@ -957,7 +963,10 @@ const Match = {
         */
         if (this.state === 'GOAL_KICK') {
             this.setPieceTimer += dt;
-            if (this.setPieceTimer > 12.0) {
+            this.updateGoalKickWait(dt);
+            // Orçamento maior que antes: posicionamento + espera de 3-6s +
+            // corrida/cobrança cabem lá dentro sem disparar o reset.
+            if (this.setPieceTimer > 20.0) {
                 this.setPieceTimer = 0;
                 this.resetPlay();
             }
@@ -1303,7 +1312,7 @@ const Match = {
             bestAltura <= BallControl.peitoYMax &&
             best.jumpTimer <= 0 &&
             best.fsm.currentState !== 'CHEST_CONTROL') {
-            best.controlarNoPeito();
+            best.controlarNoPeito(bestAltura);
             return true;
         }
 
@@ -1818,6 +1827,9 @@ const Match = {
             this.ball.position.set(bolaX, BallPhysics.raio, bolaZ);
             this.ballVel.set(0, 0, 0);
             this.ballCarrier = null;
+            this.golKickProntos = false;
+            this.golKickEspera = 0;
+            this.golKickAlvoEspera = 3.0 + Math.random() * 3.0;
 
             const gk = attackingPlayers.find(p => p.role === 'gk');
             this.setPieceTaker = gk || null;
@@ -1840,14 +1852,30 @@ const Match = {
             }
 
             /*
-            Os outros: os que batem espalham-se para receber, os adversários
-            saem da área (regra). Sem estado de bola parada — a jogada retoma
-            assim que o GR chuta, e nesse instante o jogo volta a 'PLAY'.
+            Os outros de quem bate: sobem um pouco para o meio-campo, como na
+            construção normal quando o próprio guarda-redes tem a bola — não
+            ficam encolhidos junto à própria área. Referência é o mesmo tecto
+            "Linha Defensiva" do painel que baliza a equipa em jogo corrido
+            (TeamShape.linhaDefensiva/computeDefensiveLine em team_bt.js), só
+            que aqui aplicado como avanço a partir da posição de formação
+            (`baseTarget`), não como recuo a partir da bola.
+
+            `MOVE_TO_POS` sobrevive ao ramo `esperarLance` do PlayerBT (ver
+            player_bt.js) — sem essa excepção o BT reescrevia o estado para
+            IDLE no frame seguinte e ninguém saía do sítio.
             */
+            const capGK = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
             attackingPlayers.forEach(p => {
                 if (p.role === 'gk') return;
                 p.hasBall = false;
-                p.fsm.changeState('SET_PIECE_WAIT');
+
+                const atkZ = p.baseTarget.z * p.dirZ;
+                const tecto = Math.max(atkZ, capGK);
+                const novoAtkZ = Math.min(atkZ + 6.0, tecto);
+
+                p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, novoAtkZ * p.dirZ);
+                p.speedMult = 4.0;
+                p.fsm.changeState('MOVE_TO_POS');
             });
             defendingPlayers.forEach(p => {
                 if (p.role === 'gk') return;
@@ -1860,6 +1888,38 @@ const Match = {
                 }
                 p.fsm.changeState('SET_PIECE_WAIT');
             });
+        }
+    },
+
+    /*
+    Espera do tiro de meta: 3-6s DEPOIS de quem bate estar posicionado, não a
+    contar do apito. Só entra em contagem quando o último jogador de fora
+    chega perto do alvo (MOVE_TO_POS -> aqui já convertido a SET_PIECE_WAIT);
+    a partir daí o guarda-redes fica autorizado a completar a cobrança (ver o
+    gate em gkTiroFase 0->1 no updateGK, player.js).
+    */
+    updateGoalKickWait: function (dt) {
+        if (this.state !== 'GOAL_KICK') return;
+
+        const team = this.setPieceTaker ? this.setPieceTaker.team : null;
+        const atacantes = (team === 'TeamA') ? this.players : this.opponents;
+
+        atacantes.forEach(p => {
+            if (p.role === 'gk') return;
+            if (p.fsm.currentState === 'MOVE_TO_POS' &&
+                p.model.position.distanceTo(p.dynamicTarget) < 1.5) {
+                p.fsm.changeState('SET_PIECE_WAIT');
+            }
+        });
+
+        if (!this.golKickProntos) {
+            const todosProntos = atacantes.every(p => {
+                if (p.role === 'gk') return true;
+                return p.fsm.currentState === 'SET_PIECE_WAIT';
+            });
+            if (todosProntos) this.golKickProntos = true;
+        } else {
+            this.golKickEspera += dt;
         }
     },
 };

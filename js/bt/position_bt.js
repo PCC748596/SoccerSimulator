@@ -221,6 +221,17 @@ function aproximar(ctx, alvoX, alvoZ, maxDist) {
     ctx.targetZ += dz;
 }
 
+/*
+Teto de desvio da marcação (ver MarkingModel.biasMaxPara em config.js) para
+o terço do campo onde ALVO está — no referencial de ataque do MARCADOR, não
+do alvo, porque é a distância à PRÓPRIA baliza que decide a disciplina.
+*/
+function biasMaxDaMarcacao(p, alvo, mult) {
+    const zoneAhead = alvo.model.position.z * p.dirZ;
+    const base = MarkingModel.biasMaxPara(zoneAhead);
+    return (mult === undefined) ? base : base * mult;
+}
+
 // Aplica a marcação sobre o posto zonal que a folha já calculou.
 function marcar(ctx, alvo, maxDist) {
     const p = ctx.p;
@@ -238,7 +249,7 @@ function marcar(ctx, alvo, maxDist) {
     }
 
     const m = goalSide(p, alvo, distancia);
-    aproximar(ctx, m.x, m.z, (maxDist === undefined) ? MarkingModel.biasMax : maxDist);
+    aproximar(ctx, m.x, m.z, (maxDist === undefined) ? biasMaxDaMarcacao(p, alvo) : maxDist);
     ctx.isMarking = true;
 }
 
@@ -312,7 +323,7 @@ function defendFullBack(ctx) {
         const d = p.model.position.distanceTo(opp.model.position);
         if (d < lateralDist) { lateralDist = d; lateral = opp; }
     }
-    if (lateral) { marcar(ctx, lateral, MarkingModel.biasMax * 0.9); return; }
+    if (lateral) { marcar(ctx, lateral, biasMaxDaMarcacao(p, lateral, 0.9)); return; }
 
     // Ninguém no corredor: fecha um pouco para dentro, acompanhando a bola.
     ctx.targetX += (bb.ballX * 0.18) - flankSign * 1.5;
@@ -385,7 +396,7 @@ function defendFlankShift(ctx) {
 
     if (p.pos === nearSide) {
         // Sai ao portador, pelo lado da baliza.
-        marcar(ctx, carrier, MarkingModel.biasMax);
+        marcar(ctx, carrier, biasMaxDaMarcacao(p, carrier));
     } else if (p.pos === 'CB' && eCentralDoLado) {
         // Cobertura por dentro, mais atrás do que o lateral.
         const cob = goalSide(p, carrier, MarkingModel.distancia + 4.5);

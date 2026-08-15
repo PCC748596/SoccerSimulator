@@ -621,6 +621,22 @@ class PlayerFSM {
                 {
                     p.peitoTimer = (p.peitoTimer || 0) + dt;
 
+                    /*
+                    Salto leve (ver controlarNoPeito/peitoPuloMax) — mesma
+                    curva seno do salto de cabeceio, pico bem mais baixo
+                    (1/3). Escrito aqui, não em animateBones, porque este
+                    corre ANTES dele (ver a ordem em player.update) — o guard
+                    em animateBones só evita que a linha do idle apague isto
+                    a seguir.
+                    */
+                    if (p.peitoHopTimer > 0) {
+                        p.peitoHopTimer -= dt;
+                        const jt = Math.max(0, p.peitoHopTimer / BallControl.peitoDur);
+                        p.model.position.y = ALTURA_BASE_Y + Math.sin(jt * Math.PI) * BallControl.peitoPuloMax;
+                    } else {
+                        p.model.position.y = lerpTo(p.model.position.y, ALTURA_BASE_Y, 0.3);
+                    }
+
                     if (p.peitoCola > 0) {
                         p.peitoCola -= dt;
                         p.colarBolaAoPeito();

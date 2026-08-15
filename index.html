@@ -186,6 +186,8 @@
                     OFF</button>
                 <button type="button" class="btn-sector" id="btn-positionbt" onclick="togglePositionBT()">Position BT:
                     OFF</button>
+                <button type="button" class="btn-sector" id="btn-playingstylebt" onclick="togglePlayingStyleBT()">PlayingStyleBT:
+                    OFF</button>
                 <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">SG
                     PASS/MARKING: OFF</button>
                 <button type="button" class="btn-sector" id="btn-passcandidates"
@@ -278,6 +280,11 @@
     <script src="js/stats.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/controls.js"></script>
+
+    <!-- IK de duas articulações (braço/perna) e mergulho do GR — ver o
+         cabeçalho de js/gk_dive.js para o que substitui e porquê. -->
+    <script src="js/ik.js"></script>
+    <script src="js/gk_dive.js"></script>
 
     <!-- Sincronização gameplay <-> animação (ver ActionAnimClips em config.js) -->
     <script src="js/bt/action_state.js"></script>
