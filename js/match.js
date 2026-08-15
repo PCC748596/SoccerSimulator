@@ -307,12 +307,12 @@ const Match = {
 
         if (window.cameraMode === 'center') {
             // Câmara de TV mais próxima da ação, na altura do último degrau
-            targetPos.set(62 * zoom, 42 * zoom, 0);
+            targetPos.set(58 * zoom, 39 * zoom, 0);
             lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'sideline') {
             // Câmara Lateral bem mais próxima, acompanhando a bola no eixo Z
             let bz = THREE.MathUtils.clamp(this.ball.position.z, -45, 45);
-            targetPos.set(40 * zoom, 15 * zoom, bz);
+            targetPos.set(35 * zoom, 14 * zoom, bz);
             lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'topdown') {
             const aspect = window.innerWidth / window.innerHeight;

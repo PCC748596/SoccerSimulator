@@ -5,7 +5,7 @@ class SimpleOrbitControls {
         this.target = new THREE.Vector3(0, 0, 0);
         this.theta = -Math.PI / 2;
         this.phi = Math.PI / 4;
-        this.radius = 85;
+        this.radius = 80;
 
         this.isDragging = false;
         this.previousMousePosition = { x: 0, y: 0 };
@@ -76,8 +76,8 @@ class SimpleOrbitControls {
     }
 
     onWheel(e) {
-        window.cameraZoom = THREE.MathUtils.clamp(window.cameraZoom + e.deltaY * 0.001, 0.3, 2.5);
-        this.radius = 85 * window.cameraZoom;
+        window.cameraZoom = THREE.MathUtils.clamp(window.cameraZoom + e.deltaY * 0.001, 0.24, 2.5);
+        this.radius = 80 * window.cameraZoom;
         e.preventDefault();
     }
 
@@ -108,8 +108,8 @@ class SimpleOrbitControls {
             const currentDistance = this.getPinchDistance(e);
             if (currentDistance > 0 && this.initialPinchDistance > 0) {
                 const factor = this.initialPinchDistance / currentDistance;
-                window.cameraZoom = THREE.MathUtils.clamp((this.initialRadius * factor) / 85, 0.3, 2.5);
-                this.radius = 85 * window.cameraZoom;
+                window.cameraZoom = THREE.MathUtils.clamp((this.initialRadius * factor) / 80, 0.24, 2.5);
+                this.radius = 80 * window.cameraZoom;
             }
         }
     }

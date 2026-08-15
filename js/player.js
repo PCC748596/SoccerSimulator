@@ -1081,9 +1081,20 @@ class FootballPlayer {
         const B = BallControl;
         const intens = this.peitoIntens || 0;
 
-        rig.chest.rotation.x = B.peitoInclinacao * intens;
+        /*
+        Só o TRONCO (chest) recua — pedido explícito: o jogador não pode
+        parecer que se inclina inteiro para trás. Pelvis e pernas ficam
+        de pé, a prumo (comentário em config.js já dizia isto, mas o
+        recuo estava forte e sem lerp — snap instantâneo do peito todo
+        para trás lia-se como o corpo inteiro a tombar). Lerp suaviza a
+        entrada/saída, e um leve avanço do joelho ancora visualmente a
+        base, para não parecer que ele cai para trás.
+        */
+        rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, B.peitoInclinacao * intens, 0.4);
         rig.lArm.rotation.z += B.peitoBracos * intens;
         rig.rArm.rotation.z -= B.peitoBracos * intens;
+        rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, 0.15 * intens, 0.4);
+        rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 0.15 * intens, 0.4);
     }
 
     /*
@@ -1207,11 +1218,51 @@ class FootballPlayer {
             let jt = this.jumpTimer / SaltoCabeceio.duracao;
             jumpHeight = Math.sin(jt * Math.PI) * (this.jumpApex || SaltoCabeceio.alturaMax);
             this.model.position.y = ALTURA_BASE_Y + jumpHeight;
-            rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, -0.4, 0.4); 
-            rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, 2.0, 0.4); 
-            rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -2.0, 0.4);
-            rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, 0.5, 0.4); 
-            rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, 0.5, 0.4);
+
+            /*
+            Cabeceio em fases (pedido explícito, referência de 12 frames):
+            SUBIDA (tronco/pescoço recuam progressivamente, braços abrem) ->
+            CONTACTO (chicote explosivo para a frente — tronco, pescoço e
+            pernas invertem de repente) -> DESCIDA (volta ao neutro, pernas
+            esticam à procura do chão).
+
+            `p` é o progresso 0..1 do salto (`jt` conta ao contrário). O
+            contacto cai perto de p=0.5 porque o salto é apontado para a
+            bola estar à altura da cabeça exactamente a meio (ver o gatilho
+            de SaltoCabeceio acima) — não é escolhido à parte, seguido daí.
+
+            Alvos dentro de JointLimits.chest.x (-25°..60°) e .neck.x
+            (-60°..50°) — o -0.55 antigo já tinha side-effects deste tipo
+            (ver o bug do lookAt vertical na cabeçada, corrigido antes).
+            */
+            const p = 1 - jt;
+            let chestX, neckX, armZ, legX;
+            if (p < 0.45) {
+                const k = THREE.MathUtils.clamp(p / 0.45, 0, 1);
+                chestX = -0.42 * k;
+                neckX = -0.5 * k;
+                armZ = 2.0 * k;
+                legX = 0.35 * k;
+            } else if (p < 0.58) {
+                const k = THREE.MathUtils.clamp((p - 0.45) / 0.13, 0, 1);
+                chestX = -0.42 + 0.92 * k;   // -0.42 -> 0.50
+                neckX = -0.5 + 1.10 * k;     // -0.5 -> 0.60
+                armZ = 2.0 - 1.2 * k;        // braços fecham um pouco no impacto
+                legX = 0.35 + 0.25 * k;      // pernas chicoteiam também
+            } else {
+                const k = THREE.MathUtils.clamp((p - 0.58) / 0.42, 0, 1);
+                chestX = 0.50 * (1 - k);
+                neckX = 0.60 * (1 - k);
+                armZ = 0.8 * (1 - k);
+                legX = 0.60 * (1 - k);       // estica à procura do chão
+            }
+
+            rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, chestX, 0.5);
+            if (rig.neck) rig.neck.rotation.x = lerpTo(rig.neck.rotation.x, neckX, 0.5);
+            rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, armZ, 0.5);
+            rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -armZ, 0.5);
+            rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, legX, 0.5);
+            rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, legX, 0.5);
         }
 
         /*

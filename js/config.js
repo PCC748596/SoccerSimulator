@@ -1330,7 +1330,7 @@ const BallControl = {
     jogador inteiro, pernas incluídas. Ele fica de pé e a prumo, o tronco
     acima da cintura vai levemente para trás e os braços abrem um pouco.
     */
-    peitoInclinacao: -0.30, // rotação da cintura (negativo = para trás)
+    peitoInclinacao: -0.20, // rotação da cintura (negativo = para trás) — só o tronco, reduzido pra não ler como o corpo inteiro a tombar
     peitoBracos: 0.35,      // abertura dos braços (rotation.z, somado à pose)
 
     /*
