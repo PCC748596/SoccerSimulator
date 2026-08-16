@@ -586,10 +586,12 @@ const Match = {
             }
         }
 
-        buildCorner(-32.0, 52.0, Math.PI / 2);
-        buildCorner(32.0, 52.0, 0);
-        buildCorner(-32.0, -52.0, Math.PI);
-        buildCorner(32.0, -52.0, 3 * Math.PI / 2);
+        let cornerX = (CAMPO_LARG / 2) - 2;
+        let cornerZ = (CAMPO_COMP / 2) - 1;
+        buildCorner(-cornerX, cornerZ, Math.PI / 2);
+        buildCorner(cornerX, cornerZ, 0);
+        buildCorner(-cornerX, -cornerZ, Math.PI);
+        buildCorner(cornerX, -cornerZ, 3 * Math.PI / 2);
 
         /*
         Barreira de contenção à frente da bancada (ver BarreiraCampo).
