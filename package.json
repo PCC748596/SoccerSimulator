@@ -2,7 +2,7 @@
   "name": "soccer-simulator",
   "version": "1.0.0",
   "private": true,
-  "description": "Simulador de futebol em Three.js — scripts clássicos, sem build. Ver js.md.",
+  "description": "Simulador de futebol em Three.js — scripts clássicos, sem build. Ver filesSummary.md.",
   "scripts": {
     "dev": "node tools/dev-server.js",
     "obj2js": "node tools/obj2js.js"

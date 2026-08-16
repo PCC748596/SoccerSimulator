@@ -295,8 +295,9 @@ travar só quem corre.
     1.00  ritmo original
     0.90  -10% (pedido)
     0.81  -10% de novo, sobre o 0.90 (pedido)
+    0.891 +10% sobre o 0.81 (pedido)
 */
-const GAME_SPEED = 0.81;
+const GAME_SPEED = 0.891;
 
 window.cameraMode = 'center';
 window.cameraZoom = 1.0;
@@ -1509,9 +1510,80 @@ const DefensivePressureModel = {
     high: 2.0
 };
 
+/*
+=============================================================================
+SISTEMA TÁTICO COLETIVO — Mentalidade, TeamPlayStyle, Momentum, Congestão
+=============================================================================
+Camada de comportamento COLETIVO acima do Decision Grid e dos Playing
+Styles — não substitui nenhum dos dois, só empurra os pesos das decisões
+já existentes (ver `player.js` → `findPassTarget`, `team_bt.js` →
+`TeamBlackboard.gather`). Playing Styles continuam intocados: um Dummy
+Runner continua a atrair marcação da mesma forma independente da
+Mentalidade ou do TeamPlayStyle da equipa.
+
+MENTALIDADE (era "Estilo de Jogo" — Defesa/Misto/Ataque). Os VALORES
+internos (`defesa`/`balanceado`/`ataque`) não mudaram, só o rótulo na UI —
+ligado a `MentalidadeModel.agressao`, a base da agressividade dinâmica
+(ver `TeamAggression` em `team_bt.js`).
+=============================================================================
+*/
+const MentalidadeModel = {
+    defesa: { agressao: 0.32 },
+    balanceado: { agressao: 0.50 },
+    ataque: { agressao: 0.68 }
+};
+
+/*
+TEAM PLAY STYLE — como a equipa prefere progredir, não ONDE cada jogador
+fica (isso é Playing Style). Cada campo é um MULTIPLICADOR (1.0 = neutro)
+sobre pesos já existentes:
+
+    circulacao      peso do passe pra trás/lateral quando o lado da bola
+                     está congestionado (findPassTarget, player.js)
+    verticalidade   peso do bónus de progressão vertical (idem)
+    viradas         peso extra quando o passe muda de lado com espaço lá
+    corredores      peso do bónus de sector lateral (Tatics.setores)
+    cruzamento      multiplica a chance de cruzamento (findCross, player_bt.js)
+    pressaoPosPerda multiplica a reacção depois de perder a bola — menor
+                     valor = reage mais depressa (pickChaser, team_bt.js)
+*/
+const TeamPlayStyles = {
+    possession: {
+        nome: 'Possession',
+        circulacao: 1.6, verticalidade: 0.75, viradas: 1.3,
+        corredores: 0.9, cruzamento: 0.9, pressaoPosPerda: 1.0
+    },
+    direct: {
+        nome: 'Direct',
+        circulacao: 0.55, verticalidade: 1.5, viradas: 0.7,
+        corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 1.0
+    },
+    counter_attack: {
+        nome: 'Counter Attack',
+        circulacao: 0.7, verticalidade: 1.35, viradas: 0.9,
+        corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 0.8
+    },
+    wing_play: {
+        nome: 'Wing Play',
+        circulacao: 0.9, verticalidade: 1.0, viradas: 1.1,
+        corredores: 1.5, cruzamento: 1.4, pressaoPosPerda: 1.0
+    },
+    positional: {
+        nome: 'Positional',
+        circulacao: 1.25, verticalidade: 0.95, viradas: 1.15,
+        corredores: 1.1, cruzamento: 1.0, pressaoPosPerda: 1.0
+    },
+    high_press: {
+        nome: 'High Press',
+        circulacao: 0.85, verticalidade: 1.1, viradas: 0.85,
+        corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 0.55
+    }
+};
+
 const Tatics = {
     formacao: '442',
     estilo: 'balanceado',
+    teamPlayStyle: 'positional',
     passe: 'balanceado',
     linhaDefensiva: 'medium',
     compactness: 'median',
@@ -1570,6 +1642,8 @@ const Tatics = {
     update: function () {
         this.formacao = document.getElementById('t-formacao').value;
         this.estilo = document.getElementById('t-estilo').value;
+        const teamStyleEl = document.getElementById('t-team-style');
+        if (teamStyleEl) this.teamPlayStyle = teamStyleEl.value;
         this.passe = document.getElementById('t-passe').value;
         this.linhaDefensiva = document.getElementById('t-linha').value;
         this.compactness = document.getElementById('t-compactness').value;

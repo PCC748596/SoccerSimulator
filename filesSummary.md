@@ -204,6 +204,39 @@ Além da postura, escreve: `pushMultiplier`, `styleDefenseZShift`, `advanceFacto
 marcações (`markingTarget` / `isCovering` / `markCount`) nos jogadores das duas
 equipas.
 
+**Camada tática coletiva** (tacticSystem.md) — três campos novos no
+`TeamBlackboard`, calculados no fim de `gather()`, uma camada ACIMA do
+Decision Grid e dos Playing Styles (que continuam intocados):
+
+```
+momentumX    EMA de -1 (esq) a +1 (dir) de onde a bola anda lateralmente —
+             suavizado (updateMomentum), uma troca de lado isolada não vira
+             Momentum sozinha
+congestion   { esq, centro, dir } 0-100 — adversários de campo perto da
+             bola em Z, contados por banda de X (computeCongestion)
+aggression   0-1 — Mentalidade (MentalidadeModel[Tatics.estilo].agressao)
+             reduzida pela congestão do lado ONDE A BOLA ESTÁ agora
+             (computeAggression); a 0.5 (neutro) reproduz o tuning antigo
+```
+
+`TeamPlayStyle` (catálogo `TeamPlayStyles` em `config.js`, seleccionado em
+`Tatics.teamPlayStyle`, painel "Estilo Coletivo") é um conjunto de
+multiplicadores (`circulacao`, `verticalidade`, `viradas`, `corredores`,
+`cruzamento`, `pressaoPosPerda`) lidos por quem já decidia essas coisas —
+não é um sistema à parte. Pontos de leitura:
+
+| Campo | Onde é lido | Efeito |
+|---|---|---|
+| `verticalidade`, `circulacao`, `viradas` | `player.js` → `findPassTarget()` | pesa progressão vs. circulação/virada no passe real |
+| `corredores` | `findPassTarget()` | multiplica o bónus de `Tatics.setores` |
+| `cruzamento` | `player_bt.js` → `findCross()` | multiplica a chance de cruzamento |
+| `pressaoPosPerda` | `team_bt.js` → `pickChaser`/`assignMarking` | multiplica o `reactionDelay` pós-perda |
+| `aggression`, `congestion` | `findPassTarget()` | escala o bónus de lançamento em espaço vazio e dispara virada de jogo quando o meu lado está cheio e o outro não |
+
+Playing Styles continuam a decidir o que sempre decidiram (ex.: Orchestrator
+já tinha bónus próprio de recuar/inverter — intocado, a camada nova só
+soma por cima para todos os OUTROS passadores).
+
 O nível 1 fala **duas vezes** por frame:
 
 | Passo | Quando | Faz |
@@ -636,6 +669,16 @@ Primeiro a carregar. Não depende de nada além do THREE.
   contado em `assignFormations`) — CM(1) Box-to-Box / CM(2) Orchestrator,
   CF(1) Fox in the Box / CF(2) Dummy Runner, CB(1) Build Up / CB(2) Extra
   Frontman. Pedido explícito: dois jogadores no mesmo posto não são clones.
+- **`MentalidadeModel`** — `{ agressao }` por Mentalidade (`defesa`/
+  `balanceado`/`ataque`, rótulos na UI: Defensiva/Equilibrada/Ofensiva —
+  os VALORES internos não mudaram). Base da `Agressividade` dinâmica em
+  `team_bt.js` → `computeAggression`.
+- **`TeamPlayStyles`** — catálogo `possession`/`direct`/`counter_attack`/
+  `wing_play`/`positional`/`high_press`. Cada entrada é só multiplicadores
+  (`circulacao`, `verticalidade`, `viradas`, `corredores`, `cruzamento`,
+  `pressaoPosPerda`) sobre pesos que já existiam — não é sistema de decisão
+  próprio. Seleccionado em `Tatics.teamPlayStyle`, painel "Estilo Coletivo".
+  Ver secção `bt/team_bt.js` acima pra onde cada campo é lido.
 - `Tatics` — formação, estilo de jogo, estilo de passe, sectores do campo activos,
   **`linhaDefensiva`** (`'low'` | `'medium'` | `'high'`) e **`pressaoDefensiva`**
   (`'low'` | `'balanced'` | `'high'`, selector "Defensive Pressure"):

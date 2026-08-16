@@ -411,6 +411,14 @@ function animate(time) {
 
         const bbB = TeamAI.blackboards['TeamB'];
         if (bbB && bbB.posture) document.getElementById('hud-state-b').innerText = bbB.posture;
+
+        // Alimenta a aba do fluxograma do TeamBT (teamBtView.html), se aberta.
+        // BroadcastChannel: nada acontece se ninguém estiver a ouvir do outro lado.
+        if (!window._teamBtChannel) window._teamBtChannel = new BroadcastChannel('teamBtTrace');
+        window._teamBtChannel.postMessage({
+            TeamA: bbA ? { trace: bbA.trace, posture: bbA.posture } : null,
+            TeamB: bbB ? { trace: bbB.trace, posture: bbB.posture } : null
+        });
     }
 
     if (!window._hudJogadoresLast || time - window._hudJogadoresLast > 200) {

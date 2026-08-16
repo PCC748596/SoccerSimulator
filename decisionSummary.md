@@ -180,7 +180,7 @@ bola.
   mundo correr pra bola ao mesmo tempo.
 - **Receber**: sou o `Match.intendedReceiver` de um passe em curso.
 - **Guarda-redes**: posiciona-se na baliza (não passa por aqui quando tem a
-  bola — isso é tratado à parte em `updateGK`, ver `js.md`).
+  bola — isso é tratado à parte em `updateGK`, ver `filesSummary.md`).
 - **Ataque à área**: colega em posição de cruzar → vai ocupar o 1º ou 2º
   poste (alterna por `id % 2`), pra o cruzamento ter alvo.
 - **Fallback — `ocuparPosicao`**: aqui é onde nasce o rótulo do estado

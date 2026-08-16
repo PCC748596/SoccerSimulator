@@ -453,6 +453,21 @@ class FootballPlayer {
         let opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
         let ratedCandidates = [];
 
+        /*
+        Camada tática coletiva (tacticSystem.md) — Mentalidade já entrava via
+        Playing Style/Decision Grid; isto é NOVO: TeamPlayStyle + Momentum +
+        Congestão, por cima do resto, sem mexer no que já existia acima.
+        Playing Styles continuam a decidir tudo o que já decidiam (ver
+        isOrchestrator abaixo, intocado).
+        */
+        const teamBB = (typeof TeamAI !== 'undefined') ? TeamAI.get(this.team) : null;
+        const teamStyle = (typeof TeamPlayStyles !== 'undefined')
+            ? (TeamPlayStyles[Tatics.teamPlayStyle] || TeamPlayStyles.positional)
+            : null;
+        const secToCongestionKey = { esq: 'esq', dir: 'dir', cen: 'centro' };
+        const ladoBola = getSectorOfX(ownX);
+        const congestaoMeuLado = (teamBB) ? (teamBB.congestion[secToCongestionKey[ladoBola]] || 0) : 0;
+
         for (let opt of options) {
             let optPos = alvoDePasse(opt);
             let dist = this.model.position.distanceTo(optPos);
@@ -519,7 +534,7 @@ class FootballPlayer {
                 // 30 -> 45 -> 67.5 -> 135 (+100%). Passa a ser o maior termo
                 // isolado da nota, à frente do bónus de estar livre (tecto 110):
                 // com menos do que isso o colega central livre ganhava sempre.
-                score += 135;
+                score += 135 * (teamStyle ? teamStyle.corredores : 1.0);
             }
 
             /*
@@ -535,17 +550,29 @@ class FootballPlayer {
             */
             let progression = (optPos.z - ownZ) * dirZ;
             if (progression > 0) {
-                let progBonus = 20 + Math.min(35, progression * 1.1);
-                // Lançamento em espaço vazio: ponto extra muito bom se o alvo estiver livre à frente
+                let progBonus = (20 + Math.min(35, progression * 1.1)) * (teamStyle ? teamStyle.verticalidade : 1.0);
+                /*
+                Lançamento em espaço vazio: ponto extra muito bom se o alvo
+                estiver livre à frente. Escalado pela Agressividade dinâmica
+                (Mentalidade × TeamPlayStyle × congestão do MEU lado, ver
+                computeAggression em team_bt.js) — a 0.5 (neutro) dá o mesmo
+                +150 de sempre; congestionado/defensivo reduz, ofensivo com
+                espaço aumenta. Isto é o "não atacar só porque tem bola"
+                pedido no tacticSystem.md.
+                */
                 if (minOppDist > 8.0) {
-                    progBonus += 150; 
+                    const aggr = teamBB ? teamBB.aggression : 0.5;
+                    progBonus += 150 * (0.6 + aggr * 0.8);
                 }
                 score += progBonus;
             } else {
                 if (isOrchestrator) {
                     score += Math.abs(progression) * 1.2; // Gosta de organizar o jogo recuando a bola
                 } else {
-                    score -= Math.abs(progression) * 1.0;
+                    // Penalidade por recuar dividida pela circulação do
+                    // TeamPlayStyle: Possession (1.6) sofre bem menos por
+                    // passar pra trás; Direct (0.55) sofre bem mais.
+                    score -= Math.abs(progression) * 1.0 / (teamStyle ? teamStyle.circulacao : 1.0);
                 }
             }
 
@@ -553,6 +580,17 @@ class FootballPlayer {
                 // Inversão de jogada: se o passe muda de flanco e a distância lateral é grande
                 if (Math.sign(optPos.x) !== Math.sign(ownX) && Math.abs(optPos.x - ownX) > 20) {
                     score += 200; // Bónus muito forte para inverter a jogada
+                }
+            } else if (teamBB && teamStyle && congestaoMeuLado > 55) {
+                /*
+                Virada de jogo coletiva (tacticSystem.md secção 7) — qualquer
+                passador, não só o Orchestrator (que já tem o bónus acima).
+                Só quando o MEU lado está congestionado e o ALVO está num
+                lado com bem menos gente adversária por perto.
+                */
+                const congestaoAlvo = teamBB.congestion[secToCongestionKey[optSec]] || 0;
+                if (congestaoAlvo < congestaoMeuLado - 20) {
+                    score += 60 * teamStyle.viradas * (1 - teamBB.aggression);
                 }
             }
 
@@ -618,18 +656,31 @@ class FootballPlayer {
             só se aplicava lead em passes >22m; agora aplica-se sempre,
             proporcional ao tempo estimado de voo.
 
-            `pesoVel` (17 m/s) é a velocidade média aproximada de saída da
-            bola — não a física exacta (essa só se resolve depois, em
-            executePassGameplay, e dependeria do alvo que ainda estamos a
-            calcular). Amortecido a 0.75: é só uma estimativa, ele pode
-            travar ou mudar de direcção durante o voo.
+            `pesoVel` é a velocidade MÉDIA aproximada da bola ao longo do
+            voo — não a de saída (essa é mais alta, ~17-18 m/s, mas o arrasto
+            e o atrito de rolamento travam-na muito ao longo do percurso; a
+            física exacta só se resolve depois, em executePassGameplay, e
+            dependeria do alvo que ainda estamos a calcular).
+
+            Auditoria dos passes (pedido explícito, "estão crutos, não
+            chegam direito"): media com jogo real mostrou o tempo de voo
+            verdadeiro 1.5x-2x mais longo do que `distancia/17` estimava
+            nos 10-30m (a faixa mais comum) — sobrava pouco lead, a bola
+            chegava atrás de quem corria a recebê-la. Piorou depois de
+            aumentar o campo: distâncias de passe maiores dão mais tempo
+            para o arrasto travar a bola, e o erro do "17 fixo" cresce com
+            a distância. 11 m/s aproxima melhor a média medida; o tecto do
+            clamp subiu de 3.0 para 4.5s para não cortar o lead nos passes
+            mais longos que o campo maior agora produz com mais frequência.
+            Amortecido a 0.75: é só uma estimativa, ele pode travar ou
+            mudar de direcção durante o voo.
             */
             const alvo = alvoDePasse(this.passTarget);
             _v1.set(alvo.x, 0, alvo.z);
 
             if (this.passTarget && this.passTarget.velocity) {
                 const distEstimate = _v1.distanceTo(Match.ball.position);
-                const travelTime = THREE.MathUtils.clamp(distEstimate / 17.0, 0.15, 3.0);
+                const travelTime = THREE.MathUtils.clamp(distEstimate / 11.0, 0.15, 4.5);
                 _v1.x += this.passTarget.velocity.x * travelTime * 0.75;
                 _v1.z += this.passTarget.velocity.z * travelTime * 0.75;
 
@@ -642,13 +693,17 @@ class FootballPlayer {
                 a empilhar no mesmo sentido (ele a correr NA direcção do
                 tacticalTarget, o caso comum) e a bola saía a passar bem à
                 frente dele, sobrando por cima do problema original (chegava
-                atrás). 14m ~ o que um jogador em sprint cobre num passe
-                longo (3s), tecto generoso mas não infinito.
+                atrás). 18m ~ o que um jogador em sprint cobre num passe
+                longo (4.5s, tecto do travelTime acima), tecto generoso mas
+                não infinito. Subiu de 14 pq o clamp do travelTime também
+                subiu (3.0 -> 4.5s) — sem subir os dois juntos o tecto
+                cortava o lead justamente nos passes longos que mais
+                precisam dele no campo maior.
                 */
                 const real = this.passTarget.model.position;
                 const leadX = _v1.x - real.x, leadZ = _v1.z - real.z;
                 const leadDist = Math.hypot(leadX, leadZ);
-                const maxLeadTotal = 14.0;
+                const maxLeadTotal = 18.0;
                 if (leadDist > maxLeadTotal) {
                     const k = maxLeadTotal / leadDist;
                     _v1.x = real.x + leadX * k;
@@ -1133,8 +1188,15 @@ class FootballPlayer {
         base, para não parecer que ele cai para trás.
         */
         rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, B.peitoInclinacao * intens, 0.4);
-        rig.lArm.rotation.z += B.peitoBracos * intens;
-        rig.rArm.rotation.z -= B.peitoBracos * intens;
+        /*
+        Era `+=`/`-=` — soma a cada frame em vez de convergir para um alvo.
+        Ao longo dos ~0.55s do gesto (peitoDur) isso acumulava para bem além
+        de 90°, lendo como o jogador a perder o equilíbrio todo, não só a
+        abrir os braços "levemente" (bug real, achado ao inspecionar os
+        ângulos frame a frame — não só visual).
+        */
+        rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, B.peitoBracos * intens, 0.4);
+        rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -B.peitoBracos * intens, 0.4);
 
         /*
         Braços erguem-se um pouco pra trás e o cotovelo dobra pra dentro —
@@ -1172,8 +1234,9 @@ class FootballPlayer {
 
         rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, -0.30 * intens, 0.5);
         if (rig.neck) rig.neck.rotation.x = lerpTo(rig.neck.rotation.x, 0.45 * intens, 0.5);
-        rig.lArm.rotation.z += 0.15 * intens;
-        rig.rArm.rotation.z -= 0.15 * intens;
+        // Mesmo bug do peito (ver aplicarCamadaPeito): era `+=`/`-=`.
+        rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, 0.15 * intens, 0.5);
+        rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -0.15 * intens, 0.5);
     }
 
     animateBones(dt) {
@@ -1292,33 +1355,50 @@ class FootballPlayer {
             (ver o bug do lookAt vertical na cabeçada, corrigido antes).
             */
             const p = 1 - jt;
-            let chestX, neckX, armZ, legX;
+            let chestX, neckX, armZ;
             if (p < 0.45) {
                 const k = THREE.MathUtils.clamp(p / 0.45, 0, 1);
                 chestX = -0.42 * k;
                 neckX = -0.5 * k;
                 armZ = 2.0 * k;
-                legX = 0.35 * k;
             } else if (p < 0.58) {
                 const k = THREE.MathUtils.clamp((p - 0.45) / 0.13, 0, 1);
                 chestX = -0.42 + 0.92 * k;   // -0.42 -> 0.50
                 neckX = -0.5 + 1.10 * k;     // -0.5 -> 0.60
                 armZ = 2.0 - 1.2 * k;        // braços fecham um pouco no impacto
-                legX = 0.35 + 0.25 * k;      // pernas chicoteiam também
             } else {
                 const k = THREE.MathUtils.clamp((p - 0.58) / 0.42, 0, 1);
                 chestX = 0.50 * (1 - k);
                 neckX = 0.60 * (1 - k);
                 armZ = 0.8 * (1 - k);
-                legX = 0.60 * (1 - k);       // estica à procura do chão
             }
 
             rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, chestX, 0.5);
             if (rig.neck) rig.neck.rotation.x = lerpTo(rig.neck.rotation.x, neckX, 0.5);
             rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, armZ, 0.5);
             rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -armZ, 0.5);
-            rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, legX, 0.5);
-            rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, legX, 0.5);
+
+            /*
+            Pedido explícito: quem dobra é a parte de BAIXO da perna (joelho,
+            rig.lKnee/rKnee), não a coxa inteira (rig.lLeg/rLeg, ficava um
+            "prancha" rígido girando no quadril — era o que estava errado).
+            Curva PRÓPRIA, independente das 3 fases do tronco: dobra rápido
+            na primeira metade da subida e já volta a esticar bem ANTES do
+            contacto (pico ~p=0.28, zero a partir de p≈0.58) — "a parte de
+            baixo da perna vai retornando à posição reta" ENQUANTO a cabeça
+            ainda está a chicotear para a bola, não depois.
+            */
+            let kneeX;
+            if (p < 0.28) {
+                kneeX = Math.sin(THREE.MathUtils.clamp(p / 0.28, 0, 1) * Math.PI / 2) * 1.0;
+            } else {
+                kneeX = 1.0 * (1 - THREE.MathUtils.clamp((p - 0.28) / 0.30, 0, 1));
+            }
+            rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, kneeX, 0.5);
+            rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, kneeX, 0.5);
+            // Coxa só um leve avanço de apoio — o movimento é do joelho.
+            rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, 0.10 * Math.sin(p * Math.PI), 0.5);
+            rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, 0.10 * Math.sin(p * Math.PI), 0.5);
         }
 
         /*
@@ -1359,7 +1439,18 @@ class FootballPlayer {
             return; 
         }
 
-        if (speed < 0.1 && this.fsm.currentState !== 'PASS' && this.fsm.currentState !== 'SHOOT') {
+        /*
+        CHEST_CONTROL força este ramo mesmo com `speed >= 0.1`: a velocidade só
+        decai (*0.75/frame, ver fsm.js) em vez de zerar na entrada, e por uns
+        ~13 frames (~0.2s) ficava >= 0.1 — tempo que chegava para o ramo da
+        passada de corrida (`speed >= 0.1` mais abaixo) escrever a perna
+        INTEIRA em pose de sprint por cima de tudo (esse ramo faz set directo,
+        sem lerp). aplicarCamadaPeito() só mexe no joelho, nunca em
+        lLeg/rLeg.rotation.x — a perna ficava esticada em passada, lendo como
+        o jogador deitado no chão. Aqui entra sempre em modo neutro (lerp),
+        e a camada do peito continua a desenhar por cima como já fazia.
+        */
+        if ((speed < 0.1 || this.fsm.currentState === 'CHEST_CONTROL') && this.fsm.currentState !== 'PASS' && this.fsm.currentState !== 'SHOOT') {
             // O salto leve da matada no peito escreve position.y no próprio
             // fsm.js (case CHEST_CONTROL), que corre antes disto — não pisar.
             if (!(this.fsm.currentState === 'CHEST_CONTROL' && this.peitoHopTimer > 0)) {

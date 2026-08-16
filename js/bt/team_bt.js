@@ -94,6 +94,16 @@ class TeamBlackboard {
         this.ballX = 0;
         this.ballZ = 0;
 
+        /*
+        Sistema tático coletivo (ver MentalidadeModel/TeamPlayStyles em
+        config.js) — persistem entre frames de propósito, este objecto não é
+        recriado a cada tick (ver TeamAI.get). `momentumX` suaviza-se aqui;
+        `congestion`/`aggression` são recalculados do zero a cada gather().
+        */
+        this.momentumX = 0;                          // -1 (esq) .. +1 (dir), suavizado
+        this.congestion = { esq: 0, centro: 0, dir: 0 };
+        this.aggression = 0.5;                        // 0..1, ver computeAggression
+
         this.trace = [];
     }
 
@@ -137,8 +147,65 @@ class TeamBlackboard {
         // defensivo, e um alerta antigo não pode sobreviver a uma recuperação.
         this.flankAlert = null;
 
+        updateMomentum(this, match.delta || 0.016);
+        this.congestion = computeCongestion(this);
+        this.aggression = computeAggression(this);
+
         this.trace.length = 0;
     }
+}
+
+/*
+=============================================================================
+MOMENTUM, CONGESTÃO E AGRESSIVIDADE — ver config.js (MentalidadeModel,
+TeamPlayStyles) para o catálogo de pesos que estas funções consultam.
+=============================================================================
+*/
+
+// EMA do lado do campo onde a bola anda — sem isto qualquer troca lateral
+// de bola mudava o "lado" instantaneamente; suavizado, um passe isolado
+// pro lado oposto não vira Momentum sozinho, precisa insistir.
+function updateMomentum(bb, dt) {
+    const alvo = THREE.MathUtils.clamp(bb.ballX / (CAMPO_LARG / 2), -1, 1);
+    const k = 1 - Math.exp(-0.5 * dt);
+    bb.momentumX += (alvo - bb.momentumX) * k;
+}
+
+// Congestão por banda lateral (esq/centro/dir, mesmo corte de
+// Tatics.getWeightedSectorX): adversários de campo perto da bola em Z,
+// contados por banda de X, normalizado 0-100. Só o que está PERTO da jogada
+// conta — um zagueiro adversário parado no próprio último terço não torna o
+// lado congestionado se a bola está no meio-campo.
+function computeCongestion(bb) {
+    const bandas = { esq: 0, centro: 0, dir: 0 };
+    for (const o of bb.opp) {
+        if (o.role === 'gk') continue;
+        if (Math.abs(o.model.position.z - bb.ballZ) > 22) continue;
+        const x = o.model.position.x;
+        const banda = x < -10 ? 'esq' : (x > 10 ? 'dir' : 'centro');
+        bandas[banda]++;
+    }
+    // ~4 adversários numa banda já é "cheio" (100) — 11 jogadores por
+    // equipa, 3 bandas, densidade média ~3-4 por banda quando o bloco está
+    // todo daquele lado.
+    return {
+        esq: Math.min(100, bandas.esq * 25),
+        centro: Math.min(100, bandas.centro * 25),
+        dir: Math.min(100, bandas.dir * 25)
+    };
+}
+
+// Agressividade dinâmica: Mentalidade dá a base, TeamPlayStyle e o espaço no
+// lado ONDE A BOLA ESTÁ modulam por cima. Não é fixa — equipa Ofensiva
+// contra bloco compacto do lado da bola arrisca menos, sem o utilizador
+// mexer em nada (ver tacticSystem.md secção 9).
+function computeAggression(bb) {
+    const base = (typeof MentalidadeModel !== 'undefined' && MentalidadeModel[Tatics.estilo])
+        ? MentalidadeModel[Tatics.estilo].agressao : 0.5;
+    const ladoBola = bb.ballX < -10 ? 'esq' : (bb.ballX > 10 ? 'dir' : 'centro');
+    const congestaoLado = bb.congestion[ladoBola] / 100;
+    // Congestão 0 não mexe; congestão 100 corta a agressividade a 40% da base.
+    return THREE.MathUtils.clamp(base * (1 - congestaoLado * 0.6), 0, 1);
 }
 
 /* --- Acções do nível de equipa ------------------------------------------ */
@@ -191,7 +258,9 @@ function pickChaser(bb) {
     (painel esquerdo): Low 6s, Balanced 4s, High 2s. Match.possessionTimer
     conta desde a última troca de equipa na posse (ver updatePossession).
     */
-    const reactionDelay = DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced;
+    const teamStyle = (typeof TeamPlayStyles !== 'undefined') ? TeamPlayStyles[Tatics.teamPlayStyle] : null;
+    const reactionDelay = (DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced)
+        * (teamStyle ? teamStyle.pressaoPosPerda : 1.0);
     if (!bb.isAttacking && prevChaser && Match.possessionTimer < reactionDelay) {
         bb.chaser = prevChaser;
         return;
@@ -256,7 +325,9 @@ que sobrevive a esse reset (p.prevMarkingTarget).
 function assignMarking(bb) {
     // Mesma janela de reação do pickChaser: mantém a marcação de antes da
     // perda de bola em vez de recalcular tudo no mesmo frame.
-    const reactionDelay = DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced;
+    const teamStyle = (typeof TeamPlayStyles !== 'undefined') ? TeamPlayStyles[Tatics.teamPlayStyle] : null;
+    const reactionDelay = (DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced)
+        * (teamStyle ? teamStyle.pressaoPosPerda : 1.0);
     if (!bb.isAttacking && Match.possessionTimer < reactionDelay) {
         bb.outfield.forEach(def => {
             const alvo = def.prevMarkingTarget;

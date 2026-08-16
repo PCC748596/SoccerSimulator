@@ -1568,8 +1568,11 @@ const Match = {
             }
         }
 
+        // Limite casado com BarreiraCampo.x (linha lateral + 3m, config.js) —
+        // com só +2m aqui sobrava 1m de zona morta junto ao muro onde a bola
+        // podia ficar parada e nenhum jogador tinha alvo que alcançasse lá.
         for (let i = 0; i < n; i++) {
-            outfield[i].dynamicTarget.x = Math.max(-(CAMPO_LARG / 2 + 2), Math.min(CAMPO_LARG / 2 + 2, P[i].x));
+            outfield[i].dynamicTarget.x = Math.max(-BarreiraCampo.x, Math.min(BarreiraCampo.x, P[i].x));
             if (!apenasX) outfield[i].dynamicTarget.z = Math.max(-(CAMPO_COMP / 2), Math.min(CAMPO_COMP / 2, P[i].z));
         }
     },

@@ -339,6 +339,13 @@ function findCross(ctx) {
         C.bonusLargura * largura + C.bonusFundo * fundo;
     if (ctx.underPressure) chance -= C.penalPressao;
 
+    // TeamPlayStyle (tacticSystem.md) — Wing Play cruza bem mais, Direct/
+    // Counter Attack ficam no neutro (ver TeamPlayStyles em config.js).
+    if (typeof TeamPlayStyles !== 'undefined') {
+        const teamStyle = TeamPlayStyles[Tatics.teamPlayStyle] || TeamPlayStyles.positional;
+        chance *= teamStyle.cruzamento;
+    }
+
     // Grid espacial (camada CRUZAMENTO): soma o valor autorado da célula do cruzador.
     if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
         const crossVal = SpatialGrid.layerValueAt('cruzamento', p.model.position.x, p.model.position.z, p.team);

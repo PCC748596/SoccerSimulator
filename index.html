@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Soccer Simulator</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 
@@ -30,11 +31,21 @@
                 <option value="4231">4-2-3-1</option>
             </select>
 
-            <label>Estilo de Jogo</label>
+            <label>Mentalidade</label>
             <select id="t-estilo" onchange="Tatics.update()">
-                <option value="balanceado">Balanceado</option>
-                <option value="ataque">Ataque</option>
-                <option value="defesa">Defesa</option>
+                <option value="balanceado">Equilibrada</option>
+                <option value="ataque">Ofensiva</option>
+                <option value="defesa">Defensiva</option>
+            </select>
+
+            <label>Estilo Coletivo (TeamPlayStyle)</label>
+            <select id="t-team-style" onchange="Tatics.update()">
+                <option value="positional" selected>Positional</option>
+                <option value="possession">Possession</option>
+                <option value="direct">Direct</option>
+                <option value="counter_attack">Counter Attack</option>
+                <option value="wing_play">Wing Play</option>
+                <option value="high_press">High Press</option>
             </select>
 
             <label>Estilo de Passe</label>
@@ -198,6 +209,9 @@
                     onclick="togglePassCandidates()">PlayerPassTarget: OFF</button>
                 <button type="button" class="btn-sector" id="btn-passgrid"
                     onclick="toggleUsarPasseGrid()">PassGrid (decisão): OFF</button>
+                <button type="button" class="btn-sector" id="btn-teambtview"
+                    onclick="window.open('teamBtView.html', 'teamBtView', 'width=900,height=700')">TeamBT
+                    Fluxograma (nova aba)</button>
             </div>
 
             <hr class="linha-sep">
