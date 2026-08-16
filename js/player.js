@@ -362,8 +362,9 @@ class FootballPlayer {
         window.bolaChutada = false;
 
         // Não pode voltar a tocar já no frame seguinte; o repique tem de ter
-        // tempo de acontecer.
-        this.touchLock = B.touchLock;
+        // tempo de acontecer. A duração é a mesma do gesto, para não dominar
+        // com o pé enquanto ainda está dobrado para trás.
+        this.touchLock = B.peitoDur;
         this.peitoTimer = 0;
         this.fsm.changeState('CHEST_CONTROL');
 
@@ -609,6 +610,7 @@ class FootballPlayer {
                 else score -= 10;
             }
 
+            if (window.showPlayerPoints) { opt.debugPoints = opt.debugPoints || {}; opt.debugPoints['Pass'] = Math.round(score); }
             ratedCandidates.push({ player: opt, score: score });
         }
 
@@ -981,13 +983,17 @@ class FootballPlayer {
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT, PlayerPOS e PlayerPlayingStyle)
-        if (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle) {
+        if (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints) {
             this.labelSprite.visible = true;
             let parts = [];
             if (window.showPlayerNumber) parts.push(this.num);
             if (window.showPlayerPOS) parts.push(this.pos);
             if (window.showPlayerBT) parts.push(this.fsm.currentState);
             if (window.showPlayerPlayingStyle && this.playingStyle && !this.playingStyleDesligado) parts.push(this.playingStyle);
+            if (window.showPlayerPoints && this.debugPoints) {
+                let pts = Object.entries(this.debugPoints).map(([k,v]) => `${k}:${v}`).join(' | ');
+                if (pts) parts.push(pts);
+            }
             let text = parts.join(" | ");
 
             if (text !== this.lastLabelText) {

@@ -66,7 +66,7 @@ põe o centro da cabeça a ~1.64 m e a testa a ~1.75 m. Este valor é o ponto de
 contacto de um cabeceio — ver distanciaAoCorpo() em utils.js.
 */
 const ALTURA_CABECA = 1.72;
-const CAMPO_LARG = 74; const CAMPO_COMP = 116;
+const CAMPO_LARG = 68; const CAMPO_COMP = 106;
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();

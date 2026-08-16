@@ -218,6 +218,7 @@ function findThroughBall(ctx) {
         if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
             nota += SpatialGrid.layerValueAt('lancamento', alvoX, alvoZ, p.team) * 0.5;
         }
+        if (window.showPlayerPoints) { mate.debugPoints = mate.debugPoints || {}; mate.debugPoints['Lanç'] = Math.round(nota); }
         if (nota > melhorNota) { melhorNota = nota; melhor = { mate: mate, alvoX: alvoX, alvoZ: alvoZ }; }
     }
 
@@ -350,6 +351,11 @@ function findCross(ctx) {
     if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
         const crossVal = SpatialGrid.layerValueAt('cruzamento', p.model.position.x, p.model.position.z, p.team);
         chance += (crossVal / 100) * C.pesoGrid;
+    }
+
+    if (window.showPlayerPoints && alvo) {
+        alvo.debugPoints = alvo.debugPoints || {};
+        alvo.debugPoints['Cross'] = Math.round(chance);
     }
 
     /*
@@ -699,6 +705,20 @@ const PlayerBT = sel('PlayerRoot',
         cond('tenhoABola', temBola),
 
         sel('DecisaoComBola',
+            cond('CalculaDebug', (ctx) => {
+                if (window.showPlayerPoints) {
+                    ctx.p.debugPoints = ctx.p.debugPoints || {};
+                    ctx.p.debugPoints['Shot'] = emZonaDeRemate(ctx) ? 'SIM' : 'NAO';
+                    ctx.p.debugPoints['Carry'] = ctx.campoAberto ? 'SIM' : 'NAO';
+                    let cr = findCross(ctx);
+                    if (cr) ctx.p.debugPoints['Cross'] = Math.round(cr.chance);
+                    let tb = findThroughBall(ctx);
+                    if (tb && tb.mate && tb.mate.debugPoints) ctx.p.debugPoints['Lanç'] = tb.mate.debugPoints['Lanç'];
+                    let pass = ctx.p.findPassTarget();
+                    if (pass && pass.debugPoints) ctx.p.debugPoints['Pass'] = pass.debugPoints['Pass'];
+                }
+                return false;
+            }),
             /*
             Domina antes de decidir. Cadência real: ~3s a avaliar as opções
             (CadenceModel.posseBase), bem menos sob pressão pesada — aí é

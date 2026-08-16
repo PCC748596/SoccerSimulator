@@ -44,6 +44,16 @@ function executePassGameplay(p) {
     const dirZ = distToTarget > 0.001 ? dzAlvo / distToTarget : 1;
 
     /*
+    O erro de passe ("peso" da bola) tem de ser aplicado na DISTÂNCIA ALVO,
+    antes da balística. Aplicar um multiplicador na velocidade calculada
+    com arrasto quadrático fazia o erro na distância explodir de forma
+    não-linear — passes saíam absurdamente longos ou curtos.
+    */
+    const passSkill = p.skillFor ? p.skillFor('PASS') : 50;
+    const erroDist = 1 + (Math.random() * 2 - 1) * PassModel.erroPesoMax * (1 - passSkill / 100);
+    distToTarget *= erroDist;
+
+    /*
     A força do passe sai da BALÍSTICA, não de uma heurística.
 
     Era `forca = dist * 0.85` com `vy = min(6.5, 2 + dist*0.12)` — números
@@ -140,18 +150,9 @@ function executePassGameplay(p) {
         usouBalistica = true;
     }
 
-    /*
-    Skill do passador entra como PRECISÃO no peso da bola, não como um bónus
-    de força: com a balística resolvida, multiplicar a força por um "boost"
-    só voltava a pôr a bola longe do alvo. Um bom passador acerta o peso;
-    um mau passa curto ou longo.
-    */
-    if (usouBalistica) {
-        const passSkill = p.skillFor ? p.skillFor('PASS') : 50;
-        const erro = 1 + (Math.random() * 2 - 1) * PassModel.erroPesoMax * (1 - passSkill / 100);
-        forcaPasse *= erro;
-        Match.ballVel.y *= erro;
-    } else {
+    // O erro (Skill do passador) já foi aplicado na distToTarget lá em cima,
+    // para não quebrar a escala não-linear da balística.
+    if (!usouBalistica) {
         forcaPasse *= 1.0 + ((TeamSkills[p.team].mid - 50) / 100) * 0.4;
     }
 

@@ -79,6 +79,11 @@ function togglePlayerNumber() {
     document.getElementById('btn-playernumber').innerText = 'PlayerNumber: ' + (window.showPlayerNumber ? 'ON' : 'OFF');
     document.getElementById('btn-playernumber').classList.toggle('active', window.showPlayerNumber);
 }
+function togglePlayerPoints() {
+    window.showPlayerPoints = !window.showPlayerPoints;
+    document.getElementById('btn-playerpoints').innerText = 'PlayerPoints: ' + (window.showPlayerPoints ? 'ON' : 'OFF');
+    document.getElementById('btn-playerpoints').classList.toggle('active', window.showPlayerPoints);
+}
 
 function togglePlayerBT() {
     window.showPlayerBT = !window.showPlayerBT;

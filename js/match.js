@@ -965,6 +965,8 @@ const Match = {
     },
 
     update: function (dt) {
+        for (let p of this.players) { p.debugPoints = null; }
+        for (let p of this.opponents) { p.debugPoints = null; }
         this.delta = dt;
 
         if (this.kickoffActive) {
