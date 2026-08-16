@@ -73,6 +73,14 @@ function toggleOffside() {
     document.getElementById('btn-offside').classList.toggle('active', Match.showOffsideLines);
 }
 
+function togglePlayingStyles() {
+    if (typeof Config === 'undefined') return;
+    Config.usePlayingStyles = !Config.usePlayingStyles;
+    const btn = document.getElementById('btn-global-playingstyles');
+    if (Config.usePlayingStyles) { btn.classList.add('active'); btn.innerText = "PlayingStyles: ON"; }
+    else { btn.classList.remove('active'); btn.innerText = "PlayingStyles: OFF"; }
+}
+
 // Stubs for future features (PlayerNumber, PlayerBT)
 function togglePlayerNumber() {
     window.showPlayerNumber = !window.showPlayerNumber;

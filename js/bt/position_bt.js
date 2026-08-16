@@ -566,7 +566,7 @@ const PositionAI = {
 
         Só afecta jogadores de campo — o GR tem o seu próprio ciclo (updateGK).
         */
-        if (p.role !== 'gk' && typeof estiloAtivoDe === 'function') {
+        if (Config.usePlayingStyles && p.role !== 'gk' && typeof estiloAtivoDe === 'function') {
             const est = estiloAtivoDe(p);
 
             // Avanço/recuo, no referencial de ataque.

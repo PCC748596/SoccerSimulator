@@ -570,7 +570,7 @@ class FootballPlayer {
 
             // Multiplicador do Playing Style DO ALVO
             // Aplicado no final para agir sobre a nota total balanceada
-            if (typeof estiloAtivoDe === 'function') {
+            if (Config.usePlayingStyles && typeof estiloAtivoDe === 'function') {
                 score *= estiloAtivoDe(opt).passe;
             }
 
@@ -598,7 +598,7 @@ class FootballPlayer {
         const porFuncao = (this.role === 'def') ? ShootingModel.defenderFactor : 1.0;
         // Peso `remate` do playing style: um Fox in the Box remata de onde um
         // Cross Specialist ainda estaria a procurar quem cruzar.
-        const porEstilo = (typeof estiloAtivoDe === 'function') ? estiloAtivoDe(this).remate : 1.0;
+        const porEstilo = (Config.usePlayingStyles && typeof estiloAtivoDe === 'function') ? estiloAtivoDe(this).remate : 1.0;
         return base * porFuncao * porEstilo * (ShootingModel.angleFloor + (1 - ShootingModel.angleFloor) * centralidade);
     }
 
@@ -714,9 +714,9 @@ class FootballPlayer {
         const elev = THREE.MathUtils.degToRad(25 + Math.random() * 25);
         const desvio = THREE.MathUtils.degToRad((Math.random() * 2 - 1) * 20);
 
-        // Alcance pretendido: chutão de meio-campo, com alguma variação.
-        const alcance = 38 + Math.random() * 16;
-        const v = Math.min(42, Math.sqrt((alcance * gGrav) / Math.sin(2 * elev)));
+        // Alcance pretendido: chutão de meio-campo, com alguma variação. Aumentado em 20%.
+        const alcance = (38 + Math.random() * 16) * 1.20;
+        const v = Math.min(50, Math.sqrt((alcance * gGrav) / Math.sin(2 * elev)));
 
         // Frente da equipa (dirZ), rodada pelo desvio lateral sorteado.
         const horiz = v * Math.cos(elev);

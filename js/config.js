@@ -58,6 +58,10 @@ FUNCTION & OBJECT INDEX
 
 const LARGURA_BALIZA = 7.32; const ALTURA_BALIZA = 2.44; const ALTURA_BASE_Y = 0.0;
 
+window.Config = {
+    usePlayingStyles: true
+};
+
 /*
 Altura da TESTA acima da base do modelo.
 
