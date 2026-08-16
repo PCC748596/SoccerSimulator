@@ -349,10 +349,10 @@ const Match = {
         const cvsR = document.createElement('canvas'); const ctxR = cvsR.getContext('2d'); cvsR.width = 16; cvsR.height = 512;
         const stripeHeights = [];
         for (let i = 0; i < 3; i++) stripeHeights.push(17 / 3);
-        for (let i = 0; i < 18; i++) stripeHeights.push(CAMPO_COMP / 22);
+        for (let i = 0; i < 22; i++) stripeHeights.push(CAMPO_COMP / 22);
         for (let i = 0; i < 3; i++) stripeHeights.push(17 / 3);
         let currentY = 0;
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0; i < 28; i++) {
             let nextY = currentY + stripeHeights[i];
             let yStartPix = Math.round((currentY / gramaComp) * 512);
             let yEndPix = Math.round((nextY / gramaComp) * 512);
@@ -1569,8 +1569,8 @@ const Match = {
         }
 
         for (let i = 0; i < n; i++) {
-            outfield[i].dynamicTarget.x = Math.max(-32, Math.min(32, P[i].x));
-            if (!apenasX) outfield[i].dynamicTarget.z = Math.max(-50, Math.min(50, P[i].z));
+            outfield[i].dynamicTarget.x = Math.max(-(CAMPO_LARG / 2 + 2), Math.min(CAMPO_LARG / 2 + 2, P[i].x));
+            if (!apenasX) outfield[i].dynamicTarget.z = Math.max(-(CAMPO_COMP / 2), Math.min(CAMPO_COMP / 2, P[i].z));
         }
     },
 
@@ -1619,17 +1619,17 @@ const Match = {
 
         for (let i = 0; i < n; i++) {
             const p = outfield[i];
-            const tx = Math.max(-28.0, Math.min(28.0, P[i].x));
+            const tx = Math.max(-(CAMPO_LARG / 2 - 2), Math.min(CAMPO_LARG / 2 - 2, P[i].x));
             let tz = P[i].z;
 
             if (p.dirZ === 1) {
-                tz = Math.max(-49.5, tz);
+                tz = Math.max(-(CAMPO_COMP / 2 - 0.5), tz);
                 if (isAttacking && !p.hasBall && offsideLimitZ !== null) tz = Math.min(offsideLimitZ, tz);
             } else {
-                tz = Math.min(49.5, tz);
+                tz = Math.min(CAMPO_COMP / 2 - 0.5, tz);
                 if (isAttacking && !p.hasBall && offsideLimitZ !== null) tz = Math.max(offsideLimitZ, tz);
             }
-            tz = Math.max(-50.0, Math.min(50.0, tz));
+            tz = Math.max(-(CAMPO_COMP / 2), Math.min(CAMPO_COMP / 2, tz));
 
             p.dynamicTarget.x = tx;
             p.dynamicTarget.z = tz;
