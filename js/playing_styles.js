@@ -98,8 +98,15 @@ const PlayingStyleTriggers = {
     // Corre na linha do último defensor — só quando há ataque para atacar.
     goal_poacher: (p, bb, s) => s.atacando && s.bolaAvanco > 5,
 
-    // Puxa marcação para abrir espaço a outro: precisa de outro com a bola.
-    dummy_runner: (p, bb, s) => s.atacando && bb.carrier && bb.carrier !== p && s.bolaAvanco > 0,
+    // Puxa marcação para abrir espaço a outro: Meias centrais com a bola no meio campo, ou pontas do mesmo lado.
+    dummy_runner: (p, bb, s) => {
+        if (!s.atacando || !bb.carrier || bb.carrier === p) return false;
+        const meiaCentral = ['CM', 'AM', 'DM'].includes(bb.carrier.pos) && Math.abs(s.bolaAvanco) <= 17;
+        const pontaMesmoLado = ['RW', 'LW', 'RM', 'LM'].includes(bb.carrier.pos) && 
+                               Math.sign(p.baseTarget.x) === Math.sign(bb.carrier.baseTarget.x) && 
+                               Math.sign(p.baseTarget.x) !== 0;
+        return meiaCentral || pontaMesmoLado;
+    },
 
     // Espreita na área: só a partir do momento em que a bola pode lá chegar.
     fox_in_the_box: (p, bb, s) => s.atacando && s.bolaAvanco > 12,

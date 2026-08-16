@@ -480,12 +480,15 @@ class FootballPlayer {
             está a passar — bom interceptador precisa de menos proximidade
             pra ser perigo, bom passador arrisca-se mais perto dele.
             */
+            let isOrchestrator = (this.playingStyle === 'orchestrator' && this.styleAtivo);
+
             let safetyEff = safetyLimit;
             if (oppMaisPerto) {
                 const fatorIntercept = THREE.MathUtils.clamp(
                     1 + (oppMaisPerto.skillFor('INTERCEPT') - skillVal) / 150, 0.6, 1.6);
                 safetyEff = safetyLimit * fatorIntercept;
             }
+            if (isOrchestrator) safetyEff *= 0.3; // Orquestrador enxerga através dos adversários (arrisca mais o passe)
             if (minOppDist < safetyEff) continue;
 
             let score = 100;
@@ -539,7 +542,18 @@ class FootballPlayer {
                 }
                 score += progBonus;
             } else {
-                score -= Math.abs(progression) * 1.0;
+                if (isOrchestrator) {
+                    score += Math.abs(progression) * 1.2; // Gosta de organizar o jogo recuando a bola
+                } else {
+                    score -= Math.abs(progression) * 1.0;
+                }
+            }
+
+            if (isOrchestrator) {
+                // Inversão de jogada: se o passe muda de flanco e a distância lateral é grande
+                if (Math.sign(optPos.x) !== Math.sign(ownX) && Math.abs(optPos.x - ownX) > 20) {
+                    score += 200; // Bónus muito forte para inverter a jogada
+                }
             }
 
             // Pesos de distancia para induzir organicamente as porcentagens pedidas:
@@ -909,13 +923,14 @@ class FootballPlayer {
             this.aplicarCamadaCabeceioDePe(dt);
         }
 
-        // Atualização da UI flutuante (PlayerNumber, PlayerBT e PlayerPOS)
-        if (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS) {
+        // Atualização da UI flutuante (PlayerNumber, PlayerBT, PlayerPOS e PlayerPlayingStyle)
+        if (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle) {
             this.labelSprite.visible = true;
             let parts = [];
             if (window.showPlayerNumber) parts.push(this.num);
             if (window.showPlayerPOS) parts.push(this.pos);
             if (window.showPlayerBT) parts.push(this.fsm.currentState);
+            if (window.showPlayerPlayingStyle && this.playingStyle && !this.playingStyleDesligado) parts.push(this.playingStyle);
             let text = parts.join(" | ");
 
             if (text !== this.lastLabelText) {

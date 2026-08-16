@@ -257,6 +257,7 @@ const Match = {
             if (e.key === '4') this.setCameraMode('center');
             if (e.key === '5') this.setCameraMode('sideline');
             if (e.key === '6') this.setCameraMode('topdown');
+            if (e.key === '7') this.setCameraMode('lateraltv');
             if (e.key === ' ' || e.code === 'Space') {
                 this.togglePause();
                 e.preventDefault();
@@ -313,6 +314,12 @@ const Match = {
             // Câmara Lateral bem mais próxima, acompanhando a bola no eixo Z
             let bz = THREE.MathUtils.clamp(this.ball.position.z, -45, 45);
             targetPos.set(35 * zoom, 14 * zoom, bz);
+            lookTarget.copy(this.ball.position);
+        } else if (window.cameraMode === 'lateraltv') {
+            // Mistura de TV Centro e Lateral Móvel
+            // Acompanha até metade do meio-campo (26.5m), depois fica parada e só roda
+            let bz = THREE.MathUtils.clamp(this.ball.position.z, -26.5, 26.5);
+            targetPos.set(48 * zoom, 28 * zoom, bz);
             lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'topdown') {
             const aspect = window.innerWidth / window.innerHeight;

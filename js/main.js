@@ -92,6 +92,12 @@ function togglePlayerPOS() {
     document.getElementById('btn-playerpos').classList.toggle('active', window.showPlayerPOS);
 }
 
+function togglePlayerPlayingStyle() {
+    window.showPlayerPlayingStyle = !window.showPlayerPlayingStyle;
+    document.getElementById('btn-playerplayingstyle').innerText = 'Player Playing Style: ' + (window.showPlayerPlayingStyle ? 'ON' : 'OFF');
+    document.getElementById('btn-playerplayingstyle').classList.toggle('active', window.showPlayerPlayingStyle);
+}
+
 window.teamBTPosState = 'OFF';
 function toggleTeamBTPos() {
     if (window.teamBTPosState === 'OFF') window.teamBTPosState = 'TeamA';

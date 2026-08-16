@@ -636,7 +636,7 @@ const PlayingStyles = {
     },
     dummy_runner: {
         nome: 'Dummy Runner', posicoes: ['CF', 'SS', 'AM'],
-        largura: 5, passe: 0.75, remate: 0.9,
+        largura: 5, passe: 1.3, remate: 0.9,
         atraiDefesa: true
     },
     fox_in_the_box: {
