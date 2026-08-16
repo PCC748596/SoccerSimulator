@@ -378,7 +378,7 @@ class PlayerFSM {
                 }
 
                 if (p.role === 'gk') {
-                    p.dynamicTarget.z = Math.max(-53, Math.min(-38, p.dynamicTarget.z));
+                    p.dynamicTarget.z = Math.max(-CAMPO_COMP / 2, Math.min(-38, p.dynamicTarget.z));
                     p.dynamicTarget.x = Math.max(-18, Math.min(18, p.dynamicTarget.x));
                     if (p.model.position.z >= -39) {
                         let clearTarget = p.findPassTarget();

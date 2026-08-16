@@ -122,7 +122,8 @@ const SpatialGrid = {
         marking: function (avanco, cx) {
             if (avanco > 0) return 0;
 
-            const limiteAreaZ = -(53 - 16.5);              // -36.5, linha da própria área
+            let meioComp = CAMPO_COMP / 2;
+            const limiteAreaZ = -(meioComp - 16.5);              // -36.5, linha da própria área
             const nucleoZ = limiteAreaZ + SpatialGrid.cellSizeZ; // 1 célula à frente da área
             const nucleoX = 20.16;                          // meia-largura da área
 
@@ -142,7 +143,8 @@ const SpatialGrid = {
               meio-campo): fileira 5 -> 80, 6 -> 70, 7 -> 60, daí -> 0
         */
         cruzamento: function (avanco, cx) {
-            const rowFromGoal = Math.max(0, Math.floor((53 - avanco) / SpatialGrid.cellSizeZ));
+            let meioComp = CAMPO_COMP / 2;
+            const rowFromGoal = Math.max(0, Math.floor((meioComp - avanco) / SpatialGrid.cellSizeZ));
             const areaXedge = 20.16; // meia-largura da grande área (mesma ref. do MARKING/CHUTE)
             const distX = Math.abs(cx) - areaXedge;
 
@@ -175,7 +177,8 @@ const SpatialGrid = {
         de distância. Piso 50 — abaixo disso o valor cai a zero.
         */
         chute: function (avanco, cx) {
-            const rowFromGoal = Math.max(0, Math.floor((53 - avanco) / SpatialGrid.cellSizeZ));
+            let meioComp = CAMPO_COMP / 2;
+            const rowFromGoal = Math.max(0, Math.floor((meioComp - avanco) / SpatialGrid.cellSizeZ));
 
             let base;
             if (rowFromGoal <= 1) base = 100;

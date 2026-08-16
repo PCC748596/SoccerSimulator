@@ -54,8 +54,8 @@ class FootballPlayer {
         this.pos = 'GK';
 
         this.dirZ = (this.team === 'TeamA') ? 1 : -1;
-        this.targetGoalZ = 53 * this.dirZ;
-        this.ownGoalZ = -53 * this.dirZ;
+        this.targetGoalZ = (CAMPO_COMP / 2) * this.dirZ;
+        this.ownGoalZ = -(CAMPO_COMP / 2) * this.dirZ;
 
         const gerado = this.buildBody(color1, color2);
         this.model = gerado.corpo; this.rig = gerado.rig;
@@ -657,8 +657,10 @@ class FootballPlayer {
             }
         }
 
-        _v1.x = Math.max(-34 + 3.0, Math.min(34 - 3.0, _v1.x));
-        _v1.z = Math.max(-53 + 3.0, Math.min(53 - 3.0, _v1.z));
+        let meiaLarg = CAMPO_LARG / 2;
+        let meioComp = CAMPO_COMP / 2;
+        _v1.x = Math.max(-meiaLarg + 3.0, Math.min(meiaLarg - 3.0, _v1.x));
+        _v1.z = Math.max(-meioComp + 3.0, Math.min(meioComp - 3.0, _v1.z));
         
         this.passTargetPos = _v1.clone();
         
@@ -1644,8 +1646,9 @@ class FootballPlayer {
         let prevZ = gkCorpo.position.z;
 
         gkCorpo.position.x = Math.max(-20.16, Math.min(20.16, gkCorpo.position.x));
-        let areaMinZ = (this.team === 'TeamA') ? -53 : 36.5;
-        let areaMaxZ = (this.team === 'TeamA') ? -36.5 : 53;
+        let meioComp = CAMPO_COMP / 2;
+        let areaMinZ = (this.team === 'TeamA') ? -meioComp : meioComp - 16.5;
+        let areaMaxZ = (this.team === 'TeamA') ? -meioComp + 16.5 : meioComp;
         gkCorpo.position.z = Math.max(areaMinZ, Math.min(areaMaxZ, gkCorpo.position.z));
 
         if (window.bolaChutada && !this.gkReagiu) {

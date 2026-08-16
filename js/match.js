@@ -106,11 +106,11 @@ const Match = {
         this.ballVisual = this.criarBola(BallPhysics.raio * BallPhysics.escalaVisual);
         this.ball.add(this.ballVisual); this.scene.add(this.ball);
 
-        this.offsideLineA = new THREE.Mesh(new THREE.PlaneGeometry(68, 0.25), new THREE.MeshBasicMaterial({ color: 0x3498db, transparent: true, opacity: 0.65, side: THREE.DoubleSide }));
+        this.offsideLineA = new THREE.Mesh(new THREE.PlaneGeometry(CAMPO_LARG, 0.25), new THREE.MeshBasicMaterial({ color: 0x3498db, transparent: true, opacity: 0.65, side: THREE.DoubleSide }));
         this.offsideLineA.rotation.x = -Math.PI / 2; this.offsideLineA.position.y = 0.04; this.offsideLineA.visible = false;
         this.scene.add(this.offsideLineA);
 
-        this.offsideLineB = new THREE.Mesh(new THREE.PlaneGeometry(68, 0.25), new THREE.MeshBasicMaterial({ color: 0xe74c3c, transparent: true, opacity: 0.65, side: THREE.DoubleSide }));
+        this.offsideLineB = new THREE.Mesh(new THREE.PlaneGeometry(CAMPO_LARG, 0.25), new THREE.MeshBasicMaterial({ color: 0xe74c3c, transparent: true, opacity: 0.65, side: THREE.DoubleSide }));
         this.offsideLineB.rotation.x = -Math.PI / 2; this.offsideLineB.position.y = 0.04; this.offsideLineB.visible = false;
         this.scene.add(this.offsideLineB);
 
@@ -317,15 +317,15 @@ const Match = {
             lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'lateraltv') {
             // Mistura de TV Centro e Lateral Móvel
-            // Acompanha até metade do meio-campo (26.5m), depois fica parada e só roda
+            // Acompanha até metade do meio-campo, depois fica parada e só roda
             let bz = THREE.MathUtils.clamp(this.ball.position.z, -26.5, 26.5);
             targetPos.set(48 * zoom, 23 * zoom, bz);
             lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'topdown') {
             const aspect = window.innerWidth / window.innerHeight;
-            // Campo deitado: precisamos caber ~116m na horizontal (106 + margem) e ~78m na vertical (68 + margem)
-            const reqYForHeight = 78 / 0.8284;
-            const reqYForWidth = 116 / (0.8284 * aspect);
+            // Campo deitado: precisamos caber (CAMPO_COMP + margem) na horizontal e (CAMPO_LARG + margem) na vertical
+            const reqYForHeight = (CAMPO_LARG + 10) / 0.8284;
+            const reqYForWidth = (CAMPO_COMP + 10) / (0.8284 * aspect);
             const optimalY = Math.max(reqYForHeight, reqYForWidth);
             targetPos.set(0, optimalY * zoom, 0);
             lookTarget.set(0, 0, 0);
@@ -347,7 +347,7 @@ const Match = {
         const cvsR = document.createElement('canvas'); const ctxR = cvsR.getContext('2d'); cvsR.width = 16; cvsR.height = 512;
         const stripeHeights = [];
         for (let i = 0; i < 3; i++) stripeHeights.push(17 / 3);
-        for (let i = 0; i < 20; i++) stripeHeights.push(53 / 10);
+        for (let i = 0; i < 20; i++) stripeHeights.push((CAMPO_COMP / 2) / 10);
         for (let i = 0; i < 3; i++) stripeHeights.push(17 / 3);
         let currentY = 0;
         for (let i = 0; i < 26; i++) {
@@ -360,11 +360,13 @@ const Match = {
         }
         const relvaTex = new THREE.CanvasTexture(cvsR);
         relvaTex.wrapS = THREE.RepeatWrapping; relvaTex.wrapT = THREE.ClampToEdgeWrapping; relvaTex.repeat.set(15, 1);
-        window.relva = new THREE.Mesh(new THREE.PlaneGeometry(120, 140), new THREE.MeshStandardMaterial({ map: relvaTex, roughness: 1.0 }));
+        let gramaLarg = CAMPO_LARG + 52;
+        let gramaComp = CAMPO_COMP + 34;
+        window.relva = new THREE.Mesh(new THREE.PlaneGeometry(gramaLarg, gramaComp), new THREE.MeshStandardMaterial({ map: relvaTex, roughness: 1.0 }));
         window.relva.rotation.x = -Math.PI / 2; window.relva.receiveShadow = true; campoGrupo.add(window.relva);
 
         const matLinha = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
-        const esp = 0.15; const comp = 106; const larg = 68;
+        const esp = 0.15; const comp = CAMPO_COMP; const larg = CAMPO_LARG;
         function addLinha(w, h, x, z) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matLinha); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.02, z); m.receiveShadow = true; campoGrupo.add(m); }
         addLinha(larg + esp, esp, 0, comp / 2); addLinha(larg + esp, esp, 0, -comp / 2); addLinha(esp, comp + esp, larg / 2, 0); addLinha(esp, comp + esp, -larg / 2, 0); addLinha(larg, esp, 0, 0);
 
@@ -515,55 +517,60 @@ const Match = {
             }
         }
 
-        for (let r = 0; r < 20; r++) {
-            const standX = -38.5 - (r * 1.2);
+        const rows = 20;
+        // Bancada Oeste (Esquerda)
+        for (let r = 0; r < rows; r++) {
+            const standX = -(CAMPO_LARG / 2 + 4.5) - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 108), concreteMat);
+            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, CAMPO_COMP + 2), concreteMat);
             stepBox.position.set(standX, standY, 0);
             stepBox.receiveShadow = true;
             stepBox.castShadow = true;
             campoGrupo.add(stepBox);
 
             const seatYOffset = standY + 0.25 + 0.15;
-            for (let z = -52; z <= 52; z += 0.85) {
+            for (let z = -(CAMPO_COMP / 2) + 1; z <= (CAMPO_COMP / 2) - 1; z += 0.85) {
                 addSeatInstance(standX, seatYOffset, z, Math.PI / 2);
             }
         }
 
-        for (let r = 0; r < 20; r++) {
-            const standX = 38.5 + (r * 1.2);
+        // Bancada Este (Direita)
+        for (let r = 0; r < rows; r++) {
+            const standX = (CAMPO_LARG / 2 + 4.5) + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 108), concreteMat);
+            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, CAMPO_COMP + 2), concreteMat);
             stepBox.position.set(standX, standY, 0);
             stepBox.receiveShadow = true;
             stepBox.castShadow = true;
             campoGrupo.add(stepBox);
 
             const seatYOffset = standY + 0.25 + 0.15;
-            for (let z = -52; z <= 52; z += 0.85) {
+            for (let z = -(CAMPO_COMP / 2) + 1; z <= (CAMPO_COMP / 2) - 1; z += 0.85) {
                 addSeatInstance(standX, seatYOffset, z, -Math.PI / 2);
             }
         }
 
-        for (let r = 0; r < 20; r++) {
-            const standZ = 58.5 + (r * 1.2);
+        // Bancada Norte (Fundo)
+        for (let r = 0; r < rows; r++) {
+            const standZ = (CAMPO_COMP / 2 + 5.5) + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(64, 0.5, 1.2), concreteMat); 
+            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(CAMPO_LARG - 4, 0.5, 1.2), concreteMat); 
             stepBox.position.set(0, standY, standZ);
             stepBox.receiveShadow = true;
             stepBox.castShadow = true;
             campoGrupo.add(stepBox);
 
             const seatYOffset = standY + 0.25 + 0.15;
-            for (let x = -32; x <= 32; x += 0.85) {
+            for (let x = -(CAMPO_LARG / 2) + 2; x <= (CAMPO_LARG / 2) - 2; x += 0.85) {
                 if (Math.abs(x) > 4.5 || r > 1) {
                     addSeatInstance(x, seatYOffset, standZ, Math.PI);
                 }
             }
         }
 
-        for (let r = 0; r < 20; r++) {
-            const standZ = -58.5 - (r * 1.2);
+        // Bancada Sul (Fundo oposto)
+        for (let r = 0; r < rows; r++) {
+            const standZ = -(CAMPO_COMP / 2 + 5.5) - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
             const stepBox = new THREE.Mesh(new THREE.BoxGeometry(64, 0.5, 1.2), concreteMat); 
             stepBox.position.set(0, standY, standZ);
@@ -1725,7 +1732,7 @@ const Match = {
             }
         }
 
-        if (Math.abs(this.ball.position.z) - BallPhysics.raio > 53) {
+        if (Math.abs(this.ball.position.z) - BallPhysics.raio > CAMPO_COMP / 2) {
             let zSinal = Math.sign(this.ball.position.z);
             if (Math.abs(this.ball.position.x) < (LARGURA_BALIZA / 2 - 0.1) && this.ball.position.y < ALTURA_BALIZA) {
 
@@ -1792,7 +1799,7 @@ const Match = {
                     update()) — senão este clamp prendia-a na linha no
                     mesmo frame em que saiu, antes de o atraso pedido correr.
                     */
-                    this.ball.position.z = 53 * zSinal;
+                    this.ball.position.z = (CAMPO_COMP / 2) * zSinal;
                     this.ballVel.set(0, 0, 0);
                 }
             }

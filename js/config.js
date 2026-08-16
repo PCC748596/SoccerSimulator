@@ -66,7 +66,7 @@ põe o centro da cabeça a ~1.64 m e a testa a ~1.75 m. Este valor é o ponto de
 contacto de um cabeceio — ver distanciaAoCorpo() em utils.js.
 */
 const ALTURA_CABECA = 1.72;
-const CAMPO_LARG = 68; const CAMPO_COMP = 106;
+const CAMPO_LARG = 74; const CAMPO_COMP = 116;
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -144,8 +144,8 @@ existe pela mesma razão nos estádios a sério.
 =============================================================================
 */
 const BarreiraCampo = {
-    x: 37.0,
-    z: 57.0,
+    x: (CAMPO_LARG / 2) + 3.0,
+    z: (CAMPO_COMP / 2) + 4.0,
     alturaPainel: 1.1,      // muro de publicidade, opaco
     alturaRede: 4.5,        // rede de protecção por cima, translúcida
     restituicao: 0.35,      // ressalto seco: a bola morre ali, não volta ao meio
