@@ -300,7 +300,7 @@ const Match = {
 
     updateCamera: function () {
         if (window.cameraMode === 'orbit') return;
-        
+
         if (!this.ball) return;
         const zoom = window.cameraZoom || 1.0;
         let targetPos = new THREE.Vector3();
@@ -333,35 +333,35 @@ const Match = {
 
         // Interpolação de posição (suave)
         window.cameraCore.position.lerp(targetPos, 0.05);
-        
+
         // Interpolação do ponto de foco
         if (!this.currentLookTarget) this.currentLookTarget = new THREE.Vector3();
-        this.currentLookTarget.lerp(lookTarget, 0.08); 
-        
+        this.currentLookTarget.lerp(lookTarget, 0.08);
+
         // Usando lookAt direto evita que a câmara torça ou olhe para o céu ao alternar modos
         window.cameraCore.lookAt(this.currentLookTarget);
     },
 
     createField: function () {
         const campoGrupo = new THREE.Group();
+        let gramaLarg = CAMPO_LARG + 52;
+        let gramaComp = CAMPO_COMP + 34;
         const cvsR = document.createElement('canvas'); const ctxR = cvsR.getContext('2d'); cvsR.width = 16; cvsR.height = 512;
         const stripeHeights = [];
         for (let i = 0; i < 3; i++) stripeHeights.push(17 / 3);
-        for (let i = 0; i < 20; i++) stripeHeights.push((CAMPO_COMP / 2) / 10);
+        for (let i = 0; i < 18; i++) stripeHeights.push(CAMPO_COMP / 22);
         for (let i = 0; i < 3; i++) stripeHeights.push(17 / 3);
         let currentY = 0;
-        for (let i = 0; i < 26; i++) {
+        for (let i = 0; i < 24; i++) {
             let nextY = currentY + stripeHeights[i];
-            let yStartPix = Math.round((currentY / 140) * 512);
-            let yEndPix = Math.round((nextY / 140) * 512);
+            let yStartPix = Math.round((currentY / gramaComp) * 512);
+            let yEndPix = Math.round((nextY / gramaComp) * 512);
             ctxR.fillStyle = (i % 2 === 0) ? '#4B8B3B' : '#428032';
             ctxR.fillRect(0, yStartPix, 16, yEndPix - yStartPix);
             currentY = nextY;
         }
         const relvaTex = new THREE.CanvasTexture(cvsR);
         relvaTex.wrapS = THREE.RepeatWrapping; relvaTex.wrapT = THREE.ClampToEdgeWrapping; relvaTex.repeat.set(15, 1);
-        let gramaLarg = CAMPO_LARG + 52;
-        let gramaComp = CAMPO_COMP + 34;
         window.relva = new THREE.Mesh(new THREE.PlaneGeometry(gramaLarg, gramaComp), new THREE.MeshStandardMaterial({ map: relvaTex, roughness: 1.0 }));
         window.relva.rotation.x = -Math.PI / 2; window.relva.receiveShadow = true; campoGrupo.add(window.relva);
 
@@ -490,7 +490,7 @@ const Match = {
             for (let r = 0; r < 20; r++) {
                 const R = 6.5 + r * 1.2;
                 const standY = 0.25 + (r * 0.5);
-                
+
                 const numSteps = Math.max(4, Math.floor(R * (Math.PI / 2) / 2.5));
                 const stepLength = (R * (Math.PI / 2) / numSteps) * 1.05;
                 for (let j = 0; j <= numSteps; j++) {
@@ -504,7 +504,7 @@ const Match = {
                     stepBox.castShadow = true;
                     campoGrupo.add(stepBox);
                 }
-                
+
                 const seatYOffset = standY + 0.25 + 0.15;
                 const numSeats = Math.floor(R * (Math.PI / 2) / 0.85);
                 for (let i = 0; i <= numSeats; i++) {
@@ -554,7 +554,7 @@ const Match = {
         for (let r = 0; r < rows; r++) {
             const standZ = (CAMPO_COMP / 2 + 5.5) + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(CAMPO_LARG - 4, 0.5, 1.2), concreteMat); 
+            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(CAMPO_LARG - 4, 0.5, 1.2), concreteMat);
             stepBox.position.set(0, standY, standZ);
             stepBox.receiveShadow = true;
             stepBox.castShadow = true;
@@ -572,7 +572,7 @@ const Match = {
         for (let r = 0; r < rows; r++) {
             const standZ = -(CAMPO_COMP / 2 + 5.5) - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(64, 0.5, 1.2), concreteMat); 
+            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(64, 0.5, 1.2), concreteMat);
             stepBox.position.set(0, standY, standZ);
             stepBox.receiveShadow = true;
             stepBox.castShadow = true;
@@ -1042,7 +1042,7 @@ const Match = {
         if (!this.intendedReceiver && this.passTargetVisual) {
             this.passTargetVisual.visible = false;
         }
-        
+
         this.updateBall();
         if (typeof SpatialGrid !== 'undefined') SpatialGrid.update(dt);
         if (typeof PassCandidates !== 'undefined') PassCandidates.update(dt);
@@ -1127,15 +1127,15 @@ const Match = {
 
         let targetExcitement = 0.0;
         if (this.state === 'GOAL') {
-            targetExcitement = 1.0; 
+            targetExcitement = 1.0;
         } else if (this.ballVel.lengthSq() > 400) {
-            targetExcitement = 0.7; 
+            targetExcitement = 0.7;
         } else if (this.ball && Math.abs(this.ball.position.z) > 40) {
-            targetExcitement = 0.5; 
+            targetExcitement = 0.5;
         } else if (this.ballCarrier && this.ballVel.lengthSq() > 100) {
-            targetExcitement = 0.3; 
+            targetExcitement = 0.3;
         } else {
-            targetExcitement = 0.05; 
+            targetExcitement = 0.05;
         }
         this.crowdExcitement += (targetExcitement - this.crowdExcitement) * dt * 3.0;
 
@@ -1341,6 +1341,7 @@ const Match = {
         const gks = [this.players[0], this.opponents[0]];
         for (const gk of gks) {
             if (!gk || gk.role !== 'gk' || gk.touchLock > 0) continue;
+            if (this.state !== 'PLAY') continue;
             const d = gk.model.position.distanceTo(this.ball.position);
             if (d > 1.3) continue;
             const dentroArea = Math.abs(this.ball.position.x) < 20.16 &&
