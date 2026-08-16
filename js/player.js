@@ -507,107 +507,71 @@ class FootballPlayer {
             if (isOrchestrator) safetyEff *= 0.3; // Orquestrador enxerga através dos adversários (arrisca mais o passe)
             if (minOppDist < safetyEff) continue;
 
-            let score = 100;
+            let circulacao = teamStyle ? teamStyle.circulacao : 1.0;
+            let verticalidade = teamStyle ? teamStyle.verticalidade : 1.0;
 
-            /*
-            Bónus por estar livre de marcação — era Math.min(50, ...), um
-            teto que tratava "levemente livre" e "completamente sozinho no
-            campo" quase da mesma forma. Pedido explícito: quem está sem
-            marcação tem de ter pontuação de passe GRANDE, não só "um pouco
-            melhor". Tecto subido para 110 e a inclinação mais acentuada.
-            */
-            score += Math.min(110, (minOppDist - safetyLimit) * 22);
+            let baseScore = 100;
+            if (dist <= 20.0) {
+                baseScore = 80 + (20 * circulacao);
+            } else if (dist <= 40.0) {
+                baseScore = 100 - (dist - 20) * 1.5;
+                baseScore *= ((circulacao + verticalidade) / 2);
+            } else {
+                baseScore = 70 - (dist - 40) * 2.0;
+                baseScore *= verticalidade;
+                baseScore = Math.max(10, baseScore);
+            }
 
-            // Grid espacial (camada PASSE): soma o valor autorado da célula do alvo.
+            let score = baseScore;
+
+            // Bónus por estar livre de marcação
+            score += Math.min(50, Math.max(0, (minOppDist - safetyLimit) * 8));
+
+            // Grid espacial (camada PASSE)
             if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
                 score += SpatialGrid.layerValueAt('pass', optPos.x, optPos.z, this.team) * 0.4;
             }
 
-            /*
-            Playing style do CANDIDATO: um Target Man ou um Creative Playmaker
-            é procurado mais vezes como destino de passe; um Dummy Runner (que
-            está de propósito a puxar marcação, não a oferecer-se) menos.
-            */
-            if (typeof estiloAtivoDe === 'function') score *= estiloAtivoDe(opt).passe;
-
+            // Setores
             let optSec = getSectorOfX(optPos.x);
             if (Tatics.setores.includes(optSec)) {
-                // 30 -> 45 -> 67.5 -> 135 (+100%). Passa a ser o maior termo
-                // isolado da nota, à frente do bónus de estar livre (tecto 110):
-                // com menos do que isso o colega central livre ganhava sempre.
-                score += 135 * (teamStyle ? teamStyle.corredores : 1.0);
+                score += 30 * (teamStyle ? teamStyle.corredores : 1.0);
             }
 
-            /*
-            O bónus por progressão era fraco (tecto +15) comparado com o de
-            estar livre de marcação (até +50, `minOppDist*15`) — um colega
-            lateral bem livre ganhava quase sempre a um colega à frente só
-            ligeiramente marcado. Medido na simulação em lote: só 13-23% do
-            tempo de posse chegava ao terço atacante em 20 min simulados, a
-            bola ficava presa a passar de lado no meio-campo (83-90% de
-            acerto de passe, quase nenhum remate). Tecto subido para +35
-            (total até +55), para um passe bem progressivo poder competir
-            com um passe seguro em vez de perder sempre.
-            */
+            // Progressão
             let progression = (optPos.z - ownZ) * dirZ;
             if (progression > 0) {
-                let progBonus = (20 + Math.min(35, progression * 1.1)) * (teamStyle ? teamStyle.verticalidade : 1.0);
-                /*
-                Lançamento em espaço vazio: ponto extra muito bom se o alvo
-                estiver livre à frente. Escalado pela Agressividade dinâmica
-                (Mentalidade × TeamPlayStyle × congestão do MEU lado, ver
-                computeAggression em team_bt.js) — a 0.5 (neutro) dá o mesmo
-                +150 de sempre; congestionado/defensivo reduz, ofensivo com
-                espaço aumenta. Isto é o "não atacar só porque tem bola"
-                pedido no tacticSystem.md.
-                */
+                let progBonus = Math.min(25, progression * 0.9) * verticalidade;
+                // Lançamento em espaço vazio
                 if (minOppDist > 8.0) {
                     const aggr = teamBB ? teamBB.aggression : 0.5;
-                    progBonus += 150 * (0.6 + aggr * 0.8);
+                    progBonus += 60 * (0.6 + aggr * 0.8);
                 }
                 score += progBonus;
             } else {
                 if (isOrchestrator) {
-                    score += Math.abs(progression) * 1.2; // Gosta de organizar o jogo recuando a bola
+                    score += Math.abs(progression) * 0.8;
                 } else {
-                    // Penalidade por recuar dividida pela circulação do
-                    // TeamPlayStyle: Possession (1.6) sofre bem menos por
-                    // passar pra trás; Direct (0.55) sofre bem mais.
-                    score -= Math.abs(progression) * 1.0 / (teamStyle ? teamStyle.circulacao : 1.0);
+                    score -= Math.abs(progression) * 1.5 / circulacao;
                 }
             }
 
+            // Virada
             if (isOrchestrator) {
-                // Inversão de jogada: se o passe muda de flanco e a distância lateral é grande
                 if (Math.sign(optPos.x) !== Math.sign(ownX) && Math.abs(optPos.x - ownX) > 20) {
-                    score += 200; // Bónus muito forte para inverter a jogada
+                    score += 80;
                 }
             } else if (teamBB && teamStyle && congestaoMeuLado > 55) {
-                /*
-                Virada de jogo coletiva (tacticSystem.md secção 7) — qualquer
-                passador, não só o Orchestrator (que já tem o bónus acima).
-                Só quando o MEU lado está congestionado e o ALVO está num
-                lado com bem menos gente adversária por perto.
-                */
                 const congestaoAlvo = teamBB.congestion[secToCongestionKey[optSec]] || 0;
                 if (congestaoAlvo < congestaoMeuLado - 20) {
-                    score += 60 * teamStyle.viradas * (1 - teamBB.aggression);
+                    score += 50 * teamStyle.viradas * (1 - teamBB.aggression);
                 }
             }
 
-            // Pesos de distancia para induzir organicamente as porcentagens pedidas:
-            if (Tatics.passe === 'curto') {
-                if (dist <= 30.0) score += 50;
-                else if (dist <= 50.0) score -= 20;
-                else score -= 80;
-            } else if (Tatics.passe === 'longo') {
-                if (dist <= 30.0) score += 20;
-                else if (dist <= 50.0) score += 40;
-                else score += 10;
-            } else { // misto
-                if (dist <= 30.0) score += 30;
-                else if (dist <= 50.0) score += 10;
-                else score -= 10;
+            // Multiplicador do Playing Style DO ALVO
+            // Aplicado no final para agir sobre a nota total balanceada
+            if (typeof estiloAtivoDe === 'function') {
+                score *= estiloAtivoDe(opt).passe;
             }
 
             if (window.showPlayerPoints) { opt.debugPoints = opt.debugPoints || {}; opt.debugPoints['Pass'] = Math.round(score); }

@@ -191,10 +191,23 @@ rolamento); integrando `v·dv / (k·v² + μ·g) = -dx`:
     v0 = √( ( (k·v1² + μ·g)·e^(2·k·x) − μ·g ) / k )
 */
 function velocidadeRasteiraPara(dist, vChegada) {
+    // Adaptar a velocidade de chegada à distância:
+    // Passes curtos precisam chegar mais fortes para não parecerem frouxos.
+    // Passes longos não precisam chegar a 6.5m/s (o que exigiria uma força inicial absurda).
+    let vAlvo = vChegada;
+    if (dist < 10.0) {
+        vAlvo += (10.0 - dist) * 0.3; // Boost nos curtos (ex: 5m ganha +1.5m/s)
+    } else if (dist > 15.0) {
+        // Quebra gradualmente, caindo de forma mais agressiva em passes acima de 15m
+        vAlvo = Math.max(1.5, vChegada - (dist - 15.0) * 0.25);
+    }
+
     const k = BallPhysics.kArrasto;
     const atrito = BallPhysics.atritoRolamento * BallPhysics.gravidade;
-    const alvo = (k * vChegada * vChegada + atrito) * Math.exp(2 * k * dist) - atrito;
-    return Math.sqrt(Math.max(0, alvo / k));
+    const alvo = (k * vAlvo * vAlvo + atrito) * Math.exp(2 * k * dist) - atrito;
+    
+    // Tecto rígido de segurança muito mais baixo (24 m/s em vez de 35 m/s) para evitar "chutões".
+    return Math.min(24.0, Math.sqrt(Math.max(0, alvo / k)));
 }
 
 /*

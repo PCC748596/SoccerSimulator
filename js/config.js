@@ -1584,7 +1584,6 @@ const Tatics = {
     formacao: '442',
     estilo: 'balanceado',
     teamPlayStyle: 'positional',
-    passe: 'balanceado',
     linhaDefensiva: 'medium',
     compactness: 'median',
     lengthCompactness: 'median',
@@ -1644,7 +1643,6 @@ const Tatics = {
         this.estilo = document.getElementById('t-estilo').value;
         const teamStyleEl = document.getElementById('t-team-style');
         if (teamStyleEl) this.teamPlayStyle = teamStyleEl.value;
-        this.passe = document.getElementById('t-passe').value;
         this.linhaDefensiva = document.getElementById('t-linha').value;
         this.compactness = document.getElementById('t-compactness').value;
         this.lengthCompactness = document.getElementById('t-length-compactness').value;
