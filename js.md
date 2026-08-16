@@ -20,8 +20,9 @@ three.min.js (CDN)
        → bt/action_state.js → perception.js
        → spatial_grid.js → pass_candidates.js
        → bt/core.js → bt/team_bt.js → bt/position_bt.js → bt/player_bt.js
+       → match.js → player.js → fsm.js → simulate.js
        → bt/btDebug.js
-       → match.js → player.js → fsm.js → simulate.js → main.js
+       → main.js
 ```
 
 (nota: `perception.js` vive em `js/perception.js`, não em `js/bt/` — o diagrama
@@ -744,9 +745,33 @@ Corre **inteiramente no browser**, não em Node — `match.js`/`config.js`/
 `player.js` dependem de DOM (canvas para texturas,
 `document.getElementById`), replicar isso em Node seria mais trabalho do
 que reaproveitar o browser real. Ligado ao botão "Simulação rápida" do
-painel esquerdo (`runFastSim()` em `main.js`). Enquanto corre,
-`animate()` (`main.js`) fica de fora por completo (`if (Sim.running) return`)
-— não pode haver dois donos do tick.
+painel esquerdo (`runFastSim()` em `main.js`, 2 jogos × 25 min por omissão).
+Enquanto corre, `animate()` (`main.js`) fica de fora por completo
+(`if (Sim.running) return`) — não pode haver dois donos do tick.
+
+**Calibração de Playing Styles** (`opts.calibrarEstilos`, default `true` —
+o botão do painel passa `false`, ver abaixo): liga todos os `playingStyle`
+(vêm OFF por omissão, `match.js` → `aplicarPlayingStyle`), mede por
+(estilo, posição) ativações, % do tempo ativo, e o deslocamento do alvo
+(`p.dynamicTarget`) em relação ao slot puro do bloco (`p.slotTarget`) —
+RMS, máximo, desvio padrão de X/Z. Aponta `semEfeito:true` quando um estilo
+ativa mas não desloca nada (flag sem código de posicionamento por trás,
+ex.: `juntaSeAoAtaque`). Reporta no `console.table` e no campo `estilos` do
+JSON exportado.
+
+`opts.rotacionarFormacoes` (default = `calibrarEstilos`): nenhuma formação
+sozinha (`FormationsData` — 442/433/4231) cabe as 12 posições de campo ao
+mesmo tempo, então nenhuma cobre os 21 estilos de uma vez. Gira as 3
+formações entre jogos e força `playingStyleFixo` nos slots certos
+(respeitando `estiloValidoPara`) até esvaziar a fila de cada (formação,
+posição) — precisa de pelo menos ~13 jogos pra drenar a fila mais cheia
+(`433|LW`, 4 estilos por 1 slot). Repõe `Tatics.formacao` e todo
+`playingStyleFixo` tocado no fim. Avisa no console quem sobrou sem testar.
+
+Botão "Simulação rápida" do painel usa `calibrarEstilos: false` de
+propósito — 2 jogos não drenam fila nenhuma, e a rotação trocaria a
+formação escolhida no painel sem aviso. Pra calibrar os 21 estilos, correr
+na consola: `Sim.run({ jogos: 15, duracaoSeg: 120 })`.
 
 ## `match.js` — o motor do jogo *(ficheiro maior, ~1360 linhas)*
 

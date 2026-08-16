@@ -318,8 +318,12 @@ function runFastSim() {
     const btn = document.getElementById('btn-fastsim');
     if (btn) { btn.innerText = 'A simular...'; btn.disabled = true; }
 
-    Sim.run({ jogos: 10, duracaoSeg: 120 }).then(() => {
-        if (btn) { btn.innerText = 'Simulação rápida (10×2min)'; btn.disabled = false; }
+    // calibrarEstilos desligado aqui de propósito: com só 2 jogos não dá pra
+    // esvaziar as filas de cobertura (ver simulate.js), e a rotação de
+    // formação ia trocar a formação escolhida no painel sem aviso. Pra
+    // calibrar os 21 estilos, usar Sim.run({jogos:15,...}) na consola.
+    Sim.run({ jogos: 2, duracaoSeg: 1500, calibrarEstilos: false }).then(() => {
+        if (btn) { btn.innerText = 'Simulação rápida (2×25min)'; btn.disabled = false; }
     });
 }
 

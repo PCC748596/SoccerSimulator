@@ -204,7 +204,7 @@
             <label>Simulação em lote (sem ecrã)</label>
             <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
                 <button type="button" class="btn-sector" id="btn-fastsim" onclick="runFastSim()">Simulação rápida
-                    (10×2min)</button>
+                    (2×25min)</button>
             </div>
         </div>
     </div>
@@ -308,12 +308,15 @@
     <script src="js/bt/team_bt.js"></script>
     <script src="js/bt/position_bt.js"></script>
     <script src="js/bt/player_bt.js"></script>
-    <script src="js/bt/btDebug.js"></script>
 
     <script src="js/match.js"></script>
     <script src="js/player.js"></script>
     <script src="js/fsm.js"></script>
     <script src="js/simulate.js"></script>
+
+    <!-- Depende de FootballPlayer (player.js) e Sim (simulate.js) já existirem -->
+    <script src="js/bt/btDebug.js"></script>
+
     <script src="js/main.js"></script>
 
 </body>
