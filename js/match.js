@@ -319,7 +319,7 @@ const Match = {
             // Mistura de TV Centro e Lateral Móvel
             // Acompanha até metade do meio-campo (26.5m), depois fica parada e só roda
             let bz = THREE.MathUtils.clamp(this.ball.position.z, -26.5, 26.5);
-            targetPos.set(48 * zoom, 28 * zoom, bz);
+            targetPos.set(48 * zoom, 23 * zoom, bz);
             lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'topdown') {
             const aspect = window.innerWidth / window.innerHeight;
