@@ -538,8 +538,12 @@ desenhada em canvas que existia antes, e o jogo abre na mesma.
 Primeiro a carregar. Não depende de nada além do THREE.
 
 - Cabeçalho com o **índice geral de funções/objectos** do projecto (comentário no topo).
-- Dimensões do campo: `CAMPO_LARG` (68), `CAMPO_COMP` (106), `LARGURA_BALIZA` (7.32),
-  `ALTURA_BALIZA` (2.44), `ALTURA_BASE_Y`.
+- Dimensões do campo: `CAMPO_LARG` (74), `CAMPO_COMP` (116), `LARGURA_BALIZA` (7.32),
+  `ALTURA_BALIZA` (2.44), `ALTURA_BASE_Y`. Aumentado a pedido (percepção de
+  velocidade/passada dos jogadores era grande de mais no campo original).
+- `GAME_SPEED` — ritmo base da partida (multiplicador aplicado a `delta` em
+  `main.js` → `animate()`, junto com `window.speedMultiplier` do painel).
+  Histórico dos ajustes fica no comentário acima da constante.
 - Vectores/matrizes temporários reutilizados para evitar alocações por frame:
   `_v1`, `_v2`, `_v3`, `_m1`, `_q1`, `_line1`, `_vUp` (eixo Y constante, para rodar
   direcções no plano do campo). **Nunca guardar referências a `_v1`.._line1`** —
@@ -959,6 +963,22 @@ Tudo o que é individual: decisão, movimento e corpo 3D.
   pela distância e pressão adversária.
 - **Acções:** `initiatePass(alvo)`, `initiateShoot()`, `executeHeader()` — apenas
   disparam estados na FSM; a execução acontece em `fsm.js`.
+  **`initiatePass` — lead por velocidade do receptor, auditado e recalibrado**
+  (queixa: "passes crus, não chegam direito nos alvos", depois de aumentar o
+  campo). `travelTime = distância / pesoVel` estima quanto tempo a bola leva
+  a chegar, pra somar `receptor.velocity × travelTime` ao alvo. `pesoVel` é a
+  velocidade MÉDIA da bola no voo, não a de saída (~17-18 m/s) — o arrasto e
+  o atrito de rolamento travam-na muito ao longo do percurso, e a estimativa
+  antiga (17 fixo) media 1.5×-2× mais curta que o tempo de voo real nos
+  10-30 m (a faixa mais comum). No campo pequeno o erro não se notava
+  (passes curtos, pouco tempo de voo); no campo maior, mais tempo de voo =
+  mais erro acumulado = bola chegando atrás de quem corre a recebê-la.
+  Recalibrado com testes isolados (alvo parado vs. a correr, várias
+  distâncias): `pesoVel` 17→11, tecto do `travelTime` 3.0→4.5 s, tecto do
+  lead total (`maxLeadTotal`) 14→18 m (os dois tectos sobem juntos — só um
+  cortava o lead justamente nos passes longos que mais precisam dele). Erro
+  medido caiu de 2-12 m para <1 m na maioria dos casos; só sprint (6 m/s) num
+  passe de 45 m ainda erra bastante (~11 m, caso raro).
 - **Movimento:** `steerArrive(target, maxSpeed)` — steering behaviour com travagem
   ao aproximar-se.
 - **Corpo e animação:** `buildBody(corCamisa, corCalcao)` monta a malha hierárquica
@@ -1039,6 +1059,28 @@ Tudo o que é individual: decisão, movimento e corpo 3D.
 - **`aplicarCamadaCorte()`** — a camada aditiva do corte diagonal
   (`DribbleCutClip`). Corre **depois** do `animateBones`, senão ele reescreve a
   pelvis e as pernas no mesmo frame e o corte desaparece.
+- **`aplicarCamadaPeito()`** (matada no peito) e **`aplicarCamadaCabeceioDePe()`**
+  (cabeceio de pé) — mesmo padrão: camadas aditivas por cima do `animateBones`,
+  só tronco/braços, sem mexer na pelvis. **Bug corrigido**: os ângulos dos
+  braços eram escritos com `+=`/`-=` em vez de convergir para um alvo (`lerpTo`)
+  — acumulavam a cada frame e passavam bem de 90° ao longo do gesto, lendo
+  como o corpo inteiro a desequilibrar-se em vez de "abrir levemente os
+  braços". Corrigido para `lerpTo`.
+  **Segundo bug, mais grave, no `CHEST_CONTROL`**: a velocidade só decai
+  (`*0.75`/frame no `case 'CHEST_CONTROL'`, `fsm.js`) em vez de zerar na
+  entrada — por uns ~13 frames (~0.2 s) `speed` ficava `>= 0.1`, e o bloco da
+  passada de corrida em `animateBones` (`speed >= 0.1`, mais abaixo no
+  ficheiro) escreve `lLeg`/`rLeg.rotation.x` **directo, sem lerp** — por cima
+  de tudo, porque `aplicarCamadaPeito()` só mexe no joelho, nunca na coxa. O
+  jogador aparecia com a perna esticada em pose de sprint, lendo como
+  "deitado no chão" a matar no peito. Fix: `CHEST_CONTROL` força sempre o
+  ramo neutro de `animateBones` (`speed < 0.1 || estado === 'CHEST_CONTROL'`),
+  cortando o bloco de corrida por completo enquanto o gesto decorre.
+- **Cabeçada com salto (`animateBones`, fase do `jumpTimer`)** — a perna dobra
+  pelo **joelho** (`rig.lKnee`/`rKnee.rotation.x`, curva própria: pico em
+  `p<0.28`, esticada de novo por `p≈0.58`, antes do contacto), não pela coxa
+  (`rig.lLeg`/`rLeg`, que só faz um leve avanço de apoio, `0.10·sin`). Pedido
+  explícito: "dobrar a parte de baixo da perna, esticar antes de aterrar".
 
 > **`lookAtBola()` — problema em aberto, não resolvido.** É só um wrapper
 > fino para `model.lookAt(ponto)`, usado em `updateGK`,
@@ -1164,7 +1206,37 @@ manual do painel não está a bloquear o desvio de estilo.
   chamado a ~5 Hz dentro do `animate()`, e só corre trabalho se o painel
   não estiver minimizado.
 
+- **Broadcast do TeamBT** (dentro do `animate()`, junto da leitura de
+  `bbA.posture`/`bbB.posture` pro HUD) — publica `{TeamA:{trace,posture},
+  TeamB:{...}}` num `BroadcastChannel('teamBtTrace')`, todo frame. Não faz
+  nada se ninguém estiver a ouvir do outro lado — custo é só o `postMessage`.
+  Consumido por [teamBtView.html](teamBtView.html) (ver secção própria).
+
 **Mexer aqui quando:** configuração do renderer, timestep, ou o que corre no arranque.
+
+## `teamBtView.html` — fluxograma do TeamBT ao vivo
+
+Página **separada** (abre numa aba nova, botão "TeamBT Fluxograma" no painel
+de Visibilidade, ou `window.open('teamBtView.html', ...)`), não faz parte do
+`index.html`. Pedido explícito: ver a árvore de decisão do nível 1
+(`bt/team_bt.js`) como um fluxograma, não como texto/log.
+
+- A árvore (`sel`/`seq`/`cond`/`act`, mesmos nomes de nó de `team_bt.js`) está
+  **copiada à mão** neste ficheiro (`TREE`, objecto JS) — não há introspecção
+  automática da árvore real, porque os nós do `bt/core.js` não guardam os
+  filhos com nomes fora do closure de `setPosture`/`act`. **Se a árvore em
+  `team_bt.js` mudar, actualizar aqui também.**
+- Recebe `{trace, posture}` por `BroadcastChannel('teamBtTrace')` (publicado
+  por `main.js` → `animate()`) e destaca o caminho percorrido: verde
+  (`SUCCESS`), cinza (`FAILURE`), ramos nem sequer avaliados ficam
+  esbatidos. `bb.trace` já existia (`bt/core.js`, `BT.debug=true`) — este
+  ficheiro é só o primeiro consumidor visual dele.
+- Selector de equipa (TeamA/TeamB) e a postura activa em texto.
+- **Precisa da aba do jogo aberta** — sem `index.html` a correr no mesmo
+  browser (mesmo contexto/perfil), não há ninguém a publicar no canal.
+
+**Mexer aqui quando:** a árvore do TeamBT mudar de forma, ou quiseres o mesmo
+padrão de fluxograma pro PositionBT/PlayerBT.
 
 ---
 
@@ -1224,3 +1296,7 @@ manual do painel não está a bloquear o desvio de estilo.
 | Corte diagonal de 30° no drible | `config.js` → `DribbleCutClip`, `fsm.js` → `case 'CUT'`, `player.js` → `aplicarCamadaCorte()` |
 | Passe experimental por pontos candidatos | `pass_candidates.js` + botões *PlayerPassTarget* / *PassGrid* |
 | Resultado de uma disputa (desarme, remate, cabeceio) | `utils.js` → `venceuDuelo()`, `player.js` → `skillFor()` |
+| Fluxograma ao vivo da árvore do TeamBT | [teamBtView.html](teamBtView.html) (aba separada) |
+| Pose da matada no peito / cabeceio de pé | `player.js` → `aplicarCamadaPeito()` / `aplicarCamadaCabeceioDePe()` |
+| Cabeçada com salto (fase subida/contacto/descida) | `player.js` → `animateBones()`, bloco do `jumpTimer` |
+| Passe chegando atrás/à frente de quem corre (lead) | `player.js` → `initiatePass()` — `pesoVel`/`travelTime`/`maxLeadTotal` |
