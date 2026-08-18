@@ -554,24 +554,21 @@ class PlayerFSM {
                     successChance += (skill - 50) * 0.003;
 
                     if (Math.random() < successChance) {
-                        /*
-                        SUCESSO — em vez de um empurrão único e volta imediata
-                        ao CARRY, entra no gesto DRIBBLE_CUT_30: o corte de 30°
-                        acontece ao longo de ~0.75 s, com dois toques laterais
-                        curtos e o corpo a rodar gradualmente (ver DribbleCutClip).
-                        */
                         if (typeof MatchStats !== 'undefined') MatchStats[p.team].dribles.sucesso++;
                         p.speedMult = DribbleModel.sprintBoost;
                         window.bolaChutada = false;
 
-                        p.cutAtivo = true;
-                        p.cutNorm = 0;
-                        p.cutTimer = 0;
-                        p.cutToquesFeitos = 0;
-                        p.cutLado = escapeSide;
-                        p.cutDirIni = forward.clone();
-                        p.cutVel = Math.max(4.0, p.velocity.length());
-                        this.changeState('CUT');
+                        p.hasBall = false;
+                        p.touchLock = 0.08;
+                        p.carryTouchGrace = 1.2;
+                        Match.ballCarrier = null;
+                        Match.intendedReceiver = p;
+                        Match.ballVel.copy(pushDir).multiplyScalar(Math.max(6.0, p.velocity.length() + 3.5));
+                        Match.ballVel.y = 0;
+                        Match.lastTouchedTeam = p.team;
+                        Match.lastTouchedPlayer = p;
+                        
+                        this.changeState('CARRY');
                         break;
                     } else {
                         // FALHOU — bola fica solta, adversário pode roubar
