@@ -417,7 +417,7 @@ const Match = {
             const arco = new THREE.Mesh(new THREE.RingGeometry(9.15 - esp / 2, 9.15 + esp / 2, 32, 1, arcRot, theta * 2), matLinha); arco.rotation.x = -Math.PI / 2; arco.position.set(0, 0.02, zSinal + 11 * dir); campoGrupo.add(arco);
 
             const baliza = new THREE.Group();
-            const matPoste = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 }); const rP = 0.06;
+            const matPoste = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 }); const rP = GoalFrame.raioPoste;
             const posteEsq = new THREE.Mesh(new THREE.CylinderGeometry(rP, rP, ALTURA_BALIZA, 16), matPoste); posteEsq.position.set(-LARGURA_BALIZA / 2, ALTURA_BALIZA / 2, 0); posteEsq.castShadow = true;
             const posteDir = new THREE.Mesh(new THREE.CylinderGeometry(rP, rP, ALTURA_BALIZA, 16), matPoste); posteDir.position.set(LARGURA_BALIZA / 2, ALTURA_BALIZA / 2, 0); posteDir.castShadow = true;
             const travessao = new THREE.Mesh(new THREE.CylinderGeometry(rP, rP, LARGURA_BALIZA + rP * 2, 16), matPoste); travessao.rotation.z = Math.PI / 2; travessao.position.set(0, ALTURA_BALIZA + rP, 0); travessao.castShadow = true;
@@ -1691,6 +1691,79 @@ const Match = {
         }
     },
 
+    /*
+    Colisão da bola com postes e travessão das duas balizas.
+
+    Os postes são cilindros VERTICAIS: a colisão resolve-se no plano XZ,
+    desde que a bola esteja abaixo do travessão. O travessão é um cilindro
+    HORIZONTAL ao longo de X: resolve-se no plano YZ, desde que a bola esteja
+    dentro da largura da baliza.
+
+    Em ambos os casos a bola é empurrada para fora da superfície do cilindro
+    (senão fica presa a colidir frame após frame) e a velocidade é reflectida
+    na normal do contacto — é essa reflexão que faltava por completo, e por
+    isso uma bola na trave nunca ressaltava.
+
+    Corre ANTES da detecção de golo: a bola tem de bater na armação antes de
+    lhe ser perguntado se passou a linha toda.
+    */
+    colidirComBaliza: function () {
+        const rB = BallPhysics.raio;
+        const rP = GoalFrame.raioPoste;
+        const soma = rP + rB;
+        const meiaLarg = LARGURA_BALIZA / 2;
+        const b = this.ball.position;
+        const v = this.ballVel;
+
+        for (const lado of [1, -1]) {
+            // Plano da armação: meio raio para dentro da linha de fundo.
+            const zG = (CAMPO_COMP / 2) * lado - rP * lado;
+
+            // --- postes (cilindros verticais) ---
+            if (b.y < ALTURA_BALIZA + rP) {
+                for (const sx of [1, -1]) {
+                    const px = meiaLarg * sx;
+                    const dx = b.x - px, dz = b.z - zG;
+                    const d = Math.hypot(dx, dz);
+                    if (d >= soma || d < 1e-6) continue;
+
+                    const nx = dx / d, nz = dz / d;
+                    b.x = px + nx * soma;
+                    b.z = zG + nz * soma;
+
+                    const vn = v.x * nx + v.z * nz;
+                    if (vn < 0) {
+                        v.x -= (1 + GoalFrame.restituicao) * vn * nx;
+                        v.z -= (1 + GoalFrame.restituicao) * vn * nz;
+                        v.x *= GoalFrame.atrito;
+                        v.z *= GoalFrame.atrito;
+                    }
+                }
+            }
+
+            // --- travessão (cilindro horizontal ao longo de X) ---
+            if (Math.abs(b.x) <= meiaLarg + rP) {
+                const barY = ALTURA_BALIZA + rP;
+                const dy = b.y - barY, dz = b.z - zG;
+                const d = Math.hypot(dy, dz);
+                if (d < soma && d > 1e-6) {
+                    const ny = dy / d, nz = dz / d;
+                    b.y = barY + ny * soma;
+                    b.z = zG + nz * soma;
+
+                    const vn = v.y * ny + v.z * nz;
+                    if (vn < 0) {
+                        v.y -= (1 + GoalFrame.restituicao) * vn * ny;
+                        v.z -= (1 + GoalFrame.restituicao) * vn * nz;
+                        v.y *= GoalFrame.atrito;
+                        v.z *= GoalFrame.atrito;
+                        v.x *= GoalFrame.atrito;
+                    }
+                }
+            }
+        }
+    },
+
     updateBall: function () {
         /*
         Integração semi-implícita: forças primeiro, posição depois. Constantes
@@ -1789,6 +1862,8 @@ const Match = {
                 this.ballVel.x *= BC.atrito;
             }
         }
+
+        this.colidirComBaliza();
 
         if (Math.abs(this.ball.position.z) - BallPhysics.raio > CAMPO_COMP / 2) {
             let zSinal = Math.sign(this.ball.position.z);

@@ -56,6 +56,13 @@ class FootballPlayer {
         this.isCross = false;
         this.isThroughBall = false;
         this.throughBallTarget = null;
+        // Ponto do leque que este passe mira (ver PassTypes). null = aos pés.
+        this.passAimPoint = null;
+        this.passTipo = 'direct';
+        // Saída de bola sorteada para esta posse (ver decidirSaidaGK).
+        this.gkSaida = null;
+        // Está a fazer FWR/AFT_SUPPORT neste momento (ver temVagaDeApoio).
+        this.apoioAtivo = false;
         this.peitoTimer = 0;   // gesto de domínio no peito (ver CHEST_CONTROL)
         this.peitoCola = 0;    // segundos que faltam com a bola colada ao peito
         this.peitoIntens = 0;  // intensidade da pose (ver aplicarCamadaPeito)
@@ -669,6 +676,14 @@ class FootballPlayer {
         let _v1 = new THREE.Vector3();
         if (this.isThroughBall && this.throughBallTarget) {
             _v1.set(this.throughBallTarget.x, 0, this.throughBallTarget.z);
+        } else if (this.passAimPoint) {
+            /*
+            Passe para o espaço / leading: o alvo é um PONTO do leque do
+            PlayerPassTarget, não o companheiro. Já vem filtrado (sem
+            adversário a 2m, linha de passe livre), por isso não leva lead
+            nenhum por cima — o ponto JÁ é à frente dele.
+            */
+            _v1.set(this.passAimPoint.x, 0, this.passAimPoint.z);
         } else {
             /*
             Ponto de partida: alvo do PositionBT (alvoDePasse) misturado com a
@@ -733,6 +748,8 @@ class FootballPlayer {
         this.actionState = new ActionState('pass', {
             onContact: () => { if (this.hasBall && this.passTarget) executePassGameplay(this); }
         });
+        // Consumido: o próximo passe volta a decidir o seu próprio ponto.
+        this.passAimPoint = null;
         this.fsm.changeState('PASS');
     }
     /*

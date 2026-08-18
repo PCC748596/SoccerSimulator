@@ -58,6 +58,26 @@ FUNCTION & OBJECT INDEX
 
 const LARGURA_BALIZA = 7.32; const ALTURA_BALIZA = 2.44; const ALTURA_BASE_Y = 0.0;
 
+/*
+Estrutura da baliza — postes e travessão como obstáculos físicos.
+
+A bola atravessava-os: não havia colisão nenhuma com a armação, só a
+detecção de golo (que continua a exigir a bola INTEIRA para lá da linha) e o
+clamp da rede. Uma bola na trave passava ou encostava sem ressaltar.
+
+`z` é o plano dos postes: a armação está meio raio para dentro da linha,
+como no desenho da baliza (ver criação em match.js).
+*/
+const GoalFrame = {
+    raioPoste: 0.06,
+    // Trave e postes são rígidos: devolvem bem mais do que a rede, um pouco
+    // menos do que uma parede perfeita.
+    restituicao: 0.65,
+    // Atrito tangencial no ressalto: a bola sai da trave a rodar e perde
+    // alguma velocidade no plano do impacto.
+    atrito: 0.85
+};
+
 window.Config = {
     usePlayingStyles: true
 };
@@ -1241,7 +1261,33 @@ os N melhores candidatos (os mais perto da bola) e o resto vai ocupar a
 posição normal (MOVE_TO_POS), que é o que já devia acontecer.
 */
 const SupportModel = {
-    maxPorLado: 2
+    maxPorLado: 2,
+
+    /*
+    Distância à BOLA a que o apoio se coloca. O estado só rotulava: o alvo
+    continuava a ser o slot do bloco, que pode estar a 20 m da jogada — um
+    apoio a 20 m não é apoio, é um jogador com uma etiqueta.
+
+    O alvo passa a ser medido a partir da bola: mantém-se a DIRECÇÃO do slot
+    (é ela que espalha os apoios em vez de os empilhar todos no mesmo sítio)
+    e encurta-se o RAIO para esta janela.
+
+    O mínimo existe para não irem para cima do portador e lhe tirarem o
+    espaço de condução.
+    */
+    raioMax: 7.0,
+    raioMin: 3.5,
+
+    /*
+    Vantagem, em metros, de quem JÁ estava a fazer o apoio.
+
+    Sem isto, dois jogadores a distâncias parecidas da bola trocavam a vaga
+    entre si de frame para frame: quem a perdia largava o alvo junto à bola
+    e voltava ao slot do bloco, parava a meio da corrida e virava-se para o
+    outro lado. Era o "corre atrás da bola e de repente pára" observado. Com
+    a vantagem, a troca só acontece quando o outro está mesmo mais perto.
+    */
+    bonusOcupante: 2.5
 };
 
 /*
@@ -1262,6 +1308,98 @@ Duas regras, as duas necessárias:
 const CoberturaModel = {
     raioMaxBola: 6.0,
     max: 1
+};
+
+/*
+=============================================================================
+Tipos de passe — que PONTO a bola mira, e com que frequência
+=============================================================================
+Três formas de entregar a bola ao mesmo companheiro:
+
+    direct   aos pés dele (o comportamento de sempre, via alvoDePasse)
+    space    o ponto MEDIANO em profundidade do leque do PlayerPassTarget:
+             metade dos pontos vivos está mais perto dele, metade mais longe
+    leading  o ponto vivo do leque MAIS PERTO da baliza adversária
+
+`space` e `leading` saem os dois do mesmo leque de candidatos
+(pass_candidates.js), já filtrado de adversários e linhas tapadas — por isso
+mirar um deles é mirar espaço jogável, não uma coordenada qualquer.
+
+A mistura depende de DE ONDE para ONDE vai o passe. Sector = terço do campo
+no referencial de ataque (def/mid/atk); corredor = centro (|x| < larguraCentro)
+ou lado. As regras são testadas por ordem — a primeira que casa manda.
+*/
+const PassTypeModel = {
+    larguraCentro: 10.0,   // |x| abaixo disto conta como corredor central
+
+    /*
+    Ordem importa: `defParaAtk` tem de ser vista antes de `origemAtaque`,
+    senão um passe longo de trás cairia na regra do ataque.
+    */
+    regras: [
+        // Defesa a saltar o meio-campo, directo para o ataque.
+        { nome: 'defParaAtk', quando: (o, d) => o.sector === 'def' && d.sector === 'atk',
+          mistura: { space: 0.5, leading: 0.5 } },
+
+        // Já no ataque: lá dentro, a recuar para o meio, ou a abrir nas pontas.
+        { nome: 'origemAtaque', quando: (o) => o.sector === 'atk',
+          mistura: { space: 0.6, direct: 0.4 } },
+
+        // Progressão pelo centro a abrir para o lado (def->mid, mid->atk).
+        { nome: 'centroParaLado',
+          quando: (o, d) => o.corredor === 'centro' && d.corredor === 'lado' &&
+                            ((o.sector === 'def' && d.sector === 'mid') ||
+                             (o.sector === 'mid' && d.sector === 'atk')),
+          mistura: { space: 0.8, leading: 0.2 } },
+
+        // Dentro do corredor central, em qualquer sector.
+        { nome: 'centroParaCentro',
+          quando: (o, d) => o.corredor === 'centro' && d.corredor === 'centro',
+          mistura: { direct: 0.8, space: 0.2 } }
+    ],
+
+    // Tudo o resto (recuos, passes laterais dentro do mesmo sector, etc.).
+    misturaPadrao: { direct: 0.8, space: 0.2 },
+
+    /*
+    Pesos da escolha do RECEPTOR. O tipo de passe não decide só onde a bola
+    cai — também mexe em quem a recebe: num passe para o espaço vale mais o
+    companheiro que TEM espaço à frente (pontos vivos no leque) do que o que
+    está mais bem colocado agora.
+
+    `bonusSugerido` mantém o BT no comando: a escolha dele só é trocada por
+    uma alternativa claramente melhor, não por um empate técnico.
+    */
+    escolha: {
+        bonusSugerido: 30.0,   // vantagem de partida do alvo que o BT propôs
+        pesoProgresso: 1.2,    // metros ganhos para a baliza, no ponto de mira
+        pesoEspaco: 1.0,       // por ponto vivo no leque do companheiro
+        pesoDistancia: 0.6,    // penaliza passes longos
+        distanciaMax: 45.0     // acima disto nem é candidato
+    }
+};
+
+/*
+Saída de bola do guarda-redes.
+
+Sorteado UMA vez por posse (não a cada frame, senão ele mudava de ideias
+enquanto segurava a bola e o resultado seria a média das duas opções em vez
+de 80/20).
+
+`laterais`: sai a jogar curto, e o destinatário é um LATERAL (LB/RB) — é a
+saída construída, por fora, longe do miolo onde a perda custa golo.
+`chuteFrente`: chutão para o espaço à frente (puntBall).
+
+Sem lateral disponível a tempo, cai no chutão: melhor a bola longe do que
+uma saída curta forçada para dentro.
+*/
+const GoalkeeperDistribution = {
+    laterais: 0.8,
+    chuteFrente: 0.2,
+    // Um lateral mais longe do que isto não conta como saída curta.
+    distanciaMaxLateral: 45.0,
+    // Lateral com adversário a menos disto em cima não serve.
+    folgaMinima: 4.0
 };
 
 /*

@@ -133,16 +133,39 @@ const UtilityAI = {
             return true;
         }
 
+        /*
+        Destinatário da bola: é gate, não é opção a pontuar.
+
+        Faltava aqui, e era isso que fazia o condutor tocar a bola à frente e
+        virar SUPPORT. O ramo 'Receber' do BT trata este caso (o toque do
+        CARRY põe Match.intendedReceiver = o próprio), mas quem manda no
+        frame é esta camada — sem o gate, o condutor caía na pontuação, o
+        HOLD_POSITION ganhava e ele largava a bola que tinha acabado de
+        tocar para ir "apoiar" a jogada que era dele.
+        */
+        if (Match.intendedReceiver === p) {
+            actReceivePass(ctx);
+            return true;
+        }
+
         // Guarda-redes: mantém a lógica do BT, que é um caso à parte e não
         // beneficia de pontuação (as opções dele são mutuamente exclusivas).
         if (p.role === 'gk') {
             if (p.hasBall || p.carryTouchGrace > 0) {
-                ctx.passTarget = p.findPassTarget('def') || p.findPassTarget('mid') ||
-                    (ctx.underPressure ? p.findPassTargetRelaxed() : null);
-                if (ctx.passTarget) actPass(ctx);
-                else if (p.decisionTimer > 1.2) p.puntBall();
+                /*
+                Mesma saída 80/20 do ramo GuardaRedesJoga do BT
+                (GoalkeeperDistribution). Estava aqui uma cópia da versão
+                antiga — "qualquer def ou mid, senão chutão" — que ganhava
+                sempre ao BT, porque é esta camada que corre. Duas regras
+                para o mesmo guarda-redes, e a que valia era a velha.
+                */
+                const saida = decidirSaidaGK(p);
+                const lateral = (saida === 'laterais') ? acharLateralParaSaida(ctx) : null;
+                if (lateral) actPassParaAlvo(ctx, lateral);
+                else if (p.decisionTimer > (saida === 'chuteFrente' ? 0.6 : 1.2)) p.puntBall();
                 else actCarry(ctx);
             } else {
+                limparSaidaGK(p);
                 actGoalkeeperPosition(ctx);
             }
             return true;

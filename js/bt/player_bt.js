@@ -87,6 +87,11 @@ class PlayerContext {
             else if (p.pos === 'CM') EventBus.emit('CM_HAS_BALL', { p: p });
         }
         p._hadBallPrev = p.hasBall;
+        if (p.role === 'gk') limparSaidaGK(p);
+        // Perdida a posse (ou com a bola no pé), ninguém é ocupante de uma
+        // vaga de apoio — senão a vantagem do ocupante sobrevivia à
+        // transição e falseava a disputa na posse seguinte.
+        if (p.hasBall || !this.bb || !this.bb.isAttacking) p.apoioAtivo = false;
 
         /*
         Tempo seguido perto do portador adversário — Defensive Pressure não
@@ -399,8 +404,92 @@ function actThroughBall(ctx) {
     ctx.p.initiatePass(lance.mate);
 }
 
+/*
+Saída do guarda-redes: sorteada UMA vez por posse.
+
+A cada frame seria um sorteio novo enquanto ele segura a bola, e ao fim de
+uma dúzia de frames alguma das faces já tinha saído — o resultado real seria
+"o que calhar primeiro", não os 80/20 pedidos. Fica gravada no jogador e só
+é limpa quando ele deixa de ter a bola (ver limparSaidaGK).
+*/
+function decidirSaidaGK(p) {
+    if (p.gkSaida) return p.gkSaida;
+    p.gkSaida = (Math.random() < GoalkeeperDistribution.laterais) ? 'laterais' : 'chuteFrente';
+    return p.gkSaida;
+}
+
+function limparSaidaGK(p) {
+    if (!p.hasBall && p.gkSaida) p.gkSaida = null;
+}
+
+/*
+Lateral disponível para a saída curta: o mais desmarcado dos dois, dentro do
+alcance. "Desmarcado" aqui é literal — adversário mais próximo a mais de
+`folgaMinima`; um lateral com um extremo em cima não é saída, é oferta.
+*/
+function acharLateralParaSaida(ctx) {
+    const p = ctx.p;
+    const G = GoalkeeperDistribution;
+    let melhor = null, melhorFolga = -Infinity;
+
+    for (const mate of ctx.teammates) {
+        if (mate === p) continue;
+        if (mate.pos !== 'LB' && mate.pos !== 'RB') continue;
+        if (p.model.position.distanceTo(mate.model.position) > G.distanciaMaxLateral) continue;
+
+        let folga = Infinity;
+        for (const opp of ctx.opponents) {
+            if (opp.role === 'gk') continue;
+            const d = mate.model.position.distanceTo(opp.model.position);
+            if (d < folga) folga = d;
+        }
+        if (folga < G.folgaMinima) continue;
+        if (folga > melhorFolga) { melhorFolga = folga; melhor = mate; }
+    }
+    return melhor;
+}
+
+/*
+Passe para um receptor JÁ decidido: o PassTypes escolhe o ponto, mas não
+troca a pessoa. É o que a saída pelos laterais precisa — trocar o receptor
+aqui desfazia a decisão que acabou de ser tomada.
+*/
+function actPassParaAlvo(ctx, alvo) {
+    const p = ctx.p;
+    if (typeof PassTypes !== 'undefined') {
+        const r = PassTypes.paraMate(p, alvo);
+        p.passAimPoint = r.ponto ? { x: r.ponto.x, z: r.ponto.z } : null;
+        p.passTipo = r.tipo;
+    } else {
+        p.passAimPoint = null;
+        p.passTipo = 'direct';
+    }
+    p.initiatePass(alvo);
+}
+
+/*
+O BT já escolheu um companheiro; o PassTypes decide COMO a bola lhe chega
+(aos pés, no espaço à frente, ou no ponto mais adiantado do leque) e pode
+trocar o receptor por outro claramente melhor para o tipo sorteado.
+
+Sem PassTypes carregado, ou sem nada melhor a propor, fica o caminho antigo.
+*/
 function actPass(ctx) {
-    ctx.p.initiatePass(ctx.passTarget);
+    const p = ctx.p;
+    if (typeof PassTypes !== 'undefined') {
+        const escolha = PassTypes.escolher(p, ctx.passTarget);
+        if (escolha && escolha.mate) {
+            p.passAimPoint = escolha.ponto
+                ? { x: escolha.ponto.x, z: escolha.ponto.z }
+                : null;
+            p.passTipo = escolha.tipo;
+            p.initiatePass(escolha.mate);
+            return;
+        }
+    }
+    p.passAimPoint = null;
+    p.passTipo = 'direct';
+    p.initiatePass(ctx.passTarget);
 }
 
 function podeDriblar(ctx) {
@@ -708,10 +797,21 @@ mudava com a ordem da lista em vez de com o jogo. O critério aqui não depende
 de ordem nenhuma: cada jogador mede-se contra os colegas e chega sozinho à
 mesma resposta.
 */
+// Distância à bola para efeitos de disputa da vaga: quem já está a apoiar
+// conta como estando `bonusOcupante` metros mais perto (ver SupportModel).
+function distDisputaApoio(jogador, bola) {
+    const d = jogador.model.position.distanceTo(bola);
+    return jogador.apoioAtivo ? d - SupportModel.bonusOcupante : d;
+}
+
 function temVagaDeApoio(ctx, aFrenteDaBola) {
     const p = ctx.p;
+    // Quem vai buscar a bola (destinatário de um passe, ou do seu próprio
+    // toque de condução) tem tarefa; apoiar é para os outros. Segunda linha
+    // de defesa: o gate do UtilityAI já o devia ter apanhado antes daqui.
+    if (Match.intendedReceiver === p) return false;
     const bola = Match.ball.position;
-    const minhaDist = p.model.position.distanceTo(bola);
+    const minhaDist = distDisputaApoio(p, bola);
     let melhores = 0;
 
     for (const mate of ctx.teammates) {
@@ -720,13 +820,37 @@ function temVagaDeApoio(ctx, aFrenteDaBola) {
         // Mesmo lado da bola que eu? (zoneAhead no referencial de ataque)
         if ((mate.model.position.z * mate.dirZ > ctx.bb.ballZ) !== aFrenteDaBola) continue;
 
-        const d = mate.model.position.distanceTo(bola);
+        const d = distDisputaApoio(mate, bola);
         // Empate exacto desempata pelo id, para os dois lados do teste
         // concordarem sobre quem vem primeiro.
         if (d < minhaDist || (d === minhaDist && mate.id < p.id)) melhores++;
         if (melhores >= SupportModel.maxPorLado) return false;
     }
     return true;
+}
+
+/*
+Põe o alvo do apoio dentro da janela de raio à volta da bola.
+
+Guarda a DIRECÇÃO em que o bloco o tinha posto (é ela que mantém um apoio
+por dentro, outro por fora, em vez de os dois no mesmo ponto) e só encurta a
+distância. Sem direcção nenhuma — alvo em cima da bola — usa-se a frente de
+ataque dele, para o apoio de frente ficar à frente e o de trás atrás.
+*/
+function alvoDeApoio(p, aFrenteDaBola) {
+    const bola = Match.ball.position;
+    let dx = p.dynamicTarget.x - bola.x;
+    let dz = p.dynamicTarget.z - bola.z;
+    let d = Math.hypot(dx, dz);
+
+    if (d < 0.001) {
+        dx = 0;
+        dz = (aFrenteDaBola ? 1 : -1) * p.dirZ;
+        d = 1;
+    }
+
+    const raio = Math.min(Math.max(d, SupportModel.raioMin), SupportModel.raioMax);
+    p.dynamicTarget.set(bola.x + (dx / d) * raio, ALTURA_BASE_Y, bola.z + (dz / d) * raio);
 }
 
 // Ocupa a posição que o nível 2 lhe deu.
@@ -757,13 +881,19 @@ function actHoldPosition(ctx) {
     */
     const aFrenteDaBola = ctx.zoneAhead > ctx.bb?.ballZ;
     if (ctx.bb && ctx.bb.isAttacking && temVagaDeApoio(ctx, aFrenteDaBola)) {
+        // O alvo do bloco é só a direcção: quem apoia vem para junto da bola.
+        alvoDeApoio(p, aFrenteDaBola);
+        p.apoioAtivo = true;
         // zoneAhead/ballZ já no referencial de ataque — comparação directa.
         p.fsm.changeState(aFrenteDaBola ? 'FWR_SUPPORT' : 'AFT_SUPPORT');
     } else if (p.markingTarget) {
+        p.apoioAtivo = false;
         p.fsm.changeState('MARKING');
     } else if (p.isCovering) {
+        p.apoioAtivo = false;
         p.fsm.changeState('BLOCKING');
     } else {
+        p.apoioAtivo = false;
         p.fsm.changeState('MOVE_TO_POS');
     }
 }
@@ -897,22 +1027,39 @@ const PlayerBT = sel('PlayerRoot',
                 act('proteger', actCarry)
             ),
 
-            // Guarda-redes: sair a jogar curto, senão lançamento longo.
+            /*
+            Guarda-redes: 80% sai a jogar pelos LATERAIS, 20% chuta para a
+            frente (GoalkeeperDistribution). O sorteio é por posse, não por
+            frame.
+
+            Antes procurava qualquer 'def' ou 'mid' e só chutava quando não
+            achava ninguém — na prática saía quase sempre a jogar curto, e
+            muitas vezes para um central no meio da área.
+            */
             seq('GuardaRedesJoga',
                 cond('souGR', ehGK),
                 sel('OpcaoGR',
-                    seq('passeCurto',
-                        cond('haColega', (ctx) => {
-                            ctx.passTarget = ctx.p.findPassTarget('def') || ctx.p.findPassTarget('mid') ||
-                                (ctx.underPressure ? ctx.p.findPassTargetRelaxed() : null);
-                            return ctx.passTarget !== null;
+                    seq('saidaPelosLaterais',
+                        cond('vaiJogarCurto', (ctx) => {
+                            if (decidirSaidaGK(ctx.p) !== 'laterais') return false;
+                            ctx.lateralSaida = acharLateralParaSaida(ctx);
+                            return ctx.lateralSaida !== null;
                         }),
-                        act('passar', actPass)
+                        act('passar', (ctx) => actPassParaAlvo(ctx, ctx.lateralSaida))
                     ),
-                    // Sem opção curta segura: já esperou o suficiente a segurar a bola,
-                    // lança longo em vez de ficar indefinidamente parado.
-                    seq('lancamentoLongo',
-                        cond('esperouDemais', (ctx) => ctx.p.decisionTimer > 1.2),
+                    /*
+                    Chutão: a face sorteada, ou nenhum lateral livre a tempo.
+                    O `decisionTimer` continua a segurar a bola um instante
+                    antes de a mandar — sem isso o GK chutava no frame em que
+                    apanha, sem olhar.
+                    */
+                    seq('chuteParaFrente',
+                        cond('chutaJa', (ctx) => {
+                            if (decidirSaidaGK(ctx.p) === 'chuteFrente') return ctx.p.decisionTimer > 0.6;
+                            // Saída curta sem lateral disponível: espera mais
+                            // um pouco por um, depois manda embora.
+                            return ctx.p.decisionTimer > 1.2;
+                        }),
                         act('lancar', (ctx) => ctx.p.puntBall())
                     ),
                     act('segurar', actCarry)
