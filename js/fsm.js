@@ -179,10 +179,6 @@ class PlayerFSM {
         if (this.currentState === 'SLIDE_TACKLE' || this.currentState === 'TACKLE' || this.currentState === 'SHOOT' || this.currentState === 'PASS') {
             this.p.resetBonesToDefault();
         }
-        // Sair do CUT por qualquer via (perdeu a bola, desarme, bola parada)
-        // tem de desligar a camada aditiva, senão fica com o corpo torto.
-        if (this.currentState === 'CUT' && newState !== 'CUT') this.p.cutAtivo = false;
-
         this.currentState = newState; this.timer = 0;
 
         if (newState === 'SLIDE_TACKLE') this.enterSlideTackle();
@@ -586,67 +582,6 @@ class PlayerFSM {
 
                     // Volta a CARRY após o toque (o BT decidirá o próximo passo)
                     this.changeState('CARRY');
-                }
-                break;
-
-            /* =============================================================
-               CUT — DRIBBLE_CUT_30: corte lateral em diagonal de 30°.
-
-               O deslocamento roda gradualmente da direcção inicial até aos
-               30°, com dois toques laterais curtos pelo caminho. A pose
-               (inclinação, quadril, perna externa) é a camada aditiva
-               aplicada em player.aplicarCamadaCorte() — aqui só vive o
-               movimento e os toques na bola.
-               ============================================================= */
-            case 'CUT':
-                {
-                    const K = DribbleCutClip;
-                    p.cutTimer += dt;
-                    const norm = Math.min(1, p.cutTimer / K.duracao);
-                    p.cutNorm = norm;
-
-                    /*
-                    Suavização em S (smoothstep): o jogador não roda os 30° de
-                    uma vez. Arranca devagar, gira mais depressa a meio do
-                    gesto (frames 5-8) e assenta na nova direcção no fim.
-                    */
-                    const s = norm * norm * (3 - 2 * norm);
-                    const dir = p.cutDirIni.clone().applyAxisAngle(_vUp, K.angulo * p.cutLado * s);
-
-                    // Perde um pouco de velocidade no plantar do pé e recupera
-                    // no fim (frames 3-6 travam, 10-12 aceleram outra vez).
-                    const fatorVel = 0.78 + 0.22 * Math.abs(2 * norm - 1);
-                    p.velocity.copy(dir).multiplyScalar(p.cutVel * fatorVel);
-
-                    // Toques laterais alternados nos frames 6 e 9.
-                    const toque = K.toques[p.cutToquesFeitos];
-                    if (p.hasBall && toque !== undefined && norm >= toque && !pertoDaLinhaDeFundo(p)) {
-                        p.cutToquesFeitos++;
-                        const passada = misturarAndamento(p.velocity.length()).passada;
-                        // Alterna a abertura do toque: o primeiro leva a bola
-                        // mais para fora, o segundo já a alinha com a corrida.
-                        const abertura = (p.cutToquesFeitos === 1) ? 0.55 : 0.20;
-                        const dirToque = dir.clone()
-                            .applyAxisAngle(_vUp, K.angulo * p.cutLado * abertura)
-                            .normalize();
-
-                        p.hasBall = false;
-                        p.touchLock = 0.08;
-                        p.carryTouchGrace = 1.2;
-                        Match.ballCarrier = null;
-                        Match.intendedReceiver = p;
-                        Match.ballVel.copy(dirToque).multiplyScalar(p.velocity.length() + passada * K.forcaToque * 0.4);
-                        Match.ballVel.y = 0;
-                        Match.lastTouchedTeam = p.team;
-                        Match.lastTouchedPlayer = p;
-                        window.bolaChutada = false;
-                    }
-
-                    if (norm >= 1) {
-                        p.cutAtivo = false;
-                        p.dribbleOpponent = null;
-                        this.changeState('CARRY');
-                    }
                 }
                 break;
 

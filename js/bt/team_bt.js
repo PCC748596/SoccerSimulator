@@ -335,6 +335,16 @@ correr (ver Match.runTeamAI), por isso não dá para comparar contra ele
 directamente — o valor "do frame anterior" tem de viver num campo à parte
 que sobrevive a esse reset (p.prevMarkingTarget).
 */
+function atribuirCobertura(semAlvo) {
+    const bola = Match.ball.position;
+    semAlvo
+        .map(def => ({ def, d: def.model.position.distanceTo(bola) }))
+        .filter(c => c.d <= CoberturaModel.raioMaxBola)
+        .sort((a, b) => a.d - b.d || a.def.id - b.def.id)
+        .slice(0, CoberturaModel.max)
+        .forEach(c => { c.def.isCovering = true; });
+}
+
 function assignMarking(bb) {
     // Mesma janela de reação do pickChaser: mantém a marcação de antes da
     // perda de bola em vez de recalcular tudo no mesmo frame.
@@ -342,19 +352,35 @@ function assignMarking(bb) {
     const reactionDelay = (DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced)
         * (teamStyle ? teamStyle.pressaoPosPerda : 1.0);
     if (!bb.isAttacking && Match.possessionTimer < reactionDelay) {
+        const semAlvo = [];
         bb.outfield.forEach(def => {
             const alvo = def.prevMarkingTarget;
             if (alvo) {
                 def.markingTarget = alvo;
                 alvo.markCount = (alvo.markCount || 0) + 1;
             } else {
-                def.isCovering = true;
+                semAlvo.push(def);
             }
         });
+        atribuirCobertura(semAlvo);
         return;
     }
 
-    const defenders = bb.outfield;
+    /*
+    Com a bola, marcar é tarefa só dos DEFESAS — e cobrir não é tarefa de
+    ninguém.
+
+    Isto corria para as duas equipas sem distinção, por isso a equipa que
+    atacava saía daqui com a linha toda a marcar alguém: médios e avançados
+    sem bola apareciam em MARKING, e os que não arranjavam par caíam em
+    BLOCKING. Fechar a linha da bola é acção de quem defende; a equipa com
+    posse tem outro trabalho (ver as acções de apoio em actHoldPosition).
+    Os defesas continuam a marcar mesmo em posse: é o que evita que uma
+    perda de bola apanhe a última linha sem ninguém em cima dos avançados.
+    */
+    const defenders = bb.isAttacking
+        ? bb.outfield.filter(p => p.role === 'def')
+        : bb.outfield;
     const attackers = bb.opp.filter(p => p.role !== 'gk');
     const ballCarrier = bb.oppCarrier;
     const primaryChaser = bb.chaser;
@@ -366,6 +392,7 @@ function assignMarking(bb) {
         primaryChaser.prevMarkingTarget = ballCarrier;
     }
 
+    const semAlvo = [];
     defenders.forEach(def => {
         if (def === primaryChaser) return;
 
@@ -410,10 +437,13 @@ function assignMarking(bb) {
             def.markingTarget = escolhido;
             escolhido.markCount++;
         } else {
-            def.isCovering = true;
+            semAlvo.push(def);
         }
         def.prevMarkingTarget = escolhido;
     });
+
+    // Cobertura só a defender — ver a nota acima.
+    if (!bb.isAttacking) atribuirCobertura(semAlvo);
 }
 
 /*

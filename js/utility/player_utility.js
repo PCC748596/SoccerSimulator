@@ -129,7 +129,7 @@ const UtilityAI = {
 
         const s = p.fsm.currentState;
         if (s === 'PASS' || s === 'SHOOT' || s === 'TACKLE' || s === 'SLIDE_TACKLE' ||
-            s === 'CUT' || s === 'CHEST_CONTROL' || s === 'DRIBBLE') {
+            s === 'CHEST_CONTROL' || s === 'DRIBBLE') {
             return true;
         }
 

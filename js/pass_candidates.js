@@ -8,9 +8,13 @@ que seriam facilmente interceptados. Só visualização — não decide nada (ve
 findPassTarget em player.js para a decisão real).
 
 Geração (por companheiro, "referencial de ataque": frente = dirZ, lateral = X):
-    j de 5 a 1 (raio = j*2m: 10,8,6,4,2)
-    k de 1 a 7 (ângulo = 120 + 15*k -> desvio de -45° a +45° em torno da
-                direcção de ataque do companheiro)
+    j de 1 a `arcos` (raio = j*`espacamento` -> arcos a 3, 6 e 9 m)
+    k de 1 a `pontosPorArco` (ângulo = 120 + 15*k -> desvio de -45° a +45°
+                em torno da direcção de ataque do companheiro)
+
+    Os arcos passaram de 2 em 2 m (5 arcos, até 10 m) para 3 em 3 m (3
+    arcos, até 9 m): mesmo alcance útil com menos de metade dos pontos, que
+    ficavam a tapar o relvado e uns por cima dos outros.
 
 Descarte de um ponto candidato:
     - fora do campo;
@@ -23,6 +27,13 @@ Descarte de um ponto candidato:
 =============================================================================
 */
 const PassCandidates = {
+    // Geometria do leque de candidatos, por companheiro.
+    pontosPorArco: 7,      // ângulos, de 15° em 15° (-45° a +45°)
+    passoAngular: 15,      // graus entre pontos do mesmo arco
+    arcos: 3,              // quantos arcos concêntricos
+    espacamento: 3.0,      // metros entre arcos (o 1º fica a esta distância)
+    raioPonto: 0.15,       // raio do disco desenhado, em metros
+
     debug: false,
     _group: null,
     _pool: [],
@@ -36,7 +47,7 @@ const PassCandidates = {
         this._group = new THREE.Group();
         Match.scene.add(this._group);
         // Círculo achatado sobre o gramado, não uma esfera flutuando no ar.
-        this._geo = new THREE.CircleGeometry(0.22, 10);
+        this._geo = new THREE.CircleGeometry(this.raioPonto, 10);
         this._mat = new THREE.MeshBasicMaterial({ color: 0xff8c1a, side: THREE.DoubleSide });
     },
 
@@ -101,11 +112,18 @@ const PassCandidates = {
             const mx = mate.model.position.x, mz = mate.model.position.z;
             const fwdZ = mate.dirZ; // frente = ataque (eixo Z, com sinal)
 
-            for (let j = 5; j >= 1; j--) {
-                const raio = j * 2;
-                for (let k = 1; k <= 7; k++) {
-                    const angDeg = 120 + 15 * k;
-                    const offsetRad = (angDeg - 180) * Math.PI / 180; // -45°..+45° em torno da frente
+            for (let j = this.arcos; j >= 1; j--) {
+                const raio = j * this.espacamento;
+                for (let k = 1; k <= this.pontosPorArco; k++) {
+                    /*
+                    Leque centrado na frente do companheiro: com 7 pontos de
+                    15° dá -45°..+45°. O 180 de partida era escrito já somado
+                    (`120 + 15*k`), o que só ficava centrado para esses dois
+                    valores exactos — mexer num dos números torcia o leque
+                    todo para um lado.
+                    */
+                    const meio = this.passoAngular * (this.pontosPorArco + 1) / 2;
+                    const offsetRad = (this.passoAngular * k - meio) * Math.PI / 180;
                     const cosO = Math.cos(offsetRad), sinO = Math.sin(offsetRad);
 
                     // "Frente" (0,0,fwdZ) rodada por offsetRad em torno de Y.

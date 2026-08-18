@@ -23,28 +23,6 @@ function amostrarClipChuteGR(norm) {
     };
 }
 
-/*
-Amostra o clip do corte diagonal (DribbleCutClip) num tempo normalizado 0..1.
-Mesmo esquema do clip do guarda-redes: interpolação linear entre vizinhos.
-*/
-function amostrarClipCorte(norm) {
-    const fr = DribbleCutClip.frames;
-    const n = fr.length;
-    const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
-    const i = Math.min(n - 2, Math.floor(pos));
-    const u = pos - i;
-    const a = fr[i], b = fr[i + 1];
-    const mix = (k) => a[k] + (b[k] - a[k]) * u;
-    return {
-        leanZ: mix('leanZ'),
-        quadrilY: mix('quadrilY'),
-        troncoY: mix('troncoY'),
-        coxaExt: mix('coxaExt'),
-        joelhoExt: mix('joelhoExt'),
-        bracoZ: mix('bracoZ')
-    };
-}
-
 class FootballPlayer {
     constructor(id, color1, color2, team) {
         this.id = id; this.team = team; this.role = 'def';
@@ -87,14 +65,6 @@ class FootballPlayer {
         this.headLeanTimer = 0; // cabeceio de pé, sem saltar (ver animateBones)
         this.cinturaAlvoY = 0;  // cintura acompanha o giro da cabeça p/ a bola
 
-        // Corte diagonal de 30° (DRIBBLE_CUT_30) — ver estado CUT em fsm.js.
-        this.cutAtivo = false;
-        this.cutNorm = 0;
-        this.cutLado = 1;
-        this.cutTimer = 0;
-        this.cutToquesFeitos = 0;
-        this.cutDirIni = new THREE.Vector3(0, 0, 1);
-        this.cutVel = 0;
         this.decisionTimer = 0;
         this.carryTouchGrace = 0;
         this.actionState = null;
@@ -1012,12 +982,9 @@ class FootballPlayer {
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
         } else if (inViewport) {
             this.animateBones(dt);
-            // Camada do corte diagonal POR CIMA do ciclo de corrida — tem de
-            // vir depois do animateBones, senão ele reescreve a pelvis e as
-            // pernas no mesmo frame e o corte desaparece.
-            this.aplicarCamadaCorte();
-            // Idem para a matada no peito: só a cintura para trás e os braços
-            // a abrir, por cima da pose normal de pé.
+            // Camada da matada no peito: só a cintura para trás e os braços
+            // a abrir, por cima da pose normal de pé. Tem de vir depois do
+            // animateBones, senão ele reescreve o tronco no mesmo frame.
             this.aplicarCamadaPeito();
             this.aplicarCamadaCabeceioDePe(dt);
         }
@@ -1165,39 +1132,6 @@ class FootballPlayer {
         const d1 = Math.abs(t - 0.25);
         const d2 = Math.abs(t - 0.75);
         return Math.min(d1, d2) < tol;
-    }
-
-    /*
-    DRIBBLE_CUT_30, camada CORPO + PERNAS (ver DribbleCutClip em config.js).
-
-    Aditiva de propósito: o ciclo de corrida do animateBones continua a mandar
-    nas passadas, e isto só acrescenta a inclinação lateral, a rotação do
-    quadril e o viés diagonal da perna externa. O tronco contra-roda (troncoY
-    tem sinal oposto ao quadrilY), que é o que mantém o peito parcialmente
-    virado para a frente enquanto o centro de massa já foi para a diagonal.
-    */
-    aplicarCamadaCorte() {
-        if (!this.cutAtivo || !this.rig) return;
-
-        const C = amostrarClipCorte(this.cutNorm);
-        const lado = this.cutLado;
-        const rig = this.rig;
-
-        rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, C.leanZ * lado, 0.5);
-        rig.pelvis.rotation.y = lerpTo(rig.pelvis.rotation.y, C.quadrilY * lado, 0.5);
-        rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, (this.cinturaAlvoY || 0) + C.troncoY * lado, 0.5);
-
-        // Perna externa é a do lado CONTRÁRIO ao corte: é ela que planta no
-        // chão e empurra o corpo para a nova direcção.
-        const pernaExt = (lado > 0) ? rig.lLeg : rig.rLeg;
-        const joelhoExt = (lado > 0) ? rig.lKnee : rig.rKnee;
-        pernaExt.rotation.x += C.coxaExt;
-        joelhoExt.rotation.x += C.joelhoExt;
-
-        // Braço contrário abre para equilibrar.
-        const bracoOposto = (lado > 0) ? rig.lArm : rig.rArm;
-        const bracoBaseZ = (lado > 0) ? (Math.PI / 16) : (-Math.PI / 16);
-        bracoOposto.rotation.z = lerpTo(bracoOposto.rotation.z, bracoBaseZ + C.bracoZ * lado, 0.5);
     }
 
     /*

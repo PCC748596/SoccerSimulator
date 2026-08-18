@@ -90,7 +90,8 @@ class PlayerContext {
 
         /*
         Tempo seguido perto do portador adversário — Defensive Pressure não
-        manda só a DISTÂNCIA de marcação (MarkingModel.distancia: 4/3/2m),
+        manda só a DISTÂNCIA de marcação (MarkingModel.distanciaPara:
+        5/4/3m no ataque e no meio, 4/3/2m na defesa),
         manda também quanto tempo aguenta essa distância antes de tentar
         roubar (DefensivePressureModel: 6/4/2s, Low/Bal/High). Carrinho e
         Desarme só entravam a rolar dado por segundo sem olhar há quanto
@@ -409,7 +410,7 @@ function podeDriblar(ctx) {
     // Regra 4: Adversário próximo, espaço atrás do adversário, técnica >= 75 - Driblar
     const tec = p.skillFor ? p.skillFor('TEC') : ctx.skillTec;
     if (tec < 75) return false;
-    if (p.fsm.currentState === 'CUT' || p.fsm.currentState === 'DRIBBLE') return false;
+    if (p.fsm.currentState === 'DRIBBLE') return false;
 
     // Verificar se há adversário próximo à sua frente bloqueando a passagem
     let oppProximo = null;
@@ -697,6 +698,37 @@ function actReceivePass(ctx) {
     p.fsm.changeState('MOVE_TO_POS');
 }
 
+/*
+Vaga de apoio: `p` é um dos SupportModel.maxPorLado mais perto da bola, de
+entre os colegas que caem no MESMO lado (à frente da bola ou atrás dela)?
+
+Contar estados já atribuídos não servia: o BT corre jogador a jogador dentro
+do frame, por isso quem tickasse primeiro ficava com as vagas — a escolha
+mudava com a ordem da lista em vez de com o jogo. O critério aqui não depende
+de ordem nenhuma: cada jogador mede-se contra os colegas e chega sozinho à
+mesma resposta.
+*/
+function temVagaDeApoio(ctx, aFrenteDaBola) {
+    const p = ctx.p;
+    const bola = Match.ball.position;
+    const minhaDist = p.model.position.distanceTo(bola);
+    let melhores = 0;
+
+    for (const mate of ctx.teammates) {
+        if (mate === p || mate.role === 'gk') continue;
+        if (mate === Match.ballCarrier) continue;
+        // Mesmo lado da bola que eu? (zoneAhead no referencial de ataque)
+        if ((mate.model.position.z * mate.dirZ > ctx.bb.ballZ) !== aFrenteDaBola) continue;
+
+        const d = mate.model.position.distanceTo(bola);
+        // Empate exacto desempata pelo id, para os dois lados do teste
+        // concordarem sobre quem vem primeiro.
+        if (d < minhaDist || (d === minhaDist && mate.id < p.id)) melhores++;
+        if (melhores >= SupportModel.maxPorLado) return false;
+    }
+    return true;
+}
+
 // Ocupa a posição que o nível 2 lhe deu.
 function actHoldPosition(ctx) {
     const p = ctx.p;
@@ -718,14 +750,15 @@ function actHoldPosition(ctx) {
     (p.dynamicTarget) — aqui só se rotula o que está a acontecer, pra não
     ficar tudo escondido atrás de "MOVE_TO_POS":
         marcando um adversário específico  -> MARKING
-        sem par, a fechar a linha da bola  -> BLOCKING (p.isCovering)
+        sem par E perto da bola, a fechar a linha -> BLOCKING (p.isCovering)
         equipa tem a bola, à frente dela    -> FWR_SUPPORT
         equipa tem a bola, atrás dela       -> AFT_SUPPORT
         resto (posição genérica, fora de fase de bola) -> MOVE_TO_POS
     */
-    if (ctx.bb && ctx.bb.isAttacking) {
+    const aFrenteDaBola = ctx.zoneAhead > ctx.bb?.ballZ;
+    if (ctx.bb && ctx.bb.isAttacking && temVagaDeApoio(ctx, aFrenteDaBola)) {
         // zoneAhead/ballZ já no referencial de ataque — comparação directa.
-        p.fsm.changeState(ctx.zoneAhead > ctx.bb.ballZ ? 'FWR_SUPPORT' : 'AFT_SUPPORT');
+        p.fsm.changeState(aFrenteDaBola ? 'FWR_SUPPORT' : 'AFT_SUPPORT');
     } else if (p.markingTarget) {
         p.fsm.changeState('MARKING');
     } else if (p.isCovering) {
@@ -809,11 +842,8 @@ const PlayerBT = sel('PlayerRoot',
     seq('AccaoEmCurso',
         cond('estadoBloqueante', (ctx) => {
             const s = ctx.p.fsm.currentState;
-            // CUT é o gesto do corte diagonal (DRIBBLE_CUT_30): dura ~0.75s e
-            // não pode ser interrompido a meio, senão o corpo fica a meio da
-            // rotação e a bola já foi tocada para a diagonal.
             return s === 'PASS' || s === 'SHOOT' || s === 'TACKLE' || s === 'SLIDE_TACKLE' ||
-                s === 'CUT' || s === 'CHEST_CONTROL';
+                s === 'CHEST_CONTROL';
         }),
         act('deixarTerminar', () => { })
     ),
@@ -1149,7 +1179,7 @@ const PlayingStyleBTs = {
 const PlayerAI = {
     tick: function (player, dt) {
         const s = player.fsm ? player.fsm.currentState : "";
-        if (player.actionState || s === "PASS" || s === "SHOOT" || s === "CROSS" || s === "TACKLE" || s === "SLIDE_TACKLE" || s === "CHEST_CONTROL" || s === "CUT") return;
+        if (player.actionState || s === "PASS" || s === "SHOOT" || s === "CROSS" || s === "TACKLE" || s === "SLIDE_TACKLE" || s === "CHEST_CONTROL") return;
         if (!player.btCtx) player.btCtx = new PlayerContext(player);
         const ctx = player.btCtx.prepare(dt);
 

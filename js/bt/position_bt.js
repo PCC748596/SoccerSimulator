@@ -304,16 +304,11 @@ function marcar(ctx, alvo, maxDist) {
     const p = ctx.p;
 
     /*
-    Grid espacial (camada MARCAÇÃO): zona core perto da própria baliza pede
-    marcação mais colada, longe dela (fora da zona) pede mais folga. Factor
-    0.7x (colado) a 1.3x (folgado) sobre a distância base do Defensive
-    Pressure — a grid afina o valor, não o substitui.
+    Distância do Defensive Pressure para o setor onde o ALVO está, tal e
+    qual — ver MarkingModel.distanciaPara. O setor é medido no referencial
+    de ataque do MARCADOR, o mesmo que decide o tecto de desvio.
     */
-    let distancia = MarkingModel.distancia;
-    if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
-        const markVal = SpatialGrid.layerValueAt('marking', alvo.model.position.x, alvo.model.position.z, p.team);
-        distancia *= 1.3 - 0.006 * markVal;
-    }
+    const distancia = MarkingModel.distanciaPara(alvo.model.position.z * p.dirZ);
 
     const m = goalSide(p, alvo, distancia);
     aproximar(ctx, m.x, m.z, (maxDist === undefined) ? biasMaxDaMarcacao(p, alvo) : maxDist);
@@ -466,7 +461,7 @@ function defendFlankShift(ctx) {
         marcar(ctx, carrier, biasMaxDaMarcacao(p, carrier));
     } else if (p.pos === 'CB' && eCentralDoLado) {
         // Cobertura por dentro, mais atrás do que o lateral.
-        const cob = goalSide(p, carrier, MarkingModel.distancia + 4.5);
+        const cob = goalSide(p, carrier, MarkingModel.distanciaPara(carrier.model.position.z * p.dirZ) + 4.5);
         aproximar(ctx, cob.x, cob.z, MarkingModel.coberturaBiasMax);
     } else if (p.pos === 'DM') {
         const dxDM = THREE.MathUtils.clamp(carrier.model.position.x * 0.45 - ctx.targetX, -MarkingModel.coberturaBiasMax, MarkingModel.coberturaBiasMax);

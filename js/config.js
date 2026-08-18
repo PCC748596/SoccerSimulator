@@ -228,58 +228,6 @@ const GoalkeeperKickClip = {
     alturaPe: 0.25
 };
 
-/*
-=============================================================================
-DRIBBLE_CUT_30 — corte lateral em diagonal de 30°, 12 keyframes
-=============================================================================
-Três camadas independentes, aplicadas POR CIMA do ciclo de corrida
-(animateBones já pôs as pernas a correr; isto é um aditivo, não uma pose
-que substitui tudo):
-
-    CORPO    inclinação lateral (pelvis.z) + rotação do quadril (pelvis.y)
-    PERNAS   viés diagonal na perna externa, sobre a passada normal
-    BOLA     dois toques laterais curtos, nos frames 6 e 9
-
-O detalhe que faz parecer natural: o jogador NÃO roda 30° de uma vez. O
-quadril (`quadrilY`) antecipa a mudança e o tronco contra-roda
-(`troncoY`, sinal oposto), por isso o peito continua parcialmente virado
-para a frente enquanto o centro de massa já foi para a diagonal. A rotação
-efectiva do corpo vem da direcção de deslocamento, que roda suavemente.
-
-Frames pedidos:
-     1  corrida normal, bola perto do pé   7  ponto máximo da mudança
-     2  começa a inclinar o corpo          8  corpo acompanha os 30°
-     3  pé externo planta no chão          9  pé externo toca outra vez
-     4  quadril muda de direcção          10  recupera velocidade
-     5  perna interna cruza lateralmente  11  volta à posição de corrida
-     6  bola conduzida para o lado        12  corrida estabilizada
-
-Sinais são para um corte à DIREITA; ao aplicar multiplica-se por `lado`.
-=============================================================================
-*/
-const DribbleCutClip = {
-    angulo: Math.PI / 6,     // 30°
-    duracao: 0.75,           // s do gesto completo
-    toques: [5 / 11, 8 / 11],// frames 6 e 9 — toques laterais alternados
-    // Fracção da passada usada em cada toque lateral (curto, bola perto).
-    forcaToque: 0.55,
-
-    frames: [
-        { leanZ: 0.00, quadrilY: 0.00, troncoY: 0.00, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.00 },
-        { leanZ: 0.08, quadrilY: 0.03, troncoY: -0.02, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.05 },
-        { leanZ: 0.16, quadrilY: 0.06, troncoY: -0.04, coxaExt: 0.25, joelhoExt: 0.15, bracoZ: 0.12 },
-        { leanZ: 0.22, quadrilY: 0.14, troncoY: -0.09, coxaExt: 0.15, joelhoExt: 0.25, bracoZ: 0.18 },
-        { leanZ: 0.26, quadrilY: 0.22, troncoY: -0.14, coxaExt: -0.20, joelhoExt: 0.35, bracoZ: 0.22 },
-        { leanZ: 0.30, quadrilY: 0.28, troncoY: -0.17, coxaExt: -0.10, joelhoExt: 0.20, bracoZ: 0.25 },
-        { leanZ: 0.32, quadrilY: 0.34, troncoY: -0.18, coxaExt: 0.00, joelhoExt: 0.10, bracoZ: 0.26 },
-        { leanZ: 0.26, quadrilY: 0.34, troncoY: -0.12, coxaExt: 0.10, joelhoExt: 0.10, bracoZ: 0.22 },
-        { leanZ: 0.18, quadrilY: 0.30, troncoY: -0.06, coxaExt: 0.20, joelhoExt: 0.18, bracoZ: 0.16 },
-        { leanZ: 0.10, quadrilY: 0.22, troncoY: -0.02, coxaExt: 0.08, joelhoExt: 0.08, bracoZ: 0.10 },
-        { leanZ: 0.04, quadrilY: 0.12, troncoY: 0.00, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.04 },
-        { leanZ: 0.00, quadrilY: 0.00, troncoY: 0.00, coxaExt: 0.00, joelhoExt: 0.00, bracoZ: 0.00 }
-    ]
-};
-
 // window.goleiroEstado, window.goleiroReagiu e window.delayReacaoCalculado
 // foram movidos para propriedades de instância de FootballPlayer (gkEstado,
 // gkReagiu, gkDelayReacao). Cada GK tem o seu próprio estado independente.
@@ -1148,8 +1096,8 @@ const CarryModel = {
     põe-na fora pela linha de fundo, e o resultado era pontapé de baliza para
     o adversário só por conduzir até ao fundo.
 
-    Vale para o toque do CARRY e para os toques laterais do corte (CUT). O
-    leque de direcções também deixa de apontar para dentro da faixa, senão o
+    Vale para o toque do CARRY. O leque de direcções também deixa de
+    apontar para dentro da faixa, senão o
     jogador continuava a correr contra a linha sem nunca poder tocar.
     */
     margemLinhaFundo: 6.0
@@ -1190,13 +1138,33 @@ centro contra 31.6 m com ela na ala, ou seja praticamente nada.
 */
 const MarkingModel = {
     /*
-    distancia agora depende do Defensive Pressure (painel esquerdo) — Low
-    marca mais solto (4m), High mais colado (2m). Antes era um valor fixo
-    (2.2) que ignorava esse ajuste por completo.
+    Distância de marcação, em metros: a que o marcador fica do homem, do
+    lado da PRÓPRIA baliza (ver goalSide). Depende de duas coisas:
+
+        Defensive Pressure (painel esquerdo) — Low marca mais solto, High
+        mais colado.
+        SETOR do campo onde o ALVO está — terços iguais, no referencial de
+        ataque do MARCADOR (mesma convenção de biasMaxPara). Perto da
+        própria baliza marca-se mais colado: ali um metro de folga é um
+        remate à vontade.
+
+    Este valor é literal — não leva mais nenhum factor por cima. Havia
+    aqui um multiplicador da grid espacial (0.7x a 1.3x conforme a célula)
+    que mexia no número escolhido no painel: com Balanced/3m, o mesmo
+    jogador marcava a 2.1m dentro da área e a 3.9m fora dela, e a tabela
+    do painel nunca correspondia ao que se via. O ajuste por zona é agora
+    feito aqui, pelo setor, que é explícito e visível na tabela.
     */
-    distanciaPorPressao: { low: 4.0, balanced: 3.0, high: 2.0 },
-    get distancia() {
-        return this.distanciaPorPressao[Tatics.pressaoDefensiva] ?? this.distanciaPorPressao.balanced;
+    distanciaPorSetor: {
+        atk: { low: 5.0, balanced: 4.0, high: 3.0 },
+        mid: { low: 5.0, balanced: 4.0, high: 3.0 },
+        def: { low: 4.0, balanced: 3.0, high: 2.0 }
+    },
+    distanciaPara(zoneAhead) {
+        const terco = CAMPO_COMP / 6;
+        const setor = (zoneAhead < -terco) ? 'def' : (zoneAhead > terco) ? 'atk' : 'mid';
+        const porPressao = this.distanciaPorSetor[setor];
+        return porPressao[Tatics.pressaoDefensiva] ?? porPressao.balanced;
     },
 
     /*
@@ -1260,6 +1228,40 @@ const MarkingModel = {
     nenhuma a voltar à forma depois de a marcação acabar.
     */
     corredorMax: 16.0
+};
+
+/*
+Apoio ao portador: quantos jogadores por equipa podem estar em cada um dos
+dois estados de apoio ao mesmo tempo (ver actHoldPosition).
+
+Sem tecto, TODA a gente sem bola que estivesse à frente da bola virava
+FWR_SUPPORT e toda a que estivesse atrás virava AFT_SUPPORT — os dois
+rótulos cobriam a equipa inteira e deixavam de dizer nada. Com tecto, ficam
+os N melhores candidatos (os mais perto da bola) e o resto vai ocupar a
+posição normal (MOVE_TO_POS), que é o que já devia acontecer.
+*/
+const SupportModel = {
+    maxPorLado: 2
+};
+
+/*
+Cobertura (BLOCKING): fechar a linha da bola quando não se tem homem para
+marcar. Quem não arranjava par ficava `isCovering` — sem excepção — e a
+cobertura arrastava-o para o eixo (defendZonal). Resultado observado: o RM
+a fechar pelo meio entre o CM e o RB, vindo do outro lado do campo, com o
+CM a dois passos do sítio. Fechar a linha da bola é tarefa de quem já lá
+está; para quem está longe é só abandonar o corredor.
+
+Duas regras, as duas necessárias:
+    raioMaxBola  só é candidato quem está a esta distância da bola
+    max          e só este número de jogadores cobre ao mesmo tempo — a
+                 cobertura é UM homem a tapar a linha, não uma migração
+                 para o eixo. Fica o mais perto da bola; os outros mantêm
+                 o slot zonal que o TeamBT lhes deu.
+*/
+const CoberturaModel = {
+    raioMaxBola: 6.0,
+    max: 1
 };
 
 /*

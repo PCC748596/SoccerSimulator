@@ -485,7 +485,7 @@ Mede a distância à linha de fundo que ele ATACA (a que fica à frente dele no
 referencial de ataque). Dentro de CarryModel.margemLinhaFundo, adiantar a bola
 punha-a fora e dava pontapé de baliza ao adversário.
 
-Usado pelo toque do CARRY e pelos toques laterais do CUT (fsm.js).
+Usado pelo toque do CARRY (fsm.js).
 */
 function pertoDaLinhaDeFundo(p) {
     const avanco = p.model.position.z * p.dirZ;
