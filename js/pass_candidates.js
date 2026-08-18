@@ -17,13 +17,14 @@ Geração (por companheiro, "referencial de ataque": frente = dirZ, lateral = X)
     leque que chega ao espaço onde o passe vale a pena, não só à roda do
     companheiro.
 
-    O leque é SEMPRE à frente do companheiro, e "à frente" é a direcção em
-    que ele CORRE (±45° em torno dela). Um ponto atrás dele seria um passe
-    para onde ele já esteve — não existe e não deve existir.
+    O leque é SEMPRE à frente do companheiro, e "à frente" é para onde o
+    CORPO dele aponta (±45° em torno disso) — a correr, é a direcção da
+    corrida. Um ponto atrás dele seria um passe para onde ele já esteve —
+    não existe e não deve existir.
 
 Descarte de um ponto candidato:
     - fora do campo;
-    - o jogador mais próximo do ponto é um adversário;
+    - há um adversário a menos de `raioAdversario` do ponto;
     - a mais de 30m da bola;
     - o companheiro está em impedimento (offsideLimitDir do TeamAI) -> descarta
       TODOS os pontos desse companheiro;
@@ -31,6 +32,10 @@ Descarte de um ponto candidato:
       E mais perto da bola do que o próprio ponto.
 =============================================================================
 */
+// Reutilizado no cálculo da frente de cada companheiro — evita alocar um
+// Vector3 por ponto, e isto corre todos os frames.
+const _vFwd = new THREE.Vector3();
+
 const PassCandidates = {
     // Geometria do leque de candidatos, por companheiro.
     pontosPorArco: 7,      // ângulos, de 15° em 15° (-45° a +45°)
@@ -38,6 +43,7 @@ const PassCandidates = {
     arcos: 7,              // quantos arcos concêntricos (3, 6, 9 ... 21 m)
     espacamento: 3.0,      // metros entre arcos (o 1º fica a esta distância)
     raioPonto: 0.15,       // raio do disco desenhado, em metros
+    raioAdversario: 2.0,   // adversário a menos disto do ponto -> ponto descartado
 
     debug: false,
     _group: null,
@@ -121,25 +127,32 @@ const PassCandidates = {
             const mx = mate.model.position.x, mz = mate.model.position.z;
 
             /*
-            FRENTE = direcção do MOVIMENTO dele, não o eixo de ataque da
-            equipa.
+            FRENTE = para onde o jogador está VIRADO.
 
-            Era `mate.dirZ`, ou seja ±Z: o leque apontava sempre para a
-            baliza adversária, viesse o jogador de onde viesse. Um extremo a
-            abrir para a linha lateral, ou um médio a receber de lado,
-            levava os pontos atirados para o fundo do campo — de través com
-            a corrida dele, às vezes atrás das costas. Passe para o espaço é
-            à frente de quem CORRE, medido pela corrida.
+            Duas versões erradas antes desta:
 
-            Parado (ou quase), não há corrida que dê direcção: aí vale o
-            eixo de ataque, que é para onde ele vai arrancar.
+            1. `mate.dirZ` — o eixo de ataque da equipa (±Z). O leque
+               apontava para a baliza adversária viesse o jogador de onde
+               viesse, de través com a corrida dele.
+            2. a velocidade — certa a correr, mas nula quem está parado, e
+               aí caía outra vez no `dirZ`: corpo virado para um lado, os
+               49 pontos para o outro.
+
+            A orientação do modelo resolve os dois casos de uma vez. Não é
+            um terceiro critério: o `steerArrive` roda o corpo para o alvo
+            do movimento todos os frames, por isso a correr ela JÁ é a
+            direcção da corrida — e parado continua a dizer alguma coisa
+            (para onde ele olha), que é o que a velocidade não faz.
+
+            Frente local do modelo é +Z: o steerArrive monta a rotação com
+            `lookAt(pos, pos*2 - alvo)`, cujo eixo +Z fica a apontar ao
+            alvo. Ver player.js.
             */
-            let fx = 0, fz = mate.dirZ;
-            const v = mate.velocity;
-            if (v) {
-                const vel = Math.hypot(v.x, v.z);
-                if (vel > 0.5) { fx = v.x / vel; fz = v.z / vel; }
-            }
+            _vFwd.set(0, 0, 1).applyQuaternion(mate.model.quaternion);
+            _vFwd.y = 0;
+            let fx = _vFwd.x, fz = _vFwd.z;
+            const lenF = Math.hypot(fx, fz);
+            if (lenF > 0.001) { fx /= lenF; fz /= lenF; } else { fx = 0; fz = mate.dirZ; }
 
             for (let j = this.arcos; j >= 1; j--) {
                 const raio = j * this.espacamento;
@@ -159,7 +172,7 @@ const PassCandidates = {
                     const px = mx + (fx * cosO + fz * sinO) * raio;
                     const pz = mz + (fz * cosO - fx * sinO) * raio;
 
-                    if (!this.pontoValido(px, pz, carrier, teammates, opponents)) continue;
+                    if (!this.pontoValido(px, pz, carrier, opponents)) continue;
                     out.push({ x: px, z: pz, mate: mate });
                 }
             }
@@ -194,24 +207,35 @@ const PassCandidates = {
         this.esconderResto();
     },
 
-    pontoValido: function (px, pz, carrier, teammates, opponents) {
+    // `teammates` saiu da assinatura com a regra do "mais próximo": nenhuma
+    // das regras que restam olha para os colegas.
+    pontoValido: function (px, pz, carrier, opponents) {
         if (Math.abs(px) > CAMPO_LARG / 2 || Math.abs(pz) > CAMPO_COMP / 2) return false;
 
         const cx = carrier.model.position.x, cz = carrier.model.position.z;
         const distBola = Math.hypot(px - cx, pz - cz);
         if (distBola > 30) return false;
 
-        // Jogador mais próximo do ponto: se for adversário, descarta.
-        let melhorD = Infinity, maisPertoOpp = false;
+        /*
+        Adversário em cima do ponto: dentro de `raioAdversario` metros, a
+        bola chega-lhe ao pé — descarta.
+
+        Era "o jogador mais próximo do ponto é um adversário". Medido num
+        11v11 a meio-campo, essa versão cortava 61.5% dos pontos e deixava
+        colegas com 2 pontos em 49: nos arcos de fora (12-21 m) o ponto
+        está quase sempre mais perto de ALGUM adversário do que de qualquer
+        colega, num bloco compacto, mesmo quando o receptor já corre para
+        lá e o adversário está parado de costas. A regra media a densidade
+        do bloco, não a hipótese de o passe chegar.
+
+        Um raio fixo não depende de onde está o colega, por isso não
+        penaliza os arcos longos — que são precisamente os que interessam
+        para o passe em profundidade.
+        */
         for (const o of opponents) {
             const d = Math.hypot(px - o.model.position.x, pz - o.model.position.z);
-            if (d < melhorD) { melhorD = d; maisPertoOpp = true; }
+            if (d < this.raioAdversario) return false;
         }
-        for (const t of teammates) {
-            const d = Math.hypot(px - t.model.position.x, pz - t.model.position.z);
-            if (d < melhorD) { melhorD = d; maisPertoOpp = false; }
-        }
-        if (maisPertoOpp) return false;
 
         // Adversário na linha de passe: dentro de ±20° do ângulo bola->ponto
         // e mais perto da bola do que o próprio ponto candidato.
