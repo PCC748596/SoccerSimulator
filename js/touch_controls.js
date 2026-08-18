@@ -22,7 +22,7 @@ const TouchControls = {
                 }
             }
         }
-        this.setVisible(true);
+        this.setVisible(isTouchDevice);
     },
 
     createDOM: function () {

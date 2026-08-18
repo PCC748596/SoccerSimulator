@@ -849,7 +849,7 @@ class FootballPlayer {
                 // Marcador ganhou o salto: cabeçada sai fraca e desviada.
                 alvoX = this.model.position.x + (Math.random() - 0.5) * 5.0;
                 alvoY = 0.3;
-                pow = 5.0 + Math.random() * 3.0;
+                pow = (5.0 + Math.random() * 3.0) / 3.0;
             } else {
                 const gkAdversario0 = (this.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
                 // Técnica x GK decide o canto: vencer aponta perto do poste.
@@ -857,7 +857,7 @@ class FootballPlayer {
                 const cantoC = venceuGK ? maxC * 0.88 : maxC * 0.5;
                 alvoX = (Math.random() > 0.5 ? 1 : -1) * cantoC;
                 alvoY = Math.random() * 1.5 + 0.3;
-                pow = 16.0 + ((this.skillFor('TEC') - 50) / 50) * 8.0;
+                pow = (16.0 + ((this.skillFor('TEC') - 50) / 50) * 8.0) / 3.0;
             }
 
             /*
@@ -1581,9 +1581,6 @@ class FootballPlayer {
             const m = new THREE.Mesh(geo, mat); 
             m.castShadow = true; 
             m.receiveShadow = true; 
-            if (!isTouchDevice) {
-                m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat)); 
-            }
             return m; 
         }
 
@@ -1612,7 +1609,7 @@ class FootballPlayer {
         const jointGeo = new THREE.SphereGeometry(u * 0.2, 16, 16); const smallJointGeo = new THREE.SphereGeometry(u * 0.15, 16, 16);
 
         function criarBraco(x) {
-            const grp = new THREE.Group(); grp.position.set(x, 0.3, 0); grp.add(criarPeca(jointGeo, jointMat));
+            const grp = new THREE.Group(); grp.position.set(x, 0.3, 0);
             const up = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 1.0, u * 0.35), blockMat); up.position.y = -0.5;
             const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 0.5, u * 0.4), shirtMat); manga.position.y = 0.25; up.add(manga); grp.add(up);
             const elb = new THREE.Group(); elb.position.y = -1.0; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));

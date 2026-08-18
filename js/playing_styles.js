@@ -161,7 +161,8 @@ const PlayingStyleTriggers = {
     },
 
     // Laterais ofensivos: a partir do momento em que a equipa passa o meio.
-    offensive_fullback: (p, bb, s) => s.atacando && s.bolaAvanco > -5,
+    // Só ativam se a bola estiver no meio ou do seu lado (s.meuLado). No oposto, Position BT.
+    offensive_fullback: (p, bb, s) => s.atacando && s.meuLado && s.bolaAvanco > -5,
     fullback_finisher: (p, bb, s) => s.atacando && s.ultimoTerco,
 
     // Restrição defensiva: está sempre em vigor.

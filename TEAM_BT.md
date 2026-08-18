@@ -75,8 +75,9 @@ const TeamBT = sel('TeamRoot',
                 setPosture(TeamPosture.LOW_BLOCK)
             ),
             seq('PressaoAlta',
+                // Precisa do Estilo=Ataque E do Defensive Pressure em High
                 cond('pressionamosAlto', (bb) =>
-                    Tatics.estilo === 'ataque' && Tatics.pressaoDefensiva === 'high' && bb.ballZ * bb.dir > 0),
+                    (Tatics.estilo === 'ataque' || Tatics.estilo === 'muito_ofensiva') && Tatics.pressaoDefensiva === 'high' && bb.ballZ * bb.dir > 0),
                 setPosture(TeamPosture.HIGH_PRESS)
             ),
             setPosture(TeamPosture.MID_BLOCK)

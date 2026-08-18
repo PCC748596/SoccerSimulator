@@ -302,7 +302,7 @@ travar só quem corre.
     0.891  +10% sobre o 0.81 (pedido)
     0.8019 -10% sobre o 0.891 (pedido)
 */
-const GAME_SPEED = 0.8019;
+const GAME_SPEED = 0.88209;
 
 window.cameraMode = 'center';
 window.cameraZoom = 1.0;

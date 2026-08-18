@@ -15,6 +15,12 @@ A pergunta a que este nível responde é: **"Tendo em conta o que a equipa quer 
 ```javascript
 const PlayerBT = sel('PlayerRoot',
 
+    /* --- Bola parada ---------------------------------------------------- */
+    seq('BolaParada',
+        cond('jogoParado', () => Match.state !== 'PLAY'),
+        act('esperarLance', (ctx) => { /* ... */ })
+    ),
+
     /* --- Acção em curso: não voltar a decidir ---------------------------- */
     seq('AccaoEmCurso',
         cond('estadoBloqueante', (ctx) => {
@@ -36,6 +42,12 @@ const PlayerBT = sel('PlayerRoot',
             
             // ... (Cálculo de Janela de Decisão / Domínio) ...
 
+            // Guarda-redes: sair a jogar curto, senão lançamento longo.
+            seq('GuardaRedesJoga',
+                cond('souGR', ehGK),
+                sel('OpcaoGR', /* ... */ )
+            ),
+
             // Remate, se estiver em zona e ângulo de finalizar.
             seq('Rematar',
                 cond('emZonaDeRemate', emZonaDeRemate),
@@ -44,21 +56,29 @@ const PlayerBT = sel('PlayerRoot',
             
             // Cruzamento da ala, se houver alguém na área para o receber.
             seq('Cruzar',
-                cond('valeCruzar', (ctx) => { ... }),
+                cond('valeCruzar', (ctx) => { /* ... */ }),
                 act('cruzar', actCross)
             ),
             
-            // Lançamento nas costas da linha adversária.
-            seq('Lancar',
-                cond('haEspacoNasCostas', (ctx) => { ... }),
-                act('lancar', actThroughBall)
+            // Conduzir em espaço livre
+            seq('ConduzirEmEspaco',
+                cond('campoAberto', (ctx) => ctx.p.role !== 'gk' && ctx.campoAberto),
+                act('atacarOEspaco', actCarry)
+            ),
+
+            // Driblar adversário próximo
+            seq('Driblar',
+                cond('podeDriblar', podeDriblar),
+                act('driblar', actDribble)
             ),
             
-            // Passe curto ou desmarcação
-            seq('Passar',
-                cond('haPasse', (ctx) => { ... }),
-                act('passar', actPass)
-            ),
+            // Lançamento / Passe curto (Frente/Lado/Trás)
+            seq('PassarFrente', /* ... */),
+            seq('PassarLado', /* ... */),
+            seq('PassarTras', /* ... */),
+            
+            // Chute lateral (alívio)
+            seq('ChuteLateral', /* ... */),
             
             // Se falharem todas as opções anteriores, arranca com a bola!
             act('conduzir', actCarry)
@@ -68,7 +88,9 @@ const PlayerBT = sel('PlayerRoot',
     /* --- Sem bola -------------------------------------------------------- */
     seq('SemBola',
         sel('DecisaoSemBola',
+            // Carrinho, Desarme, Intercetar, IrABola, Receber, GuardaRedes, AtacarArea...
             // ... (Lógicas de desarmes, intercepções, e acompanhamento de linha defensiva)
+            act('ocuparPosicao', actHoldPosition)
         )
     )
 );

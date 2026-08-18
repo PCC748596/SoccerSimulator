@@ -788,10 +788,10 @@ const Match = {
         }
         if (!chave || !PlayingStyles[chave]) chave = null;
         p.playingStyle = chave;
-        // Por padrão os estilos começam desligados (toggle no painel Player
-        // Skills liga) — só o PositionBT puro até o utilizador ativar.
-        if (p.playingStyleDesligado === undefined) p.playingStyleDesligado = true;
-
+        // Por padrão os estilos começam ligados para espelhar o painel (Teams States: ON).
+        if (p.playingStyleDesligado === undefined) {
+            p.playingStyleDesligado = (typeof window.allPlayingStylesEnabled !== 'undefined') ? !window.allPlayingStylesEnabled : false;
+        }
         // Espelhos para os sistemas que já existiam antes do catálogo.
         if (pos === 'LB' || pos === 'RB') {
             if (chave === 'defensive_fullback') p.fbStyle = 'defensive';
