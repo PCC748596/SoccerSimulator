@@ -879,29 +879,41 @@ class FootballPlayer {
                 window.bolaChutada = true;
             }
         } else {
-            let target = this.findPassTarget('mid') || this.findPassTarget('atk') || this.findPassTarget('def');
+            /*
+            Fora da zona de remate a cabeçada é desvio/alívio, não passe
+            medido: a DIRECÇÃO é a do colega escolhido, o ALCANCE é o que uma
+            cabeçada dá (HeaderModel.alcanceMax). Antes pedia-se a força para
+            CHEGAR ao colega — com um colega a 35 m saía uma cabeçada de meio
+            campo, que é o que se via.
+
+            Sem colega nenhum, alivia para a frente. Antes ficava tudo como
+            estava e a bola continuava colada à testa dele.
+            */
+            const target = this.findPassTarget('mid') || this.findPassTarget('atk') ||
+                this.findPassTarget('def');
+
+            let uxP = 0, uzP = this.dirZ, distDesejada = HeaderModel.alcanceMax;
             if (target) {
-                // Passe de recurso — mesma balística do passe normal (ver
-                // executePassGameplay em fsm.js), não a heurística antiga.
                 const dxP = target.model.position.x - Match.ball.position.x;
                 const dzP = target.model.position.z - Match.ball.position.z;
-                const distToTarget = Math.hypot(dxP, dzP);
-                const uxP = distToTarget > 0.001 ? dxP / distToTarget : 0;
-                const uzP = distToTarget > 0.001 ? dzP / distToTarget : this.dirZ;
-
-                if (distToTarget > PassModel.distAereo) {
-                    const eP = PassModel.elevacaoCurta;
-                    const vP = velocidadeParaAlcance(distToTarget, eP);
-                    Match.ballVel.set(uxP * vP * Math.cos(eP), vP * Math.sin(eP), uzP * vP * Math.cos(eP));
-                } else {
-                    const vP = velocidadeRasteiraPara(distToTarget, PassModel.vChegadaRasteira);
-                    Match.ballVel.set(uxP * vP, 0, uzP * vP);
-                }
-                this.hasBall = false;
-                this.touchLock = BallControl.touchLock;
-                Match.ballCarrier = null;
-                Match.intendedReceiver = target;
+                const d = Math.hypot(dxP, dzP);
+                if (d > 0.001) { uxP = dxP / d; uzP = dzP / d; }
+                distDesejada = Math.min(d, HeaderModel.alcanceMax);
             }
+
+            const eP = HeaderModel.elevacao;
+            const vP = velocidadeParaAlcance(distDesejada, eP);
+            Match.ballVel.set(uxP * vP * Math.cos(eP), vP * Math.sin(eP), uzP * vP * Math.cos(eP));
+
+            this.hasBall = false;
+            this.touchLock = BallControl.touchLock;
+            Match.ballCarrier = null;
+            // Só é "destinatário" se a bola lhe chegar mesmo; a mais de
+            // alcanceMax a cabeçada morre pelo caminho e fica disputável.
+            Match.intendedReceiver = (target && distDesejada >= (
+                Math.hypot(target.model.position.x - Match.ball.position.x,
+                           target.model.position.z - Match.ball.position.z) - 0.01))
+                ? target : null;
         }
     }
 

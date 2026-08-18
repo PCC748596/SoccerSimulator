@@ -1617,6 +1617,27 @@ ponto mais alto.
 Abaixo de `subidaMin` acima da cabeça não se salta: cabeceia-se de pé.
 */
 /*
+Cabeçada — alcance.
+
+Uma cabeçada não é um pontapé: a bola leva a velocidade da testa e do tronco,
+não de uma perna a rodar. Dez metros é o que um jogador tira de uma cabeçada
+normal; um alívio bem batido de um central chega aos 15-20, mas isso é o topo
+absoluto e não o caso comum.
+
+Isto existe porque a cabeçada FORA da zona de remate era resolvida como um
+passe: pedia-se a `velocidadeParaAlcance` a força para chegar ao companheiro
+escolhido — a 30 ou 40 m, se fosse esse o colega. Saíam cabeçadas de meio
+campo. Agora a direcção continua a ser a do colega, mas o alcance é o que uma
+cabeçada dá; se ele estiver mais longe, a bola fica pelo caminho, como na
+vida real.
+*/
+const HeaderModel = {
+    alcanceMax: 10.0,
+    // Trajectória curta e alta, típica de quem desvia com a testa.
+    elevacao: 32 * Math.PI / 180
+};
+
+/*
 Mergulho do guarda-redes (ver js/gk_dive.js).
 
 Substitui o mergulho antigo, que era `gkCorpo.position.x += dirX * v * dt` —
