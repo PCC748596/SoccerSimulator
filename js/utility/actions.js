@@ -342,6 +342,12 @@ const AccoesSemBola = [
             // Interruptor do carrinho (UtilityModel.carrinhoAtivo na config).
             // typeof: em Node os testes não carregam a config.
             if (typeof UtilityModel !== 'undefined' && UtilityModel.carrinhoAtivo === false) return false;
+            // Mesma regra do BT: só se tira a bola no próprio terço
+            // defensivo (ver podeRoubarBola em player_bt.js).
+            if (typeof podeRoubarBola === 'function' && !podeRoubarBola(p)) return false;
+            // A marcar: só ao próprio marcado (ver estouAMarcar em player_bt.js).
+            if (typeof estouAMarcar === 'function' && estouAMarcar(p) &&
+                p.markingTarget !== Match.ballCarrier) return false;
             if (!_elegivelParaCarrinho(p)) return false;
             const c = _portadorAdversario(p);
             if (!c || ctx.distToBall >= 12) return false;
@@ -368,6 +374,12 @@ const AccoesSemBola = [
         nome: 'TACKLE',
         estilo: 'pressao',
         pre: (ctx) => {
+            // Mesma regra do BT: só se tira a bola no próprio terço
+            // defensivo (ver podeRoubarBola em player_bt.js).
+            if (typeof podeRoubarBola === 'function' && !podeRoubarBola(ctx.p)) return false;
+            // A marcar: só ao próprio marcado (ver estouAMarcar em player_bt.js).
+            if (typeof estouAMarcar === 'function' && estouAMarcar(ctx.p) &&
+                ctx.p.markingTarget !== Match.ballCarrier) return false;
             const p = ctx.p;
             const c = _portadorAdversario(p);
             if (!c || ctx.distToBall >= 12) return false;
@@ -414,7 +426,13 @@ const AccoesSemBola = [
     {
         nome: 'CHASE_BALL',
         estilo: null,
-        pre: (ctx) => ctx.distToBall < 12,
+        /*
+        Quem marca não persegue a bola — acompanha o homem. Sem esta linha
+        bastava a bola passar a menos de 12 m para o marcador largar a marca
+        e ir atrás dela, que é o comportamento que se via em campo.
+        */
+        pre: (ctx) => ctx.distToBall < 12 &&
+            !(typeof estouAMarcar === 'function' && estouAMarcar(ctx.p)),
         considerandos: {
             // O chaser é UM por equipa, escolhido pelo nível 1. Quem não for
             // só pode disputar a bola se estiver mesmo em cima dela — senão

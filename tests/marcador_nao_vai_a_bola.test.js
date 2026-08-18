@@ -1,0 +1,102 @@
+/*
+Quem marca acompanha o homem — não vai à bola.
+
+O marcador continuava elegível para interceptar e desarmar; bastava a bola
+passar-lhe perto para largar a marca. Onze jogadores com essa liberdade dão
+o jogo todo em bloco atrás da bola.
+
+A bola é tarefa do perseguidor designado (um por equipa). Os outros seguram
+a estrutura.
+*/
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+const raiz = path.join(__dirname, '..');
+const BT = fs.readFileSync(path.join(raiz, 'js', 'bt', 'player_bt.js'), 'utf8');
+const ACTIONS = fs.readFileSync(path.join(raiz, 'js', 'utility', 'actions.js'), 'utf8');
+
+function recortarFuncao(src, nome) {
+    const i = src.indexOf('function ' + nome + '(');
+    assert.ok(i >= 0, 'function ' + nome + ' nao encontrada');
+    let nivel = 0;
+    for (let k = src.indexOf('{', i); k < src.length; k++) {
+        if (src[k] === '{') nivel++;
+        else if (src[k] === '}' && --nivel === 0) return src.slice(i, k + 1);
+    }
+    assert.fail('chavetas desequilibradas em ' + nome);
+}
+
+function montar(chaserA, chaserB) {
+    const sandbox = { Math, Match: { chaserA: chaserA || null, chaserB: chaserB || null } };
+    vm.createContext(sandbox);
+    vm.runInContext(recortarFuncao(BT, 'estouAMarcar') +
+        '\nthis.f = estouAMarcar; this.Match = Match;', sandbox);
+    return sandbox;
+}
+
+const homem = { id: 99 };
+
+test('quem tem marca atribuída está a marcar', () => {
+    const s = montar();
+    assert.strictEqual(s.f({ markingTarget: homem }), true);
+});
+
+test('quem não tem marca não está a marcar', () => {
+    const s = montar();
+    assert.strictEqual(s.f({ markingTarget: null }), false);
+});
+
+test('o perseguidor designado não conta como marcador', () => {
+    const p = { markingTarget: homem };
+    const s = montar(p, null);
+    assert.strictEqual(s.f(p), false, 'o chaser vai a bola, mesmo com marca');
+});
+
+test('o perseguidor da outra equipa também é reconhecido', () => {
+    const p = { markingTarget: homem };
+    const s = montar(null, p);
+    assert.strictEqual(s.f(p), false);
+});
+
+/* ---------------------------------------------------------------- */
+
+test('podeIntercetar recusa quem está a marcar', () => {
+    const corpo = recortarFuncao(BT, 'podeIntercetar');
+    assert.ok(/estouAMarcar\(p\)/.test(corpo),
+        'a interceptacao nao verifica se o jogador esta a marcar');
+});
+
+test('desarme e carrinho só valem contra o próprio marcado', () => {
+    for (const folha of ['vale carrinho', 'vale desarme']) {
+        const i = BT.indexOf("cond('" + folha + "'");
+        assert.ok(i >= 0);
+        const corpo = BT.slice(i, i + 900);
+        assert.ok(/estouAMarcar\(p\) && p\.markingTarget !== c/.test(corpo),
+            folha + ' deixa abandonar a marca para ir a outro portador');
+    }
+});
+
+test('no Utility, quem marca não persegue a bola', () => {
+    const i = ACTIONS.indexOf("nome: 'CHASE_BALL'");
+    assert.ok(i >= 0);
+    const corpo = ACTIONS.slice(i, ACTIONS.indexOf('considerandos', i));
+    assert.ok(/estouAMarcar/.test(corpo), 'CHASE_BALL do Utility ignora a marcacao');
+});
+
+test('no Utility, o roubo também respeita a marca', () => {
+    for (const nome of ['TACKLE', 'SLIDE_TACKLE']) {
+        const i = ACTIONS.indexOf("nome: '" + nome + "'");
+        const corpo = ACTIONS.slice(i, ACTIONS.indexOf('considerandos', i));
+        assert.ok(/estouAMarcar/.test(corpo), nome + ' deixa abandonar a marca');
+    }
+});
+
+test('a interceptação do Utility passa pelo mesmo podeIntercetar', () => {
+    const i = ACTIONS.indexOf("nome: 'INTERCEPT'");
+    const corpo = ACTIONS.slice(i, ACTIONS.indexOf('considerandos', i));
+    assert.ok(/podeIntercetar\(ctx\)/.test(corpo),
+        'se o INTERCEPT tiver logica propria, a regra da marcacao escapa-lhe');
+});

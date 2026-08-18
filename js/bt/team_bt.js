@@ -392,9 +392,46 @@ function assignMarking(bb) {
         primaryChaser.prevMarkingTarget = ballCarrier;
     }
 
+    /*
+    PRIMEIRA PASSAGEM — pares por posição (MarkingModel.paresPorPosicao).
+
+    Corre antes da pontuação para que os pares óbvios de um 4-4-2 saiam
+    sempre iguais: central com avançado, lateral com extremo, médio-ala com
+    médio-ala. Só depois é que a pontuação trata de quem sobrou.
+
+    Entre candidatos da mesma posição escolhe-se o do MESMO LADO: compara-se
+    o x dos dois no mesmo referencial, por isso o lateral esquerdo apanha o
+    extremo que ataca por ali, e não o do outro lado do campo.
+    */
+    const pares = MarkingModel.paresPorPosicao || {};
+    defenders.forEach(def => {
+        if (def === primaryChaser || def.markingTarget) return;
+
+        const preferidas = pares[def.pos];
+        if (!preferidas || !preferidas.length) return;
+
+        for (const posAlvo of preferidas) {
+            let melhor = null, melhorDx = Infinity;
+            for (const att of attackers) {
+                if (att.pos !== posAlvo) continue;
+                if (att.markCount >= 1) continue;
+                const dx = Math.abs(att.model.position.x - def.model.position.x);
+                if (dx < melhorDx) { melhorDx = dx; melhor = att; }
+            }
+            if (melhor) {
+                def.markingTarget = melhor;
+                def.prevMarkingTarget = melhor;
+                melhor.markCount++;
+                break;
+            }
+        }
+    });
+
     const semAlvo = [];
     defenders.forEach(def => {
         if (def === primaryChaser) return;
+        // Já emparelhado por posição na primeira passagem.
+        if (def.markingTarget) return;
 
         const candidatos = [];
         attackers.forEach(att => {

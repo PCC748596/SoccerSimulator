@@ -194,6 +194,20 @@ Alterna o cérebro individual: árvore de comportamento (BT) ou Utility AI.
 A troca é a quente, a meio do jogo — os dois lêem e escrevem o mesmo estado
 (FSM, dynamicTarget), por isso não é preciso reiniciar nada.
 */
+/*
+Liga o desenho do círculo de marcação (anel do raio pedido pelo Defensive
+Pressure à volta de quem está a ser marcado). Ver js/marking_debug.js.
+*/
+function toggleMarkingDebug() {
+    if (typeof MarkingDebug === 'undefined') return;
+    MarkingDebug.setDebug(!MarkingDebug.debug);
+    const btn = document.getElementById('btn-marking-debug');
+    if (btn) {
+        btn.innerText = 'Marcação: ' + (MarkingDebug.debug ? 'ON' : 'OFF');
+        btn.classList.toggle('active', MarkingDebug.debug);
+    }
+}
+
 function toggleUtilityAI() {
     window.usarUtilityAI = !window.usarUtilityAI;
     const btn = document.getElementById('btn-utility-ai');

@@ -323,7 +323,67 @@ class PlayerFSM {
             FWR_SUPPORT/AFT_SUPPORT distinguem o apoio à frente da bola do
             apoio atrás (opção de recuo) — ver actHoldPosition.
             */
+            /*
+            MARKING respeita o CÍRCULO à volta do homem: acompanha-o pelo
+            lado de fora e nunca lhe entra dentro. O alvo já vem calculado
+            fora do círculo (ver PositionAI.commit), mas o alvo é uma
+            intenção — a inércia da corrida e os empurrões de coesão podem
+            na mesma metê-lo lá dentro. Aqui a regra é geométrica: se estiver
+            a entrar, a componente da velocidade que aponta ao homem é
+            cortada, e ele fica a deslizar à volta do círculo.
+            */
             case 'MARKING':
+                p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
+                if (p.markingTarget) {
+                    const hm = p.markingTarget.model.position;
+                    const raio = MarkingModel.distanciaPara(hm.z * p.dirZ);
+                    let dx = p.model.position.x - hm.x;
+                    let dz = p.model.position.z - hm.z;
+                    const d = Math.hypot(dx, dz);
+
+                    /*
+                    RECUO: o homem vem para cima dele, ele anda para trás.
+
+                    Sem isto o marcador ficava parado no alvo à espera, e a
+                    distância só era reposta depois de já ter sido violada —
+                    o que se via era o portador a empurrá-lo. Aqui, ainda
+                    antes de o círculo ser tocado (dentro de `margemRecuo`),
+                    compara-se a velocidade RADIAL dos dois: se ele se
+                    aproxima mais depressa do que eu me afasto, a diferença é
+                    somada ao meu recuo. A distância mantém-se sozinha.
+
+                    Só a componente radial é tocada — o acompanhamento
+                    lateral (seguir o homem pelo campo) fica intacto.
+                    */
+                    if (d > 0.001 && d < raio + MarkingModel.margemRecuo) {
+                        const nx = dx / d, nz = dz / d;
+                        const vHomem = p.markingTarget.velocity;
+                        if (vHomem) {
+                            // >0 = o homem está a fechar a distância.
+                            const vRadHomem = vHomem.x * nx + vHomem.z * nz;
+                            const vRadMeu = p.velocity.x * nx + p.velocity.z * nz;
+                            if (vRadHomem > 0 && vRadMeu < vRadHomem) {
+                                const falta = vRadHomem - vRadMeu;
+                                p.velocity.x += falta * nx;
+                                p.velocity.z += falta * nz;
+                            }
+                        }
+                    }
+
+                    if (d > 0.001 && d < raio) {
+                        const nx = dx / d, nz = dz / d;
+                        // Empurra para cima da linha do círculo...
+                        p.model.position.x = hm.x + nx * raio;
+                        p.model.position.z = hm.z + nz * raio;
+                        // ...e tira a parte da velocidade que ia para dentro.
+                        const vn = p.velocity.x * nx + p.velocity.z * nz;
+                        if (vn < 0) {
+                            p.velocity.x -= vn * nx;
+                            p.velocity.z -= vn * nz;
+                        }
+                    }
+                }
+                break;
             case 'BLOCKING':
             case 'FWR_SUPPORT':
             case 'AFT_SUPPORT':

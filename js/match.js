@@ -1072,6 +1072,7 @@ const Match = {
         // que se liga o toggle, e ficava congelado nesse frame: os jogadores
         // saíam de baixo dos pontos e parecia que os pontos desapareciam.
         if (typeof PassCandidates !== 'undefined') PassCandidates.update(dt);
+        if (typeof MarkingDebug !== 'undefined') MarkingDebug.update();
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);
         this.runTeamAI();
 
@@ -1692,6 +1693,86 @@ const Match = {
     },
 
     /*
+    Colisão da bola com a REDE, com a forma que a rede tem mesmo: pano de
+    cima horizontal até `profTopo`, e daí um pano inclinado até ao chão a
+    `profBase`. Mais as duas laterais e o pano de trás.
+
+    A bola é empurrada para dentro do pano e a velocidade decomposta em
+    normal (absorvida, `restituicao`) e tangencial (travada, `atrito`). É a
+    componente tangencial que faz a bola DESCER pelo pano até ao chão, em vez
+    de parar no ar onde bateu.
+
+    `zSinal` é o lado da baliza (+1 / -1). Tudo aqui é feito em
+    profundidade `d` (metros para lá da linha), que não tem sinal.
+    */
+    colidirComRede: function (zSinal) {
+        const rB = BallPhysics.raio;
+        const N = GoalNet;
+        const b = this.ball.position;
+        const v = this.ballVel;
+        const meiaLarg = LARGURA_BALIZA / 2;
+
+        // Profundidade dentro da baliza e velocidade nessa direcção.
+        let d = b.z * zSinal - CAMPO_COMP / 2;
+        let vd = v.z * zSinal;
+
+        // --- laterais -------------------------------------------------
+        if (b.x > meiaLarg - rB) {
+            b.x = meiaLarg - rB;
+            if (v.x > 0) v.x = -v.x * N.restituicao;
+            v.z *= N.atrito; v.y *= N.atrito;
+        } else if (b.x < -meiaLarg + rB) {
+            b.x = -meiaLarg + rB;
+            if (v.x < 0) v.x = -v.x * N.restituicao;
+            v.z *= N.atrito; v.y *= N.atrito;
+        }
+
+        // --- pano de cima ---------------------------------------------
+        if (d <= N.profTopo && b.y > ALTURA_BALIZA - rB) {
+            b.y = ALTURA_BALIZA - rB;
+            if (v.y > 0) v.y = -v.y * N.restituicao;
+            v.x *= N.atrito; v.z *= N.atrito;
+        }
+
+        /*
+        --- pano de trás, inclinado ----------------------------------
+        Recta que passa por (d=profTopo, y=ALTURA_BALIZA) e (d=profBase,
+        y=0):  a·d + y = a·profBase, com a = ALTURA_BALIZA/(profBase-profTopo).
+        A bola tem de ficar do lado de dentro, a pelo menos um raio.
+        */
+        const a = ALTURA_BALIZA / (N.profBase - N.profTopo);
+        const c = a * N.profBase;
+        const norma = Math.hypot(a, 1);
+        const dist = (a * d + b.y - c) / norma;   // >0 = já passou o pano
+
+        if (dist > -rB) {
+            // Normal do pano, a apontar para fora da baliza.
+            const nd = a / norma, ny = 1 / norma;
+            const correccao = dist + rB;
+            d -= nd * correccao;
+            b.y -= ny * correccao;
+
+            const vn = vd * nd + v.y * ny;
+            if (vn > 0) {
+                // Tira a componente normal (absorvida pela corda) e devolve
+                // só uma fracção; o resto do vector é o deslizamento.
+                vd -= vn * nd * (1 + N.restituicao);
+                v.y -= vn * ny * (1 + N.restituicao);
+            }
+            vd *= N.atrito;
+            v.y *= N.atrito;
+            v.x *= N.atrito;
+        }
+
+        // Nunca deixar a bola sair por trás da rede, seja qual for o resto.
+        if (d > N.profBase - rB) { d = N.profBase - rB; if (vd > 0) vd = 0; }
+        if (d < 0) { d = 0; }
+
+        b.z = (CAMPO_COMP / 2 + d) * zSinal;
+        v.z = vd * zSinal;
+    },
+
+    /*
     Colisão da bola com postes e travessão das duas balizas.
 
     Os postes são cilindros VERTICAIS: a colisão resolve-se no plano XZ,
@@ -1883,13 +1964,7 @@ const Match = {
                     setTimeout(() => { alerta.style.transform = 'translate(-50%, -50%) scale(1)'; }, 150);
                 }
 
-                let bateuRede = false;
-                if (Math.abs(this.ball.position.z) > 54.8) { this.ball.position.z = 54.8 * zSinal; this.ballVel.z *= -0.02; this.ballVel.x *= 0.1; if (this.ballVel.y > 0) this.ballVel.y *= 0.1; bateuRede = true; }
-                if (this.ball.position.x > (LARGURA_BALIZA / 2 - 0.2)) { this.ball.position.x = (LARGURA_BALIZA / 2 - 0.2); this.ballVel.x *= -0.02; this.ballVel.z *= 0.1; bateuRede = true; }
-                if (this.ball.position.x < -(LARGURA_BALIZA / 2 - 0.2)) { this.ball.position.x = -(LARGURA_BALIZA / 2 - 0.2); this.ballVel.x *= -0.02; this.ballVel.z *= 0.1; bateuRede = true; }
-                if (this.ball.position.y > (ALTURA_BALIZA - 0.2)) { this.ball.position.y = (ALTURA_BALIZA - 0.2); this.ballVel.y *= -0.02; this.ballVel.z *= 0.1; bateuRede = true; }
-
-                if (bateuRede) { this.ballVel.set(0, 0, 0); }
+                this.colidirComRede(zSinal);
 
             } else {
                 if (this.state === 'PLAY') {

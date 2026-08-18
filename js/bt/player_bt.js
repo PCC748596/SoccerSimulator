@@ -687,6 +687,8 @@ function podeIntercetar(ctx) {
     // O chaser e o destinatário já têm folha própria — não duplicar.
     if (Match.chaserA === p || Match.chaserB === p) return false;
     if (Match.intendedReceiver === p) return false;
+    // Quem marca não larga o homem para ir cortar uma bola.
+    if (estouAMarcar(p)) return false;
 
     const meu = bola.timeToIntercept;
     const margem = PerceptionModel.margemMelhor;
@@ -1029,6 +1031,74 @@ function souODestinatario(p) {
     return Match.intendedReceiver === p;
 }
 
+/*
+Estou incumbido de MARCAR alguém (e não sou o perseguidor da equipa)?
+
+Quem marca acompanha o homem e mais nada: não larga a marca para ir à bola,
+não sai a interceptar um passe do outro lado, não se atira ao portador que
+não é o seu. A bola é tarefa do perseguidor designado (bb.chaser, um por
+equipa) — os outros seguram a estrutura.
+
+Sem isto, o marcador continuava elegível para intercepções e desarmes, e
+bastava a bola passar-lhe perto para ele abandonar o homem. Onze jogadores
+com essa liberdade dão o jogo em bloco atrás da bola.
+*/
+function estouAMarcar(p) {
+    if (!p.markingTarget) return false;
+    return Match.chaserA !== p && Match.chaserB !== p;
+}
+
+/*
+Quantos adversários fecham o caminho em frente do portador.
+
+Conta só os que estão no corredor de progressão dele (à frente, dentro de
+PassModel.bloqueioLargura para cada lado, até bloqueioDist). Um adversário
+ao lado ou atrás não fecha caminho.
+*/
+function adversariosAFrente(ctx) {
+    const p = ctx.p;
+    const M = PassModel;
+    const px = p.model.position.x, pz = p.model.position.z;
+    let n = 0;
+
+    for (const opp of ctx.opponents) {
+        if (opp.role === 'gk') continue;
+        const dz = (opp.model.position.z - pz) * p.dirZ;
+        if (dz <= 0 || dz > M.bloqueioDist) continue;
+        if (Math.abs(opp.model.position.x - px) > M.bloqueioLargura) continue;
+        n++;
+    }
+    return n;
+}
+
+// Caminho fechado: vale mais sair pelo lado ou por trás do que insistir.
+function caminhoFechadoAFrente(ctx) {
+    return adversariosAFrente(ctx) >= PassModel.bloqueioMin;
+}
+
+/*
+Onde é permitido TENTAR TIRAR a bola (desarme e carrinho).
+
+Fora daí o jogador marca e acompanha — fica à distância que o Defensive
+Pressure manda e segue o homem, sem se atirar à bola. Atacar a bola a meio
+campo é o que desfaz o bloco: o marcador salta ao portador, falha, e o
+corredor dele fica aberto com toda a equipa já ultrapassada.
+
+`setorDeRoubo` é o terço, no referencial de ataque do jogador — 'def' é o
+terço da PRÓPRIA baliza. Pôr 'mid' alarga a dois terços; null desliga a
+restrição e volta ao comportamento antigo (roubar em qualquer sítio).
+*/
+function podeRoubarBola(p) {
+    const setor = MarkingModel.setorDeRoubo;
+    if (!setor) return true;
+
+    const terco = CAMPO_COMP / 6;
+    const zAtk = p.model.position.z * p.dirZ;
+    if (setor === 'def') return zAtk < -terco;
+    if (setor === 'mid') return zAtk < terco;
+    return true;
+}
+
 const PlayerBT = sel('PlayerRoot',
 
     /* --- Bola parada ---------------------------------------------------- */
@@ -1134,6 +1204,23 @@ const PlayerBT = sel('PlayerRoot',
                 act('atacarOEspaco', actCarry)
             ),
 
+            /*
+            3b. Caminho fechado: dois ou mais adversários no corredor à
+            frente. Sai pelo lado; não havendo lado, joga para trás. Vem
+            ANTES do drible e do passe para a frente de propósito — com dois
+            homens pela frente, insistir na frente é perder a bola.
+            */
+            seq('CaminhoFechado',
+                cond('doisPelaFrente', (ctx) => {
+                    if (!caminhoFechadoAFrente(ctx)) return false;
+                    const saida = findPassSide(ctx) || findPassBack(ctx);
+                    if (!saida) return false;
+                    ctx.passTarget = saida.target;
+                    return true;
+                }),
+                act('passarLadoOuTras', actPass)
+            ),
+
             // 4. Adversário próximo, espaço atrás do adversário, técnica >= 75 - Driblar
             seq('Driblar',
                 cond('podeDriblar', podeDriblar),
@@ -1200,6 +1287,14 @@ const PlayerBT = sel('PlayerRoot',
             seq('Carrinho',
                 cond('vale carrinho', (ctx) => {
                     const p = ctx.p, c = Match.ballCarrier;
+                    if (!podeRoubarBola(p)) return false;
+                    /*
+                    A marcar: só se o portador for o MEU homem. Não se
+                    abandona a marca para ir ao portador de outro — era
+                    assim que a marcação se desfazia toda de uma vez,
+                    com meia equipa a convergir no mesmo jogador.
+                    */
+                    if (estouAMarcar(p) && p.markingTarget !== c) return false;
                     if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 10) return false;
                     const d = p.model.position.distanceTo(c.model.position);
                     if (d < 1.0 || d > 4.2) return false;
@@ -1229,6 +1324,14 @@ const PlayerBT = sel('PlayerRoot',
             seq('Desarme',
                 cond('vale desarme', (ctx) => {
                     const p = ctx.p, c = Match.ballCarrier;
+                    if (!podeRoubarBola(p)) return false;
+                    /*
+                    A marcar: só se o portador for o MEU homem. Não se
+                    abandona a marca para ir ao portador de outro — era
+                    assim que a marcação se desfazia toda de uma vez,
+                    com meia equipa a convergir no mesmo jogador.
+                    */
+                    if (estouAMarcar(p) && p.markingTarget !== c) return false;
                     if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 10) return false;
                     const d = p.model.position.distanceTo(c.model.position);
                     const alcance = (p.pos === 'CB') ? 2.8 : 2.5;
@@ -1386,8 +1489,19 @@ const PlayerAI = {
         if (!player.btCtx) player.btCtx = new PlayerContext(player);
         const ctx = player.btCtx.prepare(dt);
 
-        // 1. Prioridade: BT específico do Playing Style (se registado e ativo)
-        if (player.playingStyle && player.styleAtivo && PlayingStyleBTs[player.playingStyle]) {
+        /*
+        1. BT do Playing Style — só na FASE DE ATAQUE da equipa.
+
+        Os estilos são identidade COM bola: cortar para dentro, atacar a
+        área, segurar a bola de costas. A defender, quem manda é a forma
+        colectiva (bloco do TeamBT + marcação do PositionBT); um estilo a
+        puxar o jogador para a sua zona preferida enquanto a equipa defende
+        é exactamente o que abre buracos no bloco.
+        */
+        const bbEquipa = (typeof TeamAI !== 'undefined') ? TeamAI.get(player.team) : null;
+        const emAtaque = !!(bbEquipa && bbEquipa.isAttacking);
+
+        if (emAtaque && player.playingStyle && player.styleAtivo && PlayingStyleBTs[player.playingStyle]) {
             const res = PlayingStyleBTs[player.playingStyle].tick(ctx);
             if (res === SUCCESS) return;
         }

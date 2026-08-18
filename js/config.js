@@ -59,6 +59,29 @@ FUNCTION & OBJECT INDEX
 const LARGURA_BALIZA = 7.32; const ALTURA_BALIZA = 2.44; const ALTURA_BASE_Y = 0.0;
 
 /*
+Rede da baliza — forma e comportamento.
+
+A rede DESENHADA é inclinada: o pano de cima entra `profTopo` metros a partir
+da linha, e daí desce em diagonal até ao chão a `profBase` metros (ver a
+criação das faces em match.js). A COLISÃO, essa, era uma caixa: parava a bola
+a 2.3 m de profundidade a qualquer altura. Uma bola entrada por cima ficava
+suspensa muito atrás do pano — lia-se como a bola a atravessar a rede.
+
+E o que havia a seguir era pior para a leitura: `ballVel.set(0,0,0)`. A bola
+congelava no ar onde tocasse, em vez de escorregar pelo pano abaixo.
+
+`restituicao` é baixa de propósito — corda amortece quase tudo. `atrito`
+trava o deslizamento sem o impedir: é ele que faz a bola descer o pano em vez
+de ficar colada onde bateu.
+*/
+const GoalNet = {
+    profTopo: 0.8,
+    profBase: 2.0,
+    restituicao: 0.12,
+    atrito: 0.72
+};
+
+/*
 Estrutura da baliza — postes e travessão como obstáculos físicos.
 
 A bola atravessava-os: não havia colisão nenhuma com a armação, só a
@@ -845,6 +868,24 @@ const PassModel = {
 
     preferenceBonus: 8.0,       // empurrão para a função preferida da posição
 
+    /*
+    Caminho fechado à frente: com este número de adversários no corredor de
+    progressão, o portador deixa de tentar passar para a frente (ou driblar)
+    e joga para o LADO ou para TRÁS.
+
+    Sem isto a árvore tentava sempre a frente primeiro: com dois adversários
+    entre ele e o colega, o passe ou era interceptado ou obrigava o receptor
+    a recebê-la de costas com marcador em cima. Sair pelo lado é a jogada
+    óbvia e não existia como decisão.
+
+    O corredor é medido à FRENTE dele no referencial de ataque, dentro de
+    `bloqueioLargura` metros para cada lado — não é um raio à volta do
+    jogador: um adversário ao lado dele não fecha caminho nenhum.
+    */
+    bloqueioMin: 2,             // quantos adversários fecham o caminho
+    bloqueioDist: 14.0,         // até que distância à frente conta
+    bloqueioLargura: 6.0,       // meia-largura do corredor
+
     throughBallGap: 14.0,       // quão atrás da linha o colega pode estar
     throughBallDepth: 9.0,      // metros além da linha onde se põe a bola
     throughBallMaxDist: 45.0,
@@ -1303,6 +1344,36 @@ const MarkingModel = {
         return porPressao[Tatics.pressaoDefensiva] ?? porPressao.balanced;
     },
 
+    /*
+    Até onde o marcador SAI DO SLOT para ir ao seu homem.
+
+    Era o `biasMaxPorSetor` (3 a 10 m) a limitar isto, e o resultado medido
+    era que a marcação só existia por acaso: com o homem a 15 m do slot o
+    marcador ficava a 9.9 m dele; a 25 m, ficava a 19 m. Ou seja, marcava
+    apenas quem já lhe calhasse ao lado — em campo lia-se como "não há
+    marcação nenhuma, toda a gente corre atrás da bola".
+
+    Marcar é ACOMPANHAR O HOMEM: quem recebeu a incumbência vai atrás dele e
+    fica à distância que o Defensive Pressure manda. Este número existe só
+    para impedir travessias absurdas do campo — e quem pode ser designado já
+    está limitado pelo `corredorMax` no assignMarking.
+
+    O `biasMaxPorSetor` continua a servir os desvios que NÃO são marcação
+    (cobertura, basculação), onde a forma do bloco tem mesmo de mandar.
+    */
+    alcanceMarcacao: 22.0,
+
+    /*
+    Faixa, para lá do raio, onde o marcador já começa a RECUAR.
+
+    O círculo sozinho não chega: ele parava no alvo, o homem vinha para cima
+    dele, e só depois de o círculo ser violado é que era reposto — lia-se
+    como o marcador a ser empurrado, não a defender. Dentro desta faixa, se
+    o homem se aproxima, o marcador afasta-se à MESMA velocidade com que ele
+    chega, e a distância mantém-se sem nunca haver colisão.
+    */
+    margemRecuo: 1.5,
+
     coberturaBiasMax: 6.0, // cair para cobertura/eixo (mais folga: é reposicionamento, não marcação)
 
     larguraCentro: 0.35,  // factor de largura da última linha com a bola no eixo
@@ -1319,7 +1390,61 @@ const MarkingModel = {
     inteira (o LM a aparecer na posição do CF e vice-versa) sem tendência
     nenhuma a voltar à forma depois de a marcação acabar.
     */
-    corredorMax: 16.0
+    corredorMax: 16.0,
+
+    /*
+    Terço do campo onde é permitido TENTAR TIRAR a bola (ver podeRoubarBola).
+    Fora dele o jogador marca à distância e acompanha, sem atacar a bola.
+
+    'def'  só no terço da própria baliza (pedido)
+    'mid'  nos dois terços de trás
+    null   sem restrição (comportamento antigo)
+    */
+    setorDeRoubo: 'def',
+
+    /*
+    MARCAÇÃO POR POSIÇÃO — quem pega em quem.
+
+    Antes a marcação era escolhida só por pontuação (distância, perigo,
+    corredor). Isso dá pares instáveis e trocas estranhas: um central a
+    marcar um extremo porque calhou estar mais perto. Num 4-4-2 contra
+    4-4-2 os pares são óbvios e devem ser fixos:
+
+        central   <-> avançado          (e o avançado marca o central)
+        lateral   <-> extremo do lado oposto do campo
+        médio-ala <-> médio-ala oposto
+        médio-centro <-> médio-centro oposto
+
+    A lista de cada posição é por ORDEM DE PREFERÊNCIA — a primeira que
+    existir no adversário ganha. Entre dois candidatos da mesma posição,
+    escolhe-se o do MESMO LADO do campo (ver assignMarking).
+
+    Quem não encontrar par aqui — formações diferentes, jogador fora de
+    posição, alguém já marcado — cai na pontuação de sempre.
+    */
+    paresPorPosicao: {
+        GK: [],
+        CB: ['CF', 'SS', 'ST'],
+        LB: ['RM', 'RW'],
+        RB: ['LM', 'LW'],
+        DM: ['AM', 'CM', 'SS'],
+        CM: ['CM', 'AM', 'DM'],
+        /*
+        Médio-ala pega no LATERAL do lado, não no médio-ala oposto: esse já
+        é do nosso lateral (LB->RM). Num 4-4-2 contra 4-4-2 os pares fecham
+        exactamente assim, dez contra dez, sem sobras nem disputas:
+
+            CB<->CF   LB<->RM   RB<->LM   CM<->CM   LM<->RB   RM<->LB   CF<->CB
+        */
+        LM: ['RB', 'RM', 'RW'],
+        RM: ['LB', 'LM', 'LW'],
+        AM: ['DM', 'CM'],
+        LW: ['RB', 'RM'],
+        RW: ['LB', 'LM'],
+        CF: ['CB'],
+        SS: ['CB', 'DM'],
+        ST: ['CB']
+    }
 };
 
 /*

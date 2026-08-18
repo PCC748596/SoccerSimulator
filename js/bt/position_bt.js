@@ -310,8 +310,15 @@ function marcar(ctx, alvo, maxDist) {
     */
     const distancia = MarkingModel.distanciaPara(alvo.model.position.z * p.dirZ);
 
+    /*
+    O alvo é o ponto de marcação, não uma sugestão. O tecto é só a rédea
+    contra travessias do campo (MarkingModel.alcanceMarcacao) — não o
+    biasMaxPorSetor, que é para desvios de forma e deixava o marcador a
+    meio caminho do homem (ver a nota em config.js).
+    */
     const m = goalSide(p, alvo, distancia);
-    aproximar(ctx, m.x, m.z, (maxDist === undefined) ? biasMaxDaMarcacao(p, alvo) : maxDist);
+    aproximar(ctx, m.x, m.z,
+        (maxDist === undefined) ? MarkingModel.alcanceMarcacao : maxDist);
     ctx.isMarking = true;
 }
 
@@ -457,8 +464,9 @@ function defendFlankShift(ctx) {
     const eCentralDoLado = (bb.flankAlert === 'left') ? (lado < 0) : (lado > 0);
 
     if (p.pos === nearSide) {
-        // Sai ao portador, pelo lado da baliza.
-        marcar(ctx, carrier, biasMaxDaMarcacao(p, carrier));
+        // Sai ao portador, pelo lado da baliza. Sem tecto próprio: sair ao
+        // homem é marcação, vale a mesma rédea das outras (alcanceMarcacao).
+        marcar(ctx, carrier);
     } else if (p.pos === 'CB' && eCentralDoLado) {
         // Cobertura por dentro, mais atrás do que o lateral.
         const cob = goalSide(p, carrier, MarkingModel.distanciaPara(carrier.model.position.z * p.dirZ) + 4.5);
@@ -534,6 +542,33 @@ const PositionAI = {
         const p = ctx.p;
         let targetX = ctx.targetX;
         let targetZ = ctx.targetZ;
+
+        /*
+        CÍRCULO DE MARCAÇÃO — regra dura, não sugestão.
+
+        À volta do homem marcado há um círculo com o raio do Defensive
+        Pressure onde o marcador NÃO entra. Ele acompanha-o pelo lado de
+        fora; quem vai à bola é o perseguidor designado.
+
+        Aplicado aqui, no fim, para que nenhuma folha do nível 2 o possa
+        contornar: qualquer alvo que caia dentro do círculo é empurrado para
+        cima da linha dele, na direcção em que já vinha.
+        */
+        if (p.markingTarget) {
+            const hx = p.markingTarget.model.position.x;
+            const hz = p.markingTarget.model.position.z;
+            const raio = MarkingModel.distanciaPara(p.markingTarget.model.position.z * p.dirZ);
+            let dx = targetX - hx, dz = targetZ - hz;
+            let d = Math.hypot(dx, dz);
+            if (d < 0.001) {
+                // Alvo em cima do homem: sai pelo lado da própria baliza.
+                dx = 0; dz = (p.ownGoalZ - hz) >= 0 ? 1 : -1; d = 1;
+            }
+            if (d < raio) {
+                targetX = hx + (dx / d) * raio;
+                targetZ = hz + (dz / d) * raio;
+            }
+        }
 
         // Tiki-taka: com bola e passe curto, puxa ligeiramente para a bola.
         // Peso baixo de propósito — é uma correcção do nível 2 sobre o slot,
