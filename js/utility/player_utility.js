@@ -109,65 +109,43 @@ const UtilityAI = {
     gatesDuros: function (ctx) {
         const p = ctx.p;
 
+        /*
+        Os gates são comportamentos que NÃO são decisão — e por isso são os
+        mesmos do BT, chamados às funções partilhadas de player_bt.js em vez
+        de reescritos aqui. Ver o bloco COMPORTAMENTOS PARTILHADOS nesse
+        ficheiro.
+
+        Eram cópias. Divergiram: a do guarda-redes ficou presa na saída de
+        bola antiga (qualquer defesa ou médio, senão chutão) e, como esta
+        camada corre em vez da árvore, ligar o Utility desfazia a regra dos
+        80/20 sem ninguém dar por isso. O mesmo podia acontecer com a bola
+        parada — e bola parada com regras diferentes por cérebro é o tipo de
+        diferença que só se vê no jogo, tarde.
+        */
+
+        // Bola parada: ninguém pontua nada, esperam pelo lance.
         if (Match.state !== 'PLAY') {
-            const fsm = p.fsm;
-            if (Match.state === 'CORNER_KICK') {
-                if (fsm.currentState !== 'SET_PIECE_TAKER' && fsm.currentState !== 'SET_PIECE_WAIT') {
-                    fsm.changeState('SET_PIECE_WAIT');
-                }
-            } else if (Match.state === 'GOAL_KICK') {
-                if (fsm.currentState !== 'SET_PIECE_TAKER' &&
-                    fsm.currentState !== 'SET_PIECE_WAIT' &&
-                    fsm.currentState !== 'MOVE_TO_POS') {
-                    fsm.changeState('SET_PIECE_WAIT');
-                }
-            } else {
-                fsm.changeState('IDLE');
-            }
+            tratarBolaParada(p);
             return true;
         }
 
+        // Acção longa a decorrer na FSM: deixa terminar.
         const s = p.fsm.currentState;
         if (s === 'PASS' || s === 'SHOOT' || s === 'TACKLE' || s === 'SLIDE_TACKLE' ||
             s === 'CHEST_CONTROL' || s === 'DRIBBLE') {
             return true;
         }
 
-        /*
-        Destinatário da bola: é gate, não é opção a pontuar.
-
-        Faltava aqui, e era isso que fazia o condutor tocar a bola à frente e
-        virar SUPPORT. O ramo 'Receber' do BT trata este caso (o toque do
-        CARRY põe Match.intendedReceiver = o próprio), mas quem manda no
-        frame é esta camada — sem o gate, o condutor caía na pontuação, o
-        HOLD_POSITION ganhava e ele largava a bola que tinha acabado de
-        tocar para ir "apoiar" a jogada que era dele.
-        */
-        if (Match.intendedReceiver === p) {
+        // A bola vem para mim: vou buscá-la, não há nada a pontuar.
+        if (souODestinatario(p)) {
             actReceivePass(ctx);
             return true;
         }
 
-        // Guarda-redes: mantém a lógica do BT, que é um caso à parte e não
-        // beneficia de pontuação (as opções dele são mutuamente exclusivas).
+        // Guarda-redes: as opções dele são mutuamente exclusivas, não
+        // beneficiam de pontuação.
         if (p.role === 'gk') {
-            if (p.hasBall || p.carryTouchGrace > 0) {
-                /*
-                Mesma saída 80/20 do ramo GuardaRedesJoga do BT
-                (GoalkeeperDistribution). Estava aqui uma cópia da versão
-                antiga — "qualquer def ou mid, senão chutão" — que ganhava
-                sempre ao BT, porque é esta camada que corre. Duas regras
-                para o mesmo guarda-redes, e a que valia era a velha.
-                */
-                const saida = decidirSaidaGK(p);
-                const lateral = (saida === 'laterais') ? acharLateralParaSaida(ctx) : null;
-                if (lateral) actPassParaAlvo(ctx, lateral);
-                else if (p.decisionTimer > (saida === 'chuteFrente' ? 0.6 : 1.2)) p.puntBall();
-                else actCarry(ctx);
-            } else {
-                limparSaidaGK(p);
-                actGoalkeeperPosition(ctx);
-            }
+            tratarGuardaRedes(ctx);
             return true;
         }
 

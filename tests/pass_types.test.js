@@ -192,3 +192,43 @@ test('pontoPara devolve o ponto certo para cada tipo', () => {
     assert.strictEqual(PassTypes.pontoPara(PassTypes.SPACE, pontos, mate, 52.5).ponto.z, 9);
     assert.strictEqual(PassTypes.pontoPara(PassTypes.LEADING, pontos, mate, 52.5).ponto.z, 15);
 });
+
+/* ------------------------------------------------------------------
+   Leading: só adianta, nunca recua.
+   ------------------------------------------------------------------ */
+
+const mateAtras = { id: 2, model: { position: { x: 0, z: 10 } } };
+
+test('leading ignora pontos que não aproximam do golo', () => {
+    // Leque de um colega a recuar: todos os pontos ficam atrás dele.
+    const atras = [3, 6, 9].map(d => ({ x: 0, z: 10 - d, mate: mateAtras }));
+    assert.strictEqual(
+        PassTypes.pontoMaisPertoDoGolo(atras, 52.5, mateAtras), null,
+        'nenhum destes pontos adianta a bola');
+});
+
+test('leading escolhe o mais adiantado quando há pontos bons', () => {
+    const frente = [3, 6, 9].map(d => ({ x: 0, z: 10 + d, mate: mateAtras }));
+    assert.strictEqual(
+        PassTypes.pontoMaisPertoDoGolo(frente, 52.5, mateAtras).z, 19);
+});
+
+test('leading descarta os que recuam e fica com os que adiantam', () => {
+    const misto = [-6, -3, 3, 6].map(d => ({ x: 0, z: 10 + d, mate: mateAtras }));
+    assert.strictEqual(
+        PassTypes.pontoMaisPertoDoGolo(misto, 52.5, mateAtras).z, 16);
+});
+
+test('sem leading possível, o tipo cai em direct', () => {
+    const atras = [3, 6].map(d => ({ x: 0, z: 10 - d, mate: mateAtras }));
+    const r = PassTypes.pontoPara(PassTypes.LEADING, atras, mateAtras, 52.5);
+    assert.strictEqual(r.tipo, PassTypes.DIRECT);
+    assert.strictEqual(r.ponto, null);
+});
+
+test('a baliza do outro lado inverte o que conta como adiantar', () => {
+    const pontos = [-6, -3, 3].map(d => ({ x: 0, z: 10 + d, mate: mateAtras }));
+    // A atacar -Z: adiantar é descer em z.
+    assert.strictEqual(
+        PassTypes.pontoMaisPertoDoGolo(pontos, -52.5, mateAtras).z, 4);
+});

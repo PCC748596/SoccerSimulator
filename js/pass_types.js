@@ -103,11 +103,26 @@ const PassTypes = {
         return ord[Math.floor(ord.length / 2)];
     },
 
-    // Leading: o ponto vivo mais perto da baliza que se ataca.
-    pontoMaisPertoDoGolo: function (pontos, golZ) {
+    /*
+    Leading: o ponto vivo mais perto da baliza que se ataca.
+
+    Só entram pontos que ADIANTEM mesmo a bola — mais perto do golo do que o
+    próprio companheiro. Sem esta condição, um companheiro virado para trás
+    (a recuar a dar linha, coisa banal) tinha o leque todo atrás dele, e o
+    "mais perto do golo" era um ponto 2 m NAS COSTAS DELE: um leading pass
+    para a própria baliza. Se nenhum ponto adianta, não há leading — quem
+    chama trata isso como passe aos pés.
+    */
+    pontoMaisPertoDoGolo: function (pontos, golZ, mate) {
+        const dGolo = (x, z) => Math.hypot(x, z - golZ);
+        const dMate = mate
+            ? dGolo(mate.model.position.x, mate.model.position.z)
+            : Infinity;
+
         let melhor = null, melhorD = Infinity;
         for (const pt of pontos) {
-            const d = Math.hypot(pt.x, pt.z - golZ);
+            const d = dGolo(pt.x, pt.z);
+            if (d >= dMate) continue;
             if (d < melhorD) { melhorD = d; melhor = pt; }
         }
         return melhor;
@@ -124,7 +139,7 @@ const PassTypes = {
             return pt ? { tipo: tipo, ponto: pt } : { tipo: this.DIRECT, ponto: null };
         }
         if (tipo === this.LEADING) {
-            const pt = this.pontoMaisPertoDoGolo(pontos, golZ);
+            const pt = this.pontoMaisPertoDoGolo(pontos, golZ, mate);
             return pt ? { tipo: tipo, ponto: pt } : { tipo: this.DIRECT, ponto: null };
         }
         return { tipo: this.DIRECT, ponto: null };

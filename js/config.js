@@ -274,7 +274,24 @@ const GAME_SPEED = 0.88209;
 
 window.cameraMode = 'center';
 window.cameraZoom = 1.0;
-window.isPaused = false;
+/*
+Arranca EM PAUSA (pedido): o jogo abre parado e só corre quando se carrega
+em Continue / ▶. Antes começava a jogar sozinho enquanto ainda se estavam a
+mexer as definições do painel.
+*/
+window.isPaused = true;
+
+/*
+Cérebro individual em uso: BT (false) ou Utility AI (true).
+
+Os dois existem e decidem a mesma coisa por caminhos diferentes — o BT por
+prioridades fixas, o Utility por pontuação. Até aqui o Utility estava escrito
+e testado mas NÃO estava sequer carregado na página: ninguém lhe chamava e
+nada no jogo passava por ele. Agora é escolha, feita no botão do painel.
+
+Arranca em OFF: o BT é o que está afinado com o resto do sistema.
+*/
+window.usarUtilityAI = false;
 
 const TeamSkills = {
     TeamA: { def: 80, mid: 80, ata: 80, gk: 80 },
@@ -596,9 +613,56 @@ const EstiloBase = {
     avanco: 0, largura: 0, avancoComBola: 0, amplitudeZ: 1.0,
     passe: 1.0, remate: 1.0, cruzar: 1.0, lancar: 1.0, conduzir: 1.0,
     pressao: 1.0, cadencia: 1.0,
+    /*
+    Pesos que só o Utility AI usa (multiplicam a pontuação da acção com o
+    mesmo nome). Neutros na base: um estilo que não os declare joga como
+    jogava. `driblar` é o único com identidade forte por estilo — está
+    declarado estilo a estilo mais abaixo.
+    */
+    driblar: 1.0, marcar: 1.0, intercetar: 1.0, apoiar: 1.0,
     ombroDefesa: false, dentroArea: false, seguraBola: false,
     atraiDefesa: false, cortaParaDentro: false, colaNaLinha: false,
     juntaSeAoAtaque: false
+};
+
+/*
+=============================================================================
+Utility AI — parâmetros da escolha de acção
+=============================================================================
+O Utility pontua TODAS as acções possíveis e escolhe entre as melhores, em
+vez de percorrer uma árvore de prioridades fixas como o BT. Ligado/desligado
+pelo botão "Utility AI" do painel (window.usarUtilityAI).
+
+    margemTopN    FRACÇÃO DO MELHOR score que uma acção tem de atingir para
+                  entrar no sorteio (ver escolherAccao: `corte = melhor *
+                  margem`). 0.65 = só concorrem as que valem pelo menos 65%
+                  da melhor. Quando só uma passa o corte, é escolhida sem
+                  sorteio nenhum.
+
+                  CUIDADO: o número é uma fracção do TOPO, não uma tolerância
+                  "abaixo do topo" — baixá-lo ALARGA o sorteio, não o
+                  aperta. Com 0.15 quase tudo entrava no pool e a escolha
+                  passava a ser aleatória ponderada: num frame com CARRY 0.93
+                  e PASS 0.40, o PASS saía 27% das vezes. Como a decisão é
+                  reavaliada a 60 fps, isso dava passe quase imediato — os
+                  jogadores tocavam sempre de primeira e nunca conduziam.
+    tamanhoPool   tecto de candidatas nesse sorteio.
+    inerciaBase   bónus da acção que já está a decorrer: +45% no instante em
+                  que começa. Sem isto o jogador troca de ideia em cada frame
+                  em que dois scores se cruzam.
+    inerciaDecai  constante de tempo, em segundos, do decaimento desse bónus.
+                  Ao fim de ~2.5x este valor o bónus é residual e a acção
+                  defende-se pelo mérito. Escala com a pressão e com a
+                  cadência do estilo (ver bonusDeInercia).
+    carrinhoAtivo interruptor do carrinho como acção do Utility.
+=============================================================================
+*/
+const UtilityModel = {
+    margemTopN: 0.65,
+    tamanhoPool: 3,
+    inerciaBase: 0.45,
+    inerciaDecai: 0.8,
+    carrinhoAtivo: true
 };
 
 const PlayingStyles = {
@@ -615,11 +679,13 @@ const PlayingStyles = {
     },
     fox_in_the_box: {
         nome: 'Fox in the Box', posicoes: ['CF'],
+        driblar: 0.4,
         avancoComBola: 6, remate: 1.5, conduzir: 0.5, lancar: 0.6, cadencia: 0.6,
         dentroArea: true
     },
     target_man: {
         nome: 'Target Man', posicoes: ['CF'],
+        driblar: 0.5,
         passe: 1.25, conduzir: 0.6, cadencia: 1.6,
         seguraBola: true
     },
@@ -627,6 +693,7 @@ const PlayingStyles = {
     /* --- Criativos ------------------------------------------------------- */
     creative_playmaker: {
         nome: 'Creative Playmaker', posicoes: ['SS', 'LW', 'RW', 'AM', 'LM', 'RM'],
+        driblar: 1.4,
         passe: 1.3, lancar: 1.5, conduzir: 1.15, cadencia: 0.85
     },
     classic_no10: {
@@ -642,6 +709,7 @@ const PlayingStyles = {
     /* --- Alas ------------------------------------------------------------ */
     prolific_winger: {
         nome: 'Prolific Winger', posicoes: ['LW', 'RW'],
+        driblar: 1.5,
         // "abre pelas pontas, e mesmo que o jogo vá para o meio ele fica
         // mais aberto na ponta esperando a bola para poder cruzar" — nunca
         // fecha, cola na linha (mesmo mecanismo do Cross Specialist).
@@ -650,6 +718,7 @@ const PlayingStyles = {
     },
     roaming_flank: {
         nome: 'Roaming Flank', posicoes: ['LW', 'RW', 'LM', 'RM'],
+        driblar: 1.4,
         // "abre pelas pontas, mas se o jogo vai para o meio ele fecha mais
         // para dar opção de passe" — fecha com a bola CENTRAL, não fundo.
         largura: -4, passe: 1.15, conduzir: 1.2,
@@ -669,14 +738,17 @@ const PlayingStyles = {
     },
     the_destroyer: {
         nome: 'The Destroyer', posicoes: ['CM', 'DM', 'CB'],
+        driblar: 0.4,
         avanco: -2, pressao: 1.6, conduzir: 0.6, lancar: 0.7, amplitudeZ: 0.85
     },
     orchestrator: {
         nome: 'Orchestrator', posicoes: ['CM', 'DM'],
+        driblar: 0.5,
         avanco: -5, passe: 1.35, lancar: 1.4, conduzir: 0.7, cadencia: 1.2
     },
     anchor_man: {
         nome: 'Anchor Man', posicoes: ['DM'],
+        driblar: 0.3,
         avanco: -7, pressao: 1.25, lancar: 0.5, conduzir: 0.5, amplitudeZ: 0.6
     },
 

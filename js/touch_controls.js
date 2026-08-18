@@ -12,8 +12,21 @@ const TouchControls = {
         this.bindEvents();
         this.updateButtonsState();
 
-        // Auto-detectar dispositivo touch ou telas pequenas
-        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 850);
+        /*
+        Auto-detectar dispositivo touch.
+
+        `ontouchstart`/`maxTouchPoints` dão TRUE em qualquer portátil Windows
+        com ecrã táctil, mesmo quando se joga com rato — e era por isso que a
+        barra aparecia ligada no PC. O que distingue um dispositivo em que o
+        toque é o ponteiro PRINCIPAL é `pointer: coarse`; um portátil táctil
+        com rato continua a ser `fine`.
+
+        O ecrã estreito continua a contar: aí a barra ajuda mesmo com rato.
+        */
+        const ponteiroGrosso = window.matchMedia
+            ? window.matchMedia('(pointer: coarse)').matches
+            : (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+        const isTouchDevice = ponteiroGrosso || (window.innerWidth <= 850);
         if (isTouchDevice) {
             // Em telas menores, inicia com painéis minimizados para focar no jogo
             if (window.innerWidth <= 768) {
@@ -334,6 +347,17 @@ const TouchControls = {
         const root = document.getElementById('touch-controls-root');
         if (root) {
             root.style.display = visible ? 'block' : 'none';
+        }
+        /*
+        O botão do painel tinha o rótulo "Touch Controls: ON" escrito à mão no
+        HTML e a classe `active` fixa: dizia ON mesmo quando a auto-detecção
+        tinha desligado a barra. Sincronizar aqui cobre a arranque e os
+        toggles todos, porque tudo passa por este ponto.
+        */
+        const btn = document.getElementById('btn-touch-toggle');
+        if (btn) {
+            btn.innerText = 'Touch Controls: ' + (visible ? 'ON' : 'OFF');
+            btn.classList.toggle('active', visible);
         }
     },
 

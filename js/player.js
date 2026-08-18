@@ -987,17 +987,23 @@ class FootballPlayer {
                 Match.ball.position.y = BallPhysics.raio; Match.ballVel.set(0, 0, 0);
             }
         }
-        // Viewport Frustum Culling
-        if (!this._boundingSphere) {
-            this._boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2.8);
-        }
-        this._boundingSphere.center.set(this.model.position.x, this.model.position.y + 1.0, this.model.position.z);
-        const inViewport = window.cameraFrustum ? window.cameraFrustum.intersectsSphere(this._boundingSphere) : true;
-        this.inViewport = inViewport;
-        this.model.visible = inViewport;
+        /*
+        Jogadores sempre desenhados e sempre animados (pedido).
+
+        Havia aqui frustum culling: quem saísse do enquadramento da câmara
+        ficava `visible = false` E parava de animar. O segundo efeito é o que
+        estragava — ao voltar ao ecrã, o jogador reaparecia com a pose
+        congelada do instante em que saiu e só recuperava o ciclo de corrida
+        nos frames seguintes. Com câmaras que giram (ou em replays), dava
+        jogadores a aparecer a deslizar sem mexer as pernas.
+
+        `inViewport` fica em true para quem ainda o leia (rótulos, debug).
+        */
+        this.inViewport = true;
+        this.model.visible = true;
 
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
-        } else if (inViewport) {
+        } else {
             this.animateBones(dt);
             // Camada da matada no peito: só a cintura para trás e os braços
             // a abrir, por cima da pose normal de pé. Tem de vir depois do
@@ -1007,7 +1013,7 @@ class FootballPlayer {
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT, PlayerPOS e PlayerPlayingStyle)
-        if (inViewport && (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints)) {
+        if (this.inViewport && (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints)) {
             this.labelSprite.visible = true;
             let parts = [];
             if (window.showPlayerNumber) parts.push(this.num);
@@ -1536,9 +1542,25 @@ class FootballPlayer {
         }
 
         const pelvis = criarPeca(new THREE.BoxGeometry(u * 1.3, u * 0.6, u * 0.8), blockMat); pelvis.position.y = 2.6; pelvis.add(criarPeca(new THREE.BoxGeometry(u * 1.35, u * 0.65, u * 0.85), shortMat)); corpo.add(pelvis); rig.pelvis = pelvis;
-        const belly = criarPeca(new THREE.BoxGeometry(u * 1.1, u * 0.45, u * 0.7), blockMat); belly.position.y = 0.525; belly.add(criarPeca(new THREE.BoxGeometry(u * 1.15, u * 0.5, u * 0.75), shirtMat)); pelvis.add(belly);
-        const chest = criarPeca(new THREE.BoxGeometry(u * 1.4, u * 1.0, u * 0.75), blockMat); chest.position.y = 0.725; chest.add(criarPeca(new THREE.BoxGeometry(u * 1.45, u * 1.05, u * 0.8), chestMats)); belly.add(chest); rig.chest = chest;
-        const neck = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.15, u * 0.35), blockMat); neck.position.y = 0.575; chest.add(neck); rig.neck = neck;
+        /*
+        TRONCO — uma peça só (pedido).
+
+        Eram três caixas empilhadas: pelvis (1.30 de largura), belly (1.10) e
+        chest (1.40). Como a do meio era a mais ESTREITA das três, o tronco
+        fazia uma cintura em degrau — dois vincos visíveis de perfil, que é o
+        que se via na captura.
+
+        Agora belly e chest são a mesma caixa: vai de onde começava a barriga
+        (y 0.30 no espaço da pelvis) até ao topo do peito (y 1.75), logo
+        1.45 de altura, centrada em 1.025. Os filhos do peito (pescoço,
+        braços) levam +0.225 para compensar a origem ter descido de 1.25
+        para 1.025 — a pose fica idêntica à de antes.
+        */
+        const chest = criarPeca(new THREE.BoxGeometry(u * 1.4, u * 1.45, u * 0.75), blockMat);
+        chest.position.y = 1.025;
+        chest.add(criarPeca(new THREE.BoxGeometry(u * 1.45, u * 1.5, u * 0.8), chestMats));
+        pelvis.add(chest); rig.chest = chest;
+        const neck = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.15, u * 0.35), blockMat); neck.position.y = 0.8; chest.add(neck); rig.neck = neck;
         const head = criarPeca(new THREE.BoxGeometry(u * 0.8, u * 1.0, u * 0.85), blockMat); head.position.y = 0.575;
 
         const faceGrp = new THREE.Group(); const faceZ = u * 0.426;
@@ -1560,7 +1582,8 @@ class FootballPlayer {
         const jointGeo = new THREE.SphereGeometry(u * 0.2, 16, 16); const smallJointGeo = new THREE.SphereGeometry(u * 0.15, 16, 16);
 
         function criarBraco(x) {
-            const grp = new THREE.Group(); grp.position.set(x, 0.3, 0);
+            // 0.525 = 0.30 de antes + 0.225 da nova origem do tronco.
+            const grp = new THREE.Group(); grp.position.set(x, 0.525, 0);
             const up = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 1.0, u * 0.35), blockMat); up.position.y = -0.5;
             const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 0.5, u * 0.4), shirtMat); manga.position.y = 0.25; up.add(manga); grp.add(up);
             const elb = new THREE.Group(); elb.position.y = -1.0; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));

@@ -458,13 +458,39 @@ function actPassParaAlvo(ctx, alvo) {
     const p = ctx.p;
     if (typeof PassTypes !== 'undefined') {
         const r = PassTypes.paraMate(p, alvo);
-        p.passAimPoint = r.ponto ? { x: r.ponto.x, z: r.ponto.z } : null;
-        p.passTipo = r.tipo;
+        aplicarMiraDoPasse(p, r.tipo, r.ponto);
     } else {
         p.passAimPoint = null;
         p.passTipo = 'direct';
     }
     p.initiatePass(alvo);
+}
+
+/*
+Aplica o ponto de mira decidido pelo PassTypes.
+
+Um passe para o ESPAÇO não é um passe normal apontado para longe: tem de
+chegar ao ponto a um ritmo em que se corre para ela. Reaproveita a balística
+do lançamento (PassModel.vChegadaLancamento, 5 m/s à chegada) em vez da do
+passe aos pés — sem isto, um leading a 25 m era resolvido como passe normal,
+passava o limiar de `distAereo` (20 m), subia, e chegava à altura do PEITO do
+receptor. Daí vinham as duas queixas de uma vez: bola "muito forte" e
+jogadores a inclinarem-se para trás a matá-la no peito.
+*/
+function aplicarMiraDoPasse(p, tipo, ponto) {
+    p.passTipo = tipo;
+    p.passAimPoint = ponto ? { x: ponto.x, z: ponto.z } : null;
+
+    const paraOEspaco = ponto &&
+        (tipo === PassTypes.SPACE || tipo === PassTypes.LEADING);
+
+    if (paraOEspaco) {
+        p.isThroughBall = true;
+        p.throughBallTarget = { x: ponto.x, z: ponto.z };
+        // Rasteiro: o corredor já foi validado pelo filtro do leque (nenhum
+        // adversário a menos de 2 m, linha de passe livre).
+        p.throughBallAlto = false;
+    }
 }
 
 /*
@@ -479,10 +505,7 @@ function actPass(ctx) {
     if (typeof PassTypes !== 'undefined') {
         const escolha = PassTypes.escolher(p, ctx.passTarget);
         if (escolha && escolha.mate) {
-            p.passAimPoint = escolha.ponto
-                ? { x: escolha.ponto.x, z: escolha.ponto.z }
-                : null;
-            p.passTipo = escolha.tipo;
+            aplicarMiraDoPasse(p, escolha.tipo, escolha.ponto);
             p.initiatePass(escolha.mate);
             return;
         }
@@ -938,34 +961,80 @@ function emZonaDeRemate(ctx) {
     return true;
 }
 
+/* =========================================================================
+   COMPORTAMENTOS PARTILHADOS PELOS DOIS CÉREBROS
+
+   O BT e o Utility AI são duas formas de DECIDIR, não duas formas de jogar.
+   Há casos que não são decisão nenhuma — bola parada, o guarda-redes com a
+   bola na mão, ser o destinatário de um passe — e esses têm de se comportar
+   exactamente igual nos dois, senão ligar o botão do Utility muda regras de
+   jogo que ninguém quis mudar.
+
+   Estavam duplicados: uma cópia na árvore, outra nos gates do Utility. As
+   cópias divergiram (a do guarda-redes ficou com a versão antiga da saída de
+   bola, a da bola parada podia divergir a seguir). Agora é uma função só,
+   chamada pelos dois lados.
+
+   Regra para quem mexer nisto: um comportamento que não dependa de pontuação
+   nem de prioridade vive AQUI, não dentro de uma das árvores.
+   ========================================================================= */
+
+/*
+Bola parada: ninguém decide nada, esperam pelo lance.
+
+GOAL_KICK deixa MOVE_TO_POS sobreviver: quem bate posiciona-se "como no chute
+do goleiro", um pouco mais adiantado (ver setupSetPiece), e chamar changeState
+aqui apagaria o dynamicTarget calculado no setup. Chegando ao alvo, match.js
+muda para SET_PIECE_WAIT.
+*/
+function tratarBolaParada(p) {
+    const fsm = p.fsm;
+    const s = fsm.currentState;
+
+    if (Match.state === 'CORNER_KICK') {
+        if (s !== 'SET_PIECE_TAKER' && s !== 'SET_PIECE_WAIT') {
+            fsm.changeState('SET_PIECE_WAIT');
+        }
+    } else if (Match.state === 'GOAL_KICK') {
+        if (s !== 'SET_PIECE_TAKER' && s !== 'SET_PIECE_WAIT' && s !== 'MOVE_TO_POS') {
+            fsm.changeState('SET_PIECE_WAIT');
+        }
+    } else {
+        fsm.changeState('IDLE');
+    }
+}
+
+/*
+Guarda-redes: sair a jogar pelos laterais (80%) ou chutão (20%), e sem a bola
+volta a posicionar-se. Ver GoalkeeperDistribution.
+*/
+function tratarGuardaRedes(ctx) {
+    const p = ctx.p;
+    if (!(p.hasBall || p.carryTouchGrace > 0)) {
+        limparSaidaGK(p);
+        actGoalkeeperPosition(ctx);
+        return;
+    }
+
+    const saida = decidirSaidaGK(p);
+    const lateral = (saida === 'laterais') ? acharLateralParaSaida(ctx) : null;
+
+    if (lateral) actPassParaAlvo(ctx, lateral);
+    else if (p.decisionTimer > (saida === 'chuteFrente' ? 0.6 : 1.2)) p.puntBall();
+    else actCarry(ctx);
+}
+
+// A bola vem para mim (passe, ou o meu próprio toque de condução): vou buscá-la.
+function souODestinatario(p) {
+    return Match.intendedReceiver === p;
+}
+
 const PlayerBT = sel('PlayerRoot',
 
     /* --- Bola parada ---------------------------------------------------- */
     seq('BolaParada',
         cond('jogoParado', () => Match.state !== 'PLAY'),
-        act('esperarLance', (ctx) => {
-            const fsm = ctx.p.fsm;
-            if (Match.state === 'CORNER_KICK') {
-                if (fsm.currentState !== 'SET_PIECE_TAKER' && fsm.currentState !== 'SET_PIECE_WAIT') {
-                    fsm.changeState('SET_PIECE_WAIT');
-                }
-            } else if (Match.state === 'GOAL_KICK') {
-                /*
-                GOAL_KICK deixa MOVE_TO_POS sobreviver: quem bate posiciona-se
-                "como no chute do goleiro", um pouco mais adiantado (ver
-                setupSetPiece), e esta folha só decidiria de novo se voltasse
-                a chamar changeState — o que apagaria o dynamicTarget calculado
-                no setup. Chegando ao alvo, match.js muda para SET_PIECE_WAIT.
-                */
-                if (fsm.currentState !== 'SET_PIECE_TAKER' &&
-                    fsm.currentState !== 'SET_PIECE_WAIT' &&
-                    fsm.currentState !== 'MOVE_TO_POS') {
-                    fsm.changeState('SET_PIECE_WAIT');
-                }
-            } else {
-                fsm.changeState('IDLE');
-            }
-        })
+        act('esperarLance', (ctx) => tratarBolaParada(ctx.p))
     ),
 
     /* --- Acção em curso: não voltar a decidir ---------------------------- */
@@ -1036,34 +1105,10 @@ const PlayerBT = sel('PlayerRoot',
             achava ninguém — na prática saía quase sempre a jogar curto, e
             muitas vezes para um central no meio da área.
             */
+            // Guarda-redes: comportamento partilhado (ver tratarGuardaRedes).
             seq('GuardaRedesJoga',
                 cond('souGR', ehGK),
-                sel('OpcaoGR',
-                    seq('saidaPelosLaterais',
-                        cond('vaiJogarCurto', (ctx) => {
-                            if (decidirSaidaGK(ctx.p) !== 'laterais') return false;
-                            ctx.lateralSaida = acharLateralParaSaida(ctx);
-                            return ctx.lateralSaida !== null;
-                        }),
-                        act('passar', (ctx) => actPassParaAlvo(ctx, ctx.lateralSaida))
-                    ),
-                    /*
-                    Chutão: a face sorteada, ou nenhum lateral livre a tempo.
-                    O `decisionTimer` continua a segurar a bola um instante
-                    antes de a mandar — sem isso o GK chutava no frame em que
-                    apanha, sem olhar.
-                    */
-                    seq('chuteParaFrente',
-                        cond('chutaJa', (ctx) => {
-                            if (decidirSaidaGK(ctx.p) === 'chuteFrente') return ctx.p.decisionTimer > 0.6;
-                            // Saída curta sem lateral disponível: espera mais
-                            // um pouco por um, depois manda embora.
-                            return ctx.p.decisionTimer > 1.2;
-                        }),
-                        act('lancar', (ctx) => ctx.p.puntBall())
-                    ),
-                    act('segurar', actCarry)
-                )
+                act('sairAJogar', tratarGuardaRedes)
             ),
 
             // 1. Verificar chute - chutar
@@ -1227,7 +1272,7 @@ const PlayerBT = sel('PlayerRoot',
 
             // Sou o destinatário do passe.
             seq('Receber',
-                cond('vemParaMim', (ctx) => Match.intendedReceiver === ctx.p),
+                cond('vemParaMim', (ctx) => souODestinatario(ctx.p)),
                 act('receber', actReceivePass)
             ),
 
@@ -1327,6 +1372,17 @@ const PlayerAI = {
     tick: function (player, dt) {
         const s = player.fsm ? player.fsm.currentState : "";
         if (player.actionState || s === "PASS" || s === "SHOOT" || s === "CROSS" || s === "TACKLE" || s === "SLIDE_TACKLE" || s === "CHEST_CONTROL") return;
+
+        /*
+        Utility AI em vez da árvore, quando o botão do painel o pede. Ele tem
+        os seus próprios gates e monta o contexto sozinho (ver UtilityAI.tick)
+        — por isso a troca é aqui, antes de tudo, e não por dentro da árvore.
+        */
+        if (window.usarUtilityAI && typeof UtilityAI !== 'undefined') {
+            UtilityAI.tick(player, dt);
+            return;
+        }
+
         if (!player.btCtx) player.btCtx = new PlayerContext(player);
         const ctx = player.btCtx.prepare(dt);
 

@@ -188,6 +188,21 @@ function togglePassCandidates() {
     document.getElementById('btn-passcandidates').classList.toggle('active', PassCandidates.debug);
 }
 
+/*
+Alterna o cérebro individual: árvore de comportamento (BT) ou Utility AI.
+
+A troca é a quente, a meio do jogo — os dois lêem e escrevem o mesmo estado
+(FSM, dynamicTarget), por isso não é preciso reiniciar nada.
+*/
+function toggleUtilityAI() {
+    window.usarUtilityAI = !window.usarUtilityAI;
+    const btn = document.getElementById('btn-utility-ai');
+    if (btn) {
+        btn.innerText = 'Utility AI: ' + (window.usarUtilityAI ? 'ON' : 'OFF');
+        btn.classList.toggle('active', window.usarUtilityAI);
+    }
+}
+
 function toggleUsarPasseGrid() {
     window.usarPasseGrid = !window.usarPasseGrid;
     document.getElementById('btn-passgrid').innerText = 'PassGrid (decisão): ' + (window.usarPasseGrid ? 'ON' : 'OFF');

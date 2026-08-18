@@ -21,7 +21,7 @@
         <div id="painel-conteudo">
             <div style="display: flex; gap: 4px; margin-bottom: 8px;">
                 <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.resetPlay()">Reset KickOff</button>
-                <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-pause" onclick="Match.togglePause()">Pause</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-pause" onclick="Match.togglePause()">Continue</button>
             </div>
 
             <label>Formação</label>
@@ -209,8 +209,10 @@
                     onclick="togglePassCandidates()">PlayerPassTarget: OFF</button>
                 <button type="button" class="btn-sector" id="btn-passgrid"
                     onclick="toggleUsarPasseGrid()">PassGrid (decisão): OFF</button>
-                <button type="button" class="btn-sector active" id="btn-touch-toggle"
-                    onclick="TouchControls.toggle(); this.classList.toggle('active', TouchControls.enabled); this.innerText = 'Touch Controls: ' + (TouchControls.enabled ? 'ON' : 'OFF');">Touch Controls: ON</button>
+                <button type="button" class="btn-sector" id="btn-utility-ai"
+                    onclick="toggleUtilityAI()">Utility AI: OFF</button>
+                <button type="button" class="btn-sector" id="btn-touch-toggle"
+                    onclick="TouchControls.toggle(); this.classList.toggle('active', TouchControls.enabled); this.innerText = 'Touch Controls: ' + (TouchControls.enabled ? 'ON' : 'OFF');">Touch Controls: OFF</button>
                 <button type="button" class="btn-sector" id="btn-teambtview"
                     onclick="window.open('teamBtView.html', 'teamBtView', 'width=900,height=700')">TeamBT
                     Fluxograma (nova aba)</button>
@@ -325,6 +327,11 @@
     <script src="js/bt/team_bt.js"></script>
     <script src="js/bt/position_bt.js"></script>
     <script src="js/bt/player_bt.js"></script>
+    <!-- Utility AI: alternativa ao BT, ligada pelo botao do painel.
+         Depois do player_bt.js, que e' quem define o PlayerContext. -->
+    <script src="js/utility/core.js"></script>
+    <script src="js/utility/actions.js"></script>
+    <script src="js/utility/player_utility.js"></script>
 
     <script src="js/match.js"></script>
     <script src="js/player.js"></script>
