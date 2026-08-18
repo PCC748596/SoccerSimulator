@@ -8,13 +8,18 @@ que seriam facilmente interceptados. Só visualização — não decide nada (ve
 findPassTarget em player.js para a decisão real).
 
 Geração (por companheiro, "referencial de ataque": frente = dirZ, lateral = X):
-    j de 1 a `arcos` (raio = j*`espacamento` -> arcos a 3, 6 e 9 m)
+    j de 1 a `arcos` (raio = j*`espacamento` -> arcos a 3, 6, 9 ... 21 m)
     k de 1 a `pontosPorArco` (ângulo = 120 + 15*k -> desvio de -45° a +45°
                 em torno da direcção de ataque do companheiro)
 
-    Os arcos passaram de 2 em 2 m (5 arcos, até 10 m) para 3 em 3 m (3
-    arcos, até 9 m): mesmo alcance útil com menos de metade dos pontos, que
-    ficavam a tapar o relvado e uns por cima dos outros.
+    Os arcos passaram de 2 em 2 m (5 arcos, até 10 m) para 3 em 3 m (7
+    arcos, até 21 m): pontos menos amontoados uns em cima dos outros e um
+    leque que chega ao espaço onde o passe vale a pena, não só à roda do
+    companheiro.
+
+    O leque é SEMPRE à frente do companheiro, e "à frente" é a direcção em
+    que ele CORRE (±45° em torno dela). Um ponto atrás dele seria um passe
+    para onde ele já esteve — não existe e não deve existir.
 
 Descarte de um ponto candidato:
     - fora do campo;
@@ -30,7 +35,7 @@ const PassCandidates = {
     // Geometria do leque de candidatos, por companheiro.
     pontosPorArco: 7,      // ângulos, de 15° em 15° (-45° a +45°)
     passoAngular: 15,      // graus entre pontos do mesmo arco
-    arcos: 3,              // quantos arcos concêntricos
+    arcos: 7,              // quantos arcos concêntricos (3, 6, 9 ... 21 m)
     espacamento: 3.0,      // metros entre arcos (o 1º fica a esta distância)
     raioPonto: 0.15,       // raio do disco desenhado, em metros
 
@@ -38,8 +43,6 @@ const PassCandidates = {
     _group: null,
     _pool: [],
     _usados: 0,
-    _redrawAccum: 0,
-    _redrawEvery: 0.2,
     _geo: null,
 
     ensureGroup: function () {
@@ -77,11 +80,17 @@ const PassCandidates = {
         else { this._usados = 0; this.esconderResto(); }
     },
 
-    update: function (dt) {
+    /*
+    Todos os frames. Havia aqui um acumulador que só redesenhava de 0.2 em
+    0.2s: entre redesenhos os jogadores continuavam a correr e os pontos
+    ficavam para trás, pousados em relva vazia a vários metros do dono. A
+    5 redesenhos por segundo o leque nunca coincidia com quem o gerou.
+
+    O custo é o que já era — a mesma conta que corria a cada 0.2s — e é
+    debug, só corre com o toggle ligado.
+    */
+    update: function () {
         if (!this.debug) return;
-        this._redrawAccum += (dt || 0);
-        if (this._redrawAccum < this._redrawEvery) return;
-        this._redrawAccum = 0;
         this.rebuild();
     },
 
@@ -110,7 +119,27 @@ const PassCandidates = {
             }
 
             const mx = mate.model.position.x, mz = mate.model.position.z;
-            const fwdZ = mate.dirZ; // frente = ataque (eixo Z, com sinal)
+
+            /*
+            FRENTE = direcção do MOVIMENTO dele, não o eixo de ataque da
+            equipa.
+
+            Era `mate.dirZ`, ou seja ±Z: o leque apontava sempre para a
+            baliza adversária, viesse o jogador de onde viesse. Um extremo a
+            abrir para a linha lateral, ou um médio a receber de lado,
+            levava os pontos atirados para o fundo do campo — de través com
+            a corrida dele, às vezes atrás das costas. Passe para o espaço é
+            à frente de quem CORRE, medido pela corrida.
+
+            Parado (ou quase), não há corrida que dê direcção: aí vale o
+            eixo de ataque, que é para onde ele vai arrancar.
+            */
+            let fx = 0, fz = mate.dirZ;
+            const v = mate.velocity;
+            if (v) {
+                const vel = Math.hypot(v.x, v.z);
+                if (vel > 0.5) { fx = v.x / vel; fz = v.z / vel; }
+            }
 
             for (let j = this.arcos; j >= 1; j--) {
                 const raio = j * this.espacamento;
@@ -126,9 +155,9 @@ const PassCandidates = {
                     const offsetRad = (this.passoAngular * k - meio) * Math.PI / 180;
                     const cosO = Math.cos(offsetRad), sinO = Math.sin(offsetRad);
 
-                    // "Frente" (0,0,fwdZ) rodada por offsetRad em torno de Y.
-                    const px = mx + sinO * raio;
-                    const pz = mz + cosO * raio * fwdZ;
+                    // Vector da frente (fx,fz) rodado por offsetRad em torno de Y.
+                    const px = mx + (fx * cosO + fz * sinO) * raio;
+                    const pz = mz + (fz * cosO - fx * sinO) * raio;
 
                     if (!this.pontoValido(px, pz, carrier, teammates, opponents)) continue;
                     out.push({ x: px, z: pz, mate: mate });
@@ -143,7 +172,17 @@ const PassCandidates = {
         this.ensureGroup();
         this._usados = 0;
 
-        const carrier = Match.ballCarrier;
+        /*
+        `ballCarrier` fica a null em cada toque da condução (touchLock) e
+        durante todo o voo de um passe — ou seja, boa parte do tempo em que
+        a bola está viva. Ler só esse campo apagava o leque inteiro nesses
+        instantes, e o efeito no ecrã era um pisca-pisca.
+
+        `lastTouchedPlayer` cobre essa janela: na condução é o próprio
+        condutor, num passe é quem o fez. O leque continua a ser desenhado
+        em torno da equipa que tem a bola.
+        */
+        const carrier = Match.ballCarrier || Match.lastTouchedPlayer;
         if (!carrier) { this.esconderResto(); return; }
 
         const cands = this.gerarCandidatos(carrier);
