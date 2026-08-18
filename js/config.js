@@ -296,12 +296,13 @@ do JOGO em si: multiplica o passo de tempo de tudo (jogadores, bola, timers,
 cadências), por isso abranda a partida inteira de forma coerente em vez de
 travar só quem corre.
 
-    1.00  ritmo original
-    0.90  -10% (pedido)
-    0.81  -10% de novo, sobre o 0.90 (pedido)
-    0.891 +10% sobre o 0.81 (pedido)
+    1.00   ritmo original
+    0.90   -10% (pedido)
+    0.81   -10% de novo, sobre o 0.90 (pedido)
+    0.891  +10% sobre o 0.81 (pedido)
+    0.8019 -10% sobre o 0.891 (pedido)
 */
-const GAME_SPEED = 0.891;
+const GAME_SPEED = 0.8019;
 
 window.cameraMode = 'center';
 window.cameraZoom = 1.0;
@@ -798,9 +799,9 @@ todos os passes miravam a posição actual de um colega. Estes valores dizem ond
 se põe a bola em relação à linha que o nível 1 do adversário já calcula.
 */
 const PassModel = {
-    carryChance: 0.20,
-    carryChanceShort: 0.10,
-    carryChanceLong: 0.30,
+    carryChance: 0.10,
+    carryChanceShort: 0.05,
+    carryChanceLong: 0.20,
 
     preferenceBonus: 8.0,       // empurrão para a função preferida da posição
 
@@ -855,8 +856,8 @@ const PassModel = {
     */
     recuoPasseAlto: 1.5,
     alturaCruzamento: ALTURA_CABECA,
-    // Adversários a esta distância da linha do passe obrigam a levantar a bola.
-    corredorBloqueio: 1.8,
+    // Adversários a esta distância transversal da linha do passe (à distância do travês da bola) bloqueiam a linha / obrigam a levantar a bola.
+    corredorBloqueio: 1.0,
 
     /*
     --- Arco do passe normal por faixa de distância (pedido explícito) -----
@@ -924,11 +925,11 @@ const SlideTackleModel = {
     velocidade: 9.0,        // velocidade inicial do deslize, m/s
     alturaAnca: -0.55,      // quanto o corpo desce ao sentar no relvado
 
-    janelaToqueIni: 0.10,   // quando o pé pode começar a tocar na bola
-    janelaToqueFim: 1.00,
-    alcanceToque: 2.2,
+    janelaToqueIni: 0.08,   // quando o pé pode começar a tocar na bola
+    janelaToqueFim: 1.10,
+    alcanceToque: 2.6,
     empurraoBola: 4.5,      // metros que a bola percorre depois do toque
-    alturaBola: 1.0,        // ressalto vertical do toque
+    alturaBola: 0.8,        // ressalto vertical do toque
     bloqueioAposToque: 0.9, // segundos sem poder tocar outra vez (está no chão)
 
     // A pose, em radianos. `lado` = +1 estica a perna direita, -1 a esquerda.
@@ -1093,12 +1094,13 @@ Condução (CARRY) — carregar a bola em frente com toques curtos.
 O portador testa `leque` direcções à sua frente (em radianos, 0 = a direito
 para a baliza adversária) e escolhe a de melhor nota. Quanto mais espaço livre,
 maior é o toque à frente.
+Visão de jogo: distância de leitura = técnica * 0.5, ângulo de visão = técnica * 0.7 graus.
 */
 const CarryModel = {
-    leque: [-1.0, -0.7, -0.45, -0.22, 0, 0.22, 0.45, 0.7, 1.0],
-    lookAhead: 10.0,      // a que distância se avalia cada direcção
-    spaceCap: 12.0,       // espaço acima disto já não conta mais
-    spaceWeight: 1.6,     // quanto vale ter espaço
+    leque: [-1.2, -0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9, 1.2],
+    lookAhead: 10.0,      // base de distância (sobrescrita por player.tec * 0.5)
+    spaceCap: 16.0,       // espaço acima disto já não conta mais
+    spaceWeight: 2.0,     // quanto vale ter espaço
     progressWeight: 3.2,  // quanto vale progredir para a baliza
     // Era 0.18 — no pior caso (tx a ~29m do alvo) só penalizava ~5 pontos,
     // contra até ~32 do progressWeight. Na prática o progresso pra frente
@@ -1129,7 +1131,7 @@ const CarryModel = {
     Gasto o orçamento, ele volta a cair no ramo Passar. Recomeça a zero quando
     a bola muda de pé.
     */
-    distanciaMax: 12.0,
+    distanciaMax: 16.0,
 
     // Toques de condução — distância do toque depende do espaço à frente
     touchLong: 7.0,       // toque longo (campo aberto, adversário > 15m)
@@ -1163,14 +1165,14 @@ oposto (30-45°). Se tentar ir reto, probabilidade de perda é muito maior.
 jogador e pela proximidade do adversário.
 */
 const DribbleModel = {
-    triggerDist: 5.0,     // distância para activar drible 1v1 (adversário à frente)
+    triggerDist: 5.5,     // distância para activar drible 1v1 (adversário à frente)
     angleSide: 0.6,       // ângulo lateral do toque (~35°, entre 30 e 45)
     touchPower: 11.0,     // força do toque lateral
-    successBase: 0.55,    // chance base de sucesso
+    successBase: 0.60,    // chance base de sucesso
     successSideBonus: 0.20, // bónus por ir para o lado (vs reto)
     failLossBall: 0.70,   // prob. de perder a bola se falhar
-    sprintBoost: 6.0,     // boost de velocidade após toque lateral
-    cooldown: 1.5         // tempo antes de poder driblar novamente
+    sprintBoost: 6.2,     // boost de velocidade após toque lateral
+    cooldown: 1.2         // tempo antes de poder driblar novamente
 };
 
 /*
@@ -1532,9 +1534,11 @@ ligado a `MentalidadeModel.agressao`, a base da agressividade dinâmica
 =============================================================================
 */
 const MentalidadeModel = {
-    defesa: { agressao: 0.32 },
+    muito_defensiva: { agressao: 0.20 },
+    defesa: { agressao: 0.35 },
     balanceado: { agressao: 0.50 },
-    ataque: { agressao: 0.68 }
+    ataque: { agressao: 0.65 },
+    muito_ofensiva: { agressao: 0.80 }
 };
 
 /*
@@ -1577,11 +1581,6 @@ const TeamPlayStyles = {
         circulacao: 1.25, verticalidade: 0.95, viradas: 1.15,
         corredores: 1.1, cruzamento: 1.0, pressaoPosPerda: 1.0
     },
-    high_press: {
-        nome: 'High Press',
-        circulacao: 0.85, verticalidade: 1.1, viradas: 0.85,
-        corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 0.55
-    }
 };
 
 const Tatics = {

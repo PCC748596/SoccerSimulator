@@ -103,15 +103,20 @@ class PlayerContext {
             p.tempoPertoDoPortador = 0;
         }
 
+        const tec = p.skillFor ? p.skillFor('TEC') : 50;
+        const maxVisionDist = Math.max(15.0, tec * 0.5);
+        const halfAngleRad = (Math.max(30.0, tec * 0.7) * Math.PI) / 180;
+        const aberturaCorredor = Math.tan(halfAngleRad);
+
         for (const opp of this.opponents) {
             if (opp.role === 'gk') continue;
             const oPos = opp.model.position;
             if (p.model.position.distanceTo(oPos) < 3.5) this.underPressure = true;
 
             const dz = (oPos.z - p.model.position.z) * p.dirZ;
-            if (dz <= 0) continue;
+            if (dz <= 0 || dz > maxVisionDist) continue;
             const dx = Math.abs(oPos.x - p.model.position.x);
-            if (dx > CarryModel.corredor + dz * CarryModel.abertura) continue;
+            if (dx > CarryModel.corredor + dz * aberturaCorredor) continue;
             if (dz < this.espacoAFrente) this.espacoAFrente = dz;
         }
         return this;
@@ -190,12 +195,17 @@ function findThroughBall(ctx) {
         // Lançamento é bola longa: abaixo de distMinLonga é passe normal.
         if (dist < PassModel.distMinLonga || dist > PassModel.throughBallMaxDist) continue;
 
-        // Espaço livre à frente dele. Com a grid espacial, em vez de só
-        // testar "está livre?" num ponto fixo (mateAlvo.x*0.85), procura o
-        // centro do espaço mais livre ali perto e mira nesse ponto — o
-        // lançamento passa a ir para o espaço de verdade, não uma
-        // aproximação. Sem a grid, cai no loop antigo sobre os adversários.
-        let alvoZ = (linhaNoNosso + PassModel.throughBallDepth) * p.dirZ;
+        // Calcula o alvo baseado na velocidade relativa (bola ~15m/s, jogador ~7m/s)
+        // O jogador corre aproximadamente 45% da distância do passe durante o tempo de voo.
+        let corridaM = dist * 0.45;
+        let zFuturo = mateZ + corridaM;
+        
+        // Garante que o passe rompe a linha defensiva
+        if (zFuturo < linhaNoNosso + 2) zFuturo = linhaNoNosso + 2;
+        // Impede que saia de campo ou vá directo ao guarda-redes (linha de fundo é 50)
+        if (zFuturo > 46) zFuturo = 46;
+
+        let alvoZ = zFuturo * p.dirZ;
         let alvoX = mateAlvo.x * 0.85;
         const oppTeamKey = (p.team === 'TeamA') ? 'TeamB' : 'TeamA';
 
@@ -242,29 +252,6 @@ function findThroughBall(ctx) {
         melhor.alto = naLinha > 0;
     }
 
-    return melhor;
-}
-
-/*
-Passe pelo algoritmo de pontos candidatos (PassCandidates), experimental —
-liga/desliga em window.usarPasseGrid, lógica antiga (bestPassTarget) intacta
-por baixo. Gera o leque à volta de cada companheiro, filtra os intercetáveis
-(ver pass_candidates.js) e elege o ponto sobrevivente mais perto do centro da
-baliza adversária. Quem "recebe" é o dono do ponto — mira o ESPAÇO, não a
-posição actual dele (mesmo padrão do lançamento).
-*/
-function findGridPassTarget(ctx) {
-    if (typeof PassCandidates === 'undefined') return null;
-    const p = ctx.p;
-    const cands = PassCandidates.gerarCandidatos(p);
-    if (cands.length === 0) return null;
-
-    const golZ = p.targetGoalZ;
-    let melhor = null, melhorD = Infinity;
-    for (const c of cands) {
-        const d = Math.hypot(c.x, c.z - golZ);
-        if (d < melhorD) { melhorD = d; melhor = c; }
-    }
     return melhor;
 }
 
@@ -415,6 +402,118 @@ function actPass(ctx) {
     ctx.p.initiatePass(ctx.passTarget);
 }
 
+function podeDriblar(ctx) {
+    const p = ctx.p;
+    if (p.role === 'gk') return false;
+
+    // Regra 4: Adversário próximo, espaço atrás do adversário, técnica >= 75 - Driblar
+    const tec = p.skillFor ? p.skillFor('TEC') : ctx.skillTec;
+    if (tec < 75) return false;
+    if (p.fsm.currentState === 'CUT' || p.fsm.currentState === 'DRIBBLE') return false;
+
+    // Verificar se há adversário próximo à sua frente bloqueando a passagem
+    let oppProximo = null;
+    let menorDist = Infinity;
+    for (const opp of ctx.opponents) {
+        if (opp.role === 'gk') continue;
+        const d = p.model.position.distanceTo(opp.model.position);
+        if (d >= 0.8 && d <= 4.8) {
+            const dz = (opp.model.position.z - p.model.position.z) * p.dirZ;
+            if (dz > -0.5 && dz < 4.8) {
+                const dx = Math.abs(opp.model.position.x - p.model.position.x);
+                if (dx < 3.6 && d < menorDist) {
+                    menorDist = d;
+                    oppProximo = opp;
+                }
+            }
+        }
+    }
+    if (!oppProximo) return false;
+
+    // Verificar espaço atrás do adversário (costas do adversário desimpedidas para progressão)
+    const oppZ = oppProximo.model.position.z;
+    const oppX = oppProximo.model.position.x;
+    let espacoAtrasLivre = true;
+    for (const opp2 of ctx.opponents) {
+        if (opp2 === oppProximo || opp2.role === 'gk') continue;
+        const dzAtras = (opp2.model.position.z - oppZ) * p.dirZ;
+        if (dzAtras > 0 && dzAtras < 6.5) {
+            const dxAtras = Math.abs(opp2.model.position.x - oppX);
+            if (dxAtras < 3.2) {
+                espacoAtrasLivre = false;
+                break;
+            }
+        }
+    }
+    if (!espacoAtrasLivre) return false;
+
+    ctx.dribbleOpponent = oppProximo;
+    return true;
+}
+
+function actDribble(ctx) {
+    const p = ctx.p;
+    p.dribbleOpponent = ctx.dribbleOpponent;
+    if (typeof MatchStats !== 'undefined') MatchStats[p.team].dribles.tentados++;
+    p.fsm.changeState('DRIBBLE');
+}
+
+function findPassForward(ctx) {
+    const p = ctx.p;
+    if (!ctx.underPressure) {
+        const tb = findThroughBall(ctx);
+        if (tb) return { type: 'through', data: tb };
+    }
+    let target = p.findPassTarget('frente');
+    if (!target && ctx.underPressure) target = p.findPassTargetRelaxed('frente');
+    if (target) return { type: 'pass', target: target };
+    return null;
+}
+
+function findPassSide(ctx) {
+    const p = ctx.p;
+    let target = p.findPassTarget('lado');
+    if (!target && ctx.underPressure) target = p.findPassTargetRelaxed('lado');
+    if (target) return { type: 'pass', target: target };
+    return null;
+}
+
+function findPassBack(ctx) {
+    const p = ctx.p;
+    let target = p.findPassTarget('tras');
+    if (!target && ctx.underPressure) target = p.findPassTargetRelaxed('tras');
+    if (!target && ctx.underPressure && p.decisionTimer > 0.8) target = p.findPassTargetDesperate();
+    if (target) return { type: 'pass', target: target };
+    return null;
+}
+
+function actClearance(ctx) {
+    const p = ctx.p;
+    if (typeof MatchStats !== 'undefined') MatchStats[p.team].passes.tentados++;
+
+    const meiaLarg = CAMPO_LARG / 2;
+    // Chuta em direção à lateral mais próxima para aliviar o perigo
+    const ladoX = (p.model.position.x >= 0) ? (meiaLarg + 2.0) : (-meiaLarg - 2.0);
+    const alvoZ = p.model.position.z + p.dirZ * 12.0;
+
+    _v1.set(ladoX - p.model.position.x, 0, alvoZ - p.model.position.z).normalize();
+    const forca = 16.0 + Math.random() * 6.0;
+    const elev = THREE.MathUtils.degToRad(18 + Math.random() * 14);
+    const vh = forca * Math.cos(elev);
+
+    Match.ballVel.set(_v1.x * vh, forca * Math.sin(elev), _v1.z * vh);
+    p.hasBall = false;
+    p.touchLock = BallControl.touchLock;
+    Match.ballCarrier = null;
+    Match.intendedReceiver = null;
+    Match.passTargetPos = null;
+    Match.lastTouchedTeam = p.team;
+    Match.lastTouchedPlayer = p;
+    window.bolaChutada = true;
+
+    p.fsm.changeState('MOVE_TO_POS');
+}
+
 function actCarry(ctx) {
     ctx.p.fsm.changeState('CARRY');
 }
@@ -426,7 +525,11 @@ function actCarry(ctx) {
 function actSlideTackle(ctx) {
     const p = ctx.p;
     if (typeof MatchStats !== 'undefined') MatchStats[p.team].carrinhos.tentados++;
-    _v1.copy(Match.ballCarrier.model.position);
+    if (Match.ballCarrier) {
+        _v1.copy(Match.ballCarrier.model.position);
+    } else {
+        _v1.copy(Match.ball.position);
+    }
     _v1.y = p.model.position.y;
     lookAtBola(p.model, _v1);
     p.fsm.changeState('SLIDE_TACKLE');
@@ -539,6 +642,14 @@ function actReceivePass(ctx) {
     const bola = Match.ball.position;
     const noAr = bola.y > BallPhysics.raio + 0.35 && Match.ballVel.lengthSq() > 1.0;
 
+    if (!noAr && Match.lastTouchedPlayer === p && Match.intendedReceiver === p) {
+        // Toque próprio em condução: segue directamente para a bola em velocidade de corrida sem hesitar
+        p.dynamicTarget.copy(bola);
+        p.speedMult = (6.0 + ((ctx.skillSpeed - 50) / 50) * 1.2);
+        p.fsm.changeState('CARRY');
+        return;
+    }
+
     if (noAr) {
         /*
         Bola que ainda vem alta: o ponto de encontro é onde ela DESCE pela
@@ -573,7 +684,14 @@ function actReceivePass(ctx) {
             return;
         }
     } else {
-        p.dynamicTarget.copy(bola);
+        const bb = p.blackboard && p.blackboard.ball;
+        if (bb && bb.interceptionPoint) {
+            p.dynamicTarget.set(bb.interceptionPoint.x, ALTURA_BASE_Y, bb.interceptionPoint.z);
+        } else if (typeof Match !== 'undefined' && Match.passTargetPos) {
+            p.dynamicTarget.set(Match.passTargetPos.x, ALTURA_BASE_Y, Match.passTargetPos.z);
+        } else {
+            p.dynamicTarget.copy(bola);
+        }
     }
 
     p.fsm.changeState('MOVE_TO_POS');
@@ -705,6 +823,10 @@ const PlayerBT = sel('PlayerRoot',
         cond('tenhoABola', temBola),
 
         sel('DecisaoComBola',
+            seq('RecuperarControlo',
+                cond('bolaFugiu', (ctx) => !ctx.p.hasBall),
+                act('correrParaBola', actCarry)
+            ),
             cond('CalculaDebug', (ctx) => {
                 if (window.showPlayerPoints) {
                     ctx.p.debugPoints = ctx.p.debugPoints || {};
@@ -724,8 +846,8 @@ const PlayerBT = sel('PlayerRoot',
             (CadenceModel.posseBase), bem menos sob pressão pesada — aí é
             toque de primeira, decisão quase imediata. Skill acelera um
             pouco (jogador melhor lê o jogo mais depressa). Durante a espera
-            corre com a bola (actCarry) — não fica estático, só não passa/
-            remata/lança enquanto "não decidiu".
+            protege a bola (actHoldBall) — não fica estático, mas não se
+            atira a correr para a frente enquanto "não decidiu".
             */
             seq('Dominar',
                 cond('aindaADominar', (ctx) => {
@@ -767,15 +889,13 @@ const PlayerBT = sel('PlayerRoot',
                 )
             ),
 
-            // Remate, se estiver em zona e ângulo de finalizar.
+            // 1. Verificar chute - chutar
             seq('Rematar',
                 cond('emZonaDeRemate', emZonaDeRemate),
                 act('rematar', actShoot)
             ),
 
-            // Cruzamento da ala, se houver alguém na área para o receber.
-            // O peso `cruzar` do playing style entra aqui (Cross Specialist
-            // 1.6, Fox in the Box quase nunca cruza).
+            // 2. Verificar cruzamento se tiver nas laterais das áreas - cruzar
             seq('Cruzar',
                 cond('valeCruzar', (ctx) => {
                     ctx.cross = findCross(ctx);
@@ -786,94 +906,65 @@ const PlayerBT = sel('PlayerRoot',
                 act('cruzar', actCross)
             ),
 
-            /*
-            Passe pra frente, dentro do campo de visão (mesmo cone de ângulos
-            da condução, CarryModel.leque — até ±57° do eixo de ataque).
-
-            Vem ANTES de ConduzirEmEspaco: só conduz sozinho se não houver
-            colega bem posicionado à frente dentro desse cone. Passe lateral/
-            para trás fica de fora daqui (ver bestPassTarget mais abaixo, que
-            cobre isso sob pressão).
-            */
-            seq('PassarEmFrente',
-                cond('haPasseEmFrente', (ctx) => {
-                    const p = ctx.p;
-                    const alvo = p.findPassTarget();
-                    if (!alvo) return false;
-                    const optPos = alvoDePasse(alvo);
-                    const dz = (optPos.z - p.model.position.z) * p.dirZ;
-                    if (dz <= 0) return false;
-                    const dx = Math.abs(optPos.x - p.model.position.x);
-                    const ang = Math.atan2(dx, dz);
-                    const anguloMax = CarryModel.leque[CarryModel.leque.length - 1];
-                    if (ang > anguloMax) return false;
-                    ctx.passTarget = alvo;
-                    return true;
-                }),
-                act('passar', actPass)
-            ),
-
-            /*
-            Campo aberto: conduz.
-
-            Tem de vir ANTES de Passar. A seguir ao passe a árvore já não
-            pergunta nada — e havendo sempre um colega ao lado disponível, um
-            avançado isolado com 20 m de relva à frente acabava a tocar para
-            trás em vez de atacar o espaço.
-            */
+            // 3. Verificar se tem espaço livre à frente - carry (conduzir)
             seq('ConduzirEmEspaco',
-                cond('campoAberto', (ctx) =>
-                    ctx.p.role !== 'def' && ctx.p.role !== 'gk' && ctx.campoAberto),
+                cond('campoAberto', (ctx) => ctx.p.role !== 'gk' && ctx.campoAberto),
                 act('atacarOEspaco', actCarry)
             ),
 
-            // Lançamento nas costas da linha adversária.
-            seq('Lancar',
-                cond('haEspacoNasCostas', (ctx) => {
-                    if (ctx.underPressure) return false;
-                    // Peso `lancar` do estilo: Orchestrator/Creative lançam
-                    // muito, Anchor Man quase nunca.
-                    const mult = estiloAtivoDe(ctx.p).lancar;
-                    if (mult !== 1.0 && Math.random() > mult) return false;
-                    ctx.throughBall = findThroughBall(ctx);
-                    return ctx.throughBall !== null;
-                }),
-                act('lancar', actThroughBall)
+            // 4. Adversário próximo, espaço atrás do adversário, técnica >= 75 - Driblar
+            seq('Driblar',
+                cond('podeDriblar', podeDriblar),
+                act('driblar', actDribble)
             ),
 
-            // Passe pelo algoritmo de pontos candidatos — experimental, só corre
-            // se window.usarPasseGrid estiver ligado (ver toggle no painel).
-            seq('PassarGrid',
-                cond('usarPasseGrid', (ctx) => {
-                    if (!window.usarPasseGrid) return false;
-                    ctx.gridPassPonto = findGridPassTarget(ctx);
-                    return ctx.gridPassPonto !== null;
+            // 5. Não dá para driblar, tem companheiros à frente - passar frente
+            seq('PassarFrente',
+                cond('haCompanheiroFrente', (ctx) => {
+                    const passFwd = findPassForward(ctx);
+                    if (!passFwd) return false;
+                    ctx.currentPassChoice = passFwd;
+                    return true;
                 }),
-                act('passarGrid', (ctx) => {
-                    const c = ctx.gridPassPonto;
-                    ctx.p.isThroughBall = true;
-                    ctx.p.throughBallTarget = { x: c.x, z: c.z };
-                    ctx.p.initiatePass(c.mate);
+                act('passarFrente', (ctx) => {
+                    if (ctx.currentPassChoice.type === 'through') {
+                        ctx.throughBall = ctx.currentPassChoice.data;
+                        actThroughBall(ctx);
+                    } else {
+                        ctx.passTarget = ctx.currentPassChoice.target;
+                        actPass(ctx);
+                    }
                 })
             ),
 
-            // Passe normal, por pontuação.
-            seq('Passar',
-                cond('valeAPenaPassar', (ctx) => {
-                    const p = ctx.p;
-                    const preferida = (p.role === 'def') ? 'mid' : 'atk';
-                    ctx.passTarget = bestPassTarget(ctx, preferida);
-                    if (!ctx.passTarget) return false;
-
-                    // Nem sempre passa: às vezes conduz. Sob pressão, passa quase sempre.
-                    let limiar = PassModel.carryChance;
-                    if (Tatics.passe === 'curto') limiar = PassModel.carryChanceShort;
-                    else if (Tatics.passe === 'longo') limiar = PassModel.carryChanceLong;
-                    if (ctx.underPressure) limiar = Math.max(0.02, limiar - 0.15);
-
-                    return Math.random() > limiar;
+            // 6. Não dá para driblar, tem companheiro ao lado - passar lado
+            seq('PassarLado',
+                cond('haCompanheiroLado', (ctx) => {
+                    const passSide = findPassSide(ctx);
+                    if (!passSide) return false;
+                    ctx.passTarget = passSide.target;
+                    return true;
                 }),
-                act('passar', actPass)
+                act('passarLado', actPass)
+            ),
+
+            // 7. Não tem ninguém ao lado - passar para companheiro atrás
+            seq('PassarTras',
+                cond('haCompanheiroTras', (ctx) => {
+                    const passBack = findPassBack(ctx);
+                    if (!passBack) return false;
+                    ctx.passTarget = passBack.target;
+                    return true;
+                }),
+                act('passarTras', actPass)
+            ),
+
+            // 8. Não tem ninguém atrás - chute para a lateral
+            seq('ChuteLateral',
+                cond('semOpcoesSeguras', (ctx) => {
+                    return ctx.underPressure || ctx.p.decisionTimer > 1.2;
+                }),
+                act('chutarParaLateral', actClearance)
             ),
 
             act('conduzir', actCarry)
@@ -883,21 +974,15 @@ const PlayerBT = sel('PlayerRoot',
     /* --- Sem bola -------------------------------------------------------- */
     seq('SemBola',
         sel('DecisaoSemBola',
-            // Carrinho: fora do alcance de desarme mas ainda perto.
+            // Carrinho: tentativa agressiva de desarme ao deslizar (taxa reduzida pela metade).
             seq('Carrinho',
                 cond('vale carrinho', (ctx) => {
                     const p = ctx.p, c = Match.ballCarrier;
-                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 12) return false;
+                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 10) return false;
                     const d = p.model.position.distanceTo(c.model.position);
-                    const alcanceDesarme = (p.pos === 'CB') ? 2.8 : 2.5;
-                    if (d < alcanceDesarme || d >= 4.5) return false;
+                    if (d < 1.0 || d > 4.2) return false;
 
-                    const esperaMin = DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced;
-                    if ((p.tempoPertoDoPortador || 0) < esperaMin) return false;
-
-                    // Só entra de frente (0-45°) ou de lado (45-90°) em relação
-                    // à direcção de movimento do portador — carrinho por trás
-                    // não vale (ficava dando de costas, longe da bola).
+                    // Entra de frente, de lado ou em perseguição diagonal
                     const carrierDir = c.velocity.lengthSq() > 0.1
                         ? c.velocity.clone().normalize()
                         : new THREE.Vector3(0, 0, 1).applyQuaternion(c.model.quaternion);
@@ -906,14 +991,12 @@ const PlayerBT = sel('PlayerRoot',
                     if (toDefensor.lengthSq() < 0.0001) return false;
                     toDefensor.normalize();
                     const angulo = carrierDir.angleTo(toDefensor);
-                    if (angulo > Math.PI / 2) return false;
+                    if (angulo > (135 * Math.PI / 180)) return false;
 
-                    let taxa = 0;
-                    if (p.pos === 'CB') taxa = 8.4;
-                    else if (p.pos === 'LB' || p.pos === 'RB') taxa = 6.6;
-                    else if (p.pos === 'DM') taxa = 6.0;
-                    else if (p.role === 'def' || p.role === 'mid') taxa = 3.0;
-                    // Peso `pressao` do estilo: The Destroyer entra muito mais.
+                    // Taxa reduzida em 50%
+                    let taxa = (p.pos === 'CB' || p.pos === 'DM') ? 1.5 : ((p.pos === 'LB' || p.pos === 'RB') ? 1.1 : 0.7);
+                    if (Tatics.pressaoDefensiva === 'high') taxa *= 1.4;
+                    else if (Tatics.pressaoDefensiva === 'low') taxa *= 0.7;
                     taxa *= estiloAtivoDe(p).pressao;
                     return chancePorSegundo(taxa, ctx.dt);
                 }),
@@ -924,16 +1007,15 @@ const PlayerBT = sel('PlayerRoot',
             seq('Desarme',
                 cond('vale desarme', (ctx) => {
                     const p = ctx.p, c = Match.ballCarrier;
-                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 12) return false;
+                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 10) return false;
                     const d = p.model.position.distanceTo(c.model.position);
                     const alcance = (p.pos === 'CB') ? 2.8 : 2.5;
                     if (d >= alcance) return false;
 
-                    const esperaMin = DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced;
-                    if ((p.tempoPertoDoPortador || 0) < esperaMin) return false;
-
-                    // Peso `pressao` do estilo, tal como no carrinho.
-                    const taxaDes = ((p.pos === 'CB') ? 9.0 : 4.8) * estiloAtivoDe(p).pressao;
+                    let taxaDes = (p.pos === 'CB' || p.pos === 'DM') ? 5.5 : 3.5;
+                    if (Tatics.pressaoDefensiva === 'high') taxaDes *= 1.4;
+                    else if (Tatics.pressaoDefensiva === 'low') taxaDes *= 0.7;
+                    taxaDes *= estiloAtivoDe(p).pressao;
                     return chancePorSegundo(taxaDes, ctx.dt);
                 }),
                 act('desarmar', actTackle)
@@ -1015,11 +1097,75 @@ const PlayerBT = sel('PlayerRoot',
     )
 );
 
+/* =========================================================================
+   SISTEMA DE BTs POR POSIÇÃO E PLAYING STYLE
+   ========================================================================= */
+
+const PositionBTs = {
+    GK: null,
+    CB: null,
+    LB: null,
+    RB: null,
+    DM: null,
+    CM: null,
+    AM: null,
+    LM: null,
+    RM: null,
+    LW: null,
+    RW: null,
+    CF: null,
+    SS: null,
+    register: function (pos, node) {
+        this[pos] = node;
+    }
+};
+
+const PlayingStyleBTs = {
+    goal_poacher: null,
+    fox_in_the_box: null,
+    target_man: null,
+    creative_playmaker: null,
+    classic_no10: null,
+    hole_player: null,
+    prolific_winger: null,
+    cross_specialist: null,
+    roaming_flank: null,
+    box_to_box: null,
+    the_destroyer: null,
+    orchestrator: null,
+    anchor_man: null,
+    build_up: null,
+    extra_frontman: null,
+    offensive_fullback: null,
+    fullback_finisher: null,
+    defensive_fullback: null,
+    register: function (style, node) {
+        this[style] = node;
+    }
+};
+
 /* --- Ponto de entrada --------------------------------------------------- */
 
 const PlayerAI = {
     tick: function (player, dt) {
+        const s = player.fsm ? player.fsm.currentState : "";
+        if (player.actionState || s === "PASS" || s === "SHOOT" || s === "CROSS" || s === "TACKLE" || s === "SLIDE_TACKLE" || s === "CHEST_CONTROL" || s === "CUT") return;
         if (!player.btCtx) player.btCtx = new PlayerContext(player);
-        PlayerBT.tick(player.btCtx.prepare(dt));
+        const ctx = player.btCtx.prepare(dt);
+
+        // 1. Prioridade: BT específico do Playing Style (se registado e ativo)
+        if (player.playingStyle && player.styleAtivo && PlayingStyleBTs[player.playingStyle]) {
+            const res = PlayingStyleBTs[player.playingStyle].tick(ctx);
+            if (res === SUCCESS) return;
+        }
+
+        // 2. Prioridade: BT específico da Posição (se registado)
+        if (player.pos && PositionBTs[player.pos]) {
+            const res = PositionBTs[player.pos].tick(ctx);
+            if (res === SUCCESS) return;
+        }
+
+        // 3. BT Base Unificado
+        PlayerBT.tick(ctx);
     }
 };

@@ -162,6 +162,9 @@ function executePassGameplay(p) {
     p.touchLock = BallControl.touchLock;
     Match.ballCarrier = null;
     Match.intendedReceiver = p.passTarget;
+    if (Match.passTargetVisual) Match.passTargetVisual.visible = false;
+    if (Match.passLineVisual) Match.passLineVisual.visible = false;
+    Match.passTargetPos = { x: p.passTargetPos.x, z: p.passTargetPos.z };
     Match.lastTouchedTeam = p.team;
     Match.lastTouchedPlayer = p;
     if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(p.team, tipoPasseStats);
@@ -310,7 +313,10 @@ class PlayerFSM {
                 p.velocity.set(0, 0, 0);
                 break;
             case 'MOVE_TO_POS':
-                p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
+                {
+                    const isBallTarget = p.dynamicTarget.distanceTo(Match.ball.position) < 0.8;
+                    p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult, isBallTarget ? 0 : 2.0);
+                }
                 break;
             /*
             MARKING / BLOCKING / FWR_SUPPORT / AFT_SUPPORT — mesma locomoção
@@ -337,56 +343,74 @@ class PlayerFSM {
                o espaço e corre atrás dela. Não tem a bola grudada ao pé.
                ============================================================= */
             case 'CARRY':
-                if (p.pos === 'LB' || p.pos === 'RB') {
-                    p.carryTargetX = p.baseTarget.x * 1.05;
-                } else if (!p.carryTargetX || chancePorSegundo(1.2, dt)) {
-                    p.carryTargetX = Tatics.getWeightedSectorX(p.dirZ);
-                }
+                if (!p.hasBall) {
+                    // Quando a bola foi solta num toque à frente, corre directamente para ela
+                    // sem abrandar nem hesitar até re-adquirir o controlo!
+                    p.dynamicTarget.copy(Match.ball.position);
+                    p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult * 1.05, 0);
+                } else {
+                    if (p.pos === 'LB' || p.pos === 'RB') {
+                        p.carryTargetX = p.baseTarget.x * 1.05;
+                    } else if (!p.carryTargetX || chancePorSegundo(1.2, dt)) {
+                        p.carryTargetX = Tatics.getWeightedSectorX(p.dirZ);
+                    }
 
-                // Escolhe a melhor direcção de condução (leque de ângulos)
-                {
-                    const oppsCond = (p.team === 'TeamA') ? Match.opponents : Match.players;
-                    const px = p.model.position.x, pz = p.model.position.z;
-                    let melhorNota = -Infinity;
-                    let alvoX = p.carryTargetX, alvoZ = pz + 10 * p.dirZ;
+                    // Escolhe a melhor direcção de condução (leque de ângulos adaptativo pela Técnica)
+                    {
+                        const oppsCond = (p.team === 'TeamA') ? Match.opponents : Match.players;
+                        const px = p.model.position.x, pz = p.model.position.z;
+                        let melhorNota = -Infinity;
+                        let alvoX = p.carryTargetX, alvoZ = pz + 10 * p.dirZ;
 
-                    // Ponto mais avançado que vale a pena mirar: a faixa junto
-                    // à linha de fundo está fora, senão ele corre contra a
-                    // linha sem nunca poder adiantar a bola.
-                    const avancoMax = CAMPO_COMP / 2 - CarryModel.margemLinhaFundo;
+                        // Visão de jogo baseada na técnica:
+                        // Distância de leitura = técnica * 0.5 (ex: tec 80 = 40m, tec 60 = 30m, tec 40 = 20m)
+                        // Ângulo de visão = técnica * 0.7 graus (ex: tec 80 = ±56°, tec 50 = ±35°)
+                        const tec = p.skillFor ? p.skillFor('TEC') : 50;
+                        const visDist = Math.max(12.0, tec * 0.5);
+                        const maxAngRad = (Math.max(30.0, tec * 0.7) * Math.PI) / 180;
 
-                    for (const ang of CarryModel.leque) {
-                        const tx = px + Math.sin(ang) * CarryModel.lookAhead;
-                        let tz = pz + Math.cos(ang) * p.dirZ * CarryModel.lookAhead;
-                        if (tz * p.dirZ > avancoMax) tz = avancoMax * p.dirZ;
-                        if (Math.abs(tx) > 31 || Math.abs(tz) > 51) continue;
+                        // Ponto mais avançado que vale a pena mirar: a faixa junto
+                        // à linha de fundo está fora, senão ele corre contra a
+                        // linha sem nunca poder adiantar a bola.
+                        const avancoMax = CAMPO_COMP / 2 - CarryModel.margemLinhaFundo;
 
-                        let maisPerto = 999;
-                        for (const opp of oppsCond) {
-                            if (opp.role === 'gk') continue;
-                            const d = Math.hypot(opp.model.position.x - tx, opp.model.position.z - tz);
-                            if (d < maisPerto) maisPerto = d;
+                        // Gera ângulos dinamicamente dentro do cone de visão do jogador
+                        const passos = 9;
+                        for (let k = 0; k < passos; k++) {
+                            const ratio = (k / (passos - 1)) * 2 - 1; // de -1 a +1
+                            const ang = ratio * maxAngRad;
+                            const tx = px + Math.sin(ang) * visDist;
+                            let tz = pz + Math.cos(ang) * p.dirZ * visDist;
+                            if (tz * p.dirZ > avancoMax) tz = avancoMax * p.dirZ;
+                            if (Math.abs(tx) > 31 || Math.abs(tz) > 51) continue;
+
+                            let maisPerto = 999;
+                            for (const opp of oppsCond) {
+                                if (opp.role === 'gk') continue;
+                                const d = Math.hypot(opp.model.position.x - tx, opp.model.position.z - tz);
+                                if (d < maisPerto) maisPerto = d;
+                            }
+
+                            let nota = Math.min(maisPerto, CarryModel.spaceCap) * CarryModel.spaceWeight;
+                            nota += (tz - pz) * p.dirZ * CarryModel.progressWeight;
+                            nota -= Math.abs(tx - p.carryTargetX) * CarryModel.sectorWeight;
+
+                            if (nota > melhorNota) { melhorNota = nota; alvoX = tx; alvoZ = tz; }
                         }
 
-                        let nota = Math.min(maisPerto, CarryModel.spaceCap) * CarryModel.spaceWeight;
-                        nota += (tz - pz) * p.dirZ * CarryModel.progressWeight;
-                        nota -= Math.abs(tx - p.carryTargetX) * CarryModel.sectorWeight;
-
-                        if (nota > melhorNota) { melhorNota = nota; alvoX = tx; alvoZ = tz; }
+                        p.dynamicTarget.set(alvoX, ALTURA_BASE_Y, alvoZ);
                     }
 
-                    p.dynamicTarget.set(alvoX, ALTURA_BASE_Y, alvoZ);
-                }
-
-                if (p.role === 'gk') {
-                    p.dynamicTarget.z = Math.max(-CAMPO_COMP / 2, Math.min(-38, p.dynamicTarget.z));
-                    p.dynamicTarget.x = Math.max(-18, Math.min(18, p.dynamicTarget.x));
-                    if (p.model.position.z >= -39) {
-                        let clearTarget = p.findPassTarget();
-                        if (clearTarget) p.initiatePass(clearTarget);
+                    if (p.role === 'gk') {
+                        p.dynamicTarget.z = Math.max(-CAMPO_COMP / 2, Math.min(-38, p.dynamicTarget.z));
+                        p.dynamicTarget.x = Math.max(-18, Math.min(18, p.dynamicTarget.x));
+                        if (p.model.position.z >= -39) {
+                            let clearTarget = p.findPassTarget();
+                            if (clearTarget) p.initiatePass(clearTarget);
+                        }
                     }
+                    p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult * 0.95, 0);
                 }
-                p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult * 0.85);
 
                 /*
                 Toques de condução — soltar a bola à frente e correr atrás.
@@ -399,39 +423,42 @@ class PlayerFSM {
                     let forward = p.velocity.clone().normalize();
                     let allOpps = (p.team === 'TeamA') ? Match.opponents : Match.players;
 
-                    // Encontrar adversário mais perto no cone frontal
+                    // Encontrar adversário mais perto no cone frontal de visão (técnica * 0.7 graus)
+                    const tec = p.skillFor ? p.skillFor('TEC') : 50;
+                    const maxVisionAngleRad = (Math.max(30.0, tec * 0.7) * Math.PI) / 180;
+                    const minDot = Math.cos(maxVisionAngleRad);
+                    const visionRange = Math.max(14.0, tec * 0.5);
+
                     let nearestOppDist = 999;
                     let nearestOpp = null;
                     for (let opp of allOpps) {
                         if (opp.role === 'gk') continue;
                         let dist = p.model.position.distanceTo(opp.model.position);
+                        if (dist > visionRange) continue;
                         let dirToOpp = new THREE.Vector3().subVectors(opp.model.position, p.model.position).normalize();
                         let dotFwd = dirToOpp.dot(forward);
-                        if (dotFwd > 0.2 && dist < nearestOppDist) {
+                        if (dotFwd >= minDot && dist < nearestOppDist) {
                             nearestOppDist = dist;
                             nearestOpp = opp;
                         }
                     }
 
-                    // Toque = velocidade actual do jogador + impulso extra à frente.
-                    // O impulso é calibrado em passadas (getGaitPose/misturarAndamento)
-                    // para a bola cair 1-2 passadas à frente do próximo apoio, não em
-                    // metros fixos — mas é SOMADO à velocidade, não a distância a dividir
-                    // por tempo (isso dava velocidades absurdas: 8-9m / 0.4s).
-                    const passada = misturarAndamento(p.velocity.length()).passada;
+                    // Toque suave e controlado: mantém a bola cerca de 0.8m a 1.2m à frente da passada,
+                    // sem disparar para longe nem perder a velocidade de corrida.
+                    const curSpeed = p.velocity.length();
                     let touchPow;
-                    if (nearestOppDist > 15) {
-                        // Campo aberto: toque longo, ~1.5 passo de impulso
-                        touchPow = p.velocity.length() + passada * 1.5;
+                    if (nearestOppDist > 16) {
+                        // Campo aberto: avanço fluido
+                        touchPow = curSpeed * 1.05 + 0.35;
                     } else if (nearestOppDist > 8) {
-                        // Espaço razoável: ~1.1 passo de impulso
-                        touchPow = p.velocity.length() + passada * 1.125;
+                        // Espaço médio
+                        touchPow = curSpeed * 1.03 + 0.20;
                     } else if (nearestOppDist > DribbleModel.triggerDist) {
-                        // Adversário a aproximar-se: ~0.75 passo, toque curto
-                        touchPow = p.velocity.length() + passada * 0.75;
+                        // Adversário próximo: toque curto junto ao pé
+                        touchPow = curSpeed * 1.01 + 0.10;
                     } else {
                         // Adversário muito perto — transição para DRIBBLE 1v1
-                        if (nearestOpp && nearestOppDist > 1.5) {
+                        if (nearestOpp && nearestOppDist > 1.2) {
                             p.dribbleOpponent = nearestOpp;
                             p.dribbleCooldownTimer = 0;
                             if (typeof MatchStats !== 'undefined') MatchStats[p.team].dribles.tentados++;
@@ -450,22 +477,15 @@ class PlayerFSM {
                     }
                     p.touchWaitTimer = 0;
 
-                    // Executar o toque à frente. touchLock curto (0.10) deixava o
-                    // próprio jogador readquirir a bola quase no frame seguinte —
-                    // ela nunca ganhava distância real, só vibrava para a frente e
-                    // para trás ("elástico"). Mesmo valor usado no passe/tackle.
+                    // Executar o toque à frente com touchLock muito curto (0.08s) para que o
+                    // próprio jogador retome a condução de forma fluida sem hesitação.
                     p.hasBall = false;
-                    p.touchLock = BallControl.touchLock;
-                    // Cobre o hiato até o próprio jogador recuperar o toque — evita
-                    // que decisionTimer zere e reactive o "Dominar" a meio da corrida.
-                    p.carryTouchGrace = BallControl.touchLock + 0.15;
+                    p.touchLock = 0.08;
+                    p.carryTouchGrace = 1.2;
                     Match.ballCarrier = null;
+                    Match.intendedReceiver = p;
                     Match.ballVel.copy(forward).multiplyScalar(touchPow);
                     Match.ballVel.y = 0;
-                    // Empurrão extra fixo, à parte da velocidade — a bola cai
-                    // uns 0.5m mais à frente do jogador logo no toque, e não
-                    // só depende do quanto ela desliza depois pela física.
-                    Match.ball.position.add(forward.clone().multiplyScalar(0.5));
                     Match.lastTouchedTeam = p.team;
                     Match.lastTouchedPlayer = p;
                     window.bolaChutada = false;
@@ -540,6 +560,7 @@ class PlayerFSM {
                         p.hasBall = false;
                         p.touchLock = 0.5;
                         Match.ballCarrier = null;
+                        Match.intendedReceiver = p;
                         // Bola para frente fraca, fácil para o defensor
                         Match.ballVel.copy(forward).multiplyScalar(3.0 + Math.random() * 3.0);
                         Match.ballVel.y = 0;
@@ -595,10 +616,11 @@ class PlayerFSM {
                             .normalize();
 
                         p.hasBall = false;
-                        p.touchLock = BallControl.touchLock;
-                        p.carryTouchGrace = BallControl.touchLock + 0.15;
+                        p.touchLock = 0.08;
+                        p.carryTouchGrace = 1.2;
                         Match.ballCarrier = null;
-                        Match.ballVel.copy(dirToque).multiplyScalar(p.velocity.length() + passada * K.forcaToque);
+                        Match.intendedReceiver = p;
+                        Match.ballVel.copy(dirToque).multiplyScalar(p.velocity.length() + passada * K.forcaToque * 0.4);
                         Match.ballVel.y = 0;
                         Match.lastTouchedTeam = p.team;
                         Match.lastTouchedPlayer = p;
@@ -671,7 +693,7 @@ class PlayerFSM {
                 break;
 
             case 'PASS':
-                p.velocity.multiplyScalar(0.85);
+                p.velocity.multiplyScalar(0.95);
                 if (p.passTarget) {
                     let targetPos = p.passTarget.model.position;
                     _v1.set(p.model.position.x * 2 - targetPos.x, p.model.position.y, p.model.position.z * 2 - targetPos.z);
@@ -686,21 +708,14 @@ class PlayerFSM {
                     // normalizado para posar o rig; o efeito real (bola sai do pé)
                     // dispara dentro do próprio ActionState, via onContact.
                     const norm = p.actionState.update(dt, p);
-                    if (norm < p.actionState.contactTime) {
-                        rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, 0.1, 0.25);
-                        rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, 0.2, 0.25);
-                        rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, 0.8, 0.3);
-                        rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, -0.3, 0.3);
-                        rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, Math.PI / 6.0, 0.25);
-                        rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, Math.PI / 4.0, 0.25);
-                    } else {
-                        rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, -Math.PI / 6.0, 0.3);
-                        rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 0, 0.3);
-                    }
 
-                    if (p.actionState.isDone()) {
+                    if (p.actionState.isDone() || !p.hasBall) {
                         p.actionState = null;
                         this.changeState('IDLE');
+                        if (typeof Match !== 'undefined') {
+                            if (Match.passTargetVisual) Match.passTargetVisual.visible = false;
+                            if (Match.passLineVisual) Match.passLineVisual.visible = false;
+                        }
                     }
                 }
                 break;
@@ -811,6 +826,7 @@ class PlayerFSM {
                             Match.ballVel.copy(_v1).multiplyScalar(vEmp);
                             Match.ballVel.y = S.alturaBola;
                             Match.intendedReceiver = null;
+                            Match.passTargetPos = null;
                             Match.lastTouchedTeam = p.team;
                             Match.lastTouchedPlayer = p;
                             window.bolaChutada = false;
@@ -830,7 +846,7 @@ class PlayerFSM {
                 break;
 
             case 'SHOOT':
-                p.velocity.multiplyScalar(0.85);
+                p.velocity.multiplyScalar(0.95);
                 {
                     _v1.set(0, 0, p.targetGoalZ);
                     _v2.set(p.model.position.x * 2 - _v1.x, p.model.position.y, p.model.position.z * 2 - _v1.z);

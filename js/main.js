@@ -32,6 +32,9 @@ function togglePainel(forcarMinimizado, evt) {
 
     const btn = document.getElementById('btn-painel');
     if (btn) btn.innerHTML = minimizar ? '&plus;' : '&minus;';
+    if (typeof TouchControls !== 'undefined' && TouchControls.updateButtonsState) {
+        TouchControls.updateButtonsState();
+    }
 }
 
 function toggleSkillsTeam(letra, forcarMinimizado, evt) {
@@ -125,8 +128,9 @@ function toggleTeamBTPos() {
 
     document.getElementById('btn-teambtpos').innerText = 'Team BT POS: ' + uiLabel;
     document.getElementById('btn-teambtpos').classList.toggle('active', window.teamBTPosState !== 'OFF');
-    if (typeof Match !== 'undefined' && Match.passTargetVisual) {
-        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+    if (typeof Match !== 'undefined') {
+        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
     }
 }
 
@@ -144,8 +148,9 @@ function togglePositionBT() {
 
     document.getElementById('btn-positionbt').innerText = 'Position BT: ' + uiLabel;
     document.getElementById('btn-positionbt').classList.toggle('active', window.positionBTToggleState !== 'OFF');
-    if (typeof Match !== 'undefined' && Match.passTargetVisual) {
-        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+    if (typeof Match !== 'undefined') {
+        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
     }
 }
 
@@ -163,8 +168,9 @@ function togglePlayingStyleBT() {
 
     document.getElementById('btn-playingstylebt').innerText = 'PlayingStyleBT: ' + uiLabel;
     document.getElementById('btn-playingstylebt').classList.toggle('active', window.playingStyleBTToggleState !== 'OFF');
-    if (typeof Match !== 'undefined' && Match.passTargetVisual) {
-        Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+    if (typeof Match !== 'undefined') {
+        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
     }
 }
 
@@ -186,6 +192,37 @@ function toggleUsarPasseGrid() {
     window.usarPasseGrid = !window.usarPasseGrid;
     document.getElementById('btn-passgrid').innerText = 'PassGrid (decisão): ' + (window.usarPasseGrid ? 'ON' : 'OFF');
     document.getElementById('btn-passgrid').classList.toggle('active', window.usarPasseGrid);
+}
+
+window.allPlayingStylesEnabled = true;
+function toggleAllPlayingStyles() {
+    window.allPlayingStylesEnabled = !window.allPlayingStylesEnabled;
+    const btn = document.getElementById('btn-all-playing-styles');
+    if (btn) {
+        btn.innerText = 'All Playing Styles: ' + (window.allPlayingStylesEnabled ? 'ON' : 'OFF');
+        btn.classList.toggle('active', window.allPlayingStylesEnabled);
+    }
+    
+    if (typeof Match !== 'undefined' && Match.players && Match.opponents) {
+        const all = Match.players.concat(Match.opponents);
+        all.forEach(p => {
+            p.playingStyleDesligado = !window.allPlayingStylesEnabled;
+        });
+        popularPainelJogadores();
+        
+        // Se o modal estiver aberto, atualiza visualmente o estilo dentro dele
+        const modal = document.getElementById('modal-skills');
+        if (modal && !modal.classList.contains('oculto')) {
+            const linhaEstilo = modal.querySelector('.skill-linha-estilo b');
+            if (linhaEstilo) {
+                const text = linhaEstilo.textContent;
+                if (text.includes('ON') || text.includes('OFF')) {
+                    linhaEstilo.textContent = text.replace(/\(O(N|FF)\)/, window.allPlayingStylesEnabled ? '(ON)' : '(OFF)');
+                    linhaEstilo.style.color = window.allPlayingStylesEnabled ? '#16a34a' : '#94a3b8';
+                }
+            }
+        }
+    }
 }
 
 function togglePainelJogadores(forcarMinimizado, evt) {
@@ -391,6 +428,16 @@ function updateHudJogadores() {
     preencherHudJogador('hud-jogador-dir', marcador);
 }
 
+window.cameraFrustum = new THREE.Frustum();
+window.cameraProjMatrix = new THREE.Matrix4();
+
+function updateCameraFrustum() {
+    if (!window.cameraCore) return;
+    window.cameraCore.updateMatrixWorld();
+    window.cameraProjMatrix.multiplyMatrices(window.cameraCore.projectionMatrix, window.cameraCore.matrixWorldInverse);
+    window.cameraFrustum.setFromProjectionMatrix(window.cameraProjMatrix);
+}
+
 function animate(time) {
     requestAnimationFrame(animate);
 
@@ -412,6 +459,13 @@ function animate(time) {
         fpsLastTime = time;
     }
 
+    if (window.cameraMode === 'orbit') {
+        if (orbitControls) orbitControls.update();
+    } else {
+        Match.updateCamera();
+    }
+    updateCameraFrustum();
+
     if (!window.isPaused) {
         // GAME_SPEED é o ritmo base da partida (config.js); o speedMultiplier
         // continua a ser só o controlo 0.5x/1.0x/1.3x do painel.
@@ -420,10 +474,24 @@ function animate(time) {
 
     if (TeamAI && TeamAI.blackboards) {
         const bbA = TeamAI.blackboards['TeamA'];
-        if (bbA && bbA.posture) document.getElementById('hud-state-a').innerText = bbA.posture;
-
+        const mapPosture = (posture) => {
+            switch (posture) {
+                case 'BUILD_UP':
+                case 'ATTACK_SUSTAINED':
+                case 'FINAL_THIRD': return 'Offensive';
+                case 'COUNTER': return 'To Offensive';
+                case 'HIGH_PRESS': return 'To Defensive';
+                case 'MID_BLOCK':
+                case 'LOW_BLOCK':
+                case 'FLANK_SHIFT': return 'Defensive';
+                case 'SET_PIECE': return 'Set Piece';
+                default: return posture;
+            }
+        };
+        if (bbA && bbA.posture) document.getElementById('hud-state-a').innerText = mapPosture(bbA.posture);
         const bbB = TeamAI.blackboards['TeamB'];
-        if (bbB && bbB.posture) document.getElementById('hud-state-b').innerText = bbB.posture;
+        if (bbB && bbB.posture) document.getElementById('hud-state-b').innerText = mapPosture(bbB.posture);
+
 
         // Alimenta a aba do fluxograma do TeamBT (teamBtView.html), se aberta.
         // BroadcastChannel: nada acontece se ninguém estiver a ouvir do outro lado.
@@ -439,12 +507,6 @@ function animate(time) {
         updateHudJogadores();
     }
 
-    if (window.cameraMode === 'orbit') {
-        if (orbitControls) orbitControls.update();
-    } else {
-        Match.updateCamera();
-    }
-
     rendererCore.render(scene, cameraCore);
 }
 
@@ -456,7 +518,8 @@ document.addEventListener("DOMContentLoaded", () => {
         cameraCore = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
         window.cameraCore = cameraCore;
 
-        rendererCore = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 850);
+        rendererCore = new THREE.WebGLRenderer({ antialias: !isTouchDevice, powerPreference: "high-performance" });
         rendererCore.setSize(window.innerWidth, window.innerHeight);
         rendererCore.shadowMap.enabled = true;
         rendererCore.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -464,12 +527,13 @@ document.addEventListener("DOMContentLoaded", () => {
         window.rendererCore = rendererCore;
 
         orbitControls = new SimpleOrbitControls(cameraCore, rendererCore.domElement);
+        window.orbitControls = orbitControls;
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(50, 100, 40);
         dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
         
         const d = 80;
         dirLight.shadow.camera.left = -d;

@@ -224,20 +224,35 @@ class FootballPlayer {
         this.model.position.y = ALTURA_BASE_Y;
     }
 
-    findPassTargetRelaxed() {
+    findPassTargetRelaxed(filterOrDir) {
         let teammates = (this.team === 'TeamA') ? Match.players : Match.opponents;
         let ownZ = this.model.position.z;
+        let ownX = this.model.position.x;
         let dirZ = this.dirZ;
 
         // Mira o alvo do PositionBT, não a posição actual — ver alvoDePasse().
-        let options = teammates.filter(p =>
-            p.id !== this.id &&
-            (alvoDePasse(p).z * dirZ > ownZ * dirZ - 15.0)
-        );
+        let options = teammates.filter(p => {
+            if (p.id === this.id) return false;
+            let optPos = alvoDePasse(p);
+            let relZ = (optPos.z - ownZ) * dirZ;
+            let relX = Math.abs(optPos.x - ownX);
+
+            if (filterOrDir === 'frente' || filterOrDir === 'forward') {
+                if (relZ <= 1.0) return false;
+            } else if (filterOrDir === 'lado' || filterOrDir === 'side') {
+                if (Math.abs(relZ) > 4.5 || relX < 3.5) return false;
+            } else if (filterOrDir === 'tras' || filterOrDir === 'back') {
+                if (relZ >= -1.0) return false;
+            } else if (filterOrDir === 'def' || filterOrDir === 'mid' || filterOrDir === 'atk') {
+                if (p.role !== filterOrDir) return false;
+            }
+
+            return (optPos.z * dirZ > ownZ * dirZ - 15.0);
+        });
 
         if (options.length === 0) return null;
 
-        let safetyLimit = 1.2;
+        let safetyLimit = 1.0;
         let opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
         let ratedCandidates = [];
 
@@ -323,6 +338,68 @@ class FootballPlayer {
     }
 
     /*
+    Procura opção de passe no cone frontal (padrão: 120° de amplitude total = ±60° = Math.PI / 3).
+    Garante que o jogador só gira com a bola mais de 120° se NÃO tiver opção viável à sua frente.
+    */
+    findPassTargetInCone(maxAngleRad = Math.PI / 3) {
+        let teammates = (this.team === 'TeamA') ? Match.players : Match.opponents;
+        let opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        let skillVal = this.skillFor('PASS');
+        let safetyLimit = 1.7 + (1.0 - (skillVal / 100)) * 1.5;
+        let isOrchestrator = (this.playingStyle === 'orchestrator' && this.styleAtivo);
+        let fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.model.quaternion).normalize();
+
+        let ratedCandidates = [];
+
+        for (let opt of teammates) {
+            if (opt.id === this.id) continue;
+            let optPos = alvoDePasse(opt);
+            let dist = this.model.position.distanceTo(optPos);
+            let maxDist = Math.max(10, skillVal * 0.6);
+            if (dist > maxDist || dist < 2.0) continue;
+
+            let toTarget = new THREE.Vector3().subVectors(optPos, this.model.position);
+            toTarget.y = 0;
+            if (toTarget.lengthSq() < 0.01) continue;
+            toTarget.normalize();
+
+            let angle = fwd.angleTo(toTarget);
+            if (angle > maxAngleRad) continue; // Fora do cone frontal de 120° (±60°)
+
+            _line1.set(this.model.position, optPos);
+            let minOppDist = 999, oppMaisPerto = null;
+            for (let i = 0; i < opponents.length; i++) {
+                let opp = opponents[i];
+                if (opp.role === 'gk') continue;
+                _line1.closestPointToPoint(opp.model.position, true, _v1);
+                let d = _v1.distanceTo(opp.model.position);
+                if (d < minOppDist) {
+                    minOppDist = d;
+                    oppMaisPerto = opp;
+                }
+            }
+
+            let safetyEff = safetyLimit;
+            if (oppMaisPerto) {
+                const fatorIntercept = THREE.MathUtils.clamp(
+                    1 + (oppMaisPerto.skillFor('INTERCEPT') - skillVal) / 150, 0.6, 1.6);
+                safetyEff = safetyLimit * fatorIntercept;
+            }
+            if (isOrchestrator) safetyEff *= 0.3;
+            if (minOppDist < safetyEff) continue;
+
+            let score = 100 - (angle / maxAngleRad) * 30 + Math.min(30, minOppDist * 4);
+            ratedCandidates.push({ player: opt, score: score });
+        }
+
+        if (ratedCandidates.length > 0) {
+            ratedCandidates.sort((a, b) => b.score - a.score);
+            return ratedCandidates[0].player;
+        }
+        return null;
+    }
+
+    /*
     Domínio no peito. Chamado por resolveBallContact quando a bola chega
     entre `peitoYMin` e `peitoYMax` — não se domina uma bola à altura do
     peito com o pé.
@@ -356,6 +433,7 @@ class FootballPlayer {
         Match.ballCarrier = null;
         this.hasBall = false;
         Match.intendedReceiver = null;
+        Match.passTargetPos = null;
         Match.lastTouchedTeam = this.team;
         Match.lastTouchedPlayer = this;
         Match.possessionTeam = this.team;
@@ -416,18 +494,31 @@ class FootballPlayer {
         PlayerAI.tick(this, dt);
     }
 
-    findPassTarget() {
+    findPassTarget(filterOrDir) {
         let teammates = (this.team === 'TeamA') ? Match.players : Match.opponents;
         let ownZ = this.model.position.z;
         let ownX = this.model.position.x;
         let dirZ = this.dirZ;
 
         // Mira o alvo do PositionBT, não a posição actual — ver alvoDePasse().
-        let options = teammates.filter(p =>
-            p.role !== 'gk' &&
-            p.id !== this.id &&
-            (alvoDePasse(p).z * dirZ > ownZ * dirZ - 15.0)
-        );
+        let options = teammates.filter(p => {
+            if (p.id === this.id) return false;
+            let optPos = alvoDePasse(p);
+            let relZ = (optPos.z - ownZ) * dirZ;
+            let relX = Math.abs(optPos.x - ownX);
+
+            if (filterOrDir === 'frente' || filterOrDir === 'forward') {
+                if (relZ <= 1.0) return false;
+            } else if (filterOrDir === 'lado' || filterOrDir === 'side') {
+                if (Math.abs(relZ) > 4.5 || relX < 3.5) return false;
+            } else if (filterOrDir === 'tras' || filterOrDir === 'back') {
+                if (relZ >= -1.0) return false;
+            } else if (filterOrDir === 'def' || filterOrDir === 'mid' || filterOrDir === 'atk') {
+                if (p.role !== filterOrDir) return false;
+            }
+
+            return (optPos.z * dirZ > ownZ * dirZ - 35.0);
+        });
 
         if (options.length === 0) return null;
 
@@ -449,7 +540,7 @@ class FootballPlayer {
         };
 
         let skillVal = this.skillFor('PASS');
-        let safetyLimit = 1.7 + (1.0 - (skillVal / 100)) * 1.5;
+        let safetyLimit = 1.0 + (1.0 - (skillVal / 100)) * 0.6;
 
         let opponents = (this.team === 'TeamA') ? Match.opponents : Match.players;
         let ratedCandidates = [];
@@ -643,39 +734,6 @@ class FootballPlayer {
             */
             const alvo = alvoDePasse(this.passTarget);
             _v1.set(alvo.x, 0, alvo.z);
-
-            if (this.passTarget && this.passTarget.velocity) {
-                const distEstimate = _v1.distanceTo(Match.ball.position);
-                const travelTime = THREE.MathUtils.clamp(distEstimate / 11.0, 0.15, 4.5);
-                _v1.x += this.passTarget.velocity.x * travelTime * 0.75;
-                _v1.z += this.passTarget.velocity.z * travelTime * 0.75;
-
-                /*
-                Teto sobre o deslocamento TOTAL face à posição REAL dele
-                agora (auditoria dos passes — pedido explícito, "tá
-                estranho"). `alvo` já é, por si só, um lead (mistura com o
-                tacticalTarget, até 10m — ver alvoDePasse) — somar o lead por
-                velocidade em cima disso, sem teto conjunto, dava dois leads
-                a empilhar no mesmo sentido (ele a correr NA direcção do
-                tacticalTarget, o caso comum) e a bola saía a passar bem à
-                frente dele, sobrando por cima do problema original (chegava
-                atrás). 18m ~ o que um jogador em sprint cobre num passe
-                longo (4.5s, tecto do travelTime acima), tecto generoso mas
-                não infinito. Subiu de 14 pq o clamp do travelTime também
-                subiu (3.0 -> 4.5s) — sem subir os dois juntos o tecto
-                cortava o lead justamente nos passes longos que mais
-                precisam dele no campo maior.
-                */
-                const real = this.passTarget.model.position;
-                const leadX = _v1.x - real.x, leadZ = _v1.z - real.z;
-                const leadDist = Math.hypot(leadX, leadZ);
-                const maxLeadTotal = 18.0;
-                if (leadDist > maxLeadTotal) {
-                    const k = maxLeadTotal / leadDist;
-                    _v1.x = real.x + leadX * k;
-                    _v1.z = real.z + leadZ * k;
-                }
-            }
         }
 
         let meiaLarg = CAMPO_LARG / 2;
@@ -685,9 +743,18 @@ class FootballPlayer {
         
         this.passTargetPos = _v1.clone();
         
-        if (typeof Match !== 'undefined' && Match.passTargetVisual) {
-            Match.passTargetVisual.position.set(_v1.x, 0.05, _v1.z);
-            Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF');
+        if (typeof Match !== 'undefined') {
+            if (Match.passTargetVisual) {
+                Match.passTargetVisual.position.set(_v1.x, 0.05, _v1.z);
+                Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+            }
+            if (Match.passLineVisual) {
+                const posAttr = Match.passLineVisual.geometry.attributes.position;
+                posAttr.setXYZ(0, this.model.position.x, 0.05, this.model.position.z);
+                posAttr.setXYZ(1, _v1.x, 0.05, _v1.z);
+                posAttr.needsUpdate = true;
+                Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+            }
         }
 
         // Não executa o passe aqui — só prepara. O efeito real (bola sai do
@@ -729,6 +796,7 @@ class FootballPlayer {
         // Ninguém é destinatário nomeado de um chutão — a bola vai para o
         // espaço, quem lá chegar disputa (ver resolveBallContact).
         Match.intendedReceiver = null;
+        Match.passTargetPos = null;
         // Sem isto o próprio GK falhava o filtro anti-falso-positivo de
         // isCross (lastTouchedPlayer !== this) e saltava logo a seguir ao
         // seu próprio relançamento, achando que era um cruzamento a chegar.
@@ -925,16 +993,24 @@ class FootballPlayer {
                 Match.ball.position.lerp(this.model.position.clone().add(maoOffset).setY(maoY), 0.5);
                 Match.ballVel.set(0, 0, 0);
             } else {
-                // -0.4m pedido: bola de domínio mais colada ao jogador (era 0.8,
-                // que por sua vez tinha sido +0.4 de um valor anterior — volta
-                // a aproximar-se do original).
-                let footOffset = new THREE.Vector3(0, 0, 0.4).applyQuaternion(this.model.quaternion);
+                // -0.6m: Aumentado um pouco para a bola não ficar tão "escondida" debaixo do jogador
+                // durante a corrida e para dar mais espaço natural ao passe/remate.
+                let footOffset = new THREE.Vector3(0, 0, 0.6).applyQuaternion(this.model.quaternion);
                 Match.ball.position.lerp(this.model.position.clone().add(footOffset), 0.5);
                 Match.ball.position.y = BallPhysics.raio; Match.ballVel.set(0, 0, 0);
             }
         }
+        // Viewport Frustum Culling
+        if (!this._boundingSphere) {
+            this._boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2.8);
+        }
+        this._boundingSphere.center.set(this.model.position.x, this.model.position.y + 1.0, this.model.position.z);
+        const inViewport = window.cameraFrustum ? window.cameraFrustum.intersectsSphere(this._boundingSphere) : true;
+        this.inViewport = inViewport;
+        this.model.visible = inViewport;
+
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
-        } else {
+        } else if (inViewport) {
             this.animateBones(dt);
             // Camada do corte diagonal POR CIMA do ciclo de corrida — tem de
             // vir depois do animateBones, senão ele reescreve a pelvis e as
@@ -947,7 +1023,7 @@ class FootballPlayer {
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT, PlayerPOS e PlayerPlayingStyle)
-        if (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints) {
+        if (inViewport && (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints)) {
             this.labelSprite.visible = true;
             let parts = [];
             if (window.showPlayerNumber) parts.push(this.num);
@@ -999,7 +1075,7 @@ class FootballPlayer {
         const showForStyle = (window.playingStyleBTToggleState === this.team || window.playingStyleBTToggleState === 'Both');
         const teamTarget = this.slotTarget || this.tacticalTarget || this.dynamicTarget;
         const posTarget = this.tacticalTarget || this.dynamicTarget;
-        const styleTarget = this.dynamicTarget;
+        const styleTarget = this.styleTarget || this.dynamicTarget;
 
         if (this.btTargetGroup) {
             if (showForTeam && teamTarget) {
@@ -1059,26 +1135,22 @@ class FootballPlayer {
         }
     }
 
-    steerArrive(target, maxSpeed) {
+    steerArrive(target, maxSpeed, brakingDist = 2.0) {
         let desired = new THREE.Vector3().subVectors(target, this.model.position);
         desired.y = 0; let d = desired.length();
         if (d < 0.2) return desired.set(0, 0, 0);
 
         desired.normalize();
-        if (d < 2.0) desired.multiplyScalar(maxSpeed * (d / 2.0));
+        if (brakingDist > 0 && d < brakingDist) desired.multiplyScalar(maxSpeed * (d / brakingDist));
         else desired.multiplyScalar(maxSpeed);
 
-        // Corpo vira sempre para a direcção real do movimento (`target`), nunca
-        // para a bola — girar o corpo todo para a bola enquanto o deslocamento
-        // ia para outro lado deixava o jogador a correr de lado/pra trás com a
-        // animação de corrida em frente virada para onde os pés não iam. Olhar
-        // para a bola durante o recuo já fica a cargo só do pescoço/cintura
-        // (ver a camada de "cabeça acompanha a bola" em animateBones).
+        // Corpo vira para a direcção do movimento
         _v1.set(this.model.position.x * 2 - target.x, this.model.position.y, this.model.position.z * 2 - target.z);
         _m1.lookAt(this.model.position, _v1, this.model.up);
         _q1.setFromRotationMatrix(_m1);
         this.model.quaternion.slerp(_q1, Math.min(1.0, 7.0 * Match.delta));
-        this.velocity.lerp(desired, Math.min(1.0, 4.5 * Match.delta));
+        // A aceleração foi reduzida para ~2.5 (de 4.5) para diminuir a explosão nas corridas
+        this.velocity.lerp(desired, Math.min(1.0, 2.5 * Match.delta));
         return this.velocity;
     }
 
@@ -1111,9 +1183,9 @@ class FootballPlayer {
         const lado = this.cutLado;
         const rig = this.rig;
 
-        rig.pelvis.rotation.z += C.leanZ * lado;
-        rig.pelvis.rotation.y += C.quadrilY * lado;
-        rig.chest.rotation.y += C.troncoY * lado;
+        rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, C.leanZ * lado, 0.5);
+        rig.pelvis.rotation.y = lerpTo(rig.pelvis.rotation.y, C.quadrilY * lado, 0.5);
+        rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, (this.cinturaAlvoY || 0) + C.troncoY * lado, 0.5);
 
         // Perna externa é a do lado CONTRÁRIO ao corte: é ela que planta no
         // chão e empurra o corpo para a nova direcção.
@@ -1124,7 +1196,8 @@ class FootballPlayer {
 
         // Braço contrário abre para equilibrar.
         const bracoOposto = (lado > 0) ? rig.lArm : rig.rArm;
-        bracoOposto.rotation.z += C.bracoZ * lado;
+        const bracoBaseZ = (lado > 0) ? (Math.PI / 16) : (-Math.PI / 16);
+        bracoOposto.rotation.z = lerpTo(bracoOposto.rotation.z, bracoBaseZ + C.bracoZ * lado, 0.5);
     }
 
     /*
@@ -1503,7 +1576,16 @@ class FootballPlayer {
         const u = 1.0; const corpo = new THREE.Group();
         const rig = { pelvis: null, chest: null, neck: null, lArm: null, rArm: null, lElbow: null, rElbow: null, lHand: null, rHand: null, lLeg: null, rLeg: null, lKnee: null, rKnee: null, lFoot: null, rFoot: null, olhoEsq: null, olhoDir: null };
 
-        function criarPeca(geo, mat) { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat)); return m; }
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 850);
+        function criarPeca(geo, mat) { 
+            const m = new THREE.Mesh(geo, mat); 
+            m.castShadow = true; 
+            m.receiveShadow = true; 
+            if (!isTouchDevice) {
+                m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat)); 
+            }
+            return m; 
+        }
 
         const pelvis = criarPeca(new THREE.BoxGeometry(u * 1.3, u * 0.6, u * 0.8), blockMat); pelvis.position.y = 2.6; pelvis.add(criarPeca(new THREE.BoxGeometry(u * 1.35, u * 0.65, u * 0.85), shortMat)); corpo.add(pelvis); rig.pelvis = pelvis;
         const belly = criarPeca(new THREE.BoxGeometry(u * 1.1, u * 0.45, u * 0.7), blockMat); belly.position.y = 0.525; belly.add(criarPeca(new THREE.BoxGeometry(u * 1.15, u * 0.5, u * 0.75), shirtMat)); pelvis.add(belly);
@@ -1566,7 +1648,7 @@ class FootballPlayer {
         const pernaEsq = criarPerna(0.4); rig.lLeg = pernaEsq.raiz; rig.lKnee = pernaEsq.joelho; rig.lFoot = pernaEsq.pe;
         const pernaDir = criarPerna(-0.4); rig.rLeg = pernaDir.raiz; rig.rKnee = pernaDir.joelho; rig.rFoot = pernaDir.pe;
 
-        corpo.scale.set(1.8 / 5.5, 1.8 / 5.5, 1.8 / 5.5); return { corpo, rig };
+        corpo.scale.set((1.8 / 5.5) * 0.9, (1.8 / 5.5) * 0.9, (1.8 / 5.5) * 0.9); return { corpo, rig };
     }
 
     updateShirt(num, pos) {
@@ -2409,6 +2491,7 @@ class FootballPlayer {
         cima de tudo, incluindo o afastamento do commit().
         */
         Match.intendedReceiver = null;
+        Match.passTargetPos = null;
         /*
         Vira já de frente pro campo (mesmo lookAtBola usado no resto do
         jogo — um rotation.y=0/PI calculado à mão dava de costas).
@@ -2474,6 +2557,7 @@ class FootballPlayer {
         this.touchLock = BallControl.touchLock;
         Match.ballCarrier = null;
         Match.intendedReceiver = null;
+        Match.passTargetPos = null;
         Match.lastTouchedTeam = this.team;
         Match.lastTouchedPlayer = this;
         window.bolaChutada = false;

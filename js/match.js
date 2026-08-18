@@ -133,6 +133,14 @@ const Match = {
         this.passTargetVisual.visible = false;
         this.scene.add(this.passTargetVisual);
 
+        this.passLineVisual = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0xffff00 })
+        );
+        this.passLineVisual.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+        this.passLineVisual.visible = false;
+        this.scene.add(this.passLineVisual);
+
         this.showOffsideLines = false;
 
         this.createTeams();
@@ -272,6 +280,9 @@ const Match = {
         window.isPaused = !window.isPaused;
         const btn = document.getElementById('btn-pause');
         if (btn) btn.textContent = window.isPaused ? 'Continue' : 'Pause';
+        if (typeof TouchControls !== 'undefined' && TouchControls.updateButtonsState) {
+            TouchControls.updateButtonsState();
+        }
     },
 
     setSpeed: function (speed) {
@@ -279,6 +290,9 @@ const Match = {
         document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
         const btn = document.getElementById('spd-' + speed);
         if (btn) btn.classList.add('active');
+        if (typeof TouchControls !== 'undefined' && TouchControls.updateButtonsState) {
+            TouchControls.updateButtonsState();
+        }
     },
 
     setCameraMode: function (mode) {
@@ -295,6 +309,9 @@ const Match = {
         if (mode === 'topdown') {
             // Roda a câmara 90 graus: Vermelho (Z = +53) à esquerda, Azul (Z = -53) à direita
             window.cameraCore.up.set(-1, 0, 0);
+        }
+        if (typeof TouchControls !== 'undefined' && TouchControls.updateButtonsState) {
+            TouchControls.updateButtonsState();
         }
     },
 
@@ -422,19 +439,28 @@ const Match = {
         });
 
         const concreteMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.9 });
+        const stepGeos = [];
+
+        function addStepBox(w, h, d, px, py, pz, rotY) {
+            const geo = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+            if (rotY) geo.rotateY(rotY);
+            geo.translate(px, py, pz);
+            stepGeos.push(geo);
+        }
+
         const seatGeo = new THREE.BoxGeometry(0.5, 0.3, 0.4);
         const seatMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.1 });
 
         const maxSeats = 12000;
         const seatMesh = new THREE.InstancedMesh(seatGeo, seatMat, maxSeats);
-        seatMesh.castShadow = true;
-        seatMesh.receiveShadow = true;
+        seatMesh.castShadow = false;
+        seatMesh.receiveShadow = false;
 
         const specGeo = createSpectatorGeometry();
         const specMat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 });
         const specMesh = new THREE.InstancedMesh(specGeo, specMat, maxSeats);
-        specMesh.castShadow = true;
-        specMesh.receiveShadow = true;
+        specMesh.castShadow = false;
+        specMesh.receiveShadow = false;
 
         let seatIndex = 0;
         let spectatorIndex = 0;
@@ -497,12 +523,7 @@ const Match = {
                     const angle = startAngle + (j / numSteps) * (Math.PI / 2);
                     const sx = cx + R * Math.cos(angle);
                     const sz = cz + R * Math.sin(angle);
-                    const stepBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, stepLength), concreteMat);
-                    stepBox.position.set(sx, standY, sz);
-                    stepBox.rotation.y = -angle;
-                    stepBox.receiveShadow = true;
-                    stepBox.castShadow = true;
-                    campoGrupo.add(stepBox);
+                    addStepBox(1.2, 0.5, stepLength, sx, standY, sz, -angle);
                 }
 
                 const seatYOffset = standY + 0.25 + 0.15;
@@ -522,11 +543,7 @@ const Match = {
         for (let r = 0; r < rows; r++) {
             const standX = -(CAMPO_LARG / 2 + 4.5) - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, CAMPO_COMP + 2), concreteMat);
-            stepBox.position.set(standX, standY, 0);
-            stepBox.receiveShadow = true;
-            stepBox.castShadow = true;
-            campoGrupo.add(stepBox);
+            addStepBox(1.2, 0.5, CAMPO_COMP + 2, standX, standY, 0, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             for (let z = -(CAMPO_COMP / 2) + 1; z <= (CAMPO_COMP / 2) - 1; z += 0.85) {
@@ -538,11 +555,7 @@ const Match = {
         for (let r = 0; r < rows; r++) {
             const standX = (CAMPO_LARG / 2 + 4.5) + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, CAMPO_COMP + 2), concreteMat);
-            stepBox.position.set(standX, standY, 0);
-            stepBox.receiveShadow = true;
-            stepBox.castShadow = true;
-            campoGrupo.add(stepBox);
+            addStepBox(1.2, 0.5, CAMPO_COMP + 2, standX, standY, 0, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             for (let z = -(CAMPO_COMP / 2) + 1; z <= (CAMPO_COMP / 2) - 1; z += 0.85) {
@@ -554,11 +567,7 @@ const Match = {
         for (let r = 0; r < rows; r++) {
             const standZ = (CAMPO_COMP / 2 + 5.5) + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(CAMPO_LARG - 4, 0.5, 1.2), concreteMat);
-            stepBox.position.set(0, standY, standZ);
-            stepBox.receiveShadow = true;
-            stepBox.castShadow = true;
-            campoGrupo.add(stepBox);
+            addStepBox(CAMPO_LARG - 4, 0.5, 1.2, 0, standY, standZ, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             for (let x = -(CAMPO_LARG / 2) + 2; x <= (CAMPO_LARG / 2) - 2; x += 0.85) {
@@ -572,11 +581,7 @@ const Match = {
         for (let r = 0; r < rows; r++) {
             const standZ = -(CAMPO_COMP / 2 + 5.5) - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            const stepBox = new THREE.Mesh(new THREE.BoxGeometry(64, 0.5, 1.2), concreteMat);
-            stepBox.position.set(0, standY, standZ);
-            stepBox.receiveShadow = true;
-            stepBox.castShadow = true;
-            campoGrupo.add(stepBox);
+            addStepBox(64, 0.5, 1.2, 0, standY, standZ, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             for (let x = -32; x <= 32; x += 0.85) {
@@ -592,6 +597,16 @@ const Match = {
         buildCorner(cornerX, cornerZ, 0);
         buildCorner(-cornerX, -cornerZ, Math.PI);
         buildCorner(cornerX, -cornerZ, 3 * Math.PI / 2);
+
+        // Geometria fundida das bancadas para mínimo de draw calls
+        if (stepGeos.length > 0) {
+            const mergedStepsGeo = mergeNonIndexedGeometries(stepGeos);
+            mergedStepsGeo.computeVertexNormals();
+            const mergedStepsMesh = new THREE.Mesh(mergedStepsGeo, concreteMat);
+            mergedStepsMesh.receiveShadow = true;
+            mergedStepsMesh.castShadow = false;
+            campoGrupo.add(mergedStepsMesh);
+        }
 
         /*
         Barreira de contenção à frente da bancada (ver BarreiraCampo).
@@ -817,6 +832,7 @@ const Match = {
         this.state = 'PLAY'; this.ballVel.set(0, 0, 0);
 
         this.intendedReceiver = null;
+        this.passTargetPos = null;
         this.chaserA = null;
         this.chaserB = null;
         this.setPieceTaker = null;
@@ -1041,13 +1057,17 @@ const Match = {
             }
         }
 
-        if (!this.intendedReceiver && this.passTargetVisual) {
-            this.passTargetVisual.visible = false;
+        let isPassing = false;
+        if (this.ballCarrier && this.ballCarrier.fsm && (this.ballCarrier.fsm.currentState === 'PASS' || this.ballCarrier.fsm.currentState === 'CROSS')) {
+            isPassing = true;
+        }
+        if (!this.intendedReceiver && !isPassing) {
+            if (this.passTargetVisual) this.passTargetVisual.visible = false;
+            if (this.passLineVisual) this.passLineVisual.visible = false;
         }
 
         this.updateBall();
         if (typeof SpatialGrid !== 'undefined') SpatialGrid.update(dt);
-        if (typeof PassCandidates !== 'undefined') PassCandidates.update(dt);
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);
         this.runTeamAI();
 
@@ -1125,6 +1145,11 @@ const Match = {
 
     updateCrowd: function (dt) {
         if (!this.specMesh || this.specData.length === 0) return;
+        
+        // Desativa a animação pesada da torcida em dispositivos móveis/tablets para poupar bateria e manter 60 FPS
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 850);
+        if (isTouchDevice) return;
+
         this.crowdTimer += dt;
 
         let targetExcitement = 0.0;
@@ -1146,11 +1171,23 @@ const Match = {
         const exc = this.crowdExcitement;
         const count = this.specData.length;
 
-        const updateRate = exc > 0.5 ? 1 : (exc > 0.2 ? 3 : 8);
+        // Na versão desktop também afrouxamos bastante a frequência de atualização para poupar o CPU
+        const updateRate = exc > 0.5 ? 4 : (exc > 0.2 ? 10 : 30);
         const startIdx = Math.floor(t * 60) % updateRate;
+
+        let updatedAny = false;
+        const frustum = window.cameraFrustum;
+        if (!this._specPos) this._specPos = new THREE.Vector3();
 
         for (let i = startIdx; i < count; i += updateRate) {
             const d = this.specData[i];
+
+            // Viewport Frustum Culling: só calcula animação para espectadores dentro do viewport
+            if (frustum) {
+                this._specPos.set(d.bx, d.by, d.bz);
+                if (!frustum.containsPoint(this._specPos)) continue;
+            }
+
             const phase = d.phase;
 
             let standUp = 0;
@@ -1174,8 +1211,12 @@ const Match = {
             sd.rotation.set(0, d.rotY + armWave, 0);
             sd.updateMatrix();
             this.specMesh.setMatrixAt(i, sd.matrix);
+            updatedAny = true;
         }
-        this.specMesh.instanceMatrix.needsUpdate = true;
+        
+        if (updatedAny) {
+            this.specMesh.instanceMatrix.needsUpdate = true;
+        }
     },
 
     /*
@@ -1310,7 +1351,10 @@ const Match = {
                 if (dist > PerceptionModel.passePerdidoDist) {
                     // Afasta-se dele? (a bola vai no sentido oposto ao alvo)
                     const afasta = (this.ballVel.x * dx + this.ballVel.z * dz) > 0;
-                    if (afasta) this.intendedReceiver = null;
+                    if (afasta) {
+                        this.intendedReceiver = null;
+                        this.passTargetPos = null;
+                    }
                 }
             }
 
@@ -1435,6 +1479,7 @@ const Match = {
         this.ballCarrier = best;
         best.hasBall = true;
         this.intendedReceiver = null;
+        this.passTargetPos = null;
         this.lastTouchedTeam = best.team;
         this.lastTouchedPlayer = best;
 
@@ -1465,6 +1510,7 @@ const Match = {
         this.ballVel.y = Math.max(this.ballVel.y, 1.2);
 
         this.intendedReceiver = null;
+        this.passTargetPos = null;
         this.lastTouchedTeam = p.team;
         this.lastTouchedPlayer = p;
         window.bolaChutada = false;
@@ -1833,6 +1879,7 @@ const Match = {
         // lá. Os outros tipos (canto, lateral) continuam a travar já.
         if (type !== 'GOAL_KICK') this.ballVel.set(0, 0, 0);
         this.intendedReceiver = null;
+        this.passTargetPos = null;
 
         if (typeof MatchStats !== 'undefined' && MatchStats[team]) {
             if (type === 'CORNER_KICK') MatchStats[team].cantos++;

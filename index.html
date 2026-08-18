@@ -31,22 +31,24 @@
                 <option value="4231">4-2-3-1</option>
             </select>
 
-            <label>Mentalidade</label>
+            <label>Mentalidade (Bloco Y-Offset)</label>
             <select id="t-estilo" onchange="Tatics.update()">
-                <option value="balanceado">Equilibrada</option>
-                <option value="ataque">Ofensiva</option>
-                <option value="defesa">Defensiva</option>
+                <option value="muito_defensiva">Muito Defensiva (-10m)</option>
+                <option value="defesa">Defensiva (-5m)</option>
+                <option value="balanceado" selected>Equilibrada (0m)</option>
+                <option value="ataque">Ofensiva (+7m)</option>
+                <option value="muito_ofensiva">Muito Ofensiva (+12m)</option>
             </select>
 
-            <label>Estilo Coletivo (TeamPlayStyle)</label>
+            <label>Estilo Ofensivo (Com Bola)</label>
             <select id="t-team-style" onchange="Tatics.update()">
                 <option value="positional" selected>Positional</option>
                 <option value="possession">Possession</option>
                 <option value="direct">Direct</option>
                 <option value="counter_attack">Counter Attack</option>
                 <option value="wing_play">Wing Play</option>
-                <option value="high_press">High Press</option>
             </select>
+
 
 
             <label>Linha Defensiva (Off-Side)</label>
@@ -198,6 +200,8 @@
                     OFF</button>
                 <button type="button" class="btn-sector" id="btn-playerplayingstyle" onclick="togglePlayerPlayingStyle()">Player Playing Style:
                     OFF</button>
+                <button type="button" class="btn-sector active" id="btn-all-playing-styles" onclick="toggleAllPlayingStyles()">All Playing Styles:
+                    ON</button>
                 <button type="button" class="btn-sector" id="btn-teambtpos" onclick="toggleTeamBTPos()">Team BT POS:
                     OFF</button>
                 <button type="button" class="btn-sector" id="btn-positionbt" onclick="togglePositionBT()">Position BT:
@@ -210,6 +214,8 @@
                     onclick="togglePassCandidates()">PlayerPassTarget: OFF</button>
                 <button type="button" class="btn-sector" id="btn-passgrid"
                     onclick="toggleUsarPasseGrid()">PassGrid (decisão): OFF</button>
+                <button type="button" class="btn-sector active" id="btn-touch-toggle"
+                    onclick="TouchControls.toggle(); this.classList.toggle('active', TouchControls.enabled); this.innerText = 'Touch Controls: ' + (TouchControls.enabled ? 'ON' : 'OFF');">Touch Controls: ON</button>
                 <button type="button" class="btn-sector" id="btn-teambtview"
                     onclick="window.open('teamBtView.html', 'teamBtView', 'width=900,height=700')">TeamBT
                     Fluxograma (nova aba)</button>
@@ -333,6 +339,7 @@
     <script src="js/bt/btDebug.js"></script>
 
     <script src="js/main.js"></script>
+    <script src="js/touch_controls.js"></script>
 
 </body>
 

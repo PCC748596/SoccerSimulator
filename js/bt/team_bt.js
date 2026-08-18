@@ -59,9 +59,11 @@ const TeamPostureTuning = {
 // a atacar (ver computeBlock). Antes o botão do painel praticamente não
 // tinha efeito no bloco fora da Pressão Alta.
 const EstiloBlockOffset = {
-    defesa: 0.0,
-    balanceado: 2.0,
-    ataque: 6.0
+    muito_defensiva: -10.0,
+    defesa: -5.0,
+    balanceado: 0.0,
+    ataque: 7.0,
+    muito_ofensiva: 12.0
 };
 
 /* --- Blackboard --------------------------------------------------------- */
@@ -100,7 +102,8 @@ class TeamBlackboard {
         recriado a cada tick (ver TeamAI.get). `momentumX` suaviza-se aqui;
         `congestion`/`aggression` são recalculados do zero a cada gather().
         */
-        this.momentumX = 0;                          // -1 (esq) .. +1 (dir), suavizado
+        this.momentumX = 0;
+        this.momentumZ = 0;                          // -1 (esq) .. +1 (dir), suavizado
         this.congestion = { esq: 0, centro: 0, dir: 0 };
         this.aggression = 0.5;                        // 0..1, ver computeAggression
 
@@ -166,9 +169,19 @@ TeamPlayStyles) para o catálogo de pesos que estas funções consultam.
 // de bola mudava o "lado" instantaneamente; suavizado, um passe isolado
 // pro lado oposto não vira Momentum sozinho, precisa insistir.
 function updateMomentum(bb, dt) {
-    const alvo = THREE.MathUtils.clamp(bb.ballX / (CAMPO_LARG / 2), -1, 1);
-    const k = 1 - Math.exp(-0.5 * dt);
-    bb.momentumX += (alvo - bb.momentumX) * k;
+    const alvoX = THREE.MathUtils.clamp(bb.ballX / (CAMPO_LARG / 2), -1, 1);
+    const kX = 1 - Math.exp(-0.8 * dt);
+    bb.momentumX += (alvoX - bb.momentumX) * kX;
+    const alvoZ = bb.ballZ;
+    let kZ;
+    if (bb.isAttacking) {
+        if (alvoZ * bb.dir < bb.momentumZ * bb.dir) kZ = 1 - Math.exp(-0.25 * dt);
+        else kZ = 1 - Math.exp(-1.5 * dt);
+    } else {
+        kZ = 1 - Math.exp(-1.0 * dt);
+    }
+    if (Math.abs(alvoZ - bb.momentumZ) > 30 && dt < 1) bb.momentumZ = alvoZ;
+    else bb.momentumZ += (alvoZ - bb.momentumZ) * kZ;
 }
 
 // Congestão por banda lateral (esq/centro/dir, mesmo corte de
@@ -493,16 +506,21 @@ function computeCollectiveShape(bb) {
 
     let pushMultiplier = (bb.isCounter ? 1.35 : 1.0) * phaseMultiplier;
     let styleDefenseZShift = 0;
-
-    if (Tatics.estilo === 'ataque') {
+    if (Tatics.estilo === 'muito_ofensiva') {
+        pushMultiplier *= 1.30;
+        styleDefenseZShift = 12.0 * bb.dir;
+    } else if (Tatics.estilo === 'ataque') {
         pushMultiplier *= 1.15;
         styleDefenseZShift = 6.0 * bb.dir;
     } else if (Tatics.estilo === 'defesa') {
         pushMultiplier *= 0.85;
         styleDefenseZShift = -8.0 * bb.dir;
+    } else if (Tatics.estilo === 'muito_defensiva') {
+        pushMultiplier *= 0.70;
+        styleDefenseZShift = -16.0 * bb.dir;
     }
-
     bb.pushMultiplier = pushMultiplier;
+
     bb.styleDefenseZShift = styleDefenseZShift;
     bb.styleLineShift = styleDefenseZShift * bb.dir;   // o mesmo, em referencial de ataque
 
@@ -543,7 +561,7 @@ function computeDefensiveLine(bb) {
     const pressCap = TeamShape.pressaoLineCap[Tatics.pressaoDefensiva] ?? TeamShape.pressaoLineCap.balanced;
     tecto = Math.min(tecto, pressCap);
 
-    const ballDir = bb.ballZ * bb.dir;
+    const ballDir = bb.momentumZ * bb.dir;
     const follow = ballDir - 8 + bb.styleLineShift;
     let lineDir = THREE.MathUtils.clamp(follow, TeamShape.lineFloor, tecto);
 
@@ -610,7 +628,7 @@ function computeBlock(bb) {
 
     // O centro do bloco no eixo Z acompanha a bola — excepto com um GR
     // segurando a bola, aí vai pro meio do campo (ver acima).
-    let blockCenterZ = gkComABola ? 0 : bb.ballZ * bb.dir;
+    let blockCenterZ = gkComABola ? 0 : bb.momentumZ * bb.dir;
 
     // A pedido do utilizador: Puxar o bloco à frente ou atrás consoante a postura
     if (gkComABola) {
@@ -683,7 +701,7 @@ function computeBlock(bb) {
 
     // Basculação: o rectângulo desliza para o lado da bola proporcionalmente.
     // Se a bola estiver na linha lateral, o rectângulo vai encostar a essa linha.
-    const ballPercentX = bb.ballX / (CAMPO_LARG / 2); // de -1 a 1
+    const ballPercentX = bb.momentumX; // de -1 a 1
     const borda = (CAMPO_LARG / 2) * B.margemLateral;
     const maxCentroX = borda - meiaLarg;
 
@@ -783,7 +801,7 @@ function holdOffsideLine(bb) {
         if (p.role !== 'def') continue;
         if (p === bb.chaser || p.hasBall) continue;
 
-        if (p.dynamicTarget.z * bb.dir > bb.defLineDir) {
+        if (p.dynamicTarget.z * bb.dir < bb.defLineDir) {
             p.dynamicTarget.z = bb.defLineDir * bb.dir;
         }
     }
@@ -889,7 +907,7 @@ const TeamBT = sel('TeamRoot',
                 // um dos dois (ex: Ataque + Balanced) não basta pra pressionar
                 // no campo do adversário o jogo inteiro.
                 cond('pressionamosAlto', (bb) =>
-                    Tatics.estilo === 'ataque' && Tatics.pressaoDefensiva === 'high' && bb.ballZ * bb.dir > 0),
+                    (Tatics.estilo === 'ataque' || Tatics.estilo === 'muito_ofensiva') && Tatics.pressaoDefensiva === 'high' && bb.ballZ * bb.dir > 0),
                 setPosture(TeamPosture.HIGH_PRESS)
             ),
             setPosture(TeamPosture.MID_BLOCK)

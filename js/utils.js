@@ -527,24 +527,43 @@ redes nunca tem tacticalTarget (não passa pelo PositionBT), por isso cai
 na posição actual.
 */
 function alvoDePasse(p) {
-    const alvo = p.tacticalTarget;
-    if (!alvo) return p.model.position;
-
-    /*
-    Sem tecto, um alvo do PositionBT muito à frente da posição REAL do
-    colega (típico de pontas/avançados a meio de uma desmarcação longa, ou
-    agora também dos biases temporários — GK_CATCH_BALL/CB_HAS_BALL) fazia
-    o passador mirar um "fantasma" lá à frente enquanto o colega ainda
-    estava fisicamente atrás — parecia um passe para trás sem sentido.
-    Central quase não sofre (o slot dele mal se afasta da posição actual);
-    ponta/avançado em transição longa, sim. Tecto de 10m: além disso, mistura
-    com a posição real em vez de mirar só o alvo.
-    */
-    const real = p.model.position;
-    const dist = alvo.distanceTo(real);
-    const maxLead = 10.0;
-    if (dist <= maxLead) return alvo;
-    return real.clone().lerp(alvo, maxLead / dist);
+    if (!p || !p.model) return new THREE.Vector3();
+    const pos = p.model.position.clone();
+    
+    if (p.velocity && typeof Match !== 'undefined' && Match.ball) {
+        const vBall = 14.0;
+        const dx = pos.x - Match.ball.position.x;
+        const dz = pos.z - Match.ball.position.z;
+        const vx = p.velocity.x * 0.85;
+        const vz = p.velocity.z * 0.85;
+        
+        const a = (vx * vx + vz * vz) - (vBall * vBall);
+        const b = 2 * (dx * vx + dz * vz);
+        const c = dx * dx + dz * dz;
+        
+        let t = 0;
+        if (Math.abs(a) < 0.001) {
+            if (Math.abs(b) > 0.001) t = -c / b;
+        } else {
+            const delta = b * b - 4 * a * c;
+            if (delta >= 0) {
+                const t1 = (-b + Math.sqrt(delta)) / (2 * a);
+                const t2 = (-b - Math.sqrt(delta)) / (2 * a);
+                if (t1 > 0 && t2 > 0) t = Math.min(t1, t2);
+                else if (t1 > 0) t = t1;
+                else if (t2 > 0) t = t2;
+            }
+        }
+        
+        if (t <= 0 || t > 3.0) {
+            t = Math.min(Math.sqrt(c) / vBall, 3.0);
+        }
+        
+        pos.x += vx * t;
+        pos.z += vz * t;
+    }
+    
+    return pos;
 }
 
 function applyKeyframeAnimation(player, animName, time) {

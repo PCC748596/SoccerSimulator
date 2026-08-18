@@ -166,9 +166,16 @@ function attackDM(ctx) {
     desviar(ctx, ctx.bb.ballX * 0.12, -3.0);
 }
 
-// Central: acompanha a bola de lado, sem sair da última linha.
+// Central: acompanha a bola de lado, mas recua para dar apoio se o lateral tiver a bola.
 function attackCB(ctx) {
-    desviar(ctx, ctx.bb.ballX * 0.10, ctx.bb.styleDefenseZShift * 0.3 * ctx.p.dirZ);
+    const carrier = ctx.bb.carrier;
+    if (carrier && (carrier.pos === 'LB' || carrier.pos === 'RB')) {
+        // Se o lateral tem a bola, recua uns metros para dar linha de passe segura.
+        // Fica um pouco mais centrado também.
+        desviar(ctx, ctx.bb.ballX * 0.05, -7.0 * ctx.p.dirZ);
+    } else {
+        desviar(ctx, ctx.bb.ballX * 0.10, ctx.bb.styleDefenseZShift * 0.3 * ctx.p.dirZ);
+    }
 }
 
 /*
@@ -558,6 +565,48 @@ const PositionAI = {
         campo, abaixo, se aplicam.
         */
 
+        const dt = (typeof Match !== 'undefined' && Match.delta) ? Match.delta : 0.016;
+        let k = 1 - Math.exp(-PositionSmoothing * dt);
+        if (p.snapPosition) { k = 1; p.snapPosition = false; }
+
+        /*
+        Afastar do próprio GR quando ele está com a bola na mão.
+        */
+        if (p.role !== 'gk' && Match.gkHoldingBall[p.team]) {
+            const gk = ctx.teammates.find(t => t.role === 'gk');
+            if (gk) {
+                const dx = targetX - gk.model.position.x;
+                const dz = targetZ - gk.model.position.z;
+                const dist = Math.hypot(dx, dz);
+                const raio = 8.0;
+                if (dist < raio) {
+                    if (dist < 0.001) { targetX += raio; }
+                    else { const k2 = (raio - dist) / dist; targetX += dx * k2; targetZ += dz * k2; }
+                    targetX = Math.max(-32, Math.min(32, targetX));
+                    targetZ = Math.max(-50, Math.min(50, targetZ));
+                }
+            }
+        }
+
+        // Bias temporário de reorganização (evento CB_HAS_BALL)
+        if (p.buildOutTimer > 0) {
+            targetX += p.buildOutBias.x;
+            targetZ += p.buildOutBias.z;
+            targetX = Math.max(-32, Math.min(32, targetX));
+            targetZ = Math.max(-50, Math.min(50, targetZ));
+            p.buildOutTimer -= dt;
+        }
+
+        // tacticalTarget é o alvo PURO do Nível 2 (TeamBT/PositionBT)
+        // ANTES do PlayingStyle (Nível 3).
+        let rawTx = Math.max(-32, Math.min(32, targetX));
+        let rawTz = Math.max(-50, Math.min(50, targetZ));
+
+        if (!p.tacticalTarget) p.tacticalTarget = new THREE.Vector3(rawTx, ALTURA_BASE_Y, rawTz);
+        p.tacticalTarget.x = lerp(p.tacticalTarget.x, rawTx, k);
+        p.tacticalTarget.z = lerp(p.tacticalTarget.z, rawTz, k);
+        p.tacticalTarget.y = ALTURA_BASE_Y;
+
         /*
         Playing style — camada posicional (ver PlayingStyles em config.js e
         playing_styles.js). Aplicada AQUI, sobre o alvo já decidido pela folha
@@ -680,63 +729,12 @@ const PositionAI = {
         let tx = Math.max(-32, Math.min(32, targetX));
         let tz = Math.max(-50, Math.min(50, targetZ));
 
-        /*
-        Afastar do próprio GR quando ele está com a bola na mão. O nível 1
-        (Match.afastarDoGuardaRedes) já fazia isto sobre p.dynamicTarget,
-        mas este commit() corre DEPOIS, por jogador, todos os frames, e
-        reescreve dynamicTarget do zero — anulava a correcção sempre. Tem de
-        ser aqui, no sítio onde o alvo é mesmo escrito por último.
-        */
-        if (p.role !== 'gk' && Match.gkHoldingBall[p.team]) {
-            const gk = ctx.teammates.find(t => t.role === 'gk');
-            if (gk) {
-                const dx = tx - gk.model.position.x;
-                const dz = tz - gk.model.position.z;
-                const dist = Math.hypot(dx, dz);
-                const raio = 8.0;
-                if (dist < raio) {
-                    if (dist < 0.001) { tx += raio; }
-                    else { const k2 = (raio - dist) / dist; tx += dx * k2; tz += dz * k2; }
-                    tx = Math.max(-32, Math.min(32, tx));
-                    tz = Math.max(-50, Math.min(50, tz));
-                }
-            }
-        }
-
-        const dt = (typeof Match !== 'undefined' && Match.delta) ? Match.delta : 0.016;
-
-        // Bias temporário de reorganização (evento CB_HAS_BALL) — soma ao
-        // alvo enquanto o timer não expira, depois desliga sozinho.
-        if (p.buildOutTimer > 0) {
-            tx += p.buildOutBias.x;
-            tz += p.buildOutBias.z;
-            tx = Math.max(-32, Math.min(32, tx));
-            tz = Math.max(-50, Math.min(50, tz));
-            p.buildOutTimer -= dt;
-        }
-
-        // Suavização independente do fps: 1 - exp(-taxa*dt). O `0.6 * dt` que
-        // aqui estava lia `Match.dt`, que não existe (o campo é Match.delta),
-        // por isso o factor ficava congelado em 0.0096 — cerca de 100 s de
-        // constante de tempo, e os alvos praticamente não se mexiam.
-        let k = 1 - Math.exp(-PositionSmoothing * dt);
-
-        // Reposicionamento instantâneo pedido por evento (ex.: GK_CATCH_BALL)
-        // — salta a suavização normal só neste frame, consome a flag.
-        if (p.snapPosition) { k = 1; p.snapPosition = false; }
-
-        // Inicializar tacticalTarget se não existir
-        if (!p.tacticalTarget) p.tacticalTarget = new THREE.Vector3(tx, ALTURA_BASE_Y, tz);
-
-        // tacticalTarget é o alvo PURO do Nível 2 (TeamBT/PositionBT)
-        //
-        // Sem o "|| tx" (bug corrigido): quando tacticalTarget.x calhava em
-        // exactamente 0 — o que acontece sempre que a bola cruza o eixo
-        // central — o "||" tratava isso como "não inicializado" e saltava
-        // directo para o alvo novo, ignorando a suavização nesse frame.
-        p.tacticalTarget.x = lerp(p.tacticalTarget.x, tx, k);
-        p.tacticalTarget.z = lerp(p.tacticalTarget.z, tz, k);
-        p.tacticalTarget.y = ALTURA_BASE_Y;
+        // styleTarget é o alvo após aplicar o Nível 3 (PlayingStyle)
+        // Serve primariamente para visualização no anel
+        if (!p.styleTarget) p.styleTarget = new THREE.Vector3(tx, ALTURA_BASE_Y, tz);
+        p.styleTarget.x = lerp(p.styleTarget.x, tx, k);
+        p.styleTarget.z = lerp(p.styleTarget.z, tz, k);
+        p.styleTarget.y = ALTURA_BASE_Y;
 
         // dynamicTarget é o alvo que a FSM (Nível 3) vai usar e potencialmente reescrever
         // (por exemplo, quando vai à bola ou foge de adversários).
