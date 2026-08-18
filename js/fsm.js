@@ -357,7 +357,7 @@ class PlayerFSM {
 
                     // Escolhe a melhor direcção de condução (leque de ângulos adaptativo pela Técnica)
                     {
-                        const oppsCond = (p.team === 'TeamA') ? Match.opponents : Match.players;
+                        const todosJogadores = Match.players.concat(Match.opponents);
                         const px = p.model.position.x, pz = p.model.position.z;
                         let melhorNota = -Infinity;
                         let alvoX = p.carryTargetX, alvoZ = pz + 10 * p.dirZ;
@@ -385,10 +385,28 @@ class PlayerFSM {
                             if (Math.abs(tx) > 31 || Math.abs(tz) > 51) continue;
 
                             let maisPerto = 999;
-                            for (const opp of oppsCond) {
-                                if (opp.role === 'gk') continue;
-                                const d = Math.hypot(opp.model.position.x - tx, opp.model.position.z - tz);
-                                if (d < maisPerto) maisPerto = d;
+                            const dx = tx - px, dz = tz - pz;
+                            const len2 = dx * dx + dz * dz;
+
+                            for (const pl of todosJogadores) {
+                                if (pl === p || pl.role === 'gk') continue;
+                                const plx = pl.model.position.x, plz = pl.model.position.z;
+                                
+                                let t = 0;
+                                if (len2 > 0) t = ((plx - px) * dx + (plz - pz) * dz) / len2;
+                                
+                                // Verifica se o jogador está na frente no corredor de deslocamento
+                                if (t > 0 && t < 1.2) {
+                                    const projX = px + t * dx;
+                                    const projZ = pz + t * dz;
+                                    const distToLine = Math.hypot(plx - projX, plz - projZ);
+                                    
+                                    // Corredor de 2.5m de largura
+                                    if (distToLine < 2.5) {
+                                        const distObstacle = Math.hypot(plx - px, plz - pz);
+                                        if (distObstacle < maisPerto) maisPerto = distObstacle;
+                                    }
+                                }
                             }
 
                             let nota = Math.min(maisPerto, CarryModel.spaceCap) * CarryModel.spaceWeight;
