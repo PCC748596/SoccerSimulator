@@ -304,10 +304,11 @@ test('a defender, qualquer sector pode marcar', () => {
     assert.ok(marcam.includes('def'), 'defesa devia poder marcar a defender');
 });
 
-test('a atacar, só os defesas marcam', () => {
-    const { marcam } = montarMarcacao(true);
-    assert.ok(marcam.length > 0, 'os defesas continuam a marcar em posse');
-    assert.deepStrictEqual([...new Set(marcam)], ['def']);
+test('a atacar, ninguem marca', () => {
+    // Marcar e do lado de quem defende, e ponto. Os defesas da equipa com
+    // posse marcavam na mesma, e isso prendia quatro jogadores atras dos
+    // adversarios enquanto a propria equipa atacava.
+    assert.deepStrictEqual(montarMarcacao(true).marcam, []);
 });
 
 test('a atacar, ninguém cobre (BLOCKING é acção de defesa)', () => {

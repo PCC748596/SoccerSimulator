@@ -538,20 +538,21 @@ function atribuirMarcacao(bb) {
     }
 
     /*
-    Com a bola, marcar é tarefa só dos DEFESAS — e cobrir não é tarefa de
-    ninguém.
+    QUEM TEM A BOLA NÃO MARCA. Ninguém, nem os defesas.
 
-    Isto corria para as duas equipas sem distinção, por isso a equipa que
-    atacava saía daqui com a linha toda a marcar alguém: médios e avançados
-    sem bola apareciam em MARKING, e os que não arranjavam par caíam em
-    BLOCKING. Fechar a linha da bola é acção de quem defende; a equipa com
-    posse tem outro trabalho (ver as acções de apoio em actHoldPosition).
-    Os defesas continuam a marcar mesmo em posse: é o que evita que uma
-    perda de bola apanhe a última linha sem ninguém em cima dos avançados.
+    A marcação é do lado de quem defende, e ponto. Os defesas da equipa com
+    posse marcavam na mesma, com o argumento de que uma perda de bola não
+    podia apanhar a última linha sem ninguém em cima dos avançados. Na
+    prática isso prendia quatro jogadores atrás dos adversários enquanto a
+    própria equipa atacava, e a malha de passe ficava com metade dos
+    vértices imóveis (ver TriangulacaoAI: quem marca é ponto fixo).
+
+    Antes disso a regra nem existia e as duas equipas marcavam por igual —
+    a que atacava saía daqui com a linha toda em MARKING, e quem não
+    arranjava par caía em BLOCKING.
     */
-    const defenders = bb.isAttacking
-        ? bb.outfield.filter(p => p.role === 'def')
-        : bb.outfield;
+    if (bb.isAttacking) return;
+    const defenders = bb.outfield;
     const attackers = bb.opp.filter(p => p.role !== 'gk');
     const ballCarrier = bb.oppCarrier;
     const primaryChaser = bb.chaser;
