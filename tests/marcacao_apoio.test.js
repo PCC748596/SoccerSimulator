@@ -54,7 +54,7 @@ const Z = { def: -30, mid: 0, atk: 30 };
 test('MarkingModel: distância por setor e Defensive Pressure', () => {
     const esperado = {
         low: { atk: 5.0, mid: 5.0, def: 4.0 },
-        balanced: { atk: 4.0, mid: 4.0, def: 3.0 },
+        balanced: { atk: 4.0, mid: 4.0, def: 4.0 },   // 4 m em todo o campo, a pedido
         high: { atk: 3.0, mid: 3.0, def: 2.0 }
     };
     for (const pressao of ['low', 'balanced', 'high']) {
@@ -68,15 +68,24 @@ test('MarkingModel: distância por setor e Defensive Pressure', () => {
 
 test('MarkingModel: pressão mais alta nunca marca mais solto', () => {
     for (const setor of ['def', 'mid', 'atk']) {
-        assert.ok(marking('low').distanciaPara(Z[setor]) >
+        assert.ok(marking('low').distanciaPara(Z[setor]) >=
             marking('balanced').distanciaPara(Z[setor]), setor);
         assert.ok(marking('balanced').distanciaPara(Z[setor]) >
             marking('high').distanciaPara(Z[setor]), setor);
     }
 });
 
-test('MarkingModel: setor defensivo marca sempre mais colado', () => {
-    for (const pressao of ['low', 'balanced', 'high']) {
+test('MarkingModel: Balanced marca à mesma distância em todo o campo', () => {
+    // Pedido: 4 m em qualquer sector, para se ver o efeito da distância
+    // isolado do sector. Low e High mantêm o aperto extra no próprio terço.
+    const M = marking('balanced');
+    assert.strictEqual(M.distanciaPara(Z.def), 4.0);
+    assert.strictEqual(M.distanciaPara(Z.mid), 4.0);
+    assert.strictEqual(M.distanciaPara(Z.atk), 4.0);
+});
+
+test('MarkingModel: nos outros níveis o setor defensivo marca mais colado', () => {
+    for (const pressao of ['low', 'high']) {
         const M = marking(pressao);
         assert.ok(M.distanciaPara(Z.def) < M.distanciaPara(Z.mid), pressao);
         assert.strictEqual(M.distanciaPara(Z.mid), M.distanciaPara(Z.atk), pressao);

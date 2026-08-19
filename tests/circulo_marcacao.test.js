@@ -78,7 +78,7 @@ test('o raio do círculo é o do Defensive Pressure, por setor', () => {
         vm.createContext(s);
         vm.runInContext(recortarConst(CONFIG, 'MarkingModel') + '\nthis.M = MarkingModel;', s);
         const raio = s.M.distanciaPara(-30);
-        assert.strictEqual(raio, { low: 4, balanced: 3, high: 2 }[pressao], pressao);
+        assert.strictEqual(raio, { low: 4, balanced: 4, high: 2 }[pressao], pressao);
         assert.ok(raio > 0 && homem);
     }
 });

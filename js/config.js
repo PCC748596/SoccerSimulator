@@ -1212,9 +1212,12 @@ const MarkingModel = {
     feito aqui, pelo setor, que é explícito e visível na tabela.
     */
     distanciaPorSetor: {
+        // Balanced: 4 m em TODO o campo, a pedido. Deixa de apertar no
+        // próprio terço (era 3 m) — o mesmo número em qualquer sector, para
+        // se poder ver o efeito da distância isolado do sector.
         atk: { low: 5.0, balanced: 4.0, high: 3.0 },
         mid: { low: 5.0, balanced: 4.0, high: 3.0 },
-        def: { low: 4.0, balanced: 3.0, high: 2.0 }
+        def: { low: 4.0, balanced: 4.0, high: 2.0 }
     },
     distanciaPara(zoneAhead) {
         const terco = CAMPO_COMP / 6;
