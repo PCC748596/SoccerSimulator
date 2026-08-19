@@ -34,7 +34,6 @@ class PositionContext {
         // homem. Tem de ser reposto a cada tick: o contexto é reutilizado, e sem
         // isto bastava marcar uma vez para a basculação ficar desligada para
         // sempre naquele jogador.
-        this.isMarking = false;
         this.trace = [];
     }
 
@@ -68,7 +67,6 @@ class PositionContext {
         if (!p.slotTarget) p.slotTarget = new THREE.Vector3();
         p.slotTarget.set(this.slotX, ALTURA_BASE_Y, this.slotZ);
 
-        this.isMarking = false;
         this.trace.length = 0;
         return this;
     }
@@ -80,178 +78,23 @@ class PositionContext {
 }
 
 /* =========================================================================
-   FOLHAS OFENSIVAS — a equipa tem a bola
-   ========================================================================= */
+   A ARVORE DO POSITIONBT FOI APAGADA
+   =========================================================================
+   Eram treze folhas de posicionamento — attackDM, attackCB, attackFullBack,
+   attackCentralMid, supportBuildUp, attackWideMid, attackForward,
+   attackGeneric, defendZonal, defendFullBack, defendCB, defendDM,
+   defendFlankShift — mais a arvore que as escolhia e os auxiliares que so
+   elas usavam: desviar, aproximar, melhorVaoX e isPos.
 
-/*
-As folhas ofensivas são DESVIOS sobre o slot que o bind() já pôs.
+   O nivel 2 e agora quatro coisas, e mais nada:
 
-Antes cada uma recalculava a posição toda a partir do baseTarget, com a sua
-própria fórmula e os seus próprios limites. Era daí que vinham as sobreposições:
-fórmulas independentes que convergiam para os mesmos pontos, e clamps que as
-projectavam sobre as mesmas fronteiras.
+       o SLOT no bloco do nivel 1     PositionContext.bind
+       a MARCACAO                     atribuirMarcacao + PositionAI.commit
+       o TACKLING (desligado)         TacklingAI
+       a MALHA de passe               TriangulacaoAI
 
-Agora o esqueleto da equipa é o rectângulo, e cada posição só lhe acrescenta o
-que a distingue.
-*/
-
-// Deslocamento em metros no referencial de ataque.
-function desviar(ctx, dx, dFrente) {
-    ctx.targetX += dx;
-    ctx.targetZ += dFrente * ctx.p.dirZ;
-}
-
-/*
-Vão livre entre adversários, ao longo de uma linha Z fixa — testa uns
-candidatos X e escolhe o mais longe do adversário mais próximo em cada um
-(maximin, não é gradiente nem física, é escolha entre pontos discretos).
-
-Usado por dois estilos (pedido explícito, "não é um ponto fixo, é relativo
-aos adversários"):
-    Fox in the Box  — vão entre 2 zagueiros, dentro da área.
-    Goal Poacher    — brecha na última linha, à espera do lançamento.
-
-`zAlvo` já vem no referencial do MUNDO (não do ataque) — quem chama resolve
-isso. Devolve 0 (centro) se não há adversários de campo para comparar.
-
-Também evita convergir com um COLEGA que já reivindicou um vão perto neste
-mesmo frame (`bb.vaosReivindicados`, limpo em TeamBlackboard.gather) — sem
-isto, dois atacantes com o mesmo estilo (ex.: dois Fox in the Box) calculavam
-cada um o "melhor" vão sem saber do outro, e batiam os dois no mesmo ponto.
-
-Preferência pelo PRÓPRIO lado: sem isto, dois CF cruzavam sem necessidade —
-o vão da direita calhava ligeiramente mais aberto e mandava lá o CF da
-esquerda (e vice-versa), todos os frames, os dois a passar um pelo outro.
-Um pequeno bónus (2m) para candidatos do lado em que ele já está resolve os
-quase-empates sem impedir uma troca de lado genuína, quando a diferença é
-grande de verdade.
-*/
-function melhorVaoX(ctx, zAlvo, candidatosX) {
-    const bb = ctx.bb;
-    /*
-    Lado preferido: o da JOGADA (bola), não o lado onde o jogador já está.
-    Antes usava só a posição actual dele — com a bola presa num lado, o vão
-    "mais livre" no lado OPOSTO ganhava, e o CF ia atrás dele: alvo do lado
-    contrário ao da jogada, sem ligação nenhuma com o que estava a acontecer.
-    */
-    const meuLado = (bb && Math.abs(bb.ballX) > 3 ? Math.sign(bb.ballX) : 0) ||
-        Math.sign(ctx.p.model.position.x) || Math.sign(ctx.p.baseTarget.x) || 1;
-    let melhorX = 0, melhorNota = -Infinity;
-    for (const x of candidatosX) {
-        let minD = Infinity;
-        for (const opp of ctx.opponents) {
-            if (opp.role === 'gk') continue;
-            const d = Math.hypot(opp.model.position.x - x, opp.model.position.z - zAlvo);
-            if (d < minD) minD = d;
-        }
-        if (bb && bb.vaosReivindicados) {
-            for (const cx of bb.vaosReivindicados) {
-                const d = Math.abs(cx - x);
-                if (d < minD) minD = d;
-            }
-        }
-        let nota = minD;
-        if (Math.sign(x) === meuLado) nota += 4.0;
-        if (nota > melhorNota) { melhorNota = nota; melhorX = x; }
-    }
-    if (bb) {
-        if (!bb.vaosReivindicados) bb.vaosReivindicados = [];
-        bb.vaosReivindicados.push(melhorX);
-    }
-    return melhorX;
-}
-
-// Trinco: fica um pouco atrás do seu slot, como seguro e primeira estação.
-function attackDM(ctx) {
-    desviar(ctx, ctx.bb.ballX * 0.12, -3.0);
-}
-
-// Central: acompanha a bola de lado, mas recua para dar apoio se o lateral tiver a bola.
-function attackCB(ctx) {
-    const carrier = ctx.bb.carrier;
-    if (carrier && (carrier.pos === 'LB' || carrier.pos === 'RB')) {
-        // Se o lateral tem a bola, recua uns metros para dar linha de passe segura.
-        // Fica um pouco mais centrado também.
-        desviar(ctx, ctx.bb.ballX * 0.05, -7.0 * ctx.p.dirZ);
-    } else {
-        // Sem termo de Mentalidade aqui: ela ja desloca o bloco INTEIRO
-        // (MentalidadeModel.blocoZ, em computeBlock). O `styleDefenseZShift * 0.3`
-        // que aqui estava era uma terceira dose do mesmo botao, so no central.
-        desviar(ctx, ctx.bb.ballX * 0.10, 0);
-    }
-}
-
-/*
-Lateral: sobe pelo corredor se o flanco estiver livre; senão fica curto.
-
-O avanço é em METROS (FullBackStyle.avancoMax) e não uma fracção da
-profundidade do bloco: o comBolaMult do slot valia ~1-3 m no total e nunca
-tirava o lateral da linha defensiva, por muito ofensivo que fosse o estilo.
-
-O avanço máximo só se ganha por inteiro quando a equipa já está instalada no
-ataque (bb.advanceFactor) — um lateral não arranca 15 m à frente no primeiro
-frame da posse. Piso de 40% para ele sair do lugar logo na construção.
-*/
-function attackFullBack(ctx) {
-    const p = ctx.p;
-    const flankSign = Math.sign(p.baseTarget.x);
-    const estilo = FullBackStyle[p.fbStyle] || FullBackStyle.defensive;
-
-    let livre = true;
-    for (const opp of ctx.opponents) {
-        if (opp.role === 'gk') continue;
-        const noFlanco = (Math.sign(opp.model.position.x) === flankSign && Math.abs(opp.model.position.x) > 10.0);
-        const aFrente = (opp.model.position.z * p.dirZ > p.model.position.z * p.dirZ) &&
-            (opp.model.position.z * p.dirZ < p.model.position.z * p.dirZ + 15.0);
-        if (noFlanco && aFrente) { livre = false; break; }
-    }
-
-    if (livre) {
-        const rampa = 0.4 + 0.6 * THREE.MathUtils.clamp(ctx.bb.advanceFactor, 0, 1);
-        desviar(ctx, flankSign * 1.5, estilo.avancoMax * rampa);
-    } else {
-        desviar(ctx, -flankSign * 1.0, -estilo.recuo);
-    }
-}
-
-// Médio interior: procura o espaço entre linhas do lado da bola.
-function attackCentralMid(ctx) {
-    desviar(ctx, ctx.bb.ballX * 0.18, 0);
-}
-
-// Desce a oferecer-se para a construção sair a jogar. Escolhido pelo nível 1.
-// Este é o único que ignora o slot: a função dele é ir ter com a bola.
-function supportBuildUp(ctx) {
-    const p = ctx.p, bb = ctx.bb;
-    const lado = Math.sign(p.baseTarget.x) || 1;
-    ctx.targetZ = bb.ballZ + TeamShape.supportAhead * p.dirZ;
-    ctx.targetX = THREE.MathUtils.clamp(bb.ballX + lado * TeamShape.supportWide, -24, 24);
-}
-
-// Médio-ala: abre mais se o sector estiver escolhido no painel.
-function attackWideMid(ctx) {
-    const p = ctx.p;
-    const lado = Math.sign(p.baseTarget.x) || 1;
-    const sector = (Tatics.setores.includes('esq') && p.pos === 'LM') ||
-        (Tatics.setores.includes('dir') && p.pos === 'RM');
-    desviar(ctx, lado * (sector ? 5.25 : 1.0) + ctx.bb.ballX * 0.08, 0);
-}
-
-// Avançados: os extremos abrem, o ponta-de-lança ataca o eixo.
-function attackForward(ctx) {
-    const p = ctx.p;
-    if (p.pos === 'RW' || p.pos === 'LW') {
-        desviar(ctx, Math.sign(p.baseTarget.x) * 3.0, 0);
-    } else {
-        desviar(ctx, ctx.bb.ballX * 0.10, 0);
-    }
-}
-
-// Rede de segurança: o slot puro, sem desvio.
-function attackGeneric(ctx) { }
-
-/* =========================================================================
-   FOLHAS DEFENSIVAS — a equipa não tem a bola
+   O goalSide sobreviveu abaixo: e a geometria da marcacao, o ponto sobre a
+   recta homem -> propria baliza.
    ========================================================================= */
 
 /*
@@ -269,226 +112,6 @@ function goalSide(p, alvo, dist) {
     const l = Math.hypot(gx, gz) || 1;
     return { x: a.x + (gx / l) * dist, z: a.z + (gz / l) * dist };
 }
-
-/*
-Desloca o alvo actual (já no slot do TeamBT, possivelmente já com outros
-desvios) no máximo `maxDist` metros na direcção de (alvoX, alvoZ).
-
-Ao contrário de um lerp por fracção da distância total, isto é sempre um
-BIAS em metros — nunca "salta" quase até ao ponto absoluto só porque ele
-está longe do slot. É a diferença entre CORRIGIR a posição do TeamBT e
-SUBSTITUI-LA por outra. Ver a nota em MarkingModel.
-*/
-function aproximar(ctx, alvoX, alvoZ, maxDist) {
-    let dx = alvoX - ctx.targetX;
-    let dz = alvoZ - ctx.targetZ;
-    const dist = Math.hypot(dx, dz);
-    if (dist > maxDist && dist > 0.001) {
-        const k = maxDist / dist;
-        dx *= k; dz *= k;
-    }
-    ctx.targetX += dx;
-    ctx.targetZ += dz;
-}
-
-/*
-A marcação não vive aqui.
-
-Havia um `marcar(ctx, alvo)` que cada folha chamava quando lhe apetecia, com
-o seu próprio tecto de desvio. Passou a ser uma regra única, aplicada a toda
-a gente com homem atribuído, no PositionAI.commit — ver a nota lá.
-*/
-
-/*
-Bloco zonal: o slot no bloco JÁ é o posto zonal.
-
-Antes esta folha recalculava x e z a partir do baseTarget com uma fórmula por
-função, e depois vinha um clamp por cima. O slot faz o mesmo trabalho e melhor,
-porque a forma do bloco é imposta por construção. Fica só o que é situacional:
-a cobertura e a marcação.
-*/
-function defendZonal(ctx) {
-    const p = ctx.p, bb = ctx.bb;
-
-    // Acompanhar a bola de lado dentro do próprio corredor.
-    const seguirBola = (p.role === 'def') ? 0.10 : (p.role === 'mid' ? 0.18 : 0.12);
-    ctx.targetX += bb.ballX * seguirBola;
-
-    // Sem homem para marcar, cai para trás e fecha para o eixo.
-    if (p.isCovering) {
-        ctx.targetZ -= p.dirZ * 4.0;
-        const dxEixo = THREE.MathUtils.clamp(bb.ballX * 0.4 - ctx.targetX, -MarkingModel.coberturaBiasMax, MarkingModel.coberturaBiasMax);
-        ctx.targetX += dxEixo;
-    }
-
-}
-
-/*
-Lateral a defender. Desvios sobre o slot, não posições recalculadas.
-
-O `flankCB` fallback saiu: quando nenhum central correspondia ao flanco, AMBOS
-os laterais caíam no mesmo `find(pos === 'CB')` e mediam a partir do mesmo
-jogador — LB e RB acabavam a poucos metros um do outro. Era a combinação mais
-frequente dos aglomerados medidos (CF + os dois laterais, 34% dos casos).
-O slot no bloco já os põe cada um no seu corredor, sem precisar de referência.
-*/
-function defendFullBack(ctx) {
-    const p = ctx.p, bb = ctx.bb;
-    const flankSign = Math.sign(p.baseTarget.x) || 1;
-    const ultrapassado = (bb.ballZ * p.dirZ < p.model.position.z * p.dirZ - 4.0);
-
-    // Ultrapassado pela bola: corre a recuperar, e aí sim ignora o slot.
-    if (ultrapassado && bb.ballZ * p.dirZ < 15.0) {
-        ctx.targetX = p.baseTarget.x * 0.85;
-        ctx.targetZ = p.ownGoalZ + 12.0 * p.dirZ;
-        p.speedMult = (6.0 + ((p.skillFor('SPEED') - 50) / 50) * 1.5) * 1.25 * 0.9; // +25% depois -10% pedidos: sem bola
-        return;
-    }
-
-    /*
-    Este bloco escolhia um homem por conta própria — o extremo do corredor,
-    ou o lateral que subisse — e marcava-o, ignorando quem o atribuirMarcacao
-    lhe tinha dado. Dois sítios a decidir quem marca quem, e o lateral acabava
-    em cima de quem não era o seu.
-
-    Quem marca quem é do atribuirMarcacao; onde o marcador se põe é do commit.
-    Aqui fica só o que ele faz sem homem.
-    */
-    // Ninguém no corredor: fecha um pouco para dentro, acompanhando a bola.
-    ctx.targetX += (bb.ballX * 0.18) - flankSign * 1.5;
-}
-
-function defendCB(ctx) {
-    const p = ctx.p, bb = ctx.bb;
-
-    // Se tem homem atribuído, o commit põe-no atrás dele e o que estiver
-    // aqui não conta. Isto é o que ele faz quando NÃO tem ninguém.
-    let colegaPressiona = false;
-    const carrier = bb.oppCarrier;
-    if (carrier) {
-        for (const mate of ctx.teammates) {
-            if (mate !== p && mate.role !== 'gk' &&
-                mate.model.position.distanceTo(carrier.model.position) < 4.0) {
-                colegaPressiona = true;
-                break;
-            }
-        }
-    }
-
-    if (colegaPressiona) {
-        // Cobertura: cai atrás da bola, mas mantendo a SUA posição relativa
-        aproximar(ctx, p.baseTarget.x + bb.ballX * 0.14, bb.ballZ - p.dirZ * 7.5, MarkingModel.coberturaBiasMax);
-    } else {
-        ctx.targetX += bb.ballX * 0.14;
-    }
-}
-
-// Trinco a defender: tapa o corredor central à frente da última linha.
-function defendDM(ctx) {
-    const p = ctx.p, bb = ctx.bb;
-    const bolaNoEixo = (Math.abs(bb.ballX) < 12.0 && bb.ballZ * p.dirZ < 15.0);
-
-    if (bolaNoEixo) {
-        aproximar(ctx, bb.ballX, bb.ballZ - p.dirZ * 1.5, MarkingModel.coberturaBiasMax);
-        return;
-    }
-    ctx.targetX += bb.ballX * 0.22;
-}
-
-/*
-Basculação para o flanco em perigo.
-
-O bloco já basculou (o centro do rectângulo segue o x da bola, para o lado da
-bola). Aqui só se acrescenta o que é específico: quem sai ao portador e quem
-faz a cobertura por dentro.
-*/
-function defendFlankShift(ctx) {
-    const p = ctx.p, bb = ctx.bb;
-    const carrier = bb.oppCarrier;
-    /*
-    Lado pelo SINAL, não pelo nome da posição.
-
-    `bb.flankAlert` vem no referencial de ataque da equipa que defende
-    (`carrier.x * bb.dir`, ver detectFlankThreat). Nesse referencial quem tem
-    `baseTarget.x * dirZ < 0` está no flanco 'left' — e no FormationsData é o
-    RB que lá está (x = -0.7), não o LB. O `nearSide = flankAlert === 'left'
-    ? 'LB' : 'RB'` que aqui estava mandava por isso o lateral do flanco
-    OPOSTO atravessar o campo até à bola, nas duas equipas. Comparar sinais
-    tira o problema do nome da posição de vez.
-    */
-    const ladoAmeaca = (bb.flankAlert === 'left') ? -1 : 1;
-    const meuLado = Math.sign(p.baseTarget.x * p.dirZ) || 1;
-    const noLadoDaAmeaca = (meuLado === ladoAmeaca);
-    const eLateralDoLado = (p.pos === 'LB' || p.pos === 'RB') && noLadoDaAmeaca;
-    const eCentralDoLado = noLadoDaAmeaca;
-
-    if (eLateralDoLado) {
-        // Aperta o portador. Se tiver homem atribuído, o commit sobrepõe-se a
-        // isto — marcar o seu homem vem primeiro que sair ao portador de outro.
-        aproximar(ctx, carrier.model.position.x, carrier.model.position.z,
-            MarkingModel.coberturaBiasMax);
-    } else if (p.pos === 'CB' && eCentralDoLado) {
-        // Cobertura por dentro, mais atrás do que o lateral.
-        const cob = goalSide(p, carrier, MarkingModel.distanciaPara(carrier.model.position.z * p.dirZ) + 4.5);
-        aproximar(ctx, cob.x, cob.z, MarkingModel.coberturaBiasMax);
-    } else if (p.pos === 'DM') {
-        const dxDM = THREE.MathUtils.clamp(carrier.model.position.x * 0.45 - ctx.targetX, -MarkingModel.coberturaBiasMax, MarkingModel.coberturaBiasMax);
-        ctx.targetX += dxDM;
-    } else {
-        defendZonal(ctx);
-    }
-}
-
-/* =========================================================================
-   A ÁRVORE
-   ========================================================================= */
-
-const isPos = (...list) => (ctx) => list.includes(ctx.p.pos);
-
-const PositionBT = sel('PositionRoot',
-
-    // Com bola: cada posição tem uma forma própria de ocupar o campo.
-    seq('Ofensivo',
-        cond('equipaTemPosse', (ctx) => ctx.bb.isAttacking),
-        sel('PorPosicao',
-            seq('ApoioNaConstrucao',
-                cond('souOApoio', (ctx) => ctx.p === ctx.bb.supportMid),
-                act('descerParaReceber', supportBuildUp)
-            ),
-            seq('Trinco', cond('eTrinco', isPos('DM')), act('subirComoTrinco', attackDM)),
-            seq('Central', cond('eCentral', isPos('CB')), act('subirComoCentral', attackCB)),
-            seq('Lateral', cond('eLateral', isPos('LB', 'RB')), act('subirNoCorredor', attackFullBack)),
-            seq('Interior', cond('eInterior', isPos('CM', 'AM')), act('ocuparEntreLinhas', attackCentralMid)),
-            seq('MedioAla', cond('eMedioAla', isPos('RM', 'LM')), act('abrirNaAla', attackWideMid)),
-            seq('Avancado', cond('eAvancado', isPos('CF', 'RW', 'LW')), act('atacarArea', attackForward)),
-            act('posicaoGenerica', attackGeneric)
-        )
-    ),
-
-    // Sem bola: o plano colectivo manda primeiro (basculação), depois a posição.
-    seq('Defensivo',
-        sel('PorSituacao',
-            seq('Basculacao',
-                cond('equipaBascula', (ctx) => ctx.bb.flankAlert !== null && ctx.bb.oppCarrier !== null),
-                act('bascularParaFlanco', defendFlankShift)
-            ),
-            seq('Lateral', cond('eLateral', isPos('LB', 'RB')), act('defenderCorredor', defendFullBack)),
-            seq('Central', cond('eCentral', isPos('CB')), act('defenderEixo', defendCB)),
-            seq('Trinco', cond('eTrinco', isPos('DM')), act('taparMeio', defendDM)),
-            act('blocoZonal', defendZonal)
-        )
-    )
-);
-
-
-/* =========================================================================
-   MARCACAO — quem marca quem
-   =========================================================================
-   Passagem de EQUIPA: corre uma vez por equipa por frame, antes dos ticks
-   individuais, porque precisa dos 22 jogadores em campo.
-
-   Veio do nivel 1 (team_bt.js) sem alteracoes de comportamento.
-   ========================================================================= */
 
 /*
 Marcação individual + cobertura. Cada defensor escolhe o adversário que
@@ -1036,7 +659,11 @@ const PositionAI = {
         if (!player.posCtx) player.posCtx = new PositionContext(player);
         const ctx = player.posCtx.bind(teamBB);
 
-        PositionBT.tick(ctx);
+        /*
+        Nao ha arvore para correr aqui. O bind() ja pos o alvo no slot do
+        bloco, e o commit trata do resto: quem tem homem vai atras dele, e
+        quem nao tem fica no slot.
+        */
         this.commit(ctx);
 
         /*
@@ -1050,8 +677,7 @@ const PositionAI = {
         else if (tentativa === 'TACKLE') actTackle(ctx);
     },
 
-    // Coesão táctica final + limites do campo. Corre depois da árvore para que
-    // nenhuma folha se possa esquecer de aplicar as regras comuns.
+    // A marcação, o playing style e os limites do campo, por cima do slot.
     commit: function (ctx) {
         const p = ctx.p;
         let targetX = ctx.targetX;
