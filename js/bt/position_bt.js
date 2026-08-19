@@ -525,7 +525,13 @@ function atribuirMarcacao(bb) {
     if (!bb.isAttacking && Match.possessionTimer < reactionDelay) {
         const semAlvo = [];
         bb.outfield.forEach(def => {
-            const alvo = def.prevMarkingTarget;
+            // Só mantém o homem de antes se ele ainda estiver na zona: senão
+            // a janela de reacção seria uma porta para o perseguir na mesma.
+            const s = slotNoBloco(def, bb) || { x: def.baseTarget.x, z: def.baseTarget.z };
+            const anterior = def.prevMarkingTarget;
+            const alvo = (anterior && Math.hypot(
+                anterior.model.position.x - s.x, anterior.model.position.z - s.z)
+                <= MarkingModel.raioZona) ? anterior : null;
             if (alvo) {
                 def.markingTarget = alvo;
                 alvo.markCount = (alvo.markCount || 0) + 1;
@@ -557,12 +563,18 @@ function atribuirMarcacao(bb) {
     const ballCarrier = bb.oppCarrier;
     const primaryChaser = bb.chaser;
 
-    if (primaryChaser && ballCarrier) {
-        primaryChaser.markingTarget = ballCarrier;
-        // Definir markCount = 2 impede que outros jogadores (na iteração abaixo) decidam marcar o mesmo portador
-        ballCarrier.markCount = 2;
-        primaryChaser.prevMarkingTarget = ballCarrier;
-    }
+    /*
+    O PERSEGUIDOR NÃO MARCA — vai à bola.
+
+    Recebia `markingTarget = portador`, e como o commit põe todo o marcador a
+    MarkingModel.distancia do seu homem, o perseguidor ficava plantado a 2 m
+    do portador, do lado da baliza, sem nunca lhe chegar. Ele agora fica sem
+    homem e o nível 3 manda-o à bola (actChaseBall).
+
+    O portador continua contado como já marcado, para os outros não
+    convergirem nele.
+    */
+    if (ballCarrier) ballCarrier.markCount = 2;
 
     /*
     PRIMEIRA PASSAGEM — pares por posição (MarkingModel.paresPorPosicao).
@@ -575,6 +587,33 @@ function atribuirMarcacao(bb) {
     o x dos dois no mesmo referencial, por isso o lateral esquerdo apanha o
     extremo que ataca por ali, e não o do outro lado do campo.
     */
+    /*
+    A ZONA DE CADA UM.
+
+    Ninguém marca um homem que esteja fora do seu raio (MarkingModel.raioZona),
+    medido a partir do SLOT dele no bloco — não da posição onde ele está agora.
+
+    Medir a partir da posição actual é o que fazia a marcação virar
+    perseguição pelo campo todo: o jogador andava atrás do homem, e o raio
+    andava com ele, por isso nunca o largava. Ancorado no slot, o raio não se
+    move: o homem sai da zona, deixa de ser candidato, e o marcador volta ao
+    bloco.
+
+    Isto também é o que limita o quanto a marcação tira alguém do sítio. O
+    alvo dele está sempre a menos de raioZona + distancia do slot, sem ser
+    preciso tecto nenhum por cima.
+    */
+    const slots = new Map();
+    for (const def of defenders) {
+        const s = slotNoBloco(def, bb);
+        slots.set(def, s || { x: def.baseTarget.x, z: def.baseTarget.z });
+    }
+    const naMinhaZona = (def, att) => {
+        const s = slots.get(def);
+        return Math.hypot(att.model.position.x - s.x, att.model.position.z - s.z)
+            <= MarkingModel.raioZona;
+    };
+
     const pares = MarkingModel.paresPorPosicao || {};
     defenders.forEach(def => {
         if (def === primaryChaser || def.markingTarget) return;
@@ -587,6 +626,7 @@ function atribuirMarcacao(bb) {
             for (const att of attackers) {
                 if (att.pos !== posAlvo) continue;
                 if (att.markCount >= 1) continue;
+                if (!naMinhaZona(def, att)) continue;
                 const dx = Math.abs(att.model.position.x - def.model.position.x);
                 if (dx < melhorDx) { melhorDx = dx; melhor = att; }
             }
@@ -609,13 +649,19 @@ function atribuirMarcacao(bb) {
         attackers.forEach(att => {
             if (att.markCount >= 1) return;
 
-            const dist = def.model.position.distanceTo(att.model.position);
-            if (dist > 25) return;
+            /*
+            A mesma zona da primeira passagem, e mais nenhum limite.
 
-            // Fora do corredor natural do jogador: nunca é candidato, por
-            // muito perto ou perigoso que esteja — ver MarkingModel.corredorMax.
-            const xDiff = Math.abs(def.baseTarget.x - att.model.position.x);
-            if (xDiff > MarkingModel.corredorMax) return;
+            Havia dois: `dist > 25` medido da POSIÇÃO do jogador (que andava
+            com ele, e por isso nunca o largava) e o `corredorMax` medido do
+            baseTarget (a posição da formação, que não sabe onde o bloco
+            está). O raio ancorado no slot substitui os dois.
+            */
+            if (!naMinhaZona(def, att)) return;
+
+            const s = slots.get(def);
+            const dist = Math.hypot(att.model.position.x - s.x, att.model.position.z - s.z);
+            const xDiff = Math.abs(s.x - att.model.position.x);
 
             const distToGoal = Math.abs(def.ownGoalZ - att.model.position.z);
             let score = (100 - dist) + (100 - distToGoal) * 1.5;

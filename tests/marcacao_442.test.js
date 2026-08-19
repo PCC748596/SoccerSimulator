@@ -42,8 +42,15 @@ function recortarFuncao(src, nome) {
     assert.fail('chavetas desequilibradas em ' + nome);
 }
 
-// Um 4-4-2, em coordenadas de mundo. `dirZ` = sentido de ataque.
-function equipa(nome, dirZ) {
+/*
+Um 4-4-2, em coordenadas de mundo. `dirZ` = sentido de ataque.
+
+`avanco` empurra a equipa toda no sentido de ataque dela. A equipa que ataca
+entra assim no bloco da outra, que e a fase em que ha marcacao: com as duas
+equipas nas suas metades, como ao pontape de saida, o CB e o CF ficam a 27 m
+e ninguem marca ninguem — e isso e o correcto, ver MarkingModel.raioZona.
+*/
+function equipa(nome, dirZ, avanco) {
     const linha = [
         ['GK', 0, -50], ['RB', -20, -32], ['CB', -7, -36], ['CB', 7, -36], ['LB', 20, -32],
         ['RM', -22, -8], ['CM', -7, -12], ['CM', 7, -12], ['LM', 22, -8],
@@ -56,14 +63,14 @@ function equipa(nome, dirZ) {
         team: nome,
         dirZ: dirZ,
         ownGoalZ: -52.5 * dirZ,
-        baseTarget: { x: q[1] * dirZ, z: q[2] * dirZ },
+        baseTarget: { x: q[1] * dirZ, z: (q[2] + (avanco || 0)) * dirZ },
         markingTarget: null,
         prevMarkingTarget: null,
         isCovering: false,
         markCount: 0,
         model: {
             position: {
-                x: q[1] * dirZ, y: 0, z: q[2] * dirZ,
+                x: q[1] * dirZ, y: 0, z: (q[2] + (avanco || 0)) * dirZ,
                 distanceTo(o) { return Math.hypot(this.x - o.x, this.y - o.y, this.z - o.z); }
             }
         }
@@ -72,7 +79,7 @@ function equipa(nome, dirZ) {
 
 function correr() {
     const casa = equipa('A', 1);
-    const fora = equipa('B', -1);
+    const fora = equipa('B', -1, 22);   // o adversario instalado no nosso bloco
     const bb = {
         team: 'A',
         isAttacking: false,
@@ -94,6 +101,10 @@ function correr() {
         recortarConst(CONFIG, 'MarkingModel') + '\n' +
         recortarConst(CONFIG, 'CoberturaModel') + '\n' +
         recortarFuncao(POS, 'atribuirCobertura') + '\n' +
+        // O atribuirMarcacao mede a zona a partir do slot no bloco; sem
+        // bloco no cenario, o slotNoBloco devolve null e ele cai no
+        // baseTarget, que e o que estes cenarios definem.
+        'function slotNoBloco() { return null; }\n' +
         recortarFuncao(POS, 'atribuirMarcacao') +
         '\nthis.f = atribuirMarcacao;', sandbox);
     sandbox.f(bb);

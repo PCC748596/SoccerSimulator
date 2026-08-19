@@ -288,6 +288,9 @@ function montarMarcacao(isAttacking) {
         recortarConst(CONFIG, 'MarkingModel') + '\n' +
         recortarConst(CONFIG, 'CoberturaModel') + '\n' +
         recortarFuncao(POS_BT, 'atribuirCobertura') + '\n' +
+        // A zona da marcacao mede-se do slot no bloco; sem bloco no
+        // cenario, o slotNoBloco devolve null e cai no baseTarget.
+        'function slotNoBloco() { return null; }\n' +
         recortarFuncao(POS_BT, 'atribuirMarcacao') +
         '\nthis.f = atribuirMarcacao;', sandbox);
     sandbox.f(bb);

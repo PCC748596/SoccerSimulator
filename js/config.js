@@ -1310,7 +1310,26 @@ const MarkingModel = {
     inteira (o LM a aparecer na posição do CF e vice-versa) sem tendência
     nenhuma a voltar à forma depois de a marcação acabar.
     */
-    corredorMax: 16.0,
+    /*
+    RAIO DA ZONA — o que impede a marcação de virar perseguição.
+
+    Um jogador só marca um adversário que esteja dentro deste raio do SEU
+    SLOT no bloco. Fora dele não é candidato, e o marcador fica no slot.
+
+    Medido a partir do slot e não da posição actual, de propósito: com a
+    posição, o raio anda com o jogador enquanto ele persegue, e o homem nunca
+    sai dele — era isso que punha a equipa toda a correr atrás dos
+    adversários pelo campo fora, com o bloco desfeito. Ancorado no slot, o
+    raio está quieto: o homem sai da zona e é largado.
+
+    É também o que limita o desvio: o alvo de um marcador nunca está a mais
+    de raioZona + distancia do slot dele.
+
+    Substituiu dois limites que não chegavam — um `dist > 25` medido da
+    posição, e o `corredorMax` (16 m em x) medido do baseTarget, que é a
+    posição da FORMAÇÃO e não sabe onde o bloco está.
+    */
+    raioZona: 20.0,
 
 
     /*
