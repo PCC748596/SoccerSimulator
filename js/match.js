@@ -1230,7 +1230,7 @@ const Match = {
         1. updatePossession()  quem tem a bola — facto, não decisão
         2. TeamAI.tick()       nível 1: o plano colectivo de cada equipa
         3. PositionAI.tick()   nível 2: onde cada jogador se coloca
-        4. relaxConstraints()  coesão do bloco + linha de fora-de-jogo
+        4. publicarLinhaDeForaDeJogo()  a linha do fora-de-jogo de quem ataca
 
     O nível 3 (o que este jogador faz com a bola) corre depois, em
     FootballPlayer.update → runBehaviorTree, e comanda a PlayerFSM.
@@ -1277,26 +1277,26 @@ const Match = {
         this.players.forEach(p => PositionAI.tick(p, bbA));
         this.opponents.forEach(p => PositionAI.tick(p, bbB));
 
-        // Coesão local (molas entre jogadores) e linha de fora-de-jogo.
-        this.relaxConstraints(this.players);
-        this.relaxConstraints(this.opponents);
+        /*
+        AS TRES PASSAGENS POS-NIVEL-2 FORAM APAGADAS.
 
-        // Volta ao nível 1 para os limites colectivos. Corre DEPOIS do relax
-        // porque as molas, à conta das distâncias de repouso, voltavam a esticar
-        // o bloco — quem impõe a forma final da equipa tem de falar por último.
-        TeamAI.compact(bbA);
-        TeamAI.compact(bbB);
-        // Ninguém no sítio de ninguém — antes dos limites colectivos...
-        this.separarAlvos(this.players);
-        this.separarAlvos(this.opponents);
+            relaxConstraints  coesao local
+            separarAlvos      separacao minima entre alvos (corria duas vezes)
+            TeamAI.holdLine   forcava os defesas para a linha de fora-de-jogo
 
-        TeamAI.holdLine(bbA);
-        TeamAI.holdLine(bbB);
+        Nenhuma delas sabia da marcacao, e as tres reescreviam o dynamicTarget
+        depois de o nivel 2 o ter escrito: um defesa posto atras do seu homem
+        era logo a seguir puxado de volta a linha, e largava a marca. Era isso
+        que se via como "jogadores que nao respeitam o PositionBT".
 
-        // ...e outra vez depois, só lateralmente, para o holdLine não voltar a
-        // juntar em z quem tinha sido afastado.
-        this.separarAlvos(this.players, true);
-        this.separarAlvos(this.opponents, true);
+        Vao ser refeitas sobre triangulacao de Delaunay, e so para a equipa COM
+        a bola: sem bola quem manda e a marcacao.
+
+        Do relaxConstraints sobreviveu so o calculo da linha de fora-de-jogo,
+        que nao mexia em ninguem — ver publicarLinhaDeForaDeJogo.
+        */
+        this.publicarLinhaDeForaDeJogo(this.players);
+        this.publicarLinhaDeForaDeJogo(this.opponents);
 
         this.afastarDoGuardaRedes(this.players);
         this.afastarDoGuardaRedes(this.opponents);
@@ -1530,43 +1530,9 @@ const Match = {
     },
 
     /*
-    Pós-processamento colectivo dos alvos escritos pelo nível 2.
-
-    Trata o bloco como uma malha de molas: cada par de jogadores cujas posições
-    de base distam menos de 33m fica ligado por uma mola que tenta manter essa
-    distância. Três iterações de relaxação chegam para o bloco não se esticar
-    nem colapsar. Depois corta os alvos pela linha de fora-de-jogo e pelos
-    limites do campo.
-    */
-    /*
-    Separação mínima entre alvos: só repulsão, nunca atracção.
-
-    Dois jogadores nunca devem ir para o mesmo sítio, aconteça o que acontecer
-    nas folhas — dois defesas podem escolher marcar adversários que estão
-    colados, e o alvo dos dois fica no mesmo ponto.
-
-    As molas de coesão garantiam isto por acidente (o comprimento de repouso
-    também empurrava para fora). Mas coesão e não-sobreposição são exigências
-    diferentes, e misturá-las era o que fazia as molas discutirem com o bloco.
-    Aqui só se resolve a segunda.
-
-    Corre duas vezes, e a ordem importa:
-
-        antes do holdLine   separação completa (x e z)
-        depois do holdLine  `apenasX` — só lateral
-
-    Só antes não chega: o holdLine põe os defesas todos no mesmo z e desfaz
-    metade do trabalho (medido: um par CB/RB a 0.03 m). Só depois também não:
-    empurrar em z passa defesas para lá da linha de fora-de-jogo (medido: 145
-    violações). Em x não há nada que se possa violar — dois defesas na linha
-    ficam lado a lado, que é o que se quer.
-    */
-    /*
-    Companheiros de linha nunca são afastados do próprio GR em separarAlvos
-    (que só separa jogadores de linha entre si, role!=='gk' excluído dos
-    dois lados) — um alvo de "apoio" perto da baliza podia coincidir com a
-    posição real do GR e o jogador entrava mesmo por cima dele. Empurra o
-    alvo pra fora de um raio mínimo do GR.
+    Um alvo de "apoio" perto da baliza pode coincidir com a posição real do
+    guarda-redes, e o jogador entrava mesmo por cima dele. Empurra o alvo
+    para fora de um raio mínimo do GR.
     */
     afastarDoGuardaRedes: function (teamPlayers) {
         const gk = teamPlayers.find(p => p.role === 'gk');
@@ -1604,100 +1570,34 @@ const Match = {
         }
     },
 
-    separarAlvos: function (teamPlayers, apenasX) {
-        const outfield = teamPlayers.filter(p => p.role !== 'gk');
-        const n = outfield.length;
-        const P = outfield.map(p => ({ x: p.dynamicTarget.x, z: p.dynamicTarget.z }));
-        const SEPARACAO = 3.2;
+    /*
+    LINHA DE FORA-DE-JOGO da equipa que ataca.
 
-        for (let iter = 0; iter < 4; iter++) {
-            for (let i = 0; i < n; i++) {
-                for (let j = i + 1; j < n; j++) {
-                    const a = P[i], b = P[j];
-                    let dx = a.x - b.x, dz = a.z - b.z;
-                    let dist = Math.hypot(dx, dz);
+    Nao e posicionamento: e um facto sobre as posicoes REAIS do adversario.
+    Leem-no o computeBlock (que trava a frente do bloco), o PassCandidates
+    (que descarta companheiros em fora-de-jogo) e o nivel 2.
 
-                    // Exactamente sobrepostos: separa numa direcção arbitrária
-                    // mas determinada, senão não há direcção para empurrar.
-                    if (dist < 0.001) { dx = (i - j); dz = 0.1; dist = Math.hypot(dx, dz); }
-                    if (dist >= SEPARACAO) continue;
-
-                    const empurrao = ((SEPARACAO - dist) / dist) * 0.5;
-                    a.x += dx * empurrao; b.x -= dx * empurrao;
-                    if (!apenasX) { a.z += dz * empurrao; b.z -= dz * empurrao; }
-                }
-            }
-        }
-
-        // Limite casado com BarreiraCampo.x (linha lateral + 3m, config.js) —
-        // com só +2m aqui sobrava 1m de zona morta junto ao muro onde a bola
-        // podia ficar parada e nenhum jogador tinha alvo que alcançasse lá.
-        for (let i = 0; i < n; i++) {
-            outfield[i].dynamicTarget.x = Math.max(-BarreiraCampo.x, Math.min(BarreiraCampo.x, P[i].x));
-            if (!apenasX) outfield[i].dynamicTarget.z = Math.max(-(CAMPO_COMP / 2), Math.min(CAMPO_COMP / 2, P[i].z));
-        }
-    },
-
-    relaxConstraints: function (teamPlayers) {
-        const outfield = teamPlayers.filter(p => p.role !== 'gk');
-        const n = outfield.length;
-
-        /*
-        As molas de coesão saíram daqui.
-
-        Eram um passo de relaxação com comprimentos de repouso tirados do
-        `baseTarget` — ou seja, da forma da FORMAÇÃO, que não sabe nada do
-        bloco. Corriam depois do nível 2 e desfaziam-lhe o trabalho: com o
-        rectângulo a pedir 22 m de profundidade, as molas voltavam a esticar a
-        equipa para os ~40 m da formação. Medido: alvos do ponta-de-lança a
-        z=21 com a frente do bloco em 6.4, e o bloco a medir 62.7 m contra os
-        44 m de limite.
-
-        A coesão passou a ser garantida por construção — toda a gente é colocada
-        dentro do mesmo rectângulo, por percentagem. Não faz sentido ter duas
-        noções de forma da equipa a discutir uma com a outra.
-
-        O que fica é o limite de fora-de-jogo, que continua a ser calculado aqui
-        porque depende das posições REAIS do adversário — e uma separação
-        mínima, abaixo.
-        */
-        const P = outfield.map(p => ({ x: p.dynamicTarget.x, z: p.dynamicTarget.z }));
-
-        const isAttacking = (this.possessionTeam === teamPlayers[0].team);
-        let offsideLimitZ = null;
-        if (isAttacking) {
-            if (teamPlayers[0].team === 'TeamA') {
-                let maxOppZ = -999;
-                Match.opponents.forEach(o => { if (o.role !== 'gk' && o.model.position.z > maxOppZ) maxOppZ = o.model.position.z; });
-                offsideLimitZ = Math.max(0, maxOppZ, Match.ball.position.z) - 0.2;
-            } else {
-                let minOppZ = 999;
-                Match.players.forEach(o => { if (o.role !== 'gk' && o.model.position.z < minOppZ) minOppZ = o.model.position.z; });
-                offsideLimitZ = Math.min(0, minOppZ, Match.ball.position.z) + 0.2;
-            }
-        }
-
-        // Publica o limite para o nível 1 não o poder violar ao compactar.
+    Vivia dentro do relaxConstraints. Sobreviveu a apagar desse passo porque
+    era a unica coisa la dentro que nao mexia em ninguem.
+    */
+    publicarLinhaDeForaDeJogo: function (teamPlayers) {
         const bb = TeamAI.get(teamPlayers[0].team);
-        bb.offsideLimitDir = (offsideLimitZ === null) ? null : offsideLimitZ * teamPlayers[0].dirZ;
-
-        for (let i = 0; i < n; i++) {
-            const p = outfield[i];
-            const tx = Math.max(-(CAMPO_LARG / 2 - 2), Math.min(CAMPO_LARG / 2 - 2, P[i].x));
-            let tz = P[i].z;
-
-            if (p.dirZ === 1) {
-                tz = Math.max(-(CAMPO_COMP / 2 - 0.5), tz);
-                if (isAttacking && !p.hasBall && offsideLimitZ !== null) tz = Math.min(offsideLimitZ, tz);
-            } else {
-                tz = Math.min(CAMPO_COMP / 2 - 0.5, tz);
-                if (isAttacking && !p.hasBall && offsideLimitZ !== null) tz = Math.max(offsideLimitZ, tz);
-            }
-            tz = Math.max(-(CAMPO_COMP / 2), Math.min(CAMPO_COMP / 2, tz));
-
-            p.dynamicTarget.x = tx;
-            p.dynamicTarget.z = tz;
+        if (this.possessionTeam !== teamPlayers[0].team) {
+            bb.offsideLimitDir = null;
+            return;
         }
+
+        let limiteZ;
+        if (teamPlayers[0].team === 'TeamA') {
+            let maxOppZ = -999;
+            Match.opponents.forEach(o => { if (o.role !== 'gk' && o.model.position.z > maxOppZ) maxOppZ = o.model.position.z; });
+            limiteZ = Math.max(0, maxOppZ, Match.ball.position.z) - 0.2;
+        } else {
+            let minOppZ = 999;
+            Match.players.forEach(o => { if (o.role !== 'gk' && o.model.position.z < minOppZ) minOppZ = o.model.position.z; });
+            limiteZ = Math.min(0, minOppZ, Match.ball.position.z) + 0.2;
+        }
+        bb.offsideLimitDir = limiteZ * teamPlayers[0].dirZ;
     },
 
     /*

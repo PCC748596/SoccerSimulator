@@ -732,36 +732,6 @@ function slotNoBloco(p, bb) {
 }
 
 /*
-A última linha segura a linha do fora-de-jogo.
-
-As folhas defensivas puxam o defesa atrás do homem que marca, e as molas do
-relaxConstraints esticam-no outra vez; sem este travão a linha derrapa vários
-metros e o ajuste "Linha Defensiva" do painel deixa de significar alguma coisa.
-
-Por isso este passo é o ÚLTIMO de todos — corre depois do relax. É um PISO: o
-defesa pode subir acima da linha (sair a pressionar), nunca ficar abaixo dela,
-que é o que dá vantagem ao avançado adversário. Quem vai à bola está isento.
-
-O comentário que aqui estava dizia exactamente o contrário do que o código faz.
-
-Como a linha é agora a traseira do próprio bloco (computeBlock), os defesas já
-chegam aqui à altura certa e este passo corrige metros, não dezenas — antes as
-duas contas discordavam ~10 m e isto colapsava a última linha toda no mesmo z.
-*/
-function holdOffsideLine(bb) {
-    if (bb.isAttacking) return;
-
-    for (const p of bb.outfield) {
-        if (p.role !== 'def') continue;
-        if (p === bb.chaser || p.hasBall) continue;
-
-        if (p.dynamicTarget.z * bb.dir < bb.defLineDir) {
-            p.dynamicTarget.z = bb.defLineDir * bb.dir;
-        }
-    }
-}
-
-/*
 Playing style do GK — Offensive (sweeper, sai da baliza) vs Defensive (fica
 perto da linha, padrão). Dispara evento só na mudança, não todo frame.
 
@@ -895,7 +865,7 @@ const TeamAI = {
         O bloco é calculado AQUI, antes do nível 2, porque agora é ele que dá a
         posição a toda a gente — deixou de ser uma compressão aplicada no fim.
 
-        Usa o `offsideLimitDir` do frame anterior (o relaxConstraints só o
+        Usa o `offsideLimitDir` do frame anterior (o Match só o
         publica depois das posições estarem escritas). Um frame de atraso numa
         grandeza que varia devagar é preferível ao nó de ordem que a alternativa
         obrigaria a desatar.
@@ -907,13 +877,13 @@ const TeamAI = {
         return bb;
     },
 
-    // Já não há um passo de compressão: comprimir passou a ser encolher o
-    // rectângulo, no computeBlock. Mantido para não partir quem o chame.
-    compact: function () { },
+    /*
+    Ja nao ha passos colectivos depois do nivel 2.
 
-    // Terceiro e último passo: a linha defensiva tem a palavra final, já depois
-    // das molas de coesão.
-    holdLine: function (bb) {
-        holdOffsideLine(bb);
-    }
+    `compact` era um no-op desde que comprimir passou a ser encolher o
+    rectangulo no computeBlock. `holdLine` puxava os defesas para a linha de
+    fora-de-jogo, por cima do que o nivel 2 tinha escrito — largava a marca
+    de quem estivesse a marcar um homem adiantado. Vao ser refeitos sobre
+    triangulacao de Delaunay, so para a equipa com bola.
+    */
 };
