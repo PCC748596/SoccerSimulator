@@ -672,18 +672,6 @@ function computeBlock(bb) {
     const ment = MentalidadeModel[Tatics.estilo] || MentalidadeModel.balanceado;
     centro += ment.blocoZ;
 
-    /*
-    Sem bola, o bloco seguia a bola quase cru - numa reposicao do GR
-    adversario (bola no fundo do campo DELE) o bloco inteiro saltava ate
-    perto do ataque a tentar "ficar a frente da bola". Defensive Pressure
-    trava o quanto o CENTRO avanca sem bola: meio-campo (Low), 1/3 do campo
-    de ataque (Balanced), 2/3 (High) - ver TeamShape.pressaoLineCap.
-    */
-    if (!bb.isAttacking) {
-        const pressCap = TeamShape.pressaoLineCap[Tatics.pressaoDefensiva] ?? TeamShape.pressaoLineCap.balanced;
-        centro = Math.min(centro, pressCap);
-    }
-
     let z0 = centro - (profundidade / 2);
     let z1 = centro + (profundidade / 2);
 
@@ -710,6 +698,39 @@ function computeBlock(bb) {
         if (z0 > tectoLinha) {
             z0 = tectoLinha;
             z1 = z0 + profundidade;
+        }
+
+        /*
+        A BOLA TEM DE CABER DENTRO DO BLOCO.
+
+        O tecto acima e ABSOLUTO: com "Linha Defensiva: Medium" prendia z0 em
+        -18.25 e, por tabela, o centro em -3.2 - o bloco ficava parado no
+        meio-campo enquanto a bola andava ate a linha de fundo adversaria.
+        Medido: d(centro)/d(bola) = 0.00 em todo o meio campo de ataque.
+
+        Este escape existia no antigo computeDefensiveLine
+        (`Math.max(lineDir, ballDir - blockDepthDef)`) e veio-se abaixo com
+        ele. Sem isto os defesas seguram-se la atras enquanto um colega
+        pressiona 60 m a frente. Corre DEPOIS do tecto, de proposito: e o
+        tecto que cede, nao a coesao do bloco.
+        */
+        const bolaDir = bb.momentumZ * bb.dir;
+        if (z1 < bolaDir) {
+            z1 = bolaDir;
+            z0 = z1 - profundidade;
+        }
+
+        /*
+        Limite duro do avanco sem bola, por Defensive Pressure: meio-campo
+        (Low), 1/3 do campo de ataque (Balanced), 2/3 (High). E o ULTIMO a
+        falar - e ele que decide ate onde a equipa acompanha uma bola que
+        esta no campo adversario, e por isso ganha ao escape acima.
+        */
+        const pressCap = TeamShape.pressaoLineCap[Tatics.pressaoDefensiva] ?? TeamShape.pressaoLineCap.balanced;
+        const centroAtual = (z0 + z1) / 2;
+        if (centroAtual > pressCap) {
+            z0 -= (centroAtual - pressCap);
+            z1 -= (centroAtual - pressCap);
         }
     }
 
