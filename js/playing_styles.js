@@ -318,6 +318,64 @@ const PlayingStyleEvents = {
     }
 };
 
+/*
+Vão livre entre adversários, ao longo de uma linha Z fixa — testa uns
+candidatos X e escolhe o mais longe do adversário mais próximo em cada um
+(maximin: escolha entre pontos discretos, não gradiente nem física).
+
+Usado por dois estilos:
+    Fox in the Box  — vão entre 2 zagueiros, dentro da área.
+    Goal Poacher    — brecha na última linha, à espera do lançamento.
+
+`zAlvo` vem no referencial do MUNDO. Devolve 0 (centro) se não houver
+adversários de campo para comparar.
+
+Também evita convergir com um COLEGA que já reivindicou um vão perto neste
+mesmo frame (`bb.vaosReivindicados`, limpo em TeamBlackboard.gather) — sem
+isto, dois atacantes do mesmo estilo calculavam cada um o "melhor" vão sem
+saber do outro, e batiam os dois no mesmo ponto.
+
+Veio do antigo nível 2, que só o tinha porque duas folhas o usavam. Quem o
+usa são os estilos, por isso vive aqui.
+*/
+function melhorVaoX(p, bb, zAlvo, candidatosX) {
+    /*
+    Lado preferido: o da JOGADA (bola), não o lado onde o jogador já está.
+    Com a bola presa num lado, o vão "mais livre" no lado OPOSTO ganhava e o
+    avançado ia atrás dele — alvo sem ligação nenhuma ao que estava a
+    acontecer. Um bónus pequeno resolve os quase-empates sem impedir uma
+    troca de lado genuína.
+    */
+    const meuLado = (bb && Math.abs(bb.ballX) > 3 ? Math.sign(bb.ballX) : 0) ||
+        Math.sign(p.model.position.x) || Math.sign(p.baseTarget.x) || 1;
+    const adversarios = (bb && bb.opp) ? bb.opp : [];
+
+    let melhorX = 0, melhorNota = -Infinity;
+    for (const x of candidatosX) {
+        let minD = Infinity;
+        for (const opp of adversarios) {
+            if (opp.role === 'gk') continue;
+            const d = Math.hypot(opp.model.position.x - x, opp.model.position.z - zAlvo);
+            if (d < minD) minD = d;
+        }
+        if (bb && bb.vaosReivindicados) {
+            for (const cx of bb.vaosReivindicados) {
+                const d = Math.abs(cx - x);
+                if (d < minD) minD = d;
+            }
+        }
+        let nota = minD;
+        if (Math.sign(x) === meuLado) nota += 4.0;
+        if (nota > melhorNota) { melhorNota = nota; melhorX = x; }
+    }
+
+    if (bb) {
+        if (!bb.vaosReivindicados) bb.vaosReivindicados = [];
+        bb.vaosReivindicados.push(melhorX);
+    }
+    return melhorX;
+}
+
 /* =========================================================================
    CAMADA POSICIONAL DO PLAYING STYLE
    =========================================================================
@@ -357,7 +415,7 @@ function aplicarEstiloPosicional(p, bb, targetX, targetZ) {
         if (est.ombroDefesa && bb && bb.isAttacking &&
             bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
             targetZ = (bb.offsideLimitDir - 0.5) * p.dirZ;
-            targetX = melhorVaoX(ctx, targetZ,
+            targetX = melhorVaoX(p, bb, targetZ,
                 [-16, -12, -8, -4, 0, 4, 8, 12, 16]);
         }
 
@@ -369,7 +427,7 @@ function aplicarEstiloPosicional(p, bb, targetX, targetZ) {
         */
         if (est.dentroArea && bb && bb.isAttacking) {
             if (targetZ * p.dirZ < CrossModel.areaZ) targetZ = CrossModel.areaZ * p.dirZ;
-            targetX = melhorVaoX(ctx, targetZ,
+            targetX = melhorVaoX(p, bb, targetZ,
                 [-16, -11, -6.5, -2, 2, 6.5, 11, 16]);
         }
 
@@ -415,7 +473,7 @@ function aplicarEstiloPosicional(p, bb, targetX, targetZ) {
         if (est.fechaComBolaCentral && bb && bb.isAttacking) {
             const ladoEst = Math.sign(p.baseTarget.x) || 1;
             let tapado = false;
-            for (const opp of ctx.opponents) {
+            for (const opp of (bb.opp || [])) {
                 if (opp.role === 'gk') continue;
                 const noFlanco = (Math.sign(opp.model.position.x) === ladoEst && Math.abs(opp.model.position.x) > 10.0);
                 const aFrente = (opp.model.position.z * p.dirZ > p.model.position.z * p.dirZ) &&
