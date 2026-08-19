@@ -68,12 +68,16 @@ test('podeIntercetar recusa quem está a marcar', () => {
         'a interceptacao nao verifica se o jogador esta a marcar');
 });
 
-test('desarme e carrinho só valem contra o próprio marcado', () => {
-    for (const folha of ['vale carrinho', 'vale desarme']) {
-        const i = BT.indexOf("cond('" + folha + "'");
-        assert.ok(i >= 0);
-        const corpo = BT.slice(i, i + 900);
-        assert.ok(/estouAMarcar\(p\) && p\.markingTarget !== c/.test(corpo),
-            folha + ' deixa abandonar a marca para ir a outro portador');
-    }
+test('o desarme so vale contra o proprio marcado', () => {
+    /*
+    A regra mudou de sitio, nao de conteudo: o roubo passou para o nivel 2
+    (TacklingAI.podeTentar, em position_bt.js) e a verificacao e feita uma
+    vez para as duas tentativas, em vez de repetida em cada folha do BT.
+    */
+    const POS = fs.readFileSync(path.join(raiz, 'js', 'bt', 'position_bt.js'), 'utf8');
+    const i = POS.indexOf('podeTentar(p)');
+    assert.ok(i >= 0, 'TacklingAI.podeTentar nao encontrado');
+    const corpo = POS.slice(i, i + 900);
+    assert.ok(corpo.includes('p.markingTarget && p.markingTarget !== c'),
+        'deixa abandonar a marca para ir a outro portador');
 });

@@ -7,7 +7,7 @@ Pares pedidos:
   médio-ala <-> médio-ala oposto
   médio-centro <-> médio-centro oposto
 
-Corre o assignMarking real.
+Corre o atribuirMarcacao real.
 */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -17,7 +17,8 @@ const vm = require('node:vm');
 
 const raiz = path.join(__dirname, '..');
 const CONFIG = fs.readFileSync(path.join(raiz, 'js', 'config.js'), 'utf8');
-const TEAM = fs.readFileSync(path.join(raiz, 'js', 'bt', 'team_bt.js'), 'utf8');
+// A marcação vive no nível 2 desde que a defesa toda passou para lá.
+const POS = fs.readFileSync(path.join(raiz, 'js', 'bt', 'position_bt.js'), 'utf8');
 
 function recortarConst(src, nome) {
     const i = src.indexOf('const ' + nome + ' = {');
@@ -92,9 +93,9 @@ function correr() {
         recortarConst(CONFIG, 'DefensivePressureModel') + '\n' +
         recortarConst(CONFIG, 'MarkingModel') + '\n' +
         recortarConst(CONFIG, 'CoberturaModel') + '\n' +
-        recortarFuncao(TEAM, 'atribuirCobertura') + '\n' +
-        recortarFuncao(TEAM, 'assignMarking') +
-        '\nthis.f = assignMarking;', sandbox);
+        recortarFuncao(POS, 'atribuirCobertura') + '\n' +
+        recortarFuncao(POS, 'atribuirMarcacao') +
+        '\nthis.f = atribuirMarcacao;', sandbox);
     sandbox.f(bb);
     return { casa, fora };
 }

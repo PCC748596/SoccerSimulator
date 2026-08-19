@@ -1318,15 +1318,6 @@ const MarkingModel = {
     */
     corredorMax: 16.0,
 
-    /*
-    Terço do campo onde é permitido TENTAR TIRAR a bola (ver podeRoubarBola).
-    Fora dele o jogador marca à distância e acompanha, sem atacar a bola.
-
-    'def'  só no terço da própria baliza (pedido)
-    'mid'  nos dois terços de trás
-    null   sem restrição (comportamento antigo)
-    */
-    setorDeRoubo: 'def',
 
     /*
     MARCAÇÃO POR POSIÇÃO — quem pega em quem.
@@ -1794,6 +1785,71 @@ const PerceptionModel = {
 
 // Segundos que a equipa SEM bola espera, depois de a perder, antes de
 // reavaliar chaser/marcação — ligado ao selector "Defensive Pressure".
+/*
+=============================================================================
+TACKLING — tirar a bola ao adversário
+=============================================================================
+Vive no NÍVEL 2 (ver TacklingAI em position_bt.js), junto da marcação: tirar
+a bola é defesa, e a defesa toda passou para lá. Estava espalhado pelo
+nível 3 (folhas `vale carrinho` / `vale desarme` do PlayerBT) com os números
+escritos no meio das condições.
+
+    ativo         interruptor geral. DESLIGADO de propósito: queremos ver a
+                  marcação a funcionar sozinha antes de voltar a pôr gente a
+                  atacar a bola.
+
+    setor         terço onde é permitido tentar, no referencial de ataque do
+                  jogador. 'def' = só no terço da própria baliza; 'mid' = nos
+                  dois terços de trás; null = em qualquer sítio.
+
+                  Fora do setor o jogador marca e acompanha, sem se atirar à
+                  bola. Atacar a bola a meio campo é o que desfaz o bloco: o
+                  marcador salta ao portador, falha, e o corredor dele fica
+                  aberto com a equipa toda já ultrapassada.
+
+    distMaxBola   distância máxima à BOLA para sequer considerar.
+
+    desarme       desarme de pé: alcance em metros (o central chega um pouco
+                  mais longe) e a taxa por segundo, por posição.
+    carrinho      distância mínima e máxima, ângulo máximo de entrada em
+                  graus (medido entre a direcção do portador e o defensor) e
+                  a taxa por segundo, por posição.
+
+                  As taxas são as que estavam escritas dentro das condições
+                  do PlayerBT, movidas tal e qual. `outros` é o valor para
+                  qualquer posição que não esteja na tabela.
+
+    porPressao    multiplica a taxa conforme o Defensive Pressure. O estilo
+                  do jogador multiplica por cima (estiloAtivoDe(p).pressao).
+=============================================================================
+*/
+const TacklingModel = {
+    ativo: false,
+
+    setor: 'def',
+    distMaxBola: 10.0,
+
+    desarme: {
+        alcance: 2.5,
+        alcanceCB: 2.8,
+        taxaPorPosicao: { CB: 5.5, DM: 5.5, outros: 3.5 }
+    },
+
+    carrinho: {
+        distMin: 1.0,
+        distMax: 4.2,
+        anguloMax: 135,
+        taxaPorPosicao: { CB: 1.5, DM: 1.5, LB: 1.1, RB: 1.1, outros: 0.7 }
+    },
+
+    porPressao: { low: 0.7, balanced: 1.0, high: 1.4 },
+
+    taxaDe(tabela, pos) {
+        const base = tabela[pos] !== undefined ? tabela[pos] : tabela.outros;
+        return base * (this.porPressao[Tatics.pressaoDefensiva] ?? this.porPressao.balanced);
+    }
+};
+
 const DefensivePressureModel = {
     low: 6.0,
     balanced: 4.0,

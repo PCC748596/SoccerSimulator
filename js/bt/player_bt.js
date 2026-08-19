@@ -1068,29 +1068,6 @@ function caminhoFechadoAFrente(ctx) {
     return adversariosAFrente(ctx) >= PassModel.bloqueioMin;
 }
 
-/*
-Onde é permitido TENTAR TIRAR a bola (desarme e carrinho).
-
-Fora daí o jogador marca e acompanha — fica à distância que o Defensive
-Pressure manda e segue o homem, sem se atirar à bola. Atacar a bola a meio
-campo é o que desfaz o bloco: o marcador salta ao portador, falha, e o
-corredor dele fica aberto com toda a equipa já ultrapassada.
-
-`setorDeRoubo` é o terço, no referencial de ataque do jogador — 'def' é o
-terço da PRÓPRIA baliza. Pôr 'mid' alarga a dois terços; null desliga a
-restrição e volta ao comportamento antigo (roubar em qualquer sítio).
-*/
-function podeRoubarBola(p) {
-    const setor = MarkingModel.setorDeRoubo;
-    if (!setor) return true;
-
-    const terco = CAMPO_COMP / 6;
-    const zAtk = p.model.position.z * p.dirZ;
-    if (setor === 'def') return zAtk < -terco;
-    if (setor === 'mid') return zAtk < terco;
-    return true;
-}
-
 const PlayerBT = sel('PlayerRoot',
 
     /* --- Bola parada ---------------------------------------------------- */
@@ -1275,68 +1252,18 @@ const PlayerBT = sel('PlayerRoot',
     /* --- Sem bola -------------------------------------------------------- */
     seq('SemBola',
         sel('DecisaoSemBola',
-            // Carrinho: tentativa agressiva de desarme ao deslizar (taxa reduzida pela metade).
-            seq('Carrinho',
-                cond('vale carrinho', (ctx) => {
-                    const p = ctx.p, c = Match.ballCarrier;
-                    if (!podeRoubarBola(p)) return false;
-                    /*
-                    A marcar: só se o portador for o MEU homem. Não se
-                    abandona a marca para ir ao portador de outro — era
-                    assim que a marcação se desfazia toda de uma vez,
-                    com meia equipa a convergir no mesmo jogador.
-                    */
-                    if (estouAMarcar(p) && p.markingTarget !== c) return false;
-                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 10) return false;
-                    const d = p.model.position.distanceTo(c.model.position);
-                    if (d < 1.0 || d > 4.2) return false;
+            /*
+            O DESARME E O CARRINHO SAIRAM DAQUI.
 
-                    // Entra de frente, de lado ou em perseguição diagonal
-                    const carrierDir = c.velocity.lengthSq() > 0.1
-                        ? c.velocity.clone().normalize()
-                        : new THREE.Vector3(0, 0, 1).applyQuaternion(c.model.quaternion);
-                    const toDefensor = new THREE.Vector3().subVectors(p.model.position, c.model.position);
-                    toDefensor.y = 0;
-                    if (toDefensor.lengthSq() < 0.0001) return false;
-                    toDefensor.normalize();
-                    const angulo = carrierDir.angleTo(toDefensor);
-                    if (angulo > (135 * Math.PI / 180)) return false;
+            Tirar a bola ao adversario e defesa, e a defesa passou toda para o
+            nivel 2 (ver TacklingAI em position_bt.js), junto com a marcacao.
+            O nivel 3 fica com o que faz com a bola.
 
-                    // Taxa reduzida em 50%
-                    let taxa = (p.pos === 'CB' || p.pos === 'DM') ? 1.5 : ((p.pos === 'LB' || p.pos === 'RB') ? 1.1 : 0.7);
-                    if (Tatics.pressaoDefensiva === 'high') taxa *= 1.4;
-                    else if (Tatics.pressaoDefensiva === 'low') taxa *= 0.7;
-                    taxa *= estiloAtivoDe(p).pressao;
-                    return chancePorSegundo(taxa, ctx.dt);
-                }),
-                act('carrinho', actSlideTackle)
-            ),
-
-            // Desarme de pé.
-            seq('Desarme',
-                cond('vale desarme', (ctx) => {
-                    const p = ctx.p, c = Match.ballCarrier;
-                    if (!podeRoubarBola(p)) return false;
-                    /*
-                    A marcar: só se o portador for o MEU homem. Não se
-                    abandona a marca para ir ao portador de outro — era
-                    assim que a marcação se desfazia toda de uma vez,
-                    com meia equipa a convergir no mesmo jogador.
-                    */
-                    if (estouAMarcar(p) && p.markingTarget !== c) return false;
-                    if (!c || c.team === p.team || c.role === 'gk' || ctx.distToBall >= 10) return false;
-                    const d = p.model.position.distanceTo(c.model.position);
-                    const alcance = (p.pos === 'CB') ? 2.8 : 2.5;
-                    if (d >= alcance) return false;
-
-                    let taxaDes = (p.pos === 'CB' || p.pos === 'DM') ? 5.5 : 3.5;
-                    if (Tatics.pressaoDefensiva === 'high') taxaDes *= 1.4;
-                    else if (Tatics.pressaoDefensiva === 'low') taxaDes *= 0.7;
-                    taxaDes *= estiloAtivoDe(p).pressao;
-                    return chancePorSegundo(taxaDes, ctx.dt);
-                }),
-                act('desarmar', actTackle)
-            ),
+            De momento o tackling esta DESLIGADO por inteiro
+            (TacklingModel.ativo = false): queremos ver a marcacao a funcionar
+            sozinha primeiro. As accoes actTackle/actSlideTackle continuam aqui
+            porque sao execucao, nao decisao - e o nivel 2 que as dispara.
+            */
 
             /*
             Intercetar: a bola vem na minha direcção e eu chego-lhe primeiro.

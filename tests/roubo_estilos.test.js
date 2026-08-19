@@ -12,6 +12,8 @@ const vm = require('node:vm');
 const raiz = path.join(__dirname, '..');
 const CONFIG = fs.readFileSync(path.join(raiz, 'js', 'config.js'), 'utf8');
 const BT = fs.readFileSync(path.join(raiz, 'js', 'bt', 'player_bt.js'), 'utf8');
+// O tackling passou para o nivel 2 (TacklingAI), junto com a marcacao.
+const POS = fs.readFileSync(path.join(raiz, 'js', 'bt', 'position_bt.js'), 'utf8');
 
 function recortarConst(src, nome) {
     const i = src.indexOf('const ' + nome + ' = {');
@@ -42,10 +44,10 @@ function montar(setor) {
     const sandbox = { Math, CAMPO_COMP, Tatics: { pressaoDefensiva: 'balanced' } };
     vm.createContext(sandbox);
     vm.runInContext(
-        recortarConst(CONFIG, 'MarkingModel') + '\n' +
-        (setor === undefined ? '' : 'MarkingModel.setorDeRoubo = ' + JSON.stringify(setor) + ';\n') +
-        recortarFuncao(BT, 'podeRoubarBola') +
-        '\nthis.f = podeRoubarBola; this.M = MarkingModel;', sandbox);
+        recortarConst(CONFIG, 'TacklingModel') + '\n' +
+        (setor === undefined ? '' : 'TacklingModel.setor = ' + JSON.stringify(setor) + ';\n') +
+        recortarConst(POS, 'TacklingAI') +
+        '\nthis.f = (p) => TacklingAI.podeRoubar(p); this.M = TacklingModel;', sandbox);
     return sandbox;
 }
 
@@ -54,7 +56,7 @@ const jog = (zAtk, dirZ) => ({ dirZ: dirZ === undefined ? 1 : dirZ,
     model: { position: { x: 0, z: zAtk * (dirZ === undefined ? 1 : dirZ) } } });
 
 test('a config pede roubo só no terço defensivo', () => {
-    assert.strictEqual(montar().M.setorDeRoubo, 'def');
+    assert.strictEqual(montar().M.setor, 'def');
 });
 
 test('rouba dentro do próprio terço defensivo', () => {
@@ -95,13 +97,24 @@ test('null desliga a restrição', () => {
 
 /* ---------------------------------------------------------------- */
 
-test('as duas folhas de roubo do BT chamam podeRoubarBola', () => {
-    for (const folha of ['vale carrinho', 'vale desarme']) {
-        const i = BT.indexOf("cond('" + folha + "'");
-        assert.ok(i >= 0, 'folha ' + folha + ' nao encontrada');
-        const corpo = BT.slice(i, i + 400);
-        assert.ok(/podeRoubarBola\(p\)/.test(corpo), folha + ' nao verifica o setor');
+test('o roubo saiu do nivel 3', () => {
+    for (const folha of ["vale carrinho", "vale desarme"]) {
+        assert.ok(!BT.includes("cond('" + folha + "'"),
+            'a folha ' + folha + ' voltou ao PlayerBT');
     }
+});
+
+test('o nivel 2 verifica o interruptor e o setor antes de tentar roubar', () => {
+    const i = POS.indexOf('podeTentar(p)');
+    assert.ok(i >= 0, 'TacklingAI.podeTentar nao encontrado');
+    const corpo = POS.slice(i, i + 900);
+    assert.ok(corpo.includes('TacklingModel.ativo'), 'podeTentar ignora o interruptor geral');
+    assert.ok(corpo.includes('this.podeRoubar(p)'), 'podeTentar nao verifica o setor');
+});
+
+test('o tackling esta desligado por inteiro', () => {
+    // Pedido: ver a marcacao a funcionar sozinha primeiro.
+    assert.strictEqual(montar().M.ativo, false);
 });
 
 test('os Playing Styles só correm na fase de ataque', () => {

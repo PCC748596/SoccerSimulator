@@ -1266,6 +1266,14 @@ const Match = {
         // próprio setupSetPiece, directamente.
         if (this.state !== 'PLAY') return;
 
+        /*
+        Quem marca quem, uma vez por equipa, antes dos ticks individuais —
+        precisa dos 22 jogadores. Era o nível 1 que fazia isto; passou para o
+        nível 2 com o resto da defesa (ver PositionAI.assignMarking).
+        */
+        PositionAI.assignMarking(bbA);
+        PositionAI.assignMarking(bbB);
+
         this.players.forEach(p => PositionAI.tick(p, bbA));
         this.opponents.forEach(p => PositionAI.tick(p, bbB));
 

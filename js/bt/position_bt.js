@@ -536,11 +536,289 @@ const PositionBT = sel('PositionRoot',
     )
 );
 
+
+/* =========================================================================
+   MARCACAO — quem marca quem
+   =========================================================================
+   Passagem de EQUIPA: corre uma vez por equipa por frame, antes dos ticks
+   individuais, porque precisa dos 22 jogadores em campo.
+
+   Veio do nivel 1 (team_bt.js) sem alteracoes de comportamento.
+   ========================================================================= */
+
+/*
+Marcação individual + cobertura. Cada defensor escolhe o adversário que
+melhor pontua por proximidade e perigo (distância à própria baliza).
+Nenhum adversário é marcado por mais de 2 jogadores.
+
+Histerese por "top-3", como no pickChaser: sem isto, dois adversários com
+pontuação parecida faziam o alvo de marcação trocar de um frame para o
+outro, e com ele o alvo de posicionamento do defensor (o salto reportado).
+Quem já marcava um adversário continua a marcá-lo se ele ainda estiver
+entre as 3 melhores opções deste frame.
+
+Nota: p.markingTarget é limpo globalmente TODOS os frames antes deste tick
+correr (ver Match.runTeamAI), por isso não dá para comparar contra ele
+directamente — o valor "do frame anterior" tem de viver num campo à parte
+que sobrevive a esse reset (p.prevMarkingTarget).
+*/
+function atribuirCobertura(semAlvo) {
+    const bola = Match.ball.position;
+    semAlvo
+        .map(def => ({ def, d: def.model.position.distanceTo(bola) }))
+        .filter(c => c.d <= CoberturaModel.raioMaxBola)
+        .sort((a, b) => a.d - b.d || a.def.id - b.def.id)
+        .slice(0, CoberturaModel.max)
+        .forEach(c => { c.def.isCovering = true; });
+}
+
+function atribuirMarcacao(bb) {
+    // Mesma janela de reação do pickChaser: mantém a marcação de antes da
+    // perda de bola em vez de recalcular tudo no mesmo frame.
+    const teamStyle = (typeof TeamPlayStyles !== 'undefined') ? TeamPlayStyles[Tatics.teamPlayStyle] : null;
+    const reactionDelay = (DefensivePressureModel[Tatics.pressaoDefensiva] || DefensivePressureModel.balanced)
+        * (teamStyle ? teamStyle.pressaoPosPerda : 1.0);
+    if (!bb.isAttacking && Match.possessionTimer < reactionDelay) {
+        const semAlvo = [];
+        bb.outfield.forEach(def => {
+            const alvo = def.prevMarkingTarget;
+            if (alvo) {
+                def.markingTarget = alvo;
+                alvo.markCount = (alvo.markCount || 0) + 1;
+            } else {
+                semAlvo.push(def);
+            }
+        });
+        atribuirCobertura(semAlvo);
+        return;
+    }
+
+    /*
+    Com a bola, marcar é tarefa só dos DEFESAS — e cobrir não é tarefa de
+    ninguém.
+
+    Isto corria para as duas equipas sem distinção, por isso a equipa que
+    atacava saía daqui com a linha toda a marcar alguém: médios e avançados
+    sem bola apareciam em MARKING, e os que não arranjavam par caíam em
+    BLOCKING. Fechar a linha da bola é acção de quem defende; a equipa com
+    posse tem outro trabalho (ver as acções de apoio em actHoldPosition).
+    Os defesas continuam a marcar mesmo em posse: é o que evita que uma
+    perda de bola apanhe a última linha sem ninguém em cima dos avançados.
+    */
+    const defenders = bb.isAttacking
+        ? bb.outfield.filter(p => p.role === 'def')
+        : bb.outfield;
+    const attackers = bb.opp.filter(p => p.role !== 'gk');
+    const ballCarrier = bb.oppCarrier;
+    const primaryChaser = bb.chaser;
+
+    if (primaryChaser && ballCarrier) {
+        primaryChaser.markingTarget = ballCarrier;
+        // Definir markCount = 2 impede que outros jogadores (na iteração abaixo) decidam marcar o mesmo portador
+        ballCarrier.markCount = 2;
+        primaryChaser.prevMarkingTarget = ballCarrier;
+    }
+
+    /*
+    PRIMEIRA PASSAGEM — pares por posição (MarkingModel.paresPorPosicao).
+
+    Corre antes da pontuação para que os pares óbvios de um 4-4-2 saiam
+    sempre iguais: central com avançado, lateral com extremo, médio-ala com
+    médio-ala. Só depois é que a pontuação trata de quem sobrou.
+
+    Entre candidatos da mesma posição escolhe-se o do MESMO LADO: compara-se
+    o x dos dois no mesmo referencial, por isso o lateral esquerdo apanha o
+    extremo que ataca por ali, e não o do outro lado do campo.
+    */
+    const pares = MarkingModel.paresPorPosicao || {};
+    defenders.forEach(def => {
+        if (def === primaryChaser || def.markingTarget) return;
+
+        const preferidas = pares[def.pos];
+        if (!preferidas || !preferidas.length) return;
+
+        for (const posAlvo of preferidas) {
+            let melhor = null, melhorDx = Infinity;
+            for (const att of attackers) {
+                if (att.pos !== posAlvo) continue;
+                if (att.markCount >= 1) continue;
+                const dx = Math.abs(att.model.position.x - def.model.position.x);
+                if (dx < melhorDx) { melhorDx = dx; melhor = att; }
+            }
+            if (melhor) {
+                def.markingTarget = melhor;
+                def.prevMarkingTarget = melhor;
+                melhor.markCount++;
+                break;
+            }
+        }
+    });
+
+    const semAlvo = [];
+    defenders.forEach(def => {
+        if (def === primaryChaser) return;
+        // Já emparelhado por posição na primeira passagem.
+        if (def.markingTarget) return;
+
+        const candidatos = [];
+        attackers.forEach(att => {
+            if (att.markCount >= 1) return;
+
+            const dist = def.model.position.distanceTo(att.model.position);
+            if (dist > 25) return;
+
+            // Fora do corredor natural do jogador: nunca é candidato, por
+            // muito perto ou perigoso que esteja — ver MarkingModel.corredorMax.
+            const xDiff = Math.abs(def.baseTarget.x - att.model.position.x);
+            if (xDiff > MarkingModel.corredorMax) return;
+
+            const distToGoal = Math.abs(def.ownGoalZ - att.model.position.z);
+            let score = (100 - dist) + (100 - distToGoal) * 1.5;
+            score -= (xDiff * 4.0);
+
+            // Penaliza atacantes que tentem marcar jogadores no seu próprio meio-campo
+            if (def.role === 'atk' && att.model.position.z * def.dirZ < 5.0) {
+                score -= 100;
+            }
+
+            if (att === ballCarrier) score += 50;
+
+            candidatos.push({ att, score });
+        });
+        candidatos.sort((a, b) => b.score - a.score);
+
+        const prevAlvo = def.prevMarkingTarget;
+        const prevIdx = prevAlvo ? candidatos.findIndex(c => c.att === prevAlvo) : -1;
+        const escolhido = (prevIdx >= 0 && prevIdx < 3)
+            ? prevAlvo
+            : (candidatos.length ? candidatos[0].att : null);
+
+        if (typeof MatchStats !== 'undefined' && prevAlvo && escolhido !== prevAlvo) {
+            MatchStats[bb.team].trocasMarcacao++;
+        }
+
+        if (escolhido) {
+            def.markingTarget = escolhido;
+            escolhido.markCount++;
+        } else {
+            semAlvo.push(def);
+        }
+        def.prevMarkingTarget = escolhido;
+    });
+
+    // Cobertura só a defender — ver a nota acima.
+    if (!bb.isAttacking) atribuirCobertura(semAlvo);
+}
+
+/* =========================================================================
+   TACKLING — tirar a bola ao adversário
+   =========================================================================
+   Decisão de nível 2, junto da marcação: tirar a bola é defesa, e a defesa
+   toda vive aqui. Estava no nível 3, nas folhas `vale carrinho` e `vale
+   desarme` do PlayerBT, com os números escritos no meio das condições — ver
+   TacklingModel em config.js, para onde foram todos.
+
+   As ACÇÕES (actTackle/actSlideTackle, em player_bt.js) ficam onde estão:
+   são execução, e é este nível que as dispara.
+
+   DESLIGADO por inteiro enquanto TacklingModel.ativo for false.
+   ========================================================================= */
+
+const TacklingAI = {
+    /*
+    Setor onde é permitido tentar. Fora dele o jogador marca e acompanha, sem
+    se atirar à bola: atacar a bola a meio campo é o que desfaz o bloco — o
+    marcador salta ao portador, falha, e o corredor dele fica aberto com a
+    equipa toda já ultrapassada.
+    */
+    podeRoubar(p) {
+        const setor = TacklingModel.setor;
+        if (!setor) return true;
+        const terco = CAMPO_COMP / 6;
+        const zAtk = p.model.position.z * p.dirZ;
+        if (setor === 'def') return zAtk < -terco;
+        if (setor === 'mid') return zAtk < terco;
+        return true;
+    },
+
+    // Condições comuns às duas tentativas.
+    podeTentar(p) {
+        if (!TacklingModel.ativo) return false;
+        if (!this.podeRoubar(p)) return false;
+
+        const c = Match.ballCarrier;
+        if (!c || c.team === p.team || c.role === 'gk') return false;
+        if (p.model.position.distanceTo(Match.ball.position) >= TacklingModel.distMaxBola) return false;
+
+        /*
+        A marcar: só se o portador for o MEU homem. Não se abandona a marca
+        para ir ao portador de outro — era assim que a marcação se desfazia
+        toda de uma vez, com meia equipa a convergir no mesmo jogador.
+        */
+        if (p.markingTarget && p.markingTarget !== c) return false;
+
+        return true;
+    },
+
+    // Devolve 'SLIDE_TACKLE', 'TACKLE' ou null. Não muda estado nenhum.
+    decidir(p, dt) {
+        if (!this.podeTentar(p)) return null;
+
+        const c = Match.ballCarrier;
+        const d = p.model.position.distanceTo(c.model.position);
+        const estilo = estiloAtivoDe(p).pressao;
+
+        // Carrinho primeiro: alcance maior, taxa mais baixa.
+        const K = TacklingModel.carrinho;
+        if (d >= K.distMin && d <= K.distMax && this.anguloDeEntradaOk(p, c, K.anguloMax)) {
+            const taxa = TacklingModel.taxaDe(K.taxaPorPosicao, p.pos) * estilo;
+            if (chancePorSegundo(taxa, dt)) return 'SLIDE_TACKLE';
+        }
+
+        const D = TacklingModel.desarme;
+        const alcance = (p.pos === 'CB') ? D.alcanceCB : D.alcance;
+        if (d < alcance) {
+            const taxa = TacklingModel.taxaDe(D.taxaPorPosicao, p.pos) * estilo;
+            if (chancePorSegundo(taxa, dt)) return 'TACKLE';
+        }
+
+        return null;
+    },
+
+    // Entra de frente, de lado ou em perseguição diagonal — nunca por trás.
+    anguloDeEntradaOk(p, c, grausMax) {
+        const dirPortador = c.velocity.lengthSq() > 0.1
+            ? c.velocity.clone().normalize()
+            : new THREE.Vector3(0, 0, 1).applyQuaternion(c.model.quaternion);
+
+        const paraDefensor = new THREE.Vector3().subVectors(p.model.position, c.model.position);
+        paraDefensor.y = 0;
+        if (paraDefensor.lengthSq() < 0.0001) return false;
+        paraDefensor.normalize();
+
+        return dirPortador.angleTo(paraDefensor) <= (grausMax * Math.PI / 180);
+    }
+};
+
 /* =========================================================================
    PONTO DE ENTRADA
    ========================================================================= */
 
 const PositionAI = {
+    /*
+    Passagem de EQUIPA, uma vez por equipa por frame, antes dos ticks
+    individuais: quem marca quem. Precisa dos 22 jogadores, por isso não pode
+    viver no tick de um jogador só.
+
+    Estava no nível 1 (assignMarking, em team_bt.js). Marcar não é a forma
+    colectiva, é onde cada jogador se põe — nível 2. O nível 1 continua a
+    escolher o perseguidor da bola (pickChaser), que é decisão de equipa: só
+    um vai.
+    */
+    assignMarking: function (teamBB) {
+        atribuirMarcacao(teamBB);
+    },
+
     // Um tick do nível 2 para um jogador de campo.
     tick: function (player, teamBB) {
         if (player.role === 'gk') return;   // o GK posiciona-se em updateGK()
@@ -550,6 +828,16 @@ const PositionAI = {
 
         PositionBT.tick(ctx);
         this.commit(ctx);
+
+        /*
+        Tackling depois do posicionamento: a decisão de atacar a bola sobrepõe-se
+        ao alvo, não o substitui a meio. Desligado enquanto TacklingModel.ativo
+        for false — ver TacklingAI.
+        */
+        const dt = (typeof Match !== 'undefined' && Match.delta) ? Match.delta : 0.016;
+        const tentativa = TacklingAI.decidir(player, dt);
+        if (tentativa === 'SLIDE_TACKLE') actSlideTackle(ctx);
+        else if (tentativa === 'TACKLE') actTackle(ctx);
     },
 
     // Coesão táctica final + limites do campo. Corre depois da árvore para que

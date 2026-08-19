@@ -178,7 +178,8 @@ test('apoio: jogadores do outro lado da bola não gastam vaga', () => {
 
 /* ------------------------------------------------------------------ */
 
-const TEAM_BT = fs.readFileSync(path.join(raiz, 'js', 'bt', 'team_bt.js'), 'utf8');
+// A marcação e a cobertura vivem no nível 2 desde que a defesa passou para lá.
+const POS_BT = fs.readFileSync(path.join(raiz, 'js', 'bt', 'position_bt.js'), 'utf8');
 
 /*
 Cobertura (BLOCKING): só quem está perto da bola, e só um de cada vez.
@@ -199,7 +200,7 @@ function montarCobertura(distanciasABola) {
     vm.createContext(sandbox);
     vm.runInContext(
         recortarConst(CONFIG, 'CoberturaModel') + '\n' +
-        recortarFuncao(TEAM_BT, 'atribuirCobertura') +
+        recortarFuncao(POS_BT, 'atribuirCobertura') +
         '\nthis.f = atribuirCobertura; this.CM = CoberturaModel;', sandbox);
     sandbox.f(semAlvo);
     return {
@@ -245,7 +246,7 @@ test('cobertura: sem candidatos não rebenta', () => {
 Quem pode marcar e cobrir: a defender, toda a gente; a atacar, só os
 defesas marcam e ninguém cobre.
 
-Corre o assignMarking real dentro do sandbox, com as dependências que ele
+Corre o atribuirMarcacao real dentro do sandbox, com as dependências que ele
 lê (modelos de config, Tatics, Match) montadas à mão.
 */
 function montarMarcacao(isAttacking) {
@@ -306,9 +307,9 @@ function montarMarcacao(isAttacking) {
         recortarConst(CONFIG, 'DefensivePressureModel') + '\n' +
         recortarConst(CONFIG, 'MarkingModel') + '\n' +
         recortarConst(CONFIG, 'CoberturaModel') + '\n' +
-        recortarFuncao(TEAM_BT, 'atribuirCobertura') + '\n' +
-        recortarFuncao(TEAM_BT, 'assignMarking') +
-        '\nthis.f = assignMarking;', sandbox);
+        recortarFuncao(POS_BT, 'atribuirCobertura') + '\n' +
+        recortarFuncao(POS_BT, 'atribuirMarcacao') +
+        '\nthis.f = atribuirMarcacao;', sandbox);
     sandbox.f(bb);
 
     return {
