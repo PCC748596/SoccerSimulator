@@ -2168,7 +2168,8 @@ const Match = {
             construção normal quando o próprio guarda-redes tem a bola — não
             ficam encolhidos junto à própria área. Referência é o mesmo tecto
             "Linha Defensiva" do painel que baliza a equipa em jogo corrido
-            (TeamShape.linhaDefensiva/computeDefensiveLine em team_bt.js), só
+            (TeamShape.linhaDefensiva, aplicado à traseira do bloco em
+            computeBlock, team_bt.js), só
             que aqui aplicado como avanço a partir da posição de formação
             (`baseTarget`), não como recuo a partir da bola.
 

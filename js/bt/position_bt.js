@@ -174,7 +174,10 @@ function attackCB(ctx) {
         // Fica um pouco mais centrado também.
         desviar(ctx, ctx.bb.ballX * 0.05, -7.0 * ctx.p.dirZ);
     } else {
-        desviar(ctx, ctx.bb.ballX * 0.10, ctx.bb.styleDefenseZShift * 0.3 * ctx.p.dirZ);
+        // Sem termo de Mentalidade aqui: ela ja desloca o bloco INTEIRO
+        // (MentalidadeModel.blocoZ, em computeBlock). O `styleDefenseZShift * 0.3`
+        // que aqui estava era uma terceira dose do mesmo botao, so no central.
+        desviar(ctx, ctx.bb.ballX * 0.10, 0);
     }
 }
 
@@ -459,11 +462,24 @@ faz a cobertura por dentro.
 function defendFlankShift(ctx) {
     const p = ctx.p, bb = ctx.bb;
     const carrier = bb.oppCarrier;
-    const nearSide = (bb.flankAlert === 'left') ? 'LB' : 'RB';
-    const lado = p.baseTarget.x * p.dirZ;
-    const eCentralDoLado = (bb.flankAlert === 'left') ? (lado < 0) : (lado > 0);
+    /*
+    Lado pelo SINAL, não pelo nome da posição.
 
-    if (p.pos === nearSide) {
+    `bb.flankAlert` vem no referencial de ataque da equipa que defende
+    (`carrier.x * bb.dir`, ver detectFlankThreat). Nesse referencial quem tem
+    `baseTarget.x * dirZ < 0` está no flanco 'left' — e no FormationsData é o
+    RB que lá está (x = -0.7), não o LB. O `nearSide = flankAlert === 'left'
+    ? 'LB' : 'RB'` que aqui estava mandava por isso o lateral do flanco
+    OPOSTO atravessar o campo até à bola, nas duas equipas. Comparar sinais
+    tira o problema do nome da posição de vez.
+    */
+    const ladoAmeaca = (bb.flankAlert === 'left') ? -1 : 1;
+    const meuLado = Math.sign(p.baseTarget.x * p.dirZ) || 1;
+    const noLadoDaAmeaca = (meuLado === ladoAmeaca);
+    const eLateralDoLado = (p.pos === 'LB' || p.pos === 'RB') && noLadoDaAmeaca;
+    const eCentralDoLado = noLadoDaAmeaca;
+
+    if (eLateralDoLado) {
         // Sai ao portador, pelo lado da baliza. Sem tecto próprio: sair ao
         // homem é marcação, vale a mesma rédea das outras (alcanceMarcacao).
         marcar(ctx, carrier);

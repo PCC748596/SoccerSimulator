@@ -9,7 +9,6 @@ blackboard (TeamBlackboard) que o nível 2 (PositionBT) consome.
 O que sai daqui:
     posture            a intenção colectiva (ver TeamPosture)
     pushMultiplier     quanto a equipa sobe no campo quando ataca
-    styleDefenseZShift deslocamento da linha defensiva pelo estilo de jogo
     advanceFactor      0..1, quão avançada está a manobra ofensiva
     chaser             quem vai à bola
     flankAlert         'left' | 'right' | null — flanco em perigo
@@ -42,36 +41,29 @@ const TeamPosture = {
 };
 
 /*
-Manípulas por postura. Os valores estão NEUTROS de propósito: com push=1.0 e
-lineShift=0.0 o comportamento é exactamente o que estava afinado antes desta
-refactorização. Sobe/desce estes números para dar personalidade a cada postura
-sem tocar na matemática das posições.
+Manípulas por postura.
 
-    push       multiplica o avanço colectivo no ataque (1.0 = neutro)
-    lineShift  desloca a linha defensiva em metros na direcção de ataque
-               (positivo = linha mais alta, negativo = linha mais recuada)
+    push    multiplica o avanço colectivo no ataque (1.0 = neutro)
+    blocoZ  desloca o BLOCO INTEIRO em metros, no referencial de ataque
+            (positivo = mais à frente da linha da bola)
+
+O `blocoZ` estava hardcoded numa cadeia de `if` dentro do computeBlock
+enquanto esta tabela tinha um `lineShift` que ninguém lia — dois mecanismos
+para a mesma coisa, um deles morto. Agora a postura só se afina aqui.
+
+O offset da MENTALIDADE não vive nesta tabela: é ortogonal à postura e soma-se
+por cima (ver MentalidadeModel.blocoZ em config.js).
 */
 const TeamPostureTuning = {
-    SET_PIECE: { push: 1.0, lineShift: 0.0 },
-    BUILD_UP: { push: 1.0, lineShift: 0.0 },
-    ATTACK_SUSTAINED: { push: 1.0, lineShift: 0.0 },
-    FINAL_THIRD: { push: 1.0, lineShift: 0.0 },
-    COUNTER: { push: 1.0, lineShift: 0.0 },
-    HIGH_PRESS: { push: 1.0, lineShift: 0.0 },
-    MID_BLOCK: { push: 1.0, lineShift: 0.0 },
-    LOW_BLOCK: { push: 1.0, lineShift: 0.0 },
-    FLANK_SHIFT: { push: 1.0, lineShift: 0.0 }
-};
-
-// Avanço do bloco (Z, metros) sobre a linha da bola, por Estilo — só entra
-// a atacar (ver computeBlock). Antes o botão do painel praticamente não
-// tinha efeito no bloco fora da Pressão Alta.
-const EstiloBlockOffset = {
-    muito_defensiva: -10.0,
-    defesa: -5.0,
-    balanceado: 0.0,
-    ataque: 7.0,
-    muito_ofensiva: 12.0
+    SET_PIECE:        { push: 1.0, blocoZ:  0.0 },
+    BUILD_UP:         { push: 1.0, blocoZ:  5.0 },
+    ATTACK_SUSTAINED: { push: 1.0, blocoZ:  5.0 },
+    FINAL_THIRD:      { push: 1.0, blocoZ:  5.0 },
+    COUNTER:          { push: 1.0, blocoZ: 10.0 },
+    HIGH_PRESS:       { push: 1.0, blocoZ:  0.0 },   // fica na linha da bola
+    MID_BLOCK:        { push: 1.0, blocoZ: -3.0 },
+    LOW_BLOCK:        { push: 1.0, blocoZ: -6.0 },
+    FLANK_SHIFT:      { push: 1.0, blocoZ:  0.0 }
 };
 
 /* --- Blackboard --------------------------------------------------------- */
@@ -93,7 +85,6 @@ class TeamBlackboard {
         this.phase = 1;
 
         this.pushMultiplier = 1.0;
-        this.styleDefenseZShift = 0.0;
         this.advanceFactor = 0.0;
 
         this.chaser = null;
@@ -110,8 +101,8 @@ class TeamBlackboard {
         recriado a cada tick (ver TeamAI.get). `momentumX` suaviza-se aqui;
         `congestion`/`aggression` são recalculados do zero a cada gather().
         */
-        this.momentumX = 0;
-        this.momentumZ = 0;                          // -1 (esq) .. +1 (dir), suavizado
+        this.momentumX = 0;                          // -1 (esq) .. +1 (dir), suavizado
+        this.momentumZ = 0;                          // Z do mundo em metros, suavizado
         this.congestion = { esq: 0, centro: 0, dir: 0 };
         this.aggression = 0.5;                        // 0..1, ver computeAggression
 
@@ -200,7 +191,14 @@ function updateMomentum(bb, dt) {
     } else {
         kZ = 1 - Math.exp(-1.0 * dt);
     }
-    if (Math.abs(alvoZ - bb.momentumZ) > 30 && dt < 1) bb.momentumZ = alvoZ;
+    /*
+    Salto instantâneo só quando a bola foi REPOSTA (fora de PLAY: golo, canto,
+    lançamento). Em jogo o teste era `|alvoZ - momentumZ| > 30`, e qualquer
+    alívio ou bola longa punha o centro do bloco no destino num único frame —
+    os onze alvos saltavam juntos.
+    */
+    const reposta = (typeof Match !== 'undefined' && Match.state !== 'PLAY');
+    if (reposta || dt >= 1) bb.momentumZ = alvoZ;
     else bb.momentumZ += (alvoZ - bb.momentumZ) * kZ;
 }
 
@@ -591,25 +589,19 @@ function computeCollectiveShape(bb) {
     if (bb.phase === 2) phaseMultiplier = 1.1;
     else if (bb.phase === 3) phaseMultiplier = 1.3;
 
+    /*
+    A Mentalidade entra no bloco por UM caminho só (MentalidadeModel.blocoZ,
+    aplicado em computeBlock). Aqui ficou apenas o que ela ainda multiplica: a
+    rampa de avanço ofensivo. Os antigos `styleDefenseZShift`/`styleLineShift`
+    eram uma segunda dose do mesmo botão, com valores que nem batiam certo com
+    os do bloco (defesa: -8 m na linha contra -5 m no bloco).
+    */
     let pushMultiplier = (bb.isCounter ? 1.35 : 1.0) * phaseMultiplier;
-    let styleDefenseZShift = 0;
-    if (Tatics.estilo === 'muito_ofensiva') {
-        pushMultiplier *= 1.30;
-        styleDefenseZShift = 12.0 * bb.dir;
-    } else if (Tatics.estilo === 'ataque') {
-        pushMultiplier *= 1.15;
-        styleDefenseZShift = 6.0 * bb.dir;
-    } else if (Tatics.estilo === 'defesa') {
-        pushMultiplier *= 0.85;
-        styleDefenseZShift = -8.0 * bb.dir;
-    } else if (Tatics.estilo === 'muito_defensiva') {
-        pushMultiplier *= 0.70;
-        styleDefenseZShift = -16.0 * bb.dir;
-    }
+    if (Tatics.estilo === 'muito_ofensiva') pushMultiplier *= 1.30;
+    else if (Tatics.estilo === 'ataque') pushMultiplier *= 1.15;
+    else if (Tatics.estilo === 'defesa') pushMultiplier *= 0.85;
+    else if (Tatics.estilo === 'muito_defensiva') pushMultiplier *= 0.70;
     bb.pushMultiplier = pushMultiplier;
-
-    bb.styleDefenseZShift = styleDefenseZShift;
-    bb.styleLineShift = styleDefenseZShift * bb.dir;   // o mesmo, em referencial de ataque
 
     /*
     Quão avançada está a manobra: 0 na nossa linha de fundo, 1 no ataque.
@@ -622,45 +614,6 @@ function computeCollectiveShape(bb) {
     */
     const ballPushNorm = THREE.MathUtils.clamp((bb.ballZ * bb.dir + 53) / 106, 0, 1);
     bb.advanceFactor = THREE.MathUtils.clamp(ballPushNorm * 1.3 * pushMultiplier, 0, 1);
-}
-
-/*
-A linha defensiva — a linha do fora-de-jogo da equipa.
-
-Acompanha a bola (8 m atrás dela), é modulada pelo estilo de jogo, e é limitada
-em cima pelo ajuste "Linha Defensiva" do painel e em baixo pelo lineFloor.
-É este tecto que decide se a equipa faz bloco baixo, médio ou alto.
-
-Devolve no referencial de ataque da equipa; bb.defLineZ guarda a versão mundo.
-*/
-function computeDefensiveLine(bb) {
-    const cap = TeamShape.linhaDefensiva[Tatics.linhaDefensiva];
-    let tecto = (cap === undefined) ? TeamShape.linhaDefensiva.medium : cap;
-
-    /*
-    Defensive Pressure (painel esquerdo) impõe um tecto ABSOLUTO à linha —
-    sem isto, "Balanced"/"Low" só atrasavam a REACÇÃO (pickChaser/
-    assignMarking, ver DefensivePressureModel) mas a linha em si podia
-    subir tanto quanto "High", bastando Estilo de Jogo=Ataque. Usa o mais
-    restritivo entre o tecto do painel "Linha Defensiva" e o de
-    TeamShape.pressaoLineCap.
-    */
-    const pressCap = TeamShape.pressaoLineCap[Tatics.pressaoDefensiva] ?? TeamShape.pressaoLineCap.balanced;
-    tecto = Math.min(tecto, pressCap);
-
-    const ballDir = bb.momentumZ * bb.dir;
-    const follow = ballDir - 8 + bb.styleLineShift;
-    let lineDir = THREE.MathUtils.clamp(follow, TeamShape.lineFloor, tecto);
-
-    // O tecto não pode deixar a bola fugir do bloco: se ela está muito à frente
-    // (pressão no meio-campo adversário), a linha sobe para o bloco continuar
-    // inteiro. Sem isto, os defesas seguravam-se lá atrás enquanto um colega
-    // pressionava 60 m à frente — precisamente o que se queria evitar.
-    lineDir = Math.max(lineDir, ballDir - TeamShape.blockDepthDef);
-
-    bb.defLineDir = lineDir;
-    bb.defLineZ = lineDir * bb.dir;
-    return lineDir;
 }
 
 /*
@@ -698,51 +651,69 @@ function computeBlock(bb) {
 
     /* --- profundidade --------------------------------------------------- */
 
-    // Pedido explícito: bloco do mesmo tamanho independente de quem tem a
-    // bola — profundidadeComBola/amplitudeComBola (esticar a atacar) tirados
-    // de propósito, não é comportamento pedido nesta conversa.
-    let profundidade = CAMPO_COMP * B.profundidade[compacLength];
+    // Pedido explicito: bloco do mesmo tamanho independente de quem tem a
+    // bola - esticar a atacar nao e comportamento pedido nesta conversa.
+    const profundidade = CAMPO_COMP * B.profundidade[compacLength];
 
-    // O centro do bloco no eixo Z acompanha a bola
-    let blockCenterZ_Rel = bb.momentumZ * bb.dir;
+    // O centro do bloco no eixo Z acompanha a bola.
+    let centro = bb.momentumZ * bb.dir;
 
-    // A pedido do utilizador: Puxar o bloco à frente ou atrás consoante a postura
-    if (bb.isAttacking) {
-        if (bb.posture === TeamPosture.COUNTER) {
-            blockCenterZ_Rel += 10.0;
-        } else if (bb.posture === TeamPosture.BUILD_UP || bb.posture === TeamPosture.ATTACK_SUSTAINED || bb.posture === TeamPosture.FINAL_THIRD) {
-            blockCenterZ_Rel += 5.0;
-        }
-        // Estilo (painel Defesa/Balanceado/Ataque) — antes só entrava na
-        // condição da Pressão Alta; fora isso "Balanceado" e "Ataque"
-        // produziam o MESMO bloco. Agora cada opção desloca visivelmente:
-        // Balanceado já fica um pouco à frente da linha da bola (+2),
-        // Ataque mais (+6), Defesa nem tanto (0).
-        blockCenterZ_Rel += EstiloBlockOffset[Tatics.estilo] ?? EstiloBlockOffset.balanceado;
-    } else {
-        if (bb.posture === TeamPosture.LOW_BLOCK) {
-            blockCenterZ_Rel -= 6.0;
-        } else if (bb.posture === TeamPosture.MID_BLOCK) {
-            blockCenterZ_Rel -= 3.0;
-        }
-        // HIGH_PRESS mantém-se na linha da bola (sem offset)
+    // POSTURA: puxa o bloco a frente ou atras da linha da bola. Uma tabela
+    // so (TeamPostureTuning), em vez da cadeia de `if` que aqui estava.
+    const tune = TeamPostureTuning[bb.posture];
+    if (tune) centro += tune.blocoZ;
 
-        /*
-        Sem bola, o bloco seguia `ballZ*dir` quase cru — numa reposição do
-        GR adversário (bola no fundo do campo DELE, ballZ*dir enorme deste
-        lado) o bloco inteiro saltava até perto do ataque tentando "ficar à
-        frente da bola", mesmo em Balanced/Low. Defensive Pressure agora
-        trava o quanto o bloco avança sem bola: meio-campo (Low), 1/3 do
-        campo de ataque (Balanced), 2/3 (High) — ver TeamShape.pressaoLineCap.
-        */
+    /*
+    MENTALIDADE: o offset do painel, aplicado ao bloco INTEIRO e nas DUAS
+    fases. Antes vivia so neste ramo `isAttacking`, e o ramo sem bola nao
+    tinha termo nenhum - em Muito Ofensiva a perda de posse mudava o centro
+    de +12+5 para -3, 20 m num frame, e a equipa toda arrancava para tras.
+    */
+    const ment = MentalidadeModel[Tatics.estilo] || MentalidadeModel.balanceado;
+    centro += ment.blocoZ;
+
+    /*
+    Sem bola, o bloco seguia a bola quase cru - numa reposicao do GR
+    adversario (bola no fundo do campo DELE) o bloco inteiro saltava ate
+    perto do ataque a tentar "ficar a frente da bola". Defensive Pressure
+    trava o quanto o CENTRO avanca sem bola: meio-campo (Low), 1/3 do campo
+    de ataque (Balanced), 2/3 (High) - ver TeamShape.pressaoLineCap.
+    */
+    if (!bb.isAttacking) {
         const pressCap = TeamShape.pressaoLineCap[Tatics.pressaoDefensiva] ?? TeamShape.pressaoLineCap.balanced;
-        blockCenterZ_Rel = Math.min(blockCenterZ_Rel, pressCap);
+        centro = Math.min(centro, pressCap);
     }
 
-    let z0 = blockCenterZ_Rel - (profundidade / 2);
-    let z1 = blockCenterZ_Rel + (profundidade / 2);
+    let z0 = centro - (profundidade / 2);
+    let z1 = centro + (profundidade / 2);
 
-    // O fora-de-jogo trava a frente do bloco (só a atacar)
+    /*
+    Tecto da TRASEIRA do bloco: e aqui que o ajuste "Linha Defensiva" do painel
+    entra, porque a linha do fora-de-jogo E a traseira do bloco (bb.defLineDir,
+    no fim desta funcao). Enquanto eram dois calculos independentes discordavam
+    uns 10 m: os defesas recebiam o slot na traseira do bloco e o holdOffsideLine
+    puxava-os logo a seguir todos para o MESMO z da outra linha - a ultima linha
+    saia achatada, quatro jogadores no mesmo ponto.
+    */
+    if (!bb.isAttacking) {
+        /*
+        A Mentalidade desloca o tecto com o resto do bloco. Sem isto ela nao
+        chegava a ver-se a defender: com a bola no meio-campo e "Linha
+        Defensiva: Medium", o tecto -18.25 travava na mesma altura tanto a
+        Equilibrada como a Muito Ofensiva, e a diferenca entre as duas voltava
+        a aparecer de golpe na recuperacao da posse - o salto de 20 m que se
+        queria tirar. Com o tecto deslocado o salto e igual em todas as
+        mentalidades (~8 m) e vem so da postura.
+        */
+        const tectoBase = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
+        const tectoLinha = tectoBase + ment.blocoZ;
+        if (z0 > tectoLinha) {
+            z0 = tectoLinha;
+            z1 = z0 + profundidade;
+        }
+    }
+
+    // O fora-de-jogo trava a frente do bloco (so a atacar)
     if (bb.isAttacking && bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
         if (z1 > bb.offsideLimitDir) {
             z1 = bb.offsideLimitDir;
@@ -762,7 +733,7 @@ function computeBlock(bb) {
         z0 = z1 - profundidade;
     }
 
-    // Travão à marca do penalty própria — ver BlockShape.recuoMax.
+    // Travao a marca do penalty propria - ver BlockShape.recuoMax.
     if (z0 < B.recuoMax) {
         z0 = B.recuoMax;
         z1 = z0 + profundidade;
@@ -770,18 +741,23 @@ function computeBlock(bb) {
 
     /* --- largura -------------------------------------------------------- */
 
-    let largura = CAMPO_LARG * B.amplitude[compac];
+    const largura = CAMPO_LARG * B.amplitude[compac];
     const meiaLarg = largura / 2;
 
-    // Basculação: o rectângulo desliza para o lado da bola proporcionalmente.
-    // Se a bola estiver na linha lateral, o rectângulo vai encostar a essa linha.
-    const ballPercentX = bb.momentumX; // de -1 a 1
     const borda = (CAMPO_LARG / 2) * B.margemLateral;
     const maxCentroX = borda - meiaLarg;
 
-    let centroX = ballPercentX * maxCentroX;
-    
-    // Basculação extra para postura FLANK_SHIFT (desloca 4 metros para o lado em perigo)
+    /*
+    Basculacao: o rectangulo desliza para o lado da bola por uma FRACCAO do
+    desvio dela (BlockShape.bascular). O factor nao estava a ser lido - o
+    centro ia direito a `momentumX * maxCentroX`, ou seja o bloco encostava a
+    linha lateral sempre que a bola la andasse, ~4.5x mais basculacao do que
+    a afinada.
+    */
+    const bascular = bb.isAttacking ? B.bascularComBola : B.bascular;
+    let centroX = bb.momentumX * (CAMPO_LARG / 2) * bascular;
+
+    // Basculacao extra para postura FLANK_SHIFT (4 m para o lado em perigo)
     if (!bb.isAttacking && bb.posture === TeamPosture.FLANK_SHIFT) {
         if (bb.flankAlert === 'left') {
             centroX -= 4.0 * bb.dir;
@@ -790,7 +766,7 @@ function computeBlock(bb) {
         }
     }
 
-    // Garante que o rectângulo não sai do campo (já coberto pelo maxCentroX, mas por precaução)
+    // Garante que o rectangulo nao sai do campo
     centroX = THREE.MathUtils.clamp(centroX, -maxCentroX, maxCentroX);
 
     bb.bloco = {
@@ -801,8 +777,16 @@ function computeBlock(bb) {
         modo: modo
     };
 
-    // O painel de debug desenha estes: mantidos em sincronia com o que é
-    // mesmo aplicado, ao contrário do blockBottom/blockTop antigos, que eram
+    /*
+    A linha do fora-de-jogo da equipa E a traseira do bloco - um calculo so.
+    Substitui o computeDefensiveLine, que a calculava por uma formula propria
+    (`bola - 8 m`, com os seus proprios tectos) e discordava do rectangulo.
+    */
+    bb.defLineDir = z0;
+    bb.defLineZ = z0 * bb.dir;
+
+    // O painel de debug desenha estes: mantidos em sincronia com o que e
+    // mesmo aplicado, ao contrario do blockBottom/blockTop antigos, que eram
     // calculados, desenhados e depois ignorados pelo clamp.
     bb.blockBottom = z0;
     bb.blockTop = z1;
@@ -825,13 +809,21 @@ function slotNoBloco(p, bb) {
     if (!bloco || !p.slot) return null;
 
     const linha = LineShape[p.role] || LineShape.mid;
-    const modo = bb.isAttacking ? linha.comBola : linha.semBola;
+    const desvioLinha = bb.isAttacking ? linha.comBola : linha.semBola;
 
-    // v: puxado para o alvo da linha, com/sem bola.
-    let v = lerp(p.slot.v, modo.alvo, modo.empurrar);
+    /*
+    v: a profundidade da FORMACAO, deslocada pela linha (ver LineShape).
 
-    // Ajuste fino por posição específica (lateral à frente do central, médio
-    // de ponta sobe mais na construção) — ver PositionDepthNudge.
+    Era `lerp(p.slot.v, alvo, empurrar)` - um lerp para um alvo comum, com
+    empurrar ate 0.80, que projectava a linha inteira quase no mesmo v: num
+    4-4-2 sem bola os centrais saiam em 0.016 e os laterais em 0.034, meio
+    metro de diferenca dentro de um bloco de 30 m. A formacao tactica nao
+    chegava ao campo. Deslocar em vez de projectar mantem o espacamento.
+    */
+    let v = p.slot.v + desvioLinha;
+
+    // Ajuste fino por posicao especifica (lateral a frente do central, medio
+    // de ponta sobe mais na construcao) - ver PositionDepthNudge.
     const nudge = PositionDepthNudge[p.pos];
     if (nudge) {
         if (bb.isAttacking) {
@@ -846,11 +838,15 @@ function slotNoBloco(p, bb) {
     // u: fecha lateralmente em torno do eixo central do bloco (0.5).
     const fechoLinha = LineShape.fecho[p.role] || LineShape.fecho.mid;
     const fecho = bb.isAttacking ? fechoLinha.comBola : fechoLinha.semBola;
-    let u = 0.5 + (p.slot.u - 0.5) * fecho;
 
-    if (bb.dir === -1) {
-        u = 1 - u;
-    }
+    /*
+    Sem espelho aqui. O `u` JA vem no referencial do mundo: o match.js
+    espelha-o para a TeamB (`(-x + 1) / 2`), tal como espelha o baseTarget.
+    O `if (bb.dir === -1) u = 1 - u` que aqui estava era um SEGUNDO espelho -
+    desfazia o primeiro e punha o lateral direito da TeamB no lado esquerdo
+    do campo, em contradicao com o baseTarget dele.
+    */
+    const u = 0.5 + (p.slot.u - 0.5) * fecho;
 
     return {
         x: bloco.x0 + u * (bloco.x1 - bloco.x0),
@@ -865,12 +861,15 @@ As folhas defensivas puxam o defesa atrás do homem que marca, e as molas do
 relaxConstraints esticam-no outra vez; sem este travão a linha derrapa vários
 metros e o ajuste "Linha Defensiva" do painel deixa de significar alguma coisa.
 
-Por isso este passo é o ÚLTIMO de todos — corre depois do relax. O defesa pode
-recuar abaixo da linha (cobertura), nunca subir acima dela. Quem vai à bola está
-isento: tem de poder sair a pressionar.
+Por isso este passo é o ÚLTIMO de todos — corre depois do relax. É um PISO: o
+defesa pode subir acima da linha (sair a pressionar), nunca ficar abaixo dela,
+que é o que dá vantagem ao avançado adversário. Quem vai à bola está isento.
 
-Como só puxa defesas para trás, nunca pode criar um fora-de-jogo — e a equipa
-que defende não é sequer a que o relax limita por fora-de-jogo.
+O comentário que aqui estava dizia exactamente o contrário do que o código faz.
+
+Como a linha é agora a traseira do próprio bloco (computeBlock), os defesas já
+chegam aqui à altura certa e este passo corrige metros, não dezenas — antes as
+duas contas discordavam ~10 m e isto colapsava a última linha toda no mesmo z.
 */
 function holdOffsideLine(bb) {
     if (bb.isAttacking) return;
@@ -932,7 +931,6 @@ function applyPostureTuning(bb) {
     const tune = TeamPostureTuning[bb.posture];
     if (!tune) return;
     bb.pushMultiplier *= tune.push;
-    bb.styleDefenseZShift += tune.lineShift * bb.dir;
     bb.advanceFactor = THREE.MathUtils.clamp(bb.advanceFactor * tune.push, 0, 1);
 }
 
@@ -1015,7 +1013,6 @@ const TeamAI = {
         TeamBT.tick(bb);
         computeCollectiveShape(bb);
         applyPostureTuning(bb);
-        computeDefensiveLine(bb);
 
         /*
         O bloco é calculado AQUI, antes do nível 2, porque agora é ele que dá a

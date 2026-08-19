@@ -380,18 +380,21 @@ Forma do bloco. Todos os valores estão no REFERENCIAL DE ATAQUE da equipa:
 Para converter para o mundo, multiplicar por p.dirZ.
 */
 const TeamShape = {
-    // Altura MÁXIMA da linha defensiva (a linha do fora-de-jogo).
-    // A linha acompanha a bola, mas nunca sobe acima deste tecto.
+    /*
+    Altura MÁXIMA da linha defensiva — que é a TRASEIRA do bloco (z0), e não
+    uma linha calculada à parte. Enquanto eram dois cálculos independentes
+    discordavam uns 10 m e o `holdOffsideLine` achatava a última linha toda
+    no mesmo z. Ver computeBlock em team_bt.js.
+    */
     linhaDefensiva: {
         low: -32.5,     // 4 m à frente da linha da grande área
         medium: -18.25, // a meio caminho entre a grande área e a linha central
         high: -2.0      // 2 m atrás da linha central
     },
 
-    lineFloor: -43.0,     // a linha nunca recua mais do que isto (10 m da baliza)
-
     /*
-    Tecto ABSOLUTO de avanço sem bola, por Defensive Pressure (painel
+    Tecto ABSOLUTO de avanço do CENTRO do bloco sem bola, por Defensive
+    Pressure (painel
     esquerdo) — em metros no referencial de ataque (0 = meio-campo, +53 =
     baliza adversária). Substitui/limita o antigo comportamento de o bloco
     seguir literalmente `ballZ*dir`: numa reposição do GR adversário (bola
@@ -403,12 +406,6 @@ const TeamShape = {
         balanced: (CAMPO_COMP / 2) / 3,       // 1/3 do campo de ataque (~17.7)
         high: (CAMPO_COMP / 2) * 2 / 3         // 2/3 do campo de ataque (~35.3)
     },
-
-    blockDepthDef: 36.0,  // profundidade do bloco sem bola (último defesa → avançado)
-    blockDepthAtk: 44.0,  // profundidade do bloco com bola
-
-    atkAnchorLag: 26.0,   // no ataque, a última linha fica esta distância atrás da bola
-    atkAnchorMax: 14.0,   // e não sobe acima disto
 
     // Construção: com a bola aquém deste Z, um médio desce a dar linha de passe.
     supportBallZ: -6.0,
@@ -447,17 +444,14 @@ const PositionSmoothing = 3.0;
 const BlockShape = {
     /*
     Profundidade do bloco (da última linha ao jogador mais avançado), por
-    definição de compacidade do painel. 0.34 × 106 = 36 m, que é o valor que
-    o blockDepthDef tinha afinado.
+    definição de compacidade do painel. A traseira deste rectângulo é a linha
+    do fora-de-jogo da equipa — ver computeBlock em team_bt.js.
     */
     profundidade: {
         short: 20 / 106,      // 20 m — bloco curto
         median: 30 / 106,     // 30 m — bloco médio
         large: 40 / 106       // 40 m — bloco longo
     },
-
-    // Com bola o bloco estica: há que dar profundidade para jogar.
-    profundidadeComBola: 1.22,
 
     /*
     Largura do bloco. É a amplitude da equipa — a manípula que o senhor pediu:
@@ -469,9 +463,6 @@ const BlockShape = {
         large: 0.70           // 70%
     },
 
-    // Com bola a equipa abre para esticar o adversário.
-    amplitudeComBola: 1.15,
-
     /*
     Quanto o bloco acompanha a bola lateralmente (basculação).
 
@@ -480,14 +471,7 @@ const BlockShape = {
     rectângulo inteiro. Ninguém se sobrepõe a ninguém porque a forma não muda.
     */
     bascular: 0.22,       // sem bola: o bloco desliza 22% do desvio da bola
-    bascularComBola: 0.10,
-
-    /*
-    Frente do bloco quando a equipa ataca: pelo menos esta fracção do campo À
-    FRENTE da bola — quem ataca corre para além dela. O limite de fora-de-jogo
-    trava-a, e esse é regra e não preferência.
-    */
-    avancoAlemDaBola: 0.14,
+    bascularComBola: 0.10,   // com bola desliza menos: a largura é para manter
 
     // Margem para o rectângulo não sair do campo.
     margemLateral: 0.94,
@@ -513,20 +497,24 @@ Depois de o rectângulo estar posto, cada linha desloca-se dentro dele.
 
 `v` é a profundidade dentro do bloco: 0 = última linha, 1 = frente do bloco.
 A posição de base normalizada da formação dá o v de partida; estes valores
-puxam-no para a frente ou para trás conforme a linha e conforme a equipa tem
-ou não a bola.
+deslocam-no para a frente ou para trás conforme a linha e conforme a equipa
+tem ou não a bola.
 
-    empurrar   quanto o v é puxado na direcção de `alvo` (0 = ignora)
-    alvo       para onde é puxado
+Cada valor é um DESLOCAMENTO em v, somado ao v da formação. Não é um lerp
+para um alvo comum: `v = lerp(slot.v, alvo, empurrar)` com `empurrar` até
+0.80 projectava a linha toda quase no mesmo sítio — num 4-4-2 os 5.3 m que
+separam lateral de central ficavam em 0.5 m em campo, e a formação táctica
+deixava de existir dentro do bloco. Com um deslocamento a linha sobe e desce
+inteira e o espaçamento interno da formação mantém-se.
 
 Com bola os médios sobem mas não tanto como os avançados — era o problema de
 o meio-campo ficar vazio. Sem bola toda a gente recua e a equipa junta-se.
 =============================================================================
 */
 const LineShape = {
-    def: { comBola: { alvo: 0.14, empurrar: 0.55 }, semBola: { alvo: 0.02, empurrar: 0.80 } },
-    mid: { comBola: { alvo: 0.52, empurrar: 0.45 }, semBola: { alvo: 0.38, empurrar: 0.55 } },
-    atk: { comBola: { alvo: 0.94, empurrar: 0.60 }, semBola: { alvo: 0.72, empurrar: 0.45 } },
+    def: { comBola:  0.05, semBola: -0.03 },
+    mid: { comBola:  0.01, semBola: -0.07 },
+    atk: { comBola: -0.04, semBola: -0.13 },
 
     /*
     Estreitamento lateral por linha (multiplica o u em torno do eixo).
@@ -543,12 +531,11 @@ const LineShape = {
 
 /*
 Ajuste fino por POSIÇÃO ESPECÍFICA, por cima do LineShape (que só
-diferencia por linha: def/mid/atk). Sem isto, um lateral e um central
-usam exactamente o mesmo alvo de profundidade — não há razão nenhuma no
-código para o lateral ficar mais avançado, o que é estruturalmente errado
-(o lateral deve estar sempre um pouco à frente do central). Da mesma
-forma, um médio de ponta deve subir mais do que um médio central quando a
-equipa tem bola, para dar opção de passe na construção final.
+diferencia por linha: def/mid/atk). A diferença de profundidade entre
+lateral e central já vem da formação (o LineShape passou a deslocar em vez
+de projectar num alvo comum); isto é o ajuste POR CIMA dela — um médio de
+ponta sobe mais do que um médio central quando a equipa tem bola, para dar
+opção de passe na construção final.
 
 Valor em fracção de v (0..1 da última linha à frente do bloco).
 */
@@ -1827,17 +1814,29 @@ Runner continua a atrair marcação da mesma forma independente da
 Mentalidade ou do TeamPlayStyle da equipa.
 
 MENTALIDADE (era "Estilo de Jogo" — Defesa/Misto/Ataque). Os VALORES
-internos (`defesa`/`balanceado`/`ataque`) não mudaram, só o rótulo na UI —
-ligado a `MentalidadeModel.agressao`, a base da agressividade dinâmica
-(ver `TeamAggression` em `team_bt.js`).
+internos (`defesa`/`balanceado`/`ataque`) não mudaram, só o rótulo na UI.
+
+    agressao  base da agressividade dinâmica (ver `TeamAggression` em
+              `team_bt.js`).
+    blocoZ    deslocamento do BLOCO INTEIRO no eixo de ataque, em metros —
+              é o número que o painel anuncia ("Ofensiva (+7m)"). Aplicado
+              uma vez, ao centro do rectângulo, com e sem bola (ver
+              `computeBlock`).
+
+              Antes a Mentalidade estava espalhada por três sítios com
+              valores diferentes: `EstiloBlockOffset` (só no ramo COM bola),
+              `styleDefenseZShift` (só na linha defensiva) e o
+              `pushMultiplier`. Como o ramo sem bola não tinha termo nenhum,
+              na perda de posse o centro do bloco saltava até 20 m num único
+              frame e os onze alvos saltavam com ele.
 =============================================================================
 */
 const MentalidadeModel = {
-    muito_defensiva: { agressao: 0.20 },
-    defesa: { agressao: 0.35 },
-    balanceado: { agressao: 0.50 },
-    ataque: { agressao: 0.65 },
-    muito_ofensiva: { agressao: 0.80 }
+    muito_defensiva: { agressao: 0.20, blocoZ: -10.0 },
+    defesa:          { agressao: 0.35, blocoZ:  -5.0 },
+    balanceado:      { agressao: 0.50, blocoZ:   0.0 },
+    ataque:          { agressao: 0.65, blocoZ:   7.0 },
+    muito_ofensiva:  { agressao: 0.80, blocoZ:  12.0 }
 };
 
 /*
