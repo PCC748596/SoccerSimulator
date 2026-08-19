@@ -41,30 +41,25 @@ const TeamPosture = {
 };
 
 /*
-Manípulas por postura.
+A POSTURA JA NAO MEXE NO BLOCO.
 
-    push    multiplica o avanço colectivo no ataque (1.0 = neutro)
-    blocoZ  desloca o BLOCO INTEIRO em metros, no referencial de ataque
-            (positivo = mais à frente da linha da bola)
+Havia um TeamPostureTuning com um deslocamento em Z por postura (COUNTER +10,
+BUILD_UP/ATTACK_SUSTAINED/FINAL_THIRD +5, MID_BLOCK -3, LOW_BLOCK -6). A
+postura nao e um ajuste do painel: e um estado que a arvore deduz do jogo. O
+bloco responde aos ajustes que existem e mais nada -
 
-O `blocoZ` estava hardcoded numa cadeia de `if` dentro do computeBlock
-enquanto esta tabela tinha um `lineShift` que ninguém lia — dois mecanismos
-para a mesma coisa, um deles morto. Agora a postura só se afina aqui.
+    Formacao          FormationsData
+    Mentalidade       MentalidadeModel.blocoZ (centro do bloco e tecto da linha)
+    Estilo            TeamPlayStyles (nao mexe no bloco: pesa nas decisoes)
+    Linha Defensiva   TeamShape.linhaDefensiva (tecto da traseira)
+    Width Compactness BlockShape.amplitude
+    Length Compactness BlockShape.profundidade
+    Defensive Pressure TeamShape.pressaoLineCap (tecto do centro sem bola)
+    Setores           Tatics.setores
 
-O offset da MENTALIDADE não vive nesta tabela: é ortogonal à postura e soma-se
-por cima (ver MentalidadeModel.blocoZ em config.js).
+A postura continua a existir e a aparecer no HUD (ver main.js); so deixou de
+deslocar o rectangulo.
 */
-const TeamPostureTuning = {
-    SET_PIECE:        { push: 1.0, blocoZ:  0.0 },
-    BUILD_UP:         { push: 1.0, blocoZ:  5.0 },
-    ATTACK_SUSTAINED: { push: 1.0, blocoZ:  5.0 },
-    FINAL_THIRD:      { push: 1.0, blocoZ:  5.0 },
-    COUNTER:          { push: 1.0, blocoZ: 10.0 },
-    HIGH_PRESS:       { push: 1.0, blocoZ:  0.0 },   // fica na linha da bola
-    MID_BLOCK:        { push: 1.0, blocoZ: -3.0 },
-    LOW_BLOCK:        { push: 1.0, blocoZ: -6.0 },
-    FLANK_SHIFT:      { push: 1.0, blocoZ:  0.0 }
-};
 
 /* --- Blackboard --------------------------------------------------------- */
 
@@ -432,10 +427,6 @@ function pickSupportMid(bb) {
 // Estes valores eram calculados por jogador; são idênticos para toda a equipa,
 // por isso passaram a ser calculados uma vez só, aqui.
 function computeCollectiveShape(bb) {
-    let phaseMultiplier = 1.0;
-    if (bb.phase === 2) phaseMultiplier = 1.1;
-    else if (bb.phase === 3) phaseMultiplier = 1.3;
-
     /*
     A Mentalidade entra no bloco por UM caminho só (MentalidadeModel.blocoZ,
     aplicado em computeBlock). Aqui ficou apenas o que ela ainda multiplica: a
@@ -443,7 +434,7 @@ function computeCollectiveShape(bb) {
     eram uma segunda dose do mesmo botão, com valores que nem batiam certo com
     os do bloco (defesa: -8 m na linha contra -5 m no bloco).
     */
-    let pushMultiplier = (bb.isCounter ? 1.35 : 1.0) * phaseMultiplier;
+    let pushMultiplier = (bb.isCounter ? 1.35 : 1.0);
     if (Tatics.estilo === 'muito_ofensiva') pushMultiplier *= 1.30;
     else if (Tatics.estilo === 'ataque') pushMultiplier *= 1.15;
     else if (Tatics.estilo === 'defesa') pushMultiplier *= 0.85;
@@ -504,11 +495,6 @@ function computeBlock(bb) {
 
     // O centro do bloco no eixo Z acompanha a bola.
     let centro = bb.momentumZ * bb.dir;
-
-    // POSTURA: puxa o bloco a frente ou atras da linha da bola. Uma tabela
-    // so (TeamPostureTuning), em vez da cadeia de `if` que aqui estava.
-    const tune = TeamPostureTuning[bb.posture];
-    if (tune) centro += tune.blocoZ;
 
     /*
     MENTALIDADE: o offset do painel, aplicado ao bloco INTEIRO e nas DUAS
@@ -634,14 +620,7 @@ function computeBlock(bb) {
     let centroX = THREE.MathUtils.clamp(
         bb.momentumX * (CAMPO_LARG / 2), -maxCentroX, maxCentroX);
 
-    // Basculacao extra para postura FLANK_SHIFT (4 m para o lado em perigo)
-    if (!bb.isAttacking && bb.posture === TeamPosture.FLANK_SHIFT) {
-        if (bb.flankAlert === 'left') {
-            centroX -= 4.0 * bb.dir;
-        } else if (bb.flankAlert === 'right') {
-            centroX += 4.0 * bb.dir;
-        }
-    }
+    // Sem basculacao extra por postura: o centro segue a bola e mais nada.
 
     // Garante que o rectangulo nao sai do campo
     centroX = THREE.MathUtils.clamp(centroX, -maxCentroX, maxCentroX);
@@ -773,14 +752,6 @@ function updateGkStyle(bb) {
     }
 }
 
-// Aplica as manípulas da postura escolhida (neutras por omissão).
-function applyPostureTuning(bb) {
-    const tune = TeamPostureTuning[bb.posture];
-    if (!tune) return;
-    bb.pushMultiplier *= tune.push;
-    bb.advanceFactor = THREE.MathUtils.clamp(bb.advanceFactor * tune.push, 0, 1);
-}
-
 const setPosture = (posture) => act('posture:' + posture, (bb) => { bb.posture = posture; });
 
 /* --- A árvore ----------------------------------------------------------- */
@@ -859,7 +830,6 @@ const TeamAI = {
         if (typeof PlayingStyleEvents !== 'undefined') PlayingStyleEvents.tick(bb);
         TeamBT.tick(bb);
         computeCollectiveShape(bb);
-        applyPostureTuning(bb);
 
         /*
         O bloco é calculado AQUI, antes do nível 2, porque agora é ele que dá a
