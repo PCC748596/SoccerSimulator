@@ -315,6 +315,38 @@ const Match = {
         }
     },
 
+    /*
+    VISTA TÁCTICA — a bola.
+
+    Na câmara de cima a bola é um disco branco pousado no relvado, como os
+    jogadores são discos da cor da equipa (ver updateShirt em player.js). A
+    bola a sério é pequena e, vista de 40 m, some-se contra o relvado; e a
+    altura dela não se lê de cima, por isso um disco no chão diz mais.
+
+    O disco fica no plano, na vertical da bola: quando ela vai pelo ar, ele
+    marca a SOMBRA dela, que é o que interessa a quem lê a jogada.
+    */
+    atualizarVistaTatica: function () {
+        if (!this.ball) return;
+        const tatico = (window.cameraMode === 'topdown');
+
+        if (!this.discoBola) {
+            this.discoBola = new THREE.Mesh(
+                new THREE.CircleGeometry(0.55, 20),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            this.discoBola.rotation.x = -Math.PI / 2;
+            this.discoBola.visible = false;
+            this.scene.add(this.discoBola);
+        }
+
+        this.discoBola.visible = tatico;
+        // Ligeiramente acima dos discos dos jogadores: a bola nunca fica
+        // escondida por baixo de quem a tem.
+        this.discoBola.position.set(this.ball.position.x, 0.06, this.ball.position.z);
+        this.ball.visible = !tatico;
+    },
+
     updateCamera: function () {
         if (window.cameraMode === 'orbit') return;
 

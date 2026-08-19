@@ -478,6 +478,8 @@ function animate(time) {
     } else {
         Match.updateCamera();
     }
+    // Discos em vez de bonecos na câmara de cima — ver atualizarVistaTatica.
+    Match.atualizarVistaTatica();
     updateCameraFrustum();
 
     if (!window.isPaused) {

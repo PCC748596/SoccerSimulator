@@ -1012,7 +1012,18 @@ class FootballPlayer {
         `inViewport` fica em true para quem ainda o leia (rótulos, debug).
         */
         this.inViewport = true;
-        this.model.visible = true;
+
+        /*
+        Boneco ou disco, conforme a câmara — ver o disco em updateShirt. Tem
+        de ficar DEPOIS do `visible = true` de cima, senão essa linha desfaz
+        a troca no frame seguinte.
+        */
+        const vistaTatica = (window.cameraMode === 'topdown');
+        this.model.visible = !vistaTatica;
+        if (this.discoTatico) {
+            this.discoTatico.visible = vistaTatica;
+            this.discoTatico.position.set(this.model.position.x, 0.04, this.model.position.z);
+        }
 
         if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
         } else {
@@ -1651,6 +1662,25 @@ class FootballPlayer {
     }
 
     updateShirt(num, pos) {
+        /*
+        VISTA TÁCTICA: na câmara de cima o jogador é um disco da cor da
+        equipa, em vez do boneco. De 40 m de altura o boneco lê-se mal e as
+        pernas a mexer só fazem ruído — o que se quer ver dali é para onde a
+        forma da equipa se desloca.
+
+        Vive na cena e não dentro do `model`: assim não sobe com o jogador
+        no salto nem roda com ele. Fica sempre pousado no relvado.
+        */
+        if (!this.discoTatico) {
+            this.discoTatico = new THREE.Mesh(
+                new THREE.CircleGeometry(0.85, 24),
+                new THREE.MeshBasicMaterial({ color: this.corCamisa })
+            );
+            this.discoTatico.rotation.x = -Math.PI / 2;
+            this.discoTatico.visible = false;
+            Match.scene.add(this.discoTatico);
+        }
+
         if (!this.btTargetGroup) {
             this.btTargetGroup = new THREE.Group();
             this.btTargetGroup.visible = false;
