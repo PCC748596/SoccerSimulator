@@ -129,6 +129,29 @@ test('quem está fora do círculo não é travado', () => {
 
 /* ---------------------------------------------------------------- */
 
+test('o commit só empurra quem está DENTRO do círculo', () => {
+    /*
+    Regressão: durante um tempo o commit ignorou o alvo que a árvore tinha
+    calculado e escreveu por cima dele o ponto goalSide do homem marcado.
+    Todo o jogador com markingTarget passava a viver na recta homem -> própria
+    baliza, sem tecto nenhum — o slot do TeamBT, o biasMax por setor e o
+    alcanceMarcacao deixavam de valer, e os marcadores juntavam-se todos em
+    raios convergentes na baliza.
+    */
+    const i = POS.indexOf('commit: function');
+    const j = POS.indexOf('const dt =', i);
+    assert.ok(i >= 0 && j > i);
+    const corpo = POS.slice(i, j);
+
+    const k = corpo.indexOf('markingTarget');
+    assert.ok(k >= 0, 'o commit deixou de tratar o circulo');
+
+    assert.ok(/d\s*<\s*raio/.test(corpo),
+        'o commit nao verifica se o alvo esta DENTRO do circulo antes de o mexer');
+    assert.ok(/targetX\s*-\s*hx/.test(corpo) && /targetZ\s*-\s*hz/.test(corpo),
+        'o commit nao mede a partir do alvo da arvore: voltou a substitui-lo');
+});
+
 test('o commit aplica mesmo o círculo', () => {
     const i = POS.indexOf('commit: function');
     assert.ok(i >= 0);

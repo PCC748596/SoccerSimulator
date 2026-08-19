@@ -574,14 +574,31 @@ const PositionAI = {
             const hx = p.markingTarget.model.position.x;
             const hz = p.markingTarget.model.position.z;
             const raio = MarkingModel.distanciaPara(p.markingTarget.model.position.z * p.dirZ);
-            
-            // Marker stays between the target and their own goal
-            // p.ownGoalZ is either -53 or 53.
-            let dz = p.ownGoalZ - hz;
-            let dx = 0 - hx; // Goal is at x=0
+
+            /*
+            Empurra para FORA do circulo, na direccao em que o alvo ja vinha.
+            Quem ja esta fora nao e tocado.
+
+            A versao anterior nao olhava sequer para o alvo que a arvore tinha
+            calculado: escrevia por cima dele o ponto `goalSide` do homem
+            marcado (recta homem -> propria baliza, a `raio` metros). Ou seja,
+            TODO o jogador com markingTarget era teleportado para essa recta,
+            sem tecto nenhum - a marcar ou a atacar, dentro ou fora do bloco.
+            Isso anula de uma vez o slot do TeamBT, o biasMax por setor e o
+            alcanceMarcacao que a folha `marcar` respeita, e junta os
+            marcadores todos em raios que convergem na propria baliza.
+            */
+            let dx = targetX - hx;
+            let dz = targetZ - hz;
             let d = Math.hypot(dx, dz);
-            
-            if (d > 0.001) {
+
+            if (d < 0.001) {
+                // Em cima do homem: nao ha direccao para preservar, sai pelo
+                // lado da propria baliza (mesma regra do goalSide).
+                const g = goalSide(p, p.markingTarget, raio);
+                targetX = g.x;
+                targetZ = g.z;
+            } else if (d < raio) {
                 targetX = hx + (dx / d) * raio;
                 targetZ = hz + (dz / d) * raio;
             }

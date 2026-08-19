@@ -769,14 +769,16 @@ function computeBlock(bb) {
     const maxCentroX = borda - meiaLarg;
 
     /*
-    Basculacao: o rectangulo desliza para o lado da bola por uma FRACCAO do
-    desvio dela (BlockShape.bascular). O factor nao estava a ser lido - o
-    centro ia direito a `momentumX * maxCentroX`, ou seja o bloco encostava a
-    linha lateral sempre que a bola la andasse, ~4.5x mais basculacao do que
-    a afinada.
+    Basculacao: o rectangulo desliza para o lado da bola em PROPORCAO da folga
+    que tem. Com a bola encostada a linha lateral o bloco encosta-se tambem -
+    e o comportamento pedido, e por isso a escala e `maxCentroX` (a folga
+    entre a borda do bloco e a margem do campo) e nao uma fraccao fixa.
+
+    Uma versao intermedia usou `BlockShape.bascular` (0.22) como factor: com a
+    bola na linha lateral o bloco parava a 6.6 m do centro em vez de 11.6 m e
+    ficava visivelmente descolado do lado da jogada.
     */
-    const bascular = bb.isAttacking ? B.bascularComBola : B.bascular;
-    let centroX = bb.momentumX * (CAMPO_LARG / 2) * bascular;
+    let centroX = bb.momentumX * maxCentroX;
 
     // Basculacao extra para postura FLANK_SHIFT (4 m para o lado em perigo)
     if (!bb.isAttacking && bb.posture === TeamPosture.FLANK_SHIFT) {

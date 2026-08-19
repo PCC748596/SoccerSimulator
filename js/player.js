@@ -1786,7 +1786,24 @@ class FootballPlayer {
 
         if (this.gkEstado === 'idle') {
             let alvoGkX = gkCorpo.position.x;
-            let alvoGkZ = (this.team === 'TeamA') ? -48 : 48;
+
+            /*
+            Posição de repouso: 5 m à frente da própria linha, MAIS um avanço
+            proporcional à distância da bola — é para isso que existe o
+            GoalkeeperStyle.maxOut (defensive 6 m, offensive/sweeper 20 m).
+
+            Esse avanço estava escrito em actGoalkeeperPosition (player_bt.js)
+            e nunca corria: o update() manda os guarda-redes para updateGK e
+            NUNCA para o runBehaviorTree, por isso essa folha é código morto e
+            o maxOut nunca foi lido. O resultado é o guarda-redes plantado a
+            5 m da linha com o bloco da equipa no meio-campo — 45 m de buraco
+            atrás da última linha, e um sweeper que nunca varre.
+            */
+            const gkStyleAtual = GoalkeeperStyle[this.gkStyle] || GoalkeeperStyle.defensive;
+            const avancoGk = Math.max(0, Math.min(gkStyleAtual.maxOut,
+                (Match.ball.position.z - this.ownGoalZ) * 0.1 * this.dirZ));
+            let alvoGkZ = ownGoalZCenter(this.team) + (5 + avancoGk) * this.dirZ;
+
             let speedLerp = 2.0;
 
             let gkSkill = this.skillFor('GK');
