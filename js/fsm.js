@@ -326,7 +326,7 @@ class PlayerFSM {
             /*
             MARKING respeita o CÍRCULO à volta do homem: acompanha-o pelo
             lado de fora e nunca lhe entra dentro. O alvo já vem calculado
-            fora do círculo (ver PositionAI.commit), mas o alvo é uma
+            fora do círculo (ver PosicionamentoAI.commit), mas o alvo é uma
             intenção — a inércia da corrida e os empurrões de coesão podem
             na mesma metê-lo lá dentro. Aqui a regra é geométrica: se estiver
             a entrar, a componente da velocidade que aponta ao homem é

@@ -317,3 +317,131 @@ const PlayingStyleEvents = {
         return linha;
     }
 };
+
+/* =========================================================================
+   CAMADA POSICIONAL DO PLAYING STYLE
+   =========================================================================
+   Vinha do PositionAI.commit, no antigo nivel 2. Com o nivel 2 apagado, o
+   desvio pessoal do estilo passa para o lado dos estilos, que e onde
+   pertence: o TeamBT poe o jogador no slot do bloco, e isto inclina-o.
+
+   Recebe e devolve o alvo em coordenadas do mundo. So jogadores de campo —
+   o guarda-redes tem o seu proprio ciclo (updateGK).
+   ========================================================================= */
+function aplicarEstiloPosicional(p, bb, targetX, targetZ) {
+    if (!Config.usePlayingStyles || p.role === 'gk' || typeof estiloAtivoDe !== 'function') {
+        return { x: targetX, z: targetZ };
+    }
+
+    const est = estiloAtivoDe(p);
+
+
+        // Avanço/recuo, no referencial de ataque.
+        let avanco = est.avanco;
+        if (bb && bb.isAttacking) avanco += est.avancoComBola;
+        if (avanco !== 0) targetZ += avanco * p.dirZ;
+
+        // Largura: + abre para a linha do LADO DELE, − fecha para o eixo.
+        if (est.largura !== 0) {
+            const ladoEst = Math.sign(p.baseTarget.x) || 1;
+            targetX += est.largura * ladoEst;
+        }
+
+        /*
+        `ombroDefesa` (Goal Poacher): cola-se à linha do último defensor,
+        à espera do lançamento — pedido explícito: não num X fixo, na
+        BRECHA da linha (o vão entre os dois zagueiros mais próximos ali,
+        ver melhorVaoX). Z continua um alvo absoluto (a graça é estar
+        exactamente no limite do fora-de-jogo).
+        */
+        if (est.ombroDefesa && bb && bb.isAttacking &&
+            bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
+            targetZ = (bb.offsideLimitDir - 0.5) * p.dirZ;
+            targetX = melhorVaoX(ctx, targetZ,
+                [-16, -12, -8, -4, 0, 4, 8, 12, 16]);
+        }
+
+        /*
+        `dentroArea` (Fox in the Box): dentro da grande área, mas no VÃO
+        entre zagueiros — pedido explícito: "numa posição que não tenha
+        adversário, ou entre 2 adversários", não um X qualquer dentro da
+        caixa.
+        */
+        if (est.dentroArea && bb && bb.isAttacking) {
+            if (targetZ * p.dirZ < CrossModel.areaZ) targetZ = CrossModel.areaZ * p.dirZ;
+            targetX = melhorVaoX(ctx, targetZ,
+                [-16, -11, -6.5, -2, 2, 6.5, 11, 16]);
+        }
+
+        /*
+        `atraiDefesa` (Dummy Runner): afasta-se do portador em vez de se
+        oferecer. É isso que puxa o marcador dele e abre o espaço para
+        outro — o oposto do que qualquer outra folha faz.
+        */
+        if (est.atraiDefesa && bb && bb.isAttacking && bb.carrier && bb.carrier !== p) {
+            const fx = targetX - bb.carrier.model.position.x;
+            const fd = Math.abs(fx) || 1;
+            targetX += (fx / fd) * 6.0;
+        }
+
+        // `colaNaLinha` (Cross Specialist) vs `cortaParaDentro`.
+        //
+        // Antes puxava para uma linha ABSOLUTA do campo (alaX+7=22m),
+        // ignorando o bloco — que bascula com a bola (ver centroX em
+        // team_bt.js). Com o jogo do lado oposto, o bloco desliza para
+        // lá e o lateral ficava esticado até aos 22m absolutos, bem fora
+        // do rectângulo encolhido/deslocado (anéis do PositionBT saíam
+        // do TeamBT). Agora o tecto é o próprio limite do bloco, não o
+        // campo inteiro.
+        if (est.colaNaLinha && bb && bb.isAttacking) {
+            const ladoEst = Math.sign(p.baseTarget.x) || 1;
+            let tectoAla = CrossModel.alaX + 7;
+            if (bb.bloco) {
+                const bordaBloco = ladoEst > 0 ? bb.bloco.x1 : -bb.bloco.x0;
+                tectoAla = Math.min(tectoAla, Math.max(bordaBloco, 0));
+            }
+            targetX = ladoEst * Math.max(Math.abs(targetX), tectoAla);
+        }
+
+        /*
+        `fechaComBolaCentral` (Roaming Flank): pedido explícito (2ª
+        correcção) — fica na PONTA por padrão, só busca o meio quando não
+        consegue prosseguir pelo lado (corredor tapado por um adversário
+        à frente), não só porque a bola está central. A 1ª versão fechava
+        proporcional a |ballX|, agressiva de mais — fechava mesmo com o
+        corredor livre. Mesma checagem de "corredor livre" do
+        attackFullBack.
+        */
+        if (est.fechaComBolaCentral && bb && bb.isAttacking) {
+            const ladoEst = Math.sign(p.baseTarget.x) || 1;
+            let tapado = false;
+            for (const opp of ctx.opponents) {
+                if (opp.role === 'gk') continue;
+                const noFlanco = (Math.sign(opp.model.position.x) === ladoEst && Math.abs(opp.model.position.x) > 10.0);
+                const aFrente = (opp.model.position.z * p.dirZ > p.model.position.z * p.dirZ) &&
+                    (opp.model.position.z * p.dirZ < p.model.position.z * p.dirZ + 12.0);
+                if (noFlanco && aFrente) { tapado = true; break; }
+            }
+            if (tapado) targetX *= 0.5;
+        }
+
+        // `amplitudeZ`: estica ou encolhe o afastamento ao meio do bloco.
+        if (est.amplitudeZ !== 1.0 && bb && bb.bloco) {
+            const centro = (bb.bloco.z0 + bb.bloco.z1) / 2 * bb.dir;
+            targetZ = centro + (targetZ - centro) * est.amplitudeZ;
+        }
+
+        /*
+        `travaNaEntradaArea` (Box-to-Box): "da entrada de uma área até a
+        entrada da outra" — pedido explícito. Sem teto, amplitudeZ (1.5x)
+        esticava o alvo para BEM DENTRO da área adversária, um meio-campo
+        a jogar de ponta-de-lança. Trava aqui, depois do amplitudeZ, para
+        cortar só o excesso — nunca empurra para trás quem já estava
+        aquém do teto.
+        */
+        if (est.travaNaEntradaArea && targetZ * p.dirZ > CrossModel.areaZ) {
+            targetZ = CrossModel.areaZ * p.dirZ;
+        }
+
+    return { x: targetX, z: targetZ };
+}

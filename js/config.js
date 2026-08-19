@@ -1207,7 +1207,7 @@ const MarkingModel = {
     /*
     Distância de marcação, em metros: a que o marcador fica do homem, do lado
     da PRÓPRIA baliza (ver goalSide). É também o raio do círculo em que o
-    marcador não entra (ver PositionAI.commit e o estado MARKING da FSM).
+    marcador não entra (ver PosicionamentoAI.commit e o estado MARKING da FSM).
 
     UM número, igual em todas as situações — a pedido, enquanto se valida a
     marcação. Era uma tabela de 9 valores, por sector do campo e por
@@ -1428,25 +1428,6 @@ const SupportModel = {
     bonusOcupante: 2.5
 };
 
-/*
-Cobertura (BLOCKING): fechar a linha da bola quando não se tem homem para
-marcar. Quem não arranjava par ficava `isCovering` — sem excepção — e a
-cobertura arrastava-o para o eixo (defendZonal). Resultado observado: o RM
-a fechar pelo meio entre o CM e o RB, vindo do outro lado do campo, com o
-CM a dois passos do sítio. Fechar a linha da bola é tarefa de quem já lá
-está; para quem está longe é só abandonar o corredor.
-
-Duas regras, as duas necessárias:
-    raioMaxBola  só é candidato quem está a esta distância da bola
-    max          e só este número de jogadores cobre ao mesmo tempo — a
-                 cobertura é UM homem a tapar a linha, não uma migração
-                 para o eixo. Fica o mais perto da bola; os outros mantêm
-                 o slot zonal que o TeamBT lhes deu.
-*/
-const CoberturaModel = {
-    raioMaxBola: 6.0,
-    max: 1
-};
 
 /*
 =============================================================================
@@ -1816,112 +1797,7 @@ const PerceptionModel = {
 
 // Segundos que a equipa SEM bola espera, depois de a perder, antes de
 // reavaliar chaser/marcação — ligado ao selector "Defensive Pressure".
-/*
-=============================================================================
-TACKLING — tirar a bola ao adversário
-=============================================================================
-Vive no NÍVEL 2 (ver TacklingAI em position_bt.js), junto da marcação: tirar
-a bola é defesa, e a defesa toda passou para lá. Estava espalhado pelo
-nível 3 (folhas `vale carrinho` / `vale desarme` do PlayerBT) com os números
-escritos no meio das condições.
 
-    ativo         interruptor geral. DESLIGADO de propósito: queremos ver a
-                  marcação a funcionar sozinha antes de voltar a pôr gente a
-                  atacar a bola.
-
-    setor         terço onde é permitido tentar, no referencial de ataque do
-                  jogador. 'def' = só no terço da própria baliza; 'mid' = nos
-                  dois terços de trás; null = em qualquer sítio.
-
-                  Fora do setor o jogador marca e acompanha, sem se atirar à
-                  bola. Atacar a bola a meio campo é o que desfaz o bloco: o
-                  marcador salta ao portador, falha, e o corredor dele fica
-                  aberto com a equipa toda já ultrapassada.
-
-    distMaxBola   distância máxima à BOLA para sequer considerar.
-
-    desarme       desarme de pé: alcance em metros (o central chega um pouco
-                  mais longe) e a taxa por segundo, por posição.
-    carrinho      distância mínima e máxima, ângulo máximo de entrada em
-                  graus (medido entre a direcção do portador e o defensor) e
-                  a taxa por segundo, por posição.
-
-                  As taxas são as que estavam escritas dentro das condições
-                  do PlayerBT, movidas tal e qual. `outros` é o valor para
-                  qualquer posição que não esteja na tabela.
-
-    porPressao    multiplica a taxa conforme o Defensive Pressure. O estilo
-                  do jogador multiplica por cima (estiloAtivoDe(p).pressao).
-=============================================================================
-*/
-const TacklingModel = {
-    ativo: false,
-
-    setor: 'def',
-    distMaxBola: 10.0,
-
-    desarme: {
-        alcance: 2.5,
-        alcanceCB: 2.8,
-        taxaPorPosicao: { CB: 5.5, DM: 5.5, outros: 3.5 }
-    },
-
-    carrinho: {
-        distMin: 1.0,
-        distMax: 4.2,
-        anguloMax: 135,
-        taxaPorPosicao: { CB: 1.5, DM: 1.5, LB: 1.1, RB: 1.1, outros: 0.7 }
-    },
-
-    porPressao: { low: 0.7, balanced: 1.0, high: 1.4 },
-
-    taxaDe(tabela, pos) {
-        const base = tabela[pos] !== undefined ? tabela[pos] : tabela.outros;
-        return base * (this.porPressao[Tatics.pressaoDefensiva] ?? this.porPressao.balanced);
-    }
-};
-
-/*
-=============================================================================
-TRIANGULAÇÃO — a malha de opções de passe
-=============================================================================
-Só corre para a equipa COM a bola (ver TriangulacaoAI em position_bt.js).
-Sem bola quem manda é a marcação.
-
-Os ALVOS dos jogadores são os vértices de uma malha de Delaunay, e as ARESTAS
-dessa malha são as linhas de passe. Estas manípulas dizem o que é uma malha
-jogável.
-
-    ativo         interruptor geral.
-
-    arestaMin     abaixo disto dois jogadores estão em cima um do outro e
-                  valem por um só. Também é o que substitui a separação
-                  mínima do antigo separarAlvos.
-    arestaMax     acima disto a aresta deixa de ser um passe.
-
-    anguloMin     graus. Um triângulo mais achatado do que isto não dá
-                  largura nenhuma: três jogadores quase em linha são uma
-                  opção de passe, não três.
-
-    iteracoes     passagens de correcção por frame.
-    passo         fracção do erro de comprimento corrigida por passagem. Menos
-                  de 1 para a correcção não oscilar entre arestas que se
-                  disputam o mesmo jogador.
-    abrirAngulo   força com que um vértice agudo é afastado da aresta oposta.
-=============================================================================
-*/
-const TriangulacaoModel = {
-    ativo: true,
-
-    arestaMin: 8.0,
-    arestaMax: 22.0,
-
-    anguloMin: 25.0,
-
-    iteracoes: 4,
-    passo: 0.5,
-    abrirAngulo: 6.0
-};
 
 const DefensivePressureModel = {
     low: 6.0,

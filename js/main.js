@@ -129,31 +129,17 @@ function toggleTeamBTPos() {
     document.getElementById('btn-teambtpos').innerText = 'Team BT POS: ' + uiLabel;
     document.getElementById('btn-teambtpos').classList.toggle('active', window.teamBTPosState !== 'OFF');
     if (typeof Match !== 'undefined') {
-        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
-        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
     }
 }
 
-window.positionBTToggleState = 'OFF';
-function togglePositionBT() {
-    if (window.positionBTToggleState === 'OFF') window.positionBTToggleState = 'TeamA';
-    else if (window.positionBTToggleState === 'TeamA') window.positionBTToggleState = 'TeamB';
-    else if (window.positionBTToggleState === 'TeamB') window.positionBTToggleState = 'Both';
-    else window.positionBTToggleState = 'OFF';
+/*
+O anel do "Position BT" desapareceu com o nivel 2. Sobram dois:
 
-    let uiLabel = window.positionBTToggleState;
-    if (uiLabel === 'TeamA') uiLabel = 'TeamBlue';
-    else if (uiLabel === 'TeamB') uiLabel = 'TeamRed';
-    else if (uiLabel === 'Both') uiLabel = 'Both';
-
-    document.getElementById('btn-positionbt').innerText = 'Position BT: ' + uiLabel;
-    document.getElementById('btn-positionbt').classList.toggle('active', window.positionBTToggleState !== 'OFF');
-    if (typeof Match !== 'undefined') {
-        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
-        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
-    }
-}
-
+    Team BT POS      o slot no bloco, do TeamBT
+    PlayingStyleBT   o mesmo slot ja inclinado pelo estilo do jogador
+*/
 window.playingStyleBTToggleState = 'OFF';
 function togglePlayingStyleBT() {
     if (window.playingStyleBTToggleState === 'OFF') window.playingStyleBTToggleState = 'TeamA';
@@ -169,8 +155,8 @@ function togglePlayingStyleBT() {
     document.getElementById('btn-playingstylebt').innerText = 'PlayingStyleBT: ' + uiLabel;
     document.getElementById('btn-playingstylebt').classList.toggle('active', window.playingStyleBTToggleState !== 'OFF');
     if (typeof Match !== 'undefined') {
-        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
-        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+        if (Match.passTargetVisual) Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+        if (Match.passLineVisual) Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
     }
 }
 
@@ -186,20 +172,6 @@ function togglePassCandidates() {
     PassCandidates.setDebug(!PassCandidates.debug);
     document.getElementById('btn-passcandidates').innerText = 'PlayerPassTarget: ' + (PassCandidates.debug ? 'ON' : 'OFF');
     document.getElementById('btn-passcandidates').classList.toggle('active', PassCandidates.debug);
-}
-
-/*
-Liga o desenho do círculo de marcação (anel do raio pedido pelo Defensive
-Pressure à volta de quem está a ser marcado). Ver js/marking_debug.js.
-*/
-function toggleMarkingDebug() {
-    if (typeof MarkingDebug === 'undefined') return;
-    MarkingDebug.setDebug(!MarkingDebug.debug);
-    const btn = document.getElementById('btn-marking-debug');
-    if (btn) {
-        btn.innerText = 'Marcação: ' + (MarkingDebug.debug ? 'ON' : 'OFF');
-        btn.classList.toggle('active', MarkingDebug.debug);
-    }
 }
 
 function toggleUsarPasseGrid() {

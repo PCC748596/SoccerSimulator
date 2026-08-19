@@ -855,3 +855,54 @@ const TeamAI = {
     triangulacao de Delaunay, so para a equipa com bola.
     */
 };
+
+/* =========================================================================
+   ONDE CADA JOGADOR SE POE
+   =========================================================================
+   Era o nivel 2, num ficheiro proprio (js/bt/position_bt.js). Deixou de
+   haver nivel 2: ha o TeamBT e ha os Playing Styles.
+
+   Ficou isto, que e o minimo para alguem se mexer: o slot no bloco que o
+   nivel 1 acabou de calcular, inclinado pelo estilo do jogador, cortado
+   pelos limites do campo e suavizado. Escreve `p.dynamicTarget`, que e o
+   ponto que o steerArrive persegue.
+
+   Foram apagados com o nivel 2: a marcacao (atribuirMarcacao/cobertura), o
+   tackling (TacklingAI) e a malha de passe de Delaunay (TriangulacaoAI).
+   ========================================================================= */
+const PosicionamentoAI = {
+    tick: function (p, bb) {
+        if (p.role === 'gk') return;   // o GK posiciona-se em updateGK()
+
+        const slot = slotNoBloco(p, bb);
+        let targetX = slot ? slot.x : p.baseTarget.x;
+        let targetZ = slot ? slot.z : p.baseTarget.z;
+
+        // Anel grande do debug: o slot puro, antes de qualquer desvio.
+        if (!p.slotTarget) p.slotTarget = new THREE.Vector3();
+        p.slotTarget.set(targetX, ALTURA_BASE_Y, targetZ);
+
+        const comEstilo = (typeof aplicarEstiloPosicional === 'function')
+            ? aplicarEstiloPosicional(p, bb, targetX, targetZ)
+            : { x: targetX, z: targetZ };
+
+        const tx = THREE.MathUtils.clamp(comEstilo.x, -32, 32);
+        const tz = THREE.MathUtils.clamp(comEstilo.z, -50, 50);
+
+        const dt = (typeof Match !== 'undefined' && Match.delta) ? Match.delta : 0.016;
+        let k = 1 - Math.exp(-PositionSmoothing * dt);
+        if (p.snapPosition) { k = 1; p.snapPosition = false; }
+
+        if (!p.tacticalTarget) p.tacticalTarget = new THREE.Vector3(tx, ALTURA_BASE_Y, tz);
+        p.tacticalTarget.x = lerp(p.tacticalTarget.x, tx, k);
+        p.tacticalTarget.z = lerp(p.tacticalTarget.z, tz, k);
+        p.tacticalTarget.y = ALTURA_BASE_Y;
+
+        if (!p.styleTarget) p.styleTarget = new THREE.Vector3(tx, ALTURA_BASE_Y, tz);
+        p.styleTarget.copy(p.tacticalTarget);
+
+        p.dynamicTarget.x = lerp(p.dynamicTarget.x, tx, k);
+        p.dynamicTarget.z = lerp(p.dynamicTarget.z, tz, k);
+        p.dynamicTarget.y = ALTURA_BASE_Y;
+    }
+};

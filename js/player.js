@@ -731,14 +731,14 @@ class FootballPlayer {
         if (typeof Match !== 'undefined') {
             if (Match.passTargetVisual) {
                 Match.passTargetVisual.position.set(_v1.x, 0.05, _v1.z);
-                Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+                Match.passTargetVisual.visible = (window.teamBTPosState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
             }
             if (Match.passLineVisual) {
                 const posAttr = Match.passLineVisual.geometry.attributes.position;
                 posAttr.setXYZ(0, this.model.position.x, 0.05, this.model.position.z);
                 posAttr.setXYZ(1, _v1.x, 0.05, _v1.z);
                 posAttr.needsUpdate = true;
-                Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.positionBTToggleState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
+                Match.passLineVisual.visible = (window.teamBTPosState !== 'OFF' || window.playingStyleBTToggleState !== 'OFF');
             }
         }
 
@@ -1095,10 +1095,8 @@ class FootballPlayer {
         A linha entre os dois só faz sentido com os dois ligados ao mesmo tempo.
         */
         const showForTeam = (window.teamBTPosState === this.team || window.teamBTPosState === 'Both');
-        const showForPos = (window.positionBTToggleState === this.team || window.positionBTToggleState === 'Both');
         const showForStyle = (window.playingStyleBTToggleState === this.team || window.playingStyleBTToggleState === 'Both');
         const teamTarget = this.slotTarget || this.tacticalTarget || this.dynamicTarget;
-        const posTarget = this.dynamicTarget || this.tacticalTarget;
         const styleTarget = this.styleTarget || this.dynamicTarget;
 
         if (this.btTargetGroup) {
@@ -1110,20 +1108,14 @@ class FootballPlayer {
             }
         }
 
-        if (this.posTargetGroup) {
-            if (showForPos && posTarget) {
-                this.posTargetGroup.visible = true;
-                this.posTargetGroup.position.set(posTarget.x, 0.06, posTarget.z);
-            } else {
-                this.posTargetGroup.visible = false;
-            }
-        }
-
+        // Liga o slot do TeamBT ao alvo já inclinado pelo estilo: a linha É
+        // o desvio que o estilo introduz. Ligava o slot ao anel do nível 2,
+        // que deixou de existir.
         if (this.btLine) {
-            if (showForTeam && showForPos && teamTarget && posTarget) {
+            if (showForTeam && showForStyle && teamTarget && styleTarget) {
                 const arr = this.btLineGeo.attributes.position.array;
                 arr[0] = teamTarget.x; arr[1] = 0.055; arr[2] = teamTarget.z;
-                arr[3] = posTarget.x; arr[4] = 0.055; arr[5] = posTarget.z;
+                arr[3] = styleTarget.x; arr[4] = 0.055; arr[5] = styleTarget.z;
                 this.btLineGeo.attributes.position.needsUpdate = true;
                 this.btLine.visible = true;
             } else {
@@ -1140,19 +1132,6 @@ class FootballPlayer {
             }
         }
 
-        // Liga o anel do PlayingStyle (nível 3) ao do PositionBT (nível 2) —
-        // só faz sentido com os dois ligados, mesmo padrão da linha acima.
-        if (this.styleLine) {
-            if (showForPos && showForStyle && posTarget && styleTarget) {
-                const arr = this.styleLineGeo.attributes.position.array;
-                arr[0] = posTarget.x; arr[1] = 0.06; arr[2] = posTarget.z;
-                arr[3] = styleTarget.x; arr[4] = 0.06; arr[5] = styleTarget.z;
-                this.styleLineGeo.attributes.position.needsUpdate = true;
-                this.styleLine.visible = true;
-            } else {
-                this.styleLine.visible = false;
-            }
-        }
 
         if (typeof MatchStats !== 'undefined') {
             MatchStats[this.team].distanciaPercorrida += this.velocity.length() * dt;
@@ -1715,29 +1694,10 @@ class FootballPlayer {
             }
 
             /*
-            Anel do "Position BT" — cor da equipa, sem etiqueta — desenhado
-            no alvo do NÍVEL 2 (p.tacticalTarget, já com os desvios das
-            folhas). O btTargetGroup acima passa a ser só o "Team BT POS": o
-            slot puro do nível 1 (p.slotTarget), sem desvios nenhuns. Uma
-            linha liga os centros dos dois — o comprimento dela é
-            literalmente o quanto o PositionBT afastou o jogador do slot do
-            TeamBT.
-
-            Tamanho: 2/3 do anel do TeamBT (que vai de 0.8 a 1.0) — mesma
-            proporção parede/raio (0.8), só escalado.
+            Linha entre os dois anéis: liga o slot do TeamBT ao alvo já
+            inclinado pelo estilo. O comprimento dela é literalmente o
+            desvio que o Playing Style introduz.
             */
-            this.posTargetGroup = new THREE.Group();
-            this.posTargetGroup.visible = false;
-            let posRing = new THREE.Mesh(
-                new THREE.RingGeometry(0.533, 0.667, 24),
-                new THREE.MeshBasicMaterial({ color: ringColorNum, side: THREE.DoubleSide })
-            );
-            posRing.rotation.x = -Math.PI / 2;
-            this.posTargetGroup.add(posRing);
-            if (typeof Match !== 'undefined' && Match.scene) {
-                Match.scene.add(this.posTargetGroup);
-            }
-
             this.btLineGeo = new THREE.BufferGeometry();
             this.btLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
             this.btLine = new THREE.Line(this.btLineGeo, new THREE.LineBasicMaterial({ color: ringColorNum }));
@@ -1747,13 +1707,8 @@ class FootballPlayer {
             }
 
             /*
-            Anel do "PlayingStyle" — 1/3 do anel do TeamBT, mesma proporção.
-            Desenhado no alvo do NÍVEL 3 (p.dynamicTarget): a posição que o
-            PlayerBT realmente mandou perseguir, já depois das folhas que
-            leem estiloAtivoDe() (ver playing_styles.js) e dos comportamentos
-            específicos de posição/perto da bola. A linha que liga este anel
-            ao do PositionBT mostra o quanto o nível 3 — incluindo o efeito
-            do PlayingStyle — se afastou do alvo tático puro do nível 2.
+            Anel do "PlayingStyle": o alvo depois do desvio pessoal do
+            estilo — o mesmo ponto que o steerArrive persegue.
             */
             this.styleTargetGroup = new THREE.Group();
             this.styleTargetGroup.visible = false;
@@ -1767,13 +1722,6 @@ class FootballPlayer {
                 Match.scene.add(this.styleTargetGroup);
             }
 
-            this.styleLineGeo = new THREE.BufferGeometry();
-            this.styleLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-            this.styleLine = new THREE.Line(this.styleLineGeo, new THREE.LineBasicMaterial({ color: ringColorNum }));
-            this.styleLine.visible = false;
-            if (typeof Match !== 'undefined' && Match.scene) {
-                Match.scene.add(this.styleLine);
-            }
         } else if (this.pos !== pos) {
             let btCtx = this.btTargetGroup.children[1].material.map.image.getContext('2d');
             btCtx.clearRect(0,0,128,64);

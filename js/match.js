@@ -1104,7 +1104,6 @@ const Match = {
         // que se liga o toggle, e ficava congelado nesse frame: os jogadores
         // saíam de baixo dos pontos e parecia que os pontos desapareciam.
         if (typeof PassCandidates !== 'undefined') PassCandidates.update(dt);
-        if (typeof MarkingDebug !== 'undefined') MarkingDebug.update();
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);
         this.runTeamAI();
 
@@ -1261,7 +1260,7 @@ const Match = {
 
         1. updatePossession()  quem tem a bola — facto, não decisão
         2. TeamAI.tick()       nível 1: o plano colectivo de cada equipa
-        3. PositionAI.tick()   nível 2: onde cada jogador se coloca
+        3. PosicionamentoAI.tick()   onde cada jogador se coloca (team_bt.js)
         4. publicarLinhaDeForaDeJogo()  a linha do fora-de-jogo de quem ataca
 
     O nível 3 (o que este jogador faz com a bola) corre depois, em
@@ -1298,45 +1297,19 @@ const Match = {
         // próprio setupSetPiece, directamente.
         if (this.state !== 'PLAY') return;
 
-        /*
-        Quem marca quem, uma vez por equipa, antes dos ticks individuais —
-        precisa dos 22 jogadores. Era o nível 1 que fazia isto; passou para o
-        nível 2 com o resto da defesa (ver PositionAI.assignMarking).
-        */
-        PositionAI.assignMarking(bbA);
-        PositionAI.assignMarking(bbB);
-
-        this.players.forEach(p => PositionAI.tick(p, bbA));
-        this.opponents.forEach(p => PositionAI.tick(p, bbB));
+        this.players.forEach(p => PosicionamentoAI.tick(p, bbA));
+        this.opponents.forEach(p => PosicionamentoAI.tick(p, bbB));
 
         /*
-        Malha de opcoes de passe da equipa COM a bola: os alvos sao os
-        vertices de uma triangulacao de Delaunay e as arestas sao as linhas
-        de passe. Corrige o que os ticks individuais escreveram — nao o
-        substitui. Ver TriangulacaoAI.
-        */
-        TriangulacaoAI.ajustar(bbA);
-        TriangulacaoAI.ajustar(bbB);
+        Nao ha mais nada a mexer nos alvos depois disto.
 
-        /*
-        AS TRES PASSAGENS POS-NIVEL-2 FORAM APAGADAS.
+        Foram apagadas, por esta ordem: as molas de coesao
+        (relaxConstraints), a separacao minima entre alvos (separarAlvos), o
+        travao da linha de fora-de-jogo (TeamAI.holdLine) e, com o nivel 2
+        inteiro, a marcacao, o tackling e a malha de Delaunay.
 
-            relaxConstraints  coesao local
-            separarAlvos      separacao minima entre alvos (corria duas vezes)
-            TeamAI.holdLine   forcava os defesas para a linha de fora-de-jogo
-
-        Nenhuma delas sabia da marcacao, e as tres reescreviam o dynamicTarget
-        depois de o nivel 2 o ter escrito: um defesa posto atras do seu homem
-        era logo a seguir puxado de volta a linha, e largava a marca. Era isso
-        que se via como "jogadores que nao respeitam o PositionBT".
-
-        A coesao foi refeita sobre a triangulacao, acima. A separacao minima
-        entre alvos vem de graca com ela (TriangulacaoModel.arestaMin). O
-        holdLine nao volta: a linha de fora-de-jogo trava a frente do BLOCO,
-        no computeBlock, em vez de puxar jogador a jogador.
-
-        Do relaxConstraints sobreviveu so o calculo da linha de fora-de-jogo,
-        que nao mexia em ninguem — ver publicarLinhaDeForaDeJogo.
+        Do relaxConstraints ficou so o calculo da linha de fora-de-jogo, que
+        nao mexia em ninguem — ver publicarLinhaDeForaDeJogo.
         */
         this.publicarLinhaDeForaDeJogo(this.players);
         this.publicarLinhaDeForaDeJogo(this.opponents);
