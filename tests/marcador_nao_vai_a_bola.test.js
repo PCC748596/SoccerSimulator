@@ -16,7 +16,6 @@ const vm = require('node:vm');
 
 const raiz = path.join(__dirname, '..');
 const BT = fs.readFileSync(path.join(raiz, 'js', 'bt', 'player_bt.js'), 'utf8');
-const ACTIONS = fs.readFileSync(path.join(raiz, 'js', 'utility', 'actions.js'), 'utf8');
 
 function recortarFuncao(src, nome) {
     const i = src.indexOf('function ' + nome + '(');
@@ -77,26 +76,4 @@ test('desarme e carrinho só valem contra o próprio marcado', () => {
         assert.ok(/estouAMarcar\(p\) && p\.markingTarget !== c/.test(corpo),
             folha + ' deixa abandonar a marca para ir a outro portador');
     }
-});
-
-test('no Utility, quem marca não persegue a bola', () => {
-    const i = ACTIONS.indexOf("nome: 'CHASE_BALL'");
-    assert.ok(i >= 0);
-    const corpo = ACTIONS.slice(i, ACTIONS.indexOf('considerandos', i));
-    assert.ok(/estouAMarcar/.test(corpo), 'CHASE_BALL do Utility ignora a marcacao');
-});
-
-test('no Utility, o roubo também respeita a marca', () => {
-    for (const nome of ['TACKLE', 'SLIDE_TACKLE']) {
-        const i = ACTIONS.indexOf("nome: '" + nome + "'");
-        const corpo = ACTIONS.slice(i, ACTIONS.indexOf('considerandos', i));
-        assert.ok(/estouAMarcar/.test(corpo), nome + ' deixa abandonar a marca');
-    }
-});
-
-test('a interceptação do Utility passa pelo mesmo podeIntercetar', () => {
-    const i = ACTIONS.indexOf("nome: 'INTERCEPT'");
-    const corpo = ACTIONS.slice(i, ACTIONS.indexOf('considerandos', i));
-    assert.ok(/podeIntercetar\(ctx\)/.test(corpo),
-        'se o INTERCEPT tiver logica propria, a regra da marcacao escapa-lhe');
 });

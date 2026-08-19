@@ -304,18 +304,6 @@ mexer as definições do painel.
 */
 window.isPaused = true;
 
-/*
-Cérebro individual em uso: BT (false) ou Utility AI (true).
-
-Os dois existem e decidem a mesma coisa por caminhos diferentes — o BT por
-prioridades fixas, o Utility por pontuação. Até aqui o Utility estava escrito
-e testado mas NÃO estava sequer carregado na página: ninguém lhe chamava e
-nada no jogo passava por ele. Agora é escolha, feita no botão do painel.
-
-Arranca em OFF: o BT é o que está afinado com o resto do sistema.
-*/
-window.usarUtilityAI = false;
-
 const TeamSkills = {
     TeamA: { def: 80, mid: 80, ata: 80, gk: 80 },
     TeamB: { def: 80, mid: 80, ata: 80, gk: 80 }
@@ -636,56 +624,9 @@ const EstiloBase = {
     avanco: 0, largura: 0, avancoComBola: 0, amplitudeZ: 1.0,
     passe: 1.0, remate: 1.0, cruzar: 1.0, lancar: 1.0, conduzir: 1.0,
     pressao: 1.0, cadencia: 1.0,
-    /*
-    Pesos que só o Utility AI usa (multiplicam a pontuação da acção com o
-    mesmo nome). Neutros na base: um estilo que não os declare joga como
-    jogava. `driblar` é o único com identidade forte por estilo — está
-    declarado estilo a estilo mais abaixo.
-    */
-    driblar: 1.0, marcar: 1.0, intercetar: 1.0, apoiar: 1.0,
     ombroDefesa: false, dentroArea: false, seguraBola: false,
     atraiDefesa: false, cortaParaDentro: false, colaNaLinha: false,
     juntaSeAoAtaque: false
-};
-
-/*
-=============================================================================
-Utility AI — parâmetros da escolha de acção
-=============================================================================
-O Utility pontua TODAS as acções possíveis e escolhe entre as melhores, em
-vez de percorrer uma árvore de prioridades fixas como o BT. Ligado/desligado
-pelo botão "Utility AI" do painel (window.usarUtilityAI).
-
-    margemTopN    FRACÇÃO DO MELHOR score que uma acção tem de atingir para
-                  entrar no sorteio (ver escolherAccao: `corte = melhor *
-                  margem`). 0.65 = só concorrem as que valem pelo menos 65%
-                  da melhor. Quando só uma passa o corte, é escolhida sem
-                  sorteio nenhum.
-
-                  CUIDADO: o número é uma fracção do TOPO, não uma tolerância
-                  "abaixo do topo" — baixá-lo ALARGA o sorteio, não o
-                  aperta. Com 0.15 quase tudo entrava no pool e a escolha
-                  passava a ser aleatória ponderada: num frame com CARRY 0.93
-                  e PASS 0.40, o PASS saía 27% das vezes. Como a decisão é
-                  reavaliada a 60 fps, isso dava passe quase imediato — os
-                  jogadores tocavam sempre de primeira e nunca conduziam.
-    tamanhoPool   tecto de candidatas nesse sorteio.
-    inerciaBase   bónus da acção que já está a decorrer: +45% no instante em
-                  que começa. Sem isto o jogador troca de ideia em cada frame
-                  em que dois scores se cruzam.
-    inerciaDecai  constante de tempo, em segundos, do decaimento desse bónus.
-                  Ao fim de ~2.5x este valor o bónus é residual e a acção
-                  defende-se pelo mérito. Escala com a pressão e com a
-                  cadência do estilo (ver bonusDeInercia).
-    carrinhoAtivo interruptor do carrinho como acção do Utility.
-=============================================================================
-*/
-const UtilityModel = {
-    margemTopN: 0.65,
-    tamanhoPool: 3,
-    inerciaBase: 0.45,
-    inerciaDecai: 0.8,
-    carrinhoAtivo: true
 };
 
 const PlayingStyles = {

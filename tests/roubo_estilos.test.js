@@ -12,7 +12,6 @@ const vm = require('node:vm');
 const raiz = path.join(__dirname, '..');
 const CONFIG = fs.readFileSync(path.join(raiz, 'js', 'config.js'), 'utf8');
 const BT = fs.readFileSync(path.join(raiz, 'js', 'bt', 'player_bt.js'), 'utf8');
-const ACTIONS = fs.readFileSync(path.join(raiz, 'js', 'utility', 'actions.js'), 'utf8');
 
 function recortarConst(src, nome) {
     const i = src.indexOf('const ' + nome + ' = {');
@@ -102,15 +101,6 @@ test('as duas folhas de roubo do BT chamam podeRoubarBola', () => {
         assert.ok(i >= 0, 'folha ' + folha + ' nao encontrada');
         const corpo = BT.slice(i, i + 400);
         assert.ok(/podeRoubarBola\(p\)/.test(corpo), folha + ' nao verifica o setor');
-    }
-});
-
-test('o Utility aplica a mesma regra nas suas acções de roubo', () => {
-    for (const nome of ['TACKLE', 'SLIDE_TACKLE']) {
-        const i = ACTIONS.indexOf("nome: '" + nome + "'");
-        assert.ok(i >= 0, 'accao ' + nome + ' nao encontrada');
-        const corpo = ACTIONS.slice(i, ACTIONS.indexOf('considerandos', i));
-        assert.ok(/podeRoubarBola/.test(corpo), nome + ' do Utility nao verifica o setor');
     }
 });
 

@@ -832,8 +832,7 @@ function distDisputaApoio(jogador, bola) {
 function temVagaDeApoio(ctx, aFrenteDaBola) {
     const p = ctx.p;
     // Quem vai buscar a bola (destinatário de um passe, ou do seu próprio
-    // toque de condução) tem tarefa; apoiar é para os outros. Segunda linha
-    // de defesa: o gate do UtilityAI já o devia ter apanhado antes daqui.
+    // toque de condução) tem tarefa; apoiar é para os outros.
     if (Match.intendedReceiver === p) return false;
     const bola = Match.ball.position;
     const minhaDist = distDisputaApoio(p, bola);
@@ -964,21 +963,14 @@ function emZonaDeRemate(ctx) {
 }
 
 /* =========================================================================
-   COMPORTAMENTOS PARTILHADOS PELOS DOIS CÉREBROS
+   COMPORTAMENTOS QUE NÃO SÃO DECISÃO
 
-   O BT e o Utility AI são duas formas de DECIDIR, não duas formas de jogar.
-   Há casos que não são decisão nenhuma — bola parada, o guarda-redes com a
-   bola na mão, ser o destinatário de um passe — e esses têm de se comportar
-   exactamente igual nos dois, senão ligar o botão do Utility muda regras de
-   jogo que ninguém quis mudar.
+   Bola parada, o guarda-redes com a bola na mão, ser o destinatário de um
+   passe: são regras de jogo, não escolhas. Vivem aqui, fora das folhas da
+   árvore, para não ficarem espalhados por vários ramos e divergirem.
 
-   Estavam duplicados: uma cópia na árvore, outra nos gates do Utility. As
-   cópias divergiram (a do guarda-redes ficou com a versão antiga da saída de
-   bola, a da bola parada podia divergir a seguir). Agora é uma função só,
-   chamada pelos dois lados.
-
-   Regra para quem mexer nisto: um comportamento que não dependa de pontuação
-   nem de prioridade vive AQUI, não dentro de uma das árvores.
+   Regra para quem mexer nisto: um comportamento que não dependa de
+   prioridade vive AQUI, não dentro da árvore.
    ========================================================================= */
 
 /*
@@ -1475,16 +1467,6 @@ const PlayerAI = {
     tick: function (player, dt) {
         const s = player.fsm ? player.fsm.currentState : "";
         if (player.actionState || s === "PASS" || s === "SHOOT" || s === "CROSS" || s === "TACKLE" || s === "SLIDE_TACKLE" || s === "CHEST_CONTROL") return;
-
-        /*
-        Utility AI em vez da árvore, quando o botão do painel o pede. Ele tem
-        os seus próprios gates e monta o contexto sozinho (ver UtilityAI.tick)
-        — por isso a troca é aqui, antes de tudo, e não por dentro da árvore.
-        */
-        if (window.usarUtilityAI && typeof UtilityAI !== 'undefined') {
-            UtilityAI.tick(player, dt);
-            return;
-        }
 
         if (!player.btCtx) player.btCtx = new PlayerContext(player);
         const ctx = player.btCtx.prepare(dt);

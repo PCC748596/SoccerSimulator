@@ -211,8 +211,6 @@
                     onclick="toggleUsarPasseGrid()">PassGrid (decisão): OFF</button>
                 <button type="button" class="btn-sector" id="btn-marking-debug"
                     onclick="toggleMarkingDebug()">Marcação: OFF</button>
-                <button type="button" class="btn-sector" id="btn-utility-ai"
-                    onclick="toggleUtilityAI()">Utility AI: OFF</button>
                 <button type="button" class="btn-sector" id="btn-touch-toggle"
                     onclick="TouchControls.toggle(); this.classList.toggle('active', TouchControls.enabled); this.innerText = 'Touch Controls: ' + (TouchControls.enabled ? 'ON' : 'OFF');">Touch Controls: OFF</button>
                 <button type="button" class="btn-sector" id="btn-teambtview"
@@ -330,12 +328,6 @@
     <script src="js/bt/team_bt.js"></script>
     <script src="js/bt/position_bt.js"></script>
     <script src="js/bt/player_bt.js"></script>
-    <!-- Utility AI: alternativa ao BT, ligada pelo botao do painel.
-         Depois do player_bt.js, que e' quem define o PlayerContext. -->
-    <script src="js/utility/core.js"></script>
-    <script src="js/utility/actions.js"></script>
-    <script src="js/utility/player_utility.js"></script>
-
     <script src="js/match.js"></script>
     <script src="js/player.js"></script>
     <script src="js/fsm.js"></script>

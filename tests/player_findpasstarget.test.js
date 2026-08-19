@@ -2,12 +2,12 @@
 Regressão do FINDING 1 da revisão da Task 3:
 findPassTarget() tinha uma saída antecipada (`options.length === 0`) que não
 escrevia `this.ultimoAlvoPasse`, deixando lá o valor de uma chamada anterior.
-Isso faz a acção PASS (js/utility/actions.js) ler métricas de um passe que já
+Isso faz o consumidor seguinte ler métricas de um passe que já
 não é este, em vez dos valores neutros a que tem direito quando não há
 candidatos.
 
 js/player.js não tem guarda `module.exports` (não é um dos ficheiros
-desenhados para ser testável — ver js/utility/*.js para esses); é um script
+desenhados para ser testável); é um script
 clássico com uma classe grande e muitas dependências globais. Para testar só
 o ramo em causa, carregamo-lo com `vm` num contexto mínimo e chamamos
 `findPassTarget` num objecto simples via `Object.create(prototype)`, sem
