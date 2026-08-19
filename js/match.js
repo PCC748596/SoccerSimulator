@@ -1278,6 +1278,15 @@ const Match = {
         this.opponents.forEach(p => PositionAI.tick(p, bbB));
 
         /*
+        Malha de opcoes de passe da equipa COM a bola: os alvos sao os
+        vertices de uma triangulacao de Delaunay e as arestas sao as linhas
+        de passe. Corrige o que os ticks individuais escreveram — nao o
+        substitui. Ver TriangulacaoAI.
+        */
+        TriangulacaoAI.ajustar(bbA);
+        TriangulacaoAI.ajustar(bbB);
+
+        /*
         AS TRES PASSAGENS POS-NIVEL-2 FORAM APAGADAS.
 
             relaxConstraints  coesao local
@@ -1289,8 +1298,10 @@ const Match = {
         era logo a seguir puxado de volta a linha, e largava a marca. Era isso
         que se via como "jogadores que nao respeitam o PositionBT".
 
-        Vao ser refeitas sobre triangulacao de Delaunay, e so para a equipa COM
-        a bola: sem bola quem manda e a marcacao.
+        A coesao foi refeita sobre a triangulacao, acima. A separacao minima
+        entre alvos vem de graca com ela (TriangulacaoModel.arestaMin). O
+        holdLine nao volta: a linha de fora-de-jogo trava a frente do BLOCO,
+        no computeBlock, em vez de puxar jogador a jogador.
 
         Do relaxConstraints sobreviveu so o calculo da linha de fora-de-jogo,
         que nao mexia em ninguem — ver publicarLinhaDeForaDeJogo.

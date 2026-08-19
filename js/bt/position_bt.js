@@ -654,6 +654,225 @@ function atribuirMarcacao(bb) {
     if (!bb.isAttacking) atribuirCobertura(semAlvo);
 }
 
+
+/* =========================================================================
+   TRIANGULAÇÃO DE DELAUNAY — a malha de opções de passe
+   =========================================================================
+   Só para a equipa COM a bola. Sem bola quem manda é a marcação, e um
+   jogador que está atrás do seu homem não tem forma nenhuma a cumprir.
+
+   A ideia: os ALVOS dos jogadores são os vértices de uma malha, e as ARESTAS
+   dessa malha são as linhas de passe disponíveis. Se a malha estiver bem
+   formada, quem tem a bola tem sempre para quem a dar.
+
+   Substitui o `relaxConstraints`, que ligava por molas todos os pares cuja
+   posição de FORMAÇÃO distasse menos de 33 m. Isso é uma vizinhança
+   inventada: não sabe onde a equipa está agora, e liga jogadores com três
+   colegas pelo meio. A triangulação de Delaunay dá a vizinhança REAL — é
+   planar, não tem arestas cruzadas, e dois pontos só ficam ligados se não
+   houver terceiro entre eles.
+
+   Duas regras sobre a malha:
+
+       comprimento de aresta   curta demais é aglomeração, longa demais não
+                               é passe. Empurra ou puxa ao longo da aresta.
+       ângulo mínimo           um triângulo achatado não dá largura nenhuma:
+                               três jogadores quase em linha não são três
+                               opções, são uma. Afasta o vértice do ângulo
+                               agudo da aresta oposta.
+
+   Ver TriangulacaoModel em config.js para os números.
+   ========================================================================= */
+
+/*
+Delaunay por FORÇA BRUTA: um trio forma triângulo se nenhum outro ponto cair
+dentro do seu circumcírculo.
+
+Com 10 pontos são 120 trios e 1200 testes por equipa por frame — barato ao pé
+de qualquer outra coisa que corre aqui. E ao contrário do Bowyer-Watson
+incremental, não depende da ordem de inserção: a mesma nuvem de pontos dá
+sempre a mesma malha, o que evita arestas a piscar entre frames quando quatro
+jogadores ficam quase co-circulares.
+*/
+function triangularDelaunay(pts) {
+    const n = pts.length;
+    const tris = [];
+    if (n < 3) return tris;
+
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            for (let k = j + 1; k < n; k++) {
+                const c = circumcirculo(pts[i], pts[j], pts[k]);
+                if (!c) continue;   // colineares: não formam triângulo
+
+                let vazio = true;
+                for (let m = 0; m < n; m++) {
+                    if (m === i || m === j || m === k) continue;
+                    const dx = pts[m].x - c.x, dz = pts[m].z - c.z;
+                    // Margem: um ponto exactamente no círculo não invalida o
+                    // triângulo, senão configurações simétricas (uma linha de
+                    // quatro defesas) não geram malha nenhuma.
+                    if (dx * dx + dz * dz < c.r2 - 1e-6) { vazio = false; break; }
+                }
+                if (vazio) tris.push([i, j, k]);
+            }
+        }
+    }
+    return tris;
+}
+
+function circumcirculo(a, b, c) {
+    const d = 2 * (a.x * (b.z - c.z) + b.x * (c.z - a.z) + c.x * (a.z - b.z));
+    if (Math.abs(d) < 1e-9) return null;
+
+    const a2 = a.x * a.x + a.z * a.z;
+    const b2 = b.x * b.x + b.z * b.z;
+    const c2 = c.x * c.x + c.z * c.z;
+
+    const x = (a2 * (b.z - c.z) + b2 * (c.z - a.z) + c2 * (a.z - b.z)) / d;
+    const z = (a2 * (c.x - b.x) + b2 * (a.x - c.x) + c2 * (b.x - a.x)) / d;
+    const r2 = (a.x - x) * (a.x - x) + (a.z - z) * (a.z - z);
+    return { x, z, r2 };
+}
+
+// Arestas únicas da malha, como pares de índices.
+function arestasDe(tris) {
+    const vistas = new Set();
+    const arestas = [];
+    for (const t of tris) {
+        for (const [u, v] of [[t[0], t[1]], [t[1], t[2]], [t[0], t[2]]]) {
+            const chave = u < v ? u + ':' + v : v + ':' + u;
+            if (vistas.has(chave)) continue;
+            vistas.add(chave);
+            arestas.push([u, v]);
+        }
+    }
+    return arestas;
+}
+
+const TriangulacaoAI = {
+    /*
+    Ajusta os alvos da equipa com bola para a malha ficar jogável.
+
+    Corre depois dos ticks individuais: parte dos alvos que o nível 2 já
+    escreveu e corrige-os, não os substitui.
+    */
+    ajustar: function (bb) {
+        const T = TriangulacaoModel;
+        if (!T.ativo || !bb.isAttacking) return null;
+
+        const jogadores = bb.outfield.filter(p => p.dynamicTarget);
+        if (jogadores.length < 3) return null;
+
+        const pts = jogadores.map(p => ({ x: p.dynamicTarget.x, z: p.dynamicTarget.z }));
+
+        /*
+        Quem não se mexe:
+            o portador  — o alvo dele é a bola que já tem
+            quem marca  — os defesas continuam a marcar em posse, e a marca
+                          vem primeiro que a forma
+        */
+        const fixo = jogadores.map(p => (p === bb.carrier || !!p.markingTarget));
+
+        // A malha é calculada UMA vez e as iterações correm sobre ela. Voltar
+        // a triangular a cada iteração faria as arestas trocar a meio da
+        // correcção, e o resultado deixava de convergir.
+        const tris = triangularDelaunay(pts);
+        const arestas = arestasDe(tris);
+
+        for (let it = 0; it < T.iteracoes; it++) {
+            corrigirArestas(pts, arestas, fixo, T);
+            corrigirAngulos(pts, tris, fixo, T);
+        }
+
+        for (let i = 0; i < jogadores.length; i++) {
+            if (fixo[i]) continue;
+            jogadores[i].dynamicTarget.x = THREE.MathUtils.clamp(pts[i].x, -(CAMPO_LARG / 2), CAMPO_LARG / 2);
+            jogadores[i].dynamicTarget.z = THREE.MathUtils.clamp(pts[i].z, -(CAMPO_COMP / 2), CAMPO_COMP / 2);
+        }
+
+        // Guardado para o debug visual poder desenhar a malha.
+        bb.malha = { pts: pts.map(q => ({ x: q.x, z: q.z })), arestas, tris };
+        return bb.malha;
+    }
+};
+
+// Comprimento de aresta dentro da faixa jogável.
+function corrigirArestas(pts, arestas, fixo, T) {
+    for (const [u, v] of arestas) {
+        const a = pts[u], b = pts[v];
+        let dx = b.x - a.x, dz = b.z - a.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 1e-6) { dx = 1; dz = 0; }
+
+        let alvo = null;
+        if (d < T.arestaMin) alvo = T.arestaMin;
+        else if (d > T.arestaMax) alvo = T.arestaMax;
+        if (alvo === null) continue;
+
+        const nx = dx / (d || 1), nz = dz / (d || 1);
+        const erro = (alvo - d) * T.passo;
+        aplicar(pts, fixo, u, -nx * erro, -nz * erro, v, nx * erro, nz * erro);
+    }
+}
+
+/*
+Triângulos achatados: três jogadores quase em linha dão UMA opção de passe,
+não três. Empurra o vértice do ângulo mais agudo para longe da aresta oposta,
+que é a direcção que abre o triângulo mais depressa.
+*/
+function corrigirAngulos(pts, tris, fixo, T) {
+    const limite = Math.cos(T.anguloMin * Math.PI / 180);
+
+    for (const t of tris) {
+        for (let e = 0; e < 3; e++) {
+            const i = t[e], j = t[(e + 1) % 3], k = t[(e + 2) % 3];
+            const ax = pts[j].x - pts[i].x, az = pts[j].z - pts[i].z;
+            const bx = pts[k].x - pts[i].x, bz = pts[k].z - pts[i].z;
+            const la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+            if (la < 1e-6 || lb < 1e-6) continue;
+
+            const cos = (ax * bx + az * bz) / (la * lb);
+            if (cos <= limite) continue;   // ângulo já é largo que chegue
+
+            // Normal à aresta oposta (j-k), na direcção que afasta o vértice i.
+            let ex = pts[k].x - pts[j].x, ez = pts[k].z - pts[j].z;
+            const le = Math.hypot(ex, ez);
+            if (le < 1e-6) continue;
+            ex /= le; ez /= le;
+
+            const vx = pts[i].x - pts[j].x, vz = pts[i].z - pts[j].z;
+            const proj = vx * ex + vz * ez;
+            let nx = vx - proj * ex, nz = vz - proj * ez;
+            const ln = Math.hypot(nx, nz);
+            if (ln < 1e-6) { nx = -ez; nz = ex; }
+            else { nx /= ln; nz /= ln; }
+
+            const forca = (cos - limite) * T.abrirAngulo;
+            aplicar(pts, fixo, i, nx * forca, nz * forca, -1, 0, 0);
+        }
+    }
+}
+
+/*
+Aplica um deslocamento a dois pontos. Um ponto fixo não se mexe, e o que lhe
+cabia passa para o outro — senão uma aresta contra o portador não corrigia
+nada, e ele é justamente aquele à volta de quem a malha se tem de formar.
+*/
+function aplicar(pts, fixo, i, ix, iz, j, jx, jz) {
+    const iLivre = i >= 0 && !fixo[i];
+    const jLivre = j >= 0 && !fixo[j];
+
+    if (iLivre && jLivre) {
+        pts[i].x += ix; pts[i].z += iz;
+        pts[j].x += jx; pts[j].z += jz;
+    } else if (iLivre) {
+        pts[i].x += ix - jx; pts[i].z += iz - jz;
+    } else if (jLivre) {
+        pts[j].x += jx - ix; pts[j].z += jz - iz;
+    }
+}
+
 /* =========================================================================
    TACKLING — tirar a bola ao adversário
    =========================================================================

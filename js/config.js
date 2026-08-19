@@ -1844,6 +1844,48 @@ const TacklingModel = {
     }
 };
 
+/*
+=============================================================================
+TRIANGULAÇÃO — a malha de opções de passe
+=============================================================================
+Só corre para a equipa COM a bola (ver TriangulacaoAI em position_bt.js).
+Sem bola quem manda é a marcação.
+
+Os ALVOS dos jogadores são os vértices de uma malha de Delaunay, e as ARESTAS
+dessa malha são as linhas de passe. Estas manípulas dizem o que é uma malha
+jogável.
+
+    ativo         interruptor geral.
+
+    arestaMin     abaixo disto dois jogadores estão em cima um do outro e
+                  valem por um só. Também é o que substitui a separação
+                  mínima do antigo separarAlvos.
+    arestaMax     acima disto a aresta deixa de ser um passe.
+
+    anguloMin     graus. Um triângulo mais achatado do que isto não dá
+                  largura nenhuma: três jogadores quase em linha são uma
+                  opção de passe, não três.
+
+    iteracoes     passagens de correcção por frame.
+    passo         fracção do erro de comprimento corrigida por passagem. Menos
+                  de 1 para a correcção não oscilar entre arestas que se
+                  disputam o mesmo jogador.
+    abrirAngulo   força com que um vértice agudo é afastado da aresta oposta.
+=============================================================================
+*/
+const TriangulacaoModel = {
+    ativo: true,
+
+    arestaMin: 8.0,
+    arestaMax: 22.0,
+
+    anguloMin: 25.0,
+
+    iteracoes: 4,
+    passo: 0.5,
+    abrirAngulo: 6.0
+};
+
 const DefensivePressureModel = {
     low: 6.0,
     balanced: 4.0,
