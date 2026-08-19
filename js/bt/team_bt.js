@@ -743,47 +743,32 @@ function computeBlock(bb) {
     }
 
     /*
-    LIMITES DE FUNDO: o bloco ENCOSTA E ENCOLHE, nao para.
+    LIMITES: as LINHAS DE FUNDO, e mais nada. O rectangulo desloca-se inteiro
+    para dentro do campo e NUNCA muda de tamanho - encolher aproximaria as
+    linhas da equipa sem ninguem ter mexido na compacidade.
 
-    Antes cada limite deslocava o rectangulo inteiro para dentro do campo
-    mantendo a profundidade. Como o bloco tem 30 m e os travoes estao em
-    -42 (recuoMax) e +49.8 (margemFundo), o centro so se podia mexer entre
-    -27 e +34.8: assim que a bola passava desses pontos o rectangulo ficava
-    PARADO e deixava de acompanhar a bola. Medido, com a bola a variar de
-    -45 a +45: derivada zero em 20 m do nosso lado e em 15 m do outro - mais
-    de um terco do campo com o bloco imovel.
-
-    Encolher e a forma certa de comprimir neste desenho, e a mesma que a
-    compacidade do painel usa: o nivel 2 coloca cada jogador por percentagem,
-    por isso um rectangulo mais curto aproxima toda a gente na mesma
-    proporcao e nao empilha ninguem numa fronteira - que era a razao de ser
-    do "sem o achatar". Uma equipa com a bola na propria linha de fundo esta
-    mesmo espremida; o que nao pode e ficar parada.
-
-    A profundidade nunca desce abaixo de BlockShape.compressaoMin da nominal.
+    Sairam daqui tres travoes que paravam o bloco antes das linhas: o
+    margemFundo (0.94, ~3.2 m antes) e o recuoMax (-42, na marca de grande
+    penalidade), mais a compressao contra eles.
     */
-    const fundo = (CAMPO_COMP / 2) * B.margemFundo;
-    const profMin = profundidade * B.compressaoMin;
+    const fundo = CAMPO_COMP / 2;
 
-    if (z0 < B.recuoMax) {
-        z0 = B.recuoMax;
-        if (z1 < z0 + profMin) z1 = z0 + profMin;
+    if (z0 < -fundo) {
+        z0 = -fundo;
+        z1 = z0 + profundidade;
     }
     if (z1 > fundo) {
         z1 = fundo;
-        if (z0 > z1 - profMin) z0 = z1 - profMin;
+        z0 = z1 - profundidade;
     }
-    // Rede de seguranca: com o campo todo mais curto do que o bloco, encosta
-    // ao fundo em vez de inverter as bordas.
-    if (z0 < -fundo) z0 = -fundo;
-    if (z1 < z0 + profMin) z1 = z0 + profMin;
 
     /* --- largura -------------------------------------------------------- */
 
     const largura = CAMPO_LARG * B.amplitude[compac];
     const meiaLarg = largura / 2;
 
-    const borda = (CAMPO_LARG / 2) * B.margemLateral;
+    // Limite lateral: a LINHA LATERAL. A borda do bloco encosta-lhe.
+    const borda = CAMPO_LARG / 2;
     const maxCentroX = borda - meiaLarg;
 
     /*

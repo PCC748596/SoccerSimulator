@@ -464,39 +464,24 @@ const BlockShape = {
     },
 
     /*
-    Quanto o bloco acompanha a bola lateralmente (basculação).
+    LIMITES DO RECTÂNGULO — as linhas do campo, e mais nada.
 
-    Substitui os degraus `if (ballX > 10) targetX = min(-18, targetX+12)` do
-    commit: em vez de empurrar cada jogador contra um limite fixo, desloca-se o
-    rectângulo inteiro. Ninguém se sobrepõe a ninguém porque a forma não muda.
+    O bloco desloca-se inteiro para dentro do campo quando bate numa linha;
+    NUNCA muda de tamanho. Encolher aproximaria as linhas da equipa umas das
+    outras sem ninguém ter mexido na compacidade, que é a única manípula que
+    deve mudar a dimensão do bloco.
+
+    Não há margens de segurança nem travões intermédios. Havia três, e cada
+    um afastava o rectângulo das linhas:
+
+        margemLateral 0.94  parava o bloco a 2 m da linha lateral
+        margemFundo   0.94  parava-o a 3.2 m da linha de fundo
+        recuoMax      -42   parava a traseira na marca de grande penalidade,
+                            11 m antes da própria linha de fundo
+
+    O centro do bloco segue a bola 1:1 nos dois eixos até a borda tocar a
+    linha; daí em diante fica encostado a ela.
     */
-    // Sem factor de basculação: o centro do bloco segue o x da bola 1:1 até
-    // encostar à margem do campo (ver computeBlock em team_bt.js).
-
-    // Margem para o rectângulo não sair do campo.
-    margemLateral: 0.94,
-    margemFundo: 0.94,
-
-    /*
-    A pedido do utilizador: o bloco nunca recua para trás da marca do
-    penalty própria (11 m da linha de baliza). Antes só havia o `margemFundo`
-    (94% do meio-campo, ~49.8 m — quase a linha de fundo), e com bola
-    encostada à própria área o bloco inteiro (avançados incluídos) colapsava
-    num canto minúsculo do campo. Com o PositionBT já a corrigir marcação e
-    cobertura por cima do slot (ver MarkingModel.biasMax), o TeamBT não
-    precisa de recuar tanto para "ir buscar" a jogada.
-    */
-    recuoMax: -(CAMPO_COMP / 2 - 11),   // -42
-
-    /*
-    Profundidade mínima quando o bloco encosta a um fundo, em fracção da
-    profundidade nominal. Encostado, o rectângulo ENCOLHE em vez de parar
-    (ver computeBlock): é o que deixa o bloco continuar a acompanhar a bola
-    nos últimos metros de cada meio-campo em vez de congelar assim que a
-    traseira toca o recuoMax. 0.5 = com o bloco médio de 30 m, nunca abaixo
-    de 15 m.
-    */
-    compressaoMin: 0.5
 };
 
 /*
