@@ -2,11 +2,16 @@
 A marcação tem de ACONTECER, não só ser calculada.
 
 Medido antes: com o homem a 15 m do slot do bloco, o marcador acabava a
-9.9 m dele; a 25 m, acabava a 19 m. O tecto de desvio (biasMaxPorSetor,
-3-10 m) comia a marcação toda, e só marcava quem já tivesse o homem ao lado.
-Em campo isso lê-se como "não há marcação, toda a gente corre para a bola".
+9.9 m dele; a 25 m, acabava a 19 m. O tecto de desvio comia a marcação toda,
+e só marcava quem já tivesse o homem ao lado. Em campo isso lê-se como "não
+há marcação, toda a gente corre para a bola".
 
-Estes testes correm o marcar() real e verificam a distância FINAL ao homem.
+Depois disso a marcação deixou de ser um desvio e passou a ser A REGRA, num
+sítio só (PositionAI.commit): quem tem homem atribuído fica sobre a recta
+homem -> própria baliza, a MarkingModel.distancia metros dele. Sem tectos,
+sem folha nenhuma a poder decidir que hoje não marca.
+
+Estes testes correm essa geometria e verificam a posição FINAL.
 */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -43,108 +48,114 @@ function recortarFuncao(src, nome) {
 function montar(pressao) {
     const sandbox = {
         Math, CAMPO_COMP: 105,
-        Tatics: { pressaoDefensiva: pressao || 'balanced' },
-        THREE: { MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } }
+        Tatics: { pressaoDefensiva: pressao || 'balanced' }
     };
     vm.createContext(sandbox);
     vm.runInContext(
         recortarConst(CONFIG, 'MarkingModel') + '\n' +
-        recortarFuncao(POS, 'goalSide') + '\n' +
-        recortarFuncao(POS, 'aproximar') + '\n' +
-        recortarFuncao(POS, 'biasMaxDaMarcacao') + '\n' +
-        recortarFuncao(POS, 'marcar') +
-        '\nthis.marcar = marcar; this.M = MarkingModel;', sandbox);
+        recortarFuncao(POS, 'goalSide') +
+        '\nthis.goalSide = goalSide; this.M = MarkingModel;', sandbox);
     return sandbox;
 }
 
-/*
-Corre o marcar() e devolve a distância a que o marcador FICA do homem.
-`slot` é onde o bloco o tinha posto; `homem` é a posição do adversário.
-*/
-function distanciaFinal(sandbox, slot, homem) {
-    const p = { dirZ: 1, ownGoalZ: -52.5, model: { position: { x: slot[0], z: slot[1] } } };
-    const alvo = {
-        model: {
-            position: {
-                x: homem[0], z: homem[1],
-                distanceTo(o) { return Math.hypot(this.x - o.x, this.z - o.z); }
-            }
-        }
-    };
-    const ctx = { p, targetX: slot[0], targetZ: slot[1] };
-    sandbox.marcar(ctx, alvo);
-    return Math.hypot(ctx.targetX - homem[0], ctx.targetZ - homem[1]);
+// Marcador em `slot`, homem em `homem`. Devolve o ponto onde ele acaba.
+function alvoDeMarcacao(s, homem, ownGoalZ) {
+    const p = { dirZ: ownGoalZ < 0 ? 1 : -1, ownGoalZ };
+    const alvo = { model: { position: { x: homem[0], y: 0, z: homem[1] } } };
+    const m = s.goalSide(p, alvo, s.M.distancia);
+    return [m.x, m.z];
 }
 
-test('o alcance da marcação está declarado e é generoso', () => {
-    const M = montar().M;
-    assert.ok(M.alcanceMarcacao >= 20, 'alcance curto demais: ' + M.alcanceMarcacao);
-});
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
-test('marca o homem mesmo quando ele está longe do slot', () => {
+/* ------------------------------------------------------------------
+   A distância pedida é a distância obtida — venha o homem de onde vier.
+   ------------------------------------------------------------------ */
+
+test('fica exactamente à distância pedida, esteja o homem onde estiver', () => {
     const s = montar();
-    const pedida = s.M.distanciaPara(-19);   // terco defensivo
-    for (const homem of [[2, -28], [6, -25], [10, -19]]) {
-        const d = distanciaFinal(s, [0, -30], homem);
-        assert.ok(Math.abs(d - s.M.distanciaPara(homem[1])) < 0.3,
-            'homem em ' + homem + ' -> ficou a ' + d.toFixed(1) + 'm');
+    for (const homem of [[0, -30], [15, -10], [25, 5], [-30, 40], [2, -50]]) {
+        const alvo = alvoDeMarcacao(s, homem, -52.5);
+        assert.ok(Math.abs(dist(alvo, homem) - s.M.distancia) < 1e-9,
+            'homem em ' + homem + ': ficou a ' + dist(alvo, homem).toFixed(2) + 'm');
     }
-    assert.ok(pedida > 0);
 });
 
 test('o caso que falhava: homem a 25m do slot', () => {
+    // Antes o tecto de desvio deixava o marcador a 19 m do homem. A marcação
+    // já não tem tecto: a distância é a mesma esteja ele perto ou longe.
     const s = montar();
-    const d = distanciaFinal(s, [0, -30], [15, -10]);
-    const pedida = s.M.distanciaPara(-10);
-    assert.ok(Math.abs(d - pedida) < 0.3,
-        'ficou a ' + d.toFixed(1) + 'm, devia ficar a ' + pedida.toFixed(1) + 'm');
-});
-
-test('a distância final segue o Defensive Pressure', () => {
-    for (const pressao of ['low', 'balanced', 'high']) {
-        const s = montar(pressao);
-        const d = distanciaFinal(s, [0, -30], [6, -25]);
-        const pedida = s.M.distanciaPara(-25);
-        assert.ok(Math.abs(d - pedida) < 0.3,
-            pressao + ': ficou a ' + d.toFixed(1) + 'm, pedida ' + pedida.toFixed(1) + 'm');
-    }
+    const alvo = alvoDeMarcacao(s, [15, -10], -52.5);
+    assert.ok(Math.abs(dist(alvo, [15, -10]) - s.M.distancia) < 1e-9);
 });
 
 test('a distância de marcação é a mesma em qualquer Defensive Pressure', () => {
     // Passou a ser um número só (MarkingModel.distancia), a pedido, enquanto
     // se valida a marcação. Se voltar a diferenciar, este teste inverte-se.
-    const dLow = distanciaFinal(montar('low'), [0, -30], [6, -25]);
-    const dHigh = distanciaFinal(montar('high'), [0, -30], [6, -25]);
-    assert.ok(Math.abs(dHigh - dLow) < 0.01,
+    const dLow = dist(alvoDeMarcacao(montar('low'), [6, -25], -52.5), [6, -25]);
+    const dHigh = dist(alvoDeMarcacao(montar('high'), [6, -25], -52.5), [6, -25]);
+    assert.ok(Math.abs(dHigh - dLow) < 1e-9,
         'low (' + dLow.toFixed(2) + ') e high (' + dHigh.toFixed(2) + ') deviam ser iguais');
 });
 
+/* ------------------------------------------------------------------
+   POR TRÁS: entre o homem e a NOSSA baliza. Não ao lado, não à frente.
+   ------------------------------------------------------------------ */
+
 test('o marcador fica do lado da PRÓPRIA baliza, não em cima do homem', () => {
     const s = montar();
-    const p = { dirZ: 1, ownGoalZ: -52.5, model: { position: { x: 0, z: -30 } } };
     const homem = [4, -24];
-    const alvo = {
-        model: {
-            position: {
-                x: homem[0], z: homem[1],
-                distanceTo(o) { return Math.hypot(this.x - o.x, this.z - o.z); }
-            }
-        }
-    };
-    const ctx = { p, targetX: 0, targetZ: -30 };
-    s.marcar(ctx, alvo);
-    assert.ok(ctx.targetZ < homem[1], 'devia ficar entre o homem e a propria baliza');
+    const alvo = alvoDeMarcacao(s, homem, -52.5);
+    assert.ok(alvo[1] < homem[1], 'ficou à frente do homem em vez de atrás');
 });
 
-test('o tecto ainda impede uma travessia absurda do campo', () => {
+test('por trás vale para os dois sentidos de ataque', () => {
     const s = montar();
-    const d = distanciaFinal(s, [0, -30], [30, 20]);   // homem a ~64m
-    assert.ok(d > 10, 'nao devia teletransportar-se para o outro lado do campo');
+    const homem = [4, 24];
+    const alvo = alvoDeMarcacao(s, homem, 52.5);   // equipa que defende o +Z
+    assert.ok(alvo[1] > homem[1], 'ficou à frente do homem em vez de atrás');
 });
 
-test('marcar() já não usa o tecto de forma como limite', () => {
-    const corpo = recortarFuncao(POS, 'marcar');
-    assert.ok(/alcanceMarcacao/.test(corpo), 'marcar() nao usa o alcance de marcacao');
-    assert.ok(!/biasMaxDaMarcacao\(p, alvo\)/.test(corpo),
-        'marcar() voltou a limitar-se ao tecto de forma');
+test('está sobre a recta homem -> baliza, não só mais atrás em Z', () => {
+    /*
+    Para um homem em frente à baliza tanto faz, mas para um homem aberto no
+    corredor um desvio só em Z põe o marcador AO LADO dele, com o caminho da
+    baliza livre nas costas. O ponto tem de estar na recta.
+    */
+    const s = montar();
+    const homem = [28, -20];
+    const baliza = [0, -52.5];
+    const alvo = alvoDeMarcacao(s, homem, -52.5);
+
+    // Área do triângulo homem-baliza-alvo: zero se os três forem colineares.
+    const area = Math.abs(
+        (baliza[0] - homem[0]) * (alvo[1] - homem[1]) -
+        (baliza[1] - homem[1]) * (alvo[0] - homem[0])) / 2;
+    assert.ok(area < 1e-9, 'o marcador não está na recta homem-baliza');
+
+    // E entre os dois, não do outro lado do homem.
+    assert.ok(dist(alvo, baliza) < dist(homem, baliza),
+        'o marcador está mais longe da baliza do que o homem');
+});
+
+/* ------------------------------------------------------------------
+   A regra é única: não sobrou nenhuma folha a decidir se marca.
+   ------------------------------------------------------------------ */
+
+test('nenhuma folha do nível 2 marca por sua conta', () => {
+    // Sem os comentários: a nota que explica a mudança fala em marcar().
+    const semBloco = POS.split('/*').map((parte, i) => i === 0 ? parte : parte.split('*/').slice(1).join('*/')).join('');
+    const codigo = semBloco.split('\n').map(l => l.split('//')[0]).join('\n');
+    assert.ok(!codigo.includes('marcar(ctx'),
+        'voltou a haver folhas a chamar marcar() — a marcação tem de viver só no commit');
+});
+
+test('o commit põe o marcador atrás do homem, sem condições', () => {
+    const i = POS.indexOf('commit: function');
+    const j = POS.indexOf('const dt =', i);
+    assert.ok(i >= 0 && j > i);
+    const corpo = POS.slice(i, j);
+    assert.ok(/if \(p\.markingTarget\)/.test(corpo), 'o commit deixou de tratar a marcação');
+    assert.ok(/goalSide\(p, p\.markingTarget, MarkingModel\.distancia\)/.test(corpo),
+        'o commit não usa o goalSide com a distância do modelo');
 });

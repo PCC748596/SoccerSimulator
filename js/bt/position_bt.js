@@ -292,38 +292,12 @@ function aproximar(ctx, alvoX, alvoZ, maxDist) {
 }
 
 /*
-Teto de desvio da marcação (ver MarkingModel.biasMaxPara em config.js) para
-o terço do campo onde ALVO está — no referencial de ataque do MARCADOR, não
-do alvo, porque é a distância à PRÓPRIA baliza que decide a disciplina.
+A marcação não vive aqui.
+
+Havia um `marcar(ctx, alvo)` que cada folha chamava quando lhe apetecia, com
+o seu próprio tecto de desvio. Passou a ser uma regra única, aplicada a toda
+a gente com homem atribuído, no PositionAI.commit — ver a nota lá.
 */
-function biasMaxDaMarcacao(p, alvo, mult) {
-    const zoneAhead = alvo.model.position.z * p.dirZ;
-    const base = MarkingModel.biasMaxPara(zoneAhead);
-    return (mult === undefined) ? base : base * mult;
-}
-
-// Aplica a marcação sobre o posto zonal que a folha já calculou.
-function marcar(ctx, alvo, maxDist) {
-    const p = ctx.p;
-
-    /*
-    Distância do Defensive Pressure para o setor onde o ALVO está, tal e
-    qual — ver MarkingModel.distanciaPara. O setor é medido no referencial
-    de ataque do MARCADOR, o mesmo que decide o tecto de desvio.
-    */
-    const distancia = MarkingModel.distanciaPara(alvo.model.position.z * p.dirZ);
-
-    /*
-    O alvo é o ponto de marcação, não uma sugestão. O tecto é só a rédea
-    contra travessias do campo (MarkingModel.alcanceMarcacao) — não o
-    biasMaxPorSetor, que é para desvios de forma e deixava o marcador a
-    meio caminho do homem (ver a nota em config.js).
-    */
-    const m = goalSide(p, alvo, distancia);
-    aproximar(ctx, m.x, m.z,
-        (maxDist === undefined) ? MarkingModel.alcanceMarcacao : maxDist);
-    ctx.isMarking = true;
-}
 
 /*
 Bloco zonal: o slot no bloco JÁ é o posto zonal.
@@ -347,9 +321,6 @@ function defendZonal(ctx) {
         ctx.targetX += dxEixo;
     }
 
-    if (p.markingTarget && p.markingTarget.markCount <= 2) {
-        marcar(ctx, p.markingTarget);
-    }
 }
 
 /*
@@ -374,29 +345,15 @@ function defendFullBack(ctx) {
         return;
     }
 
-    // O extremo adversário do meu lado tem prioridade sobre tudo.
-    let winger = null, wingerDist = 999;
-    for (const opp of ctx.opponents) {
-        if (opp.role === 'gk') continue;
-        if (!['RW', 'LW', 'RM', 'LM'].includes(opp.pos)) continue;
-        if (Math.sign(opp.model.position.x) !== flankSign || Math.abs(opp.model.position.x) <= 10.0) continue;
-        const d = p.model.position.distanceTo(opp.model.position);
-        if (d < wingerDist) { wingerDist = d; winger = opp; }
-    }
-    if (winger) { marcar(ctx, winger); return; }
+    /*
+    Este bloco escolhia um homem por conta própria — o extremo do corredor,
+    ou o lateral que subisse — e marcava-o, ignorando quem o atribuirMarcacao
+    lhe tinha dado. Dois sítios a decidir quem marca quem, e o lateral acabava
+    em cima de quem não era o seu.
 
-    // Senão, o lateral adversário que subir.
-    let lateral = null, lateralDist = 999;
-    for (const opp of ctx.opponents) {
-        if (opp.role === 'gk') continue;
-        if (!['LB', 'RB'].includes(opp.pos)) continue;
-        if (Math.sign(opp.model.position.x) !== flankSign || Math.abs(opp.model.position.x) <= 10.0) continue;
-        if (opp.model.position.z * p.dirZ >= 15.0) continue;
-        const d = p.model.position.distanceTo(opp.model.position);
-        if (d < lateralDist) { lateralDist = d; lateral = opp; }
-    }
-    if (lateral) { marcar(ctx, lateral, biasMaxDaMarcacao(p, lateral, 0.9)); return; }
-
+    Quem marca quem é do atribuirMarcacao; onde o marcador se põe é do commit.
+    Aqui fica só o que ele faz sem homem.
+    */
     // Ninguém no corredor: fecha um pouco para dentro, acompanhando a bola.
     ctx.targetX += (bb.ballX * 0.18) - flankSign * 1.5;
 }
@@ -404,22 +361,8 @@ function defendFullBack(ctx) {
 function defendCB(ctx) {
     const p = ctx.p, bb = ctx.bb;
 
-    if (p.markingTarget) {
-        // Acompanha o atacante horizontalmente para não deixá-lo livre nas pontas,
-        // mas com um limite (clamp) para não abrir um buraco no meio da defesa 
-        // se ele for completamente para a linha lateral.
-        const targetX = p.markingTarget.model.position.x;
-        const targetZ = p.markingTarget.model.position.z;
-        const puxaoX = targetX - ctx.targetX;
-        ctx.targetX += THREE.MathUtils.clamp(puxaoX, -10, 10);
-
-        // Se o atacante entra na zona de perigo, engaja a marcação por trás.
-        if (Math.abs(targetX) < 22 && targetZ * p.dirZ < -10.0) {
-            marcar(ctx, p.markingTarget);
-            return;
-        }
-    }
-
+    // Se tem homem atribuído, o commit põe-no atrás dele e o que estiver
+    // aqui não conta. Isto é o que ele faz quando NÃO tem ninguém.
     let colegaPressiona = false;
     const carrier = bb.oppCarrier;
     if (carrier) {
@@ -480,9 +423,10 @@ function defendFlankShift(ctx) {
     const eCentralDoLado = noLadoDaAmeaca;
 
     if (eLateralDoLado) {
-        // Sai ao portador, pelo lado da baliza. Sem tecto próprio: sair ao
-        // homem é marcação, vale a mesma rédea das outras (alcanceMarcacao).
-        marcar(ctx, carrier);
+        // Aperta o portador. Se tiver homem atribuído, o commit sobrepõe-se a
+        // isto — marcar o seu homem vem primeiro que sair ao portador de outro.
+        aproximar(ctx, carrier.model.position.x, carrier.model.position.z,
+            MarkingModel.coberturaBiasMax);
     } else if (p.pos === 'CB' && eCentralDoLado) {
         // Cobertura por dentro, mais atrás do que o lateral.
         const cob = goalSide(p, carrier, MarkingModel.distanciaPara(carrier.model.position.z * p.dirZ) + 4.5);
@@ -848,48 +792,35 @@ const PositionAI = {
         let targetZ = ctx.targetZ;
 
         /*
-        CÍRCULO DE MARCAÇÃO — regra dura, não sugestão.
+        MARCAÇÃO — a regra, não um desvio.
 
-        À volta do homem marcado há um círculo com o raio do Defensive
-        Pressure onde o marcador NÃO entra. Ele acompanha-o pelo lado de
-        fora; quem vai à bola é o perseguidor designado.
+        Quem tem homem atribuído fica ATRÁS dele: sobre a recta que liga o
+        homem à NOSSA baliza, a MarkingModel.distancia metros dele. "Atrás"
+        aqui é do lado da nossa baliza — o marcador entre o homem e o golo
+        que defende. É isso e mais nada; nem o slot do bloco nem folha
+        nenhuma o podem contornar.
 
-        Aplicado aqui, no fim, para que nenhuma folha do nível 2 o possa
-        contornar: qualquer alvo que caia dentro do círculo é empurrado para
-        cima da linha dele, na direcção em que já vinha.
+        Antes cada folha decidia SE marcava, e com as suas próprias
+        condições por cima:
+
+            defendFullBack  ignorava o markingTarget e escolhia outro homem
+                            por proximidade — marcava quem não lhe tinha
+                            sido atribuído, ou ninguém
+            defendDM        nunca marcava, mesmo com homem atribuído
+            defendCB        só marcava com o homem dentro da zona de perigo
+                            (|x| < 22 e no nosso terço); fora disso limitava-se
+                            a acompanhar o x dele
+            defendZonal     só se markCount <= 2
+            defendFlankShift marcava o PORTADOR, não o homem atribuído
+            attackCB        (equipa com bola) nunca marcava
+
+        O resultado era gente com a etiqueta MARKING espalhada pelo campo sem
+        estar do lado de dentro de ninguém.
         */
         if (p.markingTarget) {
-            const hx = p.markingTarget.model.position.x;
-            const hz = p.markingTarget.model.position.z;
-            const raio = MarkingModel.distanciaPara(p.markingTarget.model.position.z * p.dirZ);
-
-            /*
-            Empurra para FORA do circulo, na direccao em que o alvo ja vinha.
-            Quem ja esta fora nao e tocado.
-
-            A versao anterior nao olhava sequer para o alvo que a arvore tinha
-            calculado: escrevia por cima dele o ponto `goalSide` do homem
-            marcado (recta homem -> propria baliza, a `raio` metros). Ou seja,
-            TODO o jogador com markingTarget era teleportado para essa recta,
-            sem tecto nenhum - a marcar ou a atacar, dentro ou fora do bloco.
-            Isso anula de uma vez o slot do TeamBT, o biasMax por setor e o
-            alcanceMarcacao que a folha `marcar` respeita, e junta os
-            marcadores todos em raios que convergem na propria baliza.
-            */
-            let dx = targetX - hx;
-            let dz = targetZ - hz;
-            let d = Math.hypot(dx, dz);
-
-            if (d < 0.001) {
-                // Em cima do homem: nao ha direccao para preservar, sai pelo
-                // lado da propria baliza (mesma regra do goalSide).
-                const g = goalSide(p, p.markingTarget, raio);
-                targetX = g.x;
-                targetZ = g.z;
-            } else if (d < raio) {
-                targetX = hx + (dx / d) * raio;
-                targetZ = hz + (dz / d) * raio;
-            }
+            const m = goalSide(p, p.markingTarget, MarkingModel.distancia);
+            targetX = m.x;
+            targetZ = m.z;
         }
 
         /*
