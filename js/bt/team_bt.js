@@ -742,23 +742,41 @@ function computeBlock(bb) {
         }
     }
 
-    const fundo = (CAMPO_COMP / 2) * B.margemFundo;
+    /*
+    LIMITES DE FUNDO: o bloco ENCOSTA E ENCOLHE, nao para.
 
-    // Deslocar o bloco inteiro caso ultrapasse os limites, sem o achatar
-    if (z0 < -fundo) {
-        z0 = -fundo;
-        z1 = z0 + profundidade;
+    Antes cada limite deslocava o rectangulo inteiro para dentro do campo
+    mantendo a profundidade. Como o bloco tem 30 m e os travoes estao em
+    -42 (recuoMax) e +49.8 (margemFundo), o centro so se podia mexer entre
+    -27 e +34.8: assim que a bola passava desses pontos o rectangulo ficava
+    PARADO e deixava de acompanhar a bola. Medido, com a bola a variar de
+    -45 a +45: derivada zero em 20 m do nosso lado e em 15 m do outro - mais
+    de um terco do campo com o bloco imovel.
+
+    Encolher e a forma certa de comprimir neste desenho, e a mesma que a
+    compacidade do painel usa: o nivel 2 coloca cada jogador por percentagem,
+    por isso um rectangulo mais curto aproxima toda a gente na mesma
+    proporcao e nao empilha ninguem numa fronteira - que era a razao de ser
+    do "sem o achatar". Uma equipa com a bola na propria linha de fundo esta
+    mesmo espremida; o que nao pode e ficar parada.
+
+    A profundidade nunca desce abaixo de BlockShape.compressaoMin da nominal.
+    */
+    const fundo = (CAMPO_COMP / 2) * B.margemFundo;
+    const profMin = profundidade * B.compressaoMin;
+
+    if (z0 < B.recuoMax) {
+        z0 = B.recuoMax;
+        if (z1 < z0 + profMin) z1 = z0 + profMin;
     }
     if (z1 > fundo) {
         z1 = fundo;
-        z0 = z1 - profundidade;
+        if (z0 > z1 - profMin) z0 = z1 - profMin;
     }
-
-    // Travao a marca do penalty propria - ver BlockShape.recuoMax.
-    if (z0 < B.recuoMax) {
-        z0 = B.recuoMax;
-        z1 = z0 + profundidade;
-    }
+    // Rede de seguranca: com o campo todo mais curto do que o bloco, encosta
+    // ao fundo em vez de inverter as bordas.
+    if (z0 < -fundo) z0 = -fundo;
+    if (z1 < z0 + profMin) z1 = z0 + profMin;
 
     /* --- largura -------------------------------------------------------- */
 

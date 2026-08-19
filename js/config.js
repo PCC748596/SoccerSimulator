@@ -486,7 +486,17 @@ const BlockShape = {
     cobertura por cima do slot (ver MarkingModel.biasMax), o TeamBT não
     precisa de recuar tanto para "ir buscar" a jogada.
     */
-    recuoMax: -(CAMPO_COMP / 2 - 11)   // -42
+    recuoMax: -(CAMPO_COMP / 2 - 11),   // -42
+
+    /*
+    Profundidade mínima quando o bloco encosta a um fundo, em fracção da
+    profundidade nominal. Encostado, o rectângulo ENCOLHE em vez de parar
+    (ver computeBlock): é o que deixa o bloco continuar a acompanhar a bola
+    nos últimos metros de cada meio-campo em vez de congelar assim que a
+    traseira toca o recuoMax. 0.5 = com o bloco médio de 30 m, nunca abaixo
+    de 15 m.
+    */
+    compressaoMin: 0.5
 };
 
 /*
