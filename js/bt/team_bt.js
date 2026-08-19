@@ -423,22 +423,20 @@ function pickSupportMid(bb) {
     }
 }
 
-// Traduz fase de posse + estilo de jogo nos multiplicadores colectivos.
-// Estes valores eram calculados por jogador; são idênticos para toda a equipa,
-// por isso passaram a ser calculados uma vez só, aqui.
+/*
+Rampa de avanço colectivo — quão avançada está a manobra ofensiva.
+
+Depende SÓ da Mentalidade. Tinha por cima dois factores que não são ajustes
+do painel: o `phaseMultiplier` (1.1/1.3, inalcançável — bb.phase nunca sai de
+1) e um ×1.35 em contra-ataque. Este era o último sítio onde um estado de
+jogo mexia na forma da equipa, ao lado da postura.
+*/
 function computeCollectiveShape(bb) {
-    /*
-    A Mentalidade entra no bloco por UM caminho só (MentalidadeModel.blocoZ,
-    aplicado em computeBlock). Aqui ficou apenas o que ela ainda multiplica: a
-    rampa de avanço ofensivo. Os antigos `styleDefenseZShift`/`styleLineShift`
-    eram uma segunda dose do mesmo botão, com valores que nem batiam certo com
-    os do bloco (defesa: -8 m na linha contra -5 m no bloco).
-    */
-    let pushMultiplier = (bb.isCounter ? 1.35 : 1.0);
-    if (Tatics.estilo === 'muito_ofensiva') pushMultiplier *= 1.30;
-    else if (Tatics.estilo === 'ataque') pushMultiplier *= 1.15;
-    else if (Tatics.estilo === 'defesa') pushMultiplier *= 0.85;
-    else if (Tatics.estilo === 'muito_defensiva') pushMultiplier *= 0.70;
+    let pushMultiplier = 1.0;
+    if (Tatics.estilo === 'muito_ofensiva') pushMultiplier = 1.30;
+    else if (Tatics.estilo === 'ataque') pushMultiplier = 1.15;
+    else if (Tatics.estilo === 'defesa') pushMultiplier = 0.85;
+    else if (Tatics.estilo === 'muito_defensiva') pushMultiplier = 0.70;
     bb.pushMultiplier = pushMultiplier;
 
     /*
