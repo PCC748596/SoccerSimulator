@@ -51,49 +51,29 @@ function marking(pressao) {
 // zoneAhead representativo de cada terço (terço = CAMPO_COMP/6 = 17.5)
 const Z = { def: -30, mid: 0, atk: 30 };
 
-test('MarkingModel: distância por setor e Defensive Pressure', () => {
-    const esperado = {
-        low: { atk: 5.0, mid: 5.0, def: 4.0 },
-        balanced: { atk: 4.0, mid: 4.0, def: 4.0 },   // 4 m em todo o campo, a pedido
-        high: { atk: 3.0, mid: 3.0, def: 2.0 }
-    };
-    for (const pressao of ['low', 'balanced', 'high']) {
-        const M = marking(pressao);
+test('MarkingModel: 2 m em qualquer sector', () => {
+    const M = marking('balanced');
+    for (const setor of ['def', 'mid', 'atk']) {
+        assert.strictEqual(M.distanciaPara(Z[setor]), 2.0, setor);
+    }
+});
+
+test('MarkingModel: 2 m em qualquer Defensive Pressure', () => {
+    // A pedido: um número só, em todas as situações, enquanto se valida a
+    // marcação. Era uma tabela de 9 valores (sector x pressão, 2 a 5 m).
+    for (const pressao of ['low', 'balanced', 'high', 'nao_existe']) {
         for (const setor of ['def', 'mid', 'atk']) {
-            assert.strictEqual(M.distanciaPara(Z[setor]), esperado[pressao][setor],
+            assert.strictEqual(marking(pressao).distanciaPara(Z[setor]), 2.0,
                 pressao + '/' + setor);
         }
     }
 });
 
-test('MarkingModel: pressão mais alta nunca marca mais solto', () => {
-    for (const setor of ['def', 'mid', 'atk']) {
-        assert.ok(marking('low').distanciaPara(Z[setor]) >=
-            marking('balanced').distanciaPara(Z[setor]), setor);
-        assert.ok(marking('balanced').distanciaPara(Z[setor]) >
-            marking('high').distanciaPara(Z[setor]), setor);
-    }
-});
-
-test('MarkingModel: Balanced marca à mesma distância em todo o campo', () => {
-    // Pedido: 4 m em qualquer sector, para se ver o efeito da distância
-    // isolado do sector. Low e High mantêm o aperto extra no próprio terço.
-    const M = marking('balanced');
-    assert.strictEqual(M.distanciaPara(Z.def), 4.0);
-    assert.strictEqual(M.distanciaPara(Z.mid), 4.0);
-    assert.strictEqual(M.distanciaPara(Z.atk), 4.0);
-});
-
-test('MarkingModel: nos outros níveis o setor defensivo marca mais colado', () => {
-    for (const pressao of ['low', 'high']) {
-        const M = marking(pressao);
-        assert.ok(M.distanciaPara(Z.def) < M.distanciaPara(Z.mid), pressao);
-        assert.strictEqual(M.distanciaPara(Z.mid), M.distanciaPara(Z.atk), pressao);
-    }
-});
-
-test('MarkingModel: pressão desconhecida cai em balanced', () => {
-    assert.strictEqual(marking('nao_existe').distanciaPara(Z.mid), 4.0);
+test('MarkingModel: a rédea chega tão longe quanto a atribuição', () => {
+    // O atribuirMarcacao não incumbe ninguém de marcar a mais de 25 m; a
+    // rédea do desvio tem de deixar percorrer essa distância, senão o
+    // marcador fica a meio caminho de um homem que lhe foi atribuído.
+    assert.ok(marking('balanced').alcanceMarcacao >= 25.0);
 });
 
 /* ------------------------------------------------------------------ */

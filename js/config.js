@@ -1194,36 +1194,22 @@ centro contra 31.6 m com ela na ala, ou seja praticamente nada.
 */
 const MarkingModel = {
     /*
-    Distância de marcação, em metros: a que o marcador fica do homem, do
-    lado da PRÓPRIA baliza (ver goalSide). Depende de duas coisas:
+    Distância de marcação, em metros: a que o marcador fica do homem, do lado
+    da PRÓPRIA baliza (ver goalSide). É também o raio do círculo em que o
+    marcador não entra (ver PositionAI.commit e o estado MARKING da FSM).
 
-        Defensive Pressure (painel esquerdo) — Low marca mais solto, High
-        mais colado.
-        SETOR do campo onde o ALVO está — terços iguais, no referencial de
-        ataque do MARCADOR (mesma convenção de biasMaxPara). Perto da
-        própria baliza marca-se mais colado: ali um metro de folga é um
-        remate à vontade.
+    UM número, igual em todas as situações — a pedido, enquanto se valida a
+    marcação. Era uma tabela de 9 valores, por sector do campo e por
+    Defensive Pressure (2 a 5 m): com a distância a mudar conforme o sítio,
+    não se percebia se o que se estava a ver era a marcação ou a tabela.
 
-    Este valor é literal — não leva mais nenhum factor por cima. Havia
-    aqui um multiplicador da grid espacial (0.7x a 1.3x conforme a célula)
-    que mexia no número escolhido no painel: com Balanced/3m, o mesmo
-    jogador marcava a 2.1m dentro da área e a 3.9m fora dela, e a tabela
-    do painel nunca correspondia ao que se via. O ajuste por zona é agora
-    feito aqui, pelo setor, que é explícito e visível na tabela.
+    Para voltar a diferenciar, isto volta a ser uma tabela e o
+    `distanciaPara` volta a olhar para o `zoneAhead` que já recebe.
     */
-    distanciaPorSetor: {
-        // Balanced: 4 m em TODO o campo, a pedido. Deixa de apertar no
-        // próprio terço (era 3 m) — o mesmo número em qualquer sector, para
-        // se poder ver o efeito da distância isolado do sector.
-        atk: { low: 5.0, balanced: 4.0, high: 3.0 },
-        mid: { low: 5.0, balanced: 4.0, high: 3.0 },
-        def: { low: 4.0, balanced: 4.0, high: 2.0 }
-    },
+    distancia: 2.0,
+
     distanciaPara(zoneAhead) {
-        const terco = CAMPO_COMP / 6;
-        const setor = (zoneAhead < -terco) ? 'def' : (zoneAhead > terco) ? 'atk' : 'mid';
-        const porPressao = this.distanciaPorSetor[setor];
-        return porPressao[Tatics.pressaoDefensiva] ?? porPressao.balanced;
+        return this.distancia;
     },
 
     /*
@@ -1287,7 +1273,15 @@ const MarkingModel = {
     O `biasMaxPorSetor` continua a servir os desvios que NÃO são marcação
     (cobertura, basculação), onde a forma do bloco tem mesmo de mandar.
     */
-    alcanceMarcacao: 22.0,
+    /*
+    25 e nao 22: e a mesma distancia a que o atribuirMarcacao deixa de
+    considerar um adversario como candidato (`if (dist > 25) return`). Com os
+    dois numeros diferentes havia uma faixa onde um jogador era incumbido de
+    marcar alguem a quem a redea nao o deixava chegar — ficava a meio
+    caminho. So se notou quando a distancia de marcacao baixou para 2 m e o
+    ultimo metro passou a faltar.
+    */
+    alcanceMarcacao: 25.0,
 
     /*
     Faixa, para lá do raio, onde o marcador já começa a RECUAR.

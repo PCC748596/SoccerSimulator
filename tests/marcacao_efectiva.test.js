@@ -110,10 +110,13 @@ test('a distância final segue o Defensive Pressure', () => {
     }
 });
 
-test('pressão mais alta deixa o marcador mais perto', () => {
+test('a distância de marcação é a mesma em qualquer Defensive Pressure', () => {
+    // Passou a ser um número só (MarkingModel.distancia), a pedido, enquanto
+    // se valida a marcação. Se voltar a diferenciar, este teste inverte-se.
     const dLow = distanciaFinal(montar('low'), [0, -30], [6, -25]);
     const dHigh = distanciaFinal(montar('high'), [0, -30], [6, -25]);
-    assert.ok(dHigh < dLow, 'high (' + dHigh.toFixed(1) + ') devia ser menor que low (' + dLow.toFixed(1) + ')');
+    assert.ok(Math.abs(dHigh - dLow) < 0.01,
+        'low (' + dLow.toFixed(2) + ') e high (' + dHigh.toFixed(2) + ') deviam ser iguais');
 });
 
 test('o marcador fica do lado da PRÓPRIA baliza, não em cima do homem', () => {

@@ -71,15 +71,13 @@ test('alvo já fora do círculo não é mexido', () => {
     assert.deepStrictEqual(alvo, [0, -38]);
 });
 
-test('o raio do círculo é o do Defensive Pressure, por setor', () => {
+test('o raio do circulo e a distancia de marcacao, 2 m em tudo', () => {
     const homem = [0, -30];
     for (const pressao of ['low', 'balanced', 'high']) {
         const s = { Math, CAMPO_COMP: 105, Tatics: { pressaoDefensiva: pressao } };
         vm.createContext(s);
         vm.runInContext(recortarConst(CONFIG, 'MarkingModel') + '\nthis.M = MarkingModel;', s);
-        const raio = s.M.distanciaPara(-30);
-        assert.strictEqual(raio, { low: 4, balanced: 4, high: 2 }[pressao], pressao);
-        assert.ok(raio > 0 && homem);
+        assert.strictEqual(s.M.distanciaPara(homem[1]), 2.0, pressao);
     }
 });
 
