@@ -1926,41 +1926,66 @@ const Match = {
             }
             
             if (this.goalSequenceStage === 0) {
-                const gkToFetch = this.lastTouchedTeam === 'TeamA' ? this.opponents[0] : this.players[0];
-                
+                // A bola vai direto para o meio-campo esperar a nova saída
+                this.ball.position.set(0, BallPhysics.raio, 0);
+                this.ballVel.set(0, 0, 0);
+
+                const margem = 1.5;
                 [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
                     list.forEach(p => {
-                        if (p === gkToFetch) {
-                            p.dynamicTarget = this.ball.position;
+                        if (p.role === 'gk') {
+                            p.dynamicTarget = new THREE.Vector3(0, ALTURA_BASE_Y, -48 * dir);
                         } else {
-                            p.dynamicTarget = new THREE.Vector3(p.baseTarget.x, ALTURA_BASE_Y, p.baseTarget.z * dir);
+                            let z = p.baseTarget.z;
+                            if (p.role === 'def') {
+                                const cap = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
+                                z = cap * dir;
+                            }
+                            if (z * dir > -margem) z = -margem * dir;
+                            p.dynamicTarget = new THREE.Vector3(p.baseTarget.x, ALTURA_BASE_Y, z);
                         }
                         p.fsm.changeState('MOVE_TO_POS');
-                        p.speedMult = 3.5;
+                        p.speedMult = 1.0; // Trote/caminhada normal
                     });
                 });
                 this.goalSequenceStage = 1;
             } else if (this.goalSequenceStage === 1) {
-                const gkToFetch = this.lastTouchedTeam === 'TeamA' ? this.opponents[0] : this.players[0];
-                // Manter o alvo atualizado caso a bola se mexa um pouco
-                gkToFetch.dynamicTarget = this.ball.position;
-                if (gkToFetch.model.position.distanceTo(this.ball.position) < 1.5) {
-                    const target = new THREE.Vector3(0, BallPhysics.raio, 0);
-                    const vel = target.clone().sub(this.ball.position).normalize().multiplyScalar(15);
-                    this.ballVel.copy(vel);
-                    this.ballVel.y = 5;
+                // Espera todo mundo chegar na posição
+                let allInPosition = true;
+                const margem = 1.5;
+                [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+                    list.forEach(p => {
+                        let targetZ, targetX = p.baseTarget.x;
+                        if (p.role === 'gk') {
+                            targetZ = -48 * dir;
+                            targetX = 0;
+                        } else {
+                            let z = p.baseTarget.z;
+                            if (p.role === 'def') {
+                                const cap = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
+                                z = cap * dir;
+                            }
+                            if (z * dir > -margem) z = -margem * dir;
+                            targetZ = z;
+                        }
+                        const distSq = p.model.position.distanceToSquared(new THREE.Vector3(targetX, ALTURA_BASE_Y, targetZ));
+                        if (distSq > 9.0) { // Raio de tolerância (3m) para não ficar travado
+                            allInPosition = false;
+                        }
+                    });
+                });
+
+                if (allInPosition) {
+                    this.tempoParada = 0;
                     this.goalSequenceStage = 2;
-                    gkToFetch.dynamicTarget = new THREE.Vector3(gkToFetch.baseTarget.x, ALTURA_BASE_Y, gkToFetch.baseTarget.z * (gkToFetch.team === 'TeamA' ? 1 : -1));
                 }
             } else if (this.goalSequenceStage === 2) {
-                // Wait for ball to arrive near center
-                if (this.ball.position.lengthSq() < 100 || this.ballVel.lengthSq() < 0.5) {
-                    this.tempoParada += this.delta;
-                    if (this.tempoParada > 1.0) {
-                        this.tempoParada = 0;
-                        this.goalSequenceStage = undefined;
-                        this.resetPlay();
-                    }
+                // Espera mais 3 segundos após todos estarem em posição
+                this.tempoParada += this.delta;
+                if (this.tempoParada > 3.0) {
+                    this.tempoParada = 0;
+                    this.goalSequenceStage = undefined;
+                    this.resetPlay();
                 }
             }
         } else if (this.state === 'OUT' && this.ballVel.lengthSq() < 0.5) {
@@ -1975,6 +2000,15 @@ const Match = {
     setupSetPiece: function (type, team) {
         this.state = type;
         this.setPieceTeam = team;
+        
+        // Ao marcar uma bola parada, a posse de bola já é da equipe que vai cobrar.
+        if (this.possessionTeam !== team) {
+            this.possessionTeam = team;
+            this.possessionTimer = 0;
+            this.counterAttackTeam = null;
+            this.counterAttackTimer = 0;
+        }
+
         this.setPieceTimer = 0;
         // GOAL_KICK é excepção: a bola continua com a velocidade que trazia
         // até tocar no chão + 3s (ver o teleporte próprio mais abaixo) — zerar

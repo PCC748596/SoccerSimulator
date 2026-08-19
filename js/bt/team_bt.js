@@ -189,7 +189,8 @@ function updateMomentum(bb, dt) {
         if (alvoZ * bb.dir < bb.momentumZ * bb.dir) kZ = 1 - Math.exp(-0.25 * dt);
         else kZ = 1 - Math.exp(-1.5 * dt);
     } else {
-        kZ = 1 - Math.exp(-1.0 * dt);
+        // Reduzido de -1.0 para -0.4 para a transição defensiva ser mais gradual
+        kZ = 1 - Math.exp(-0.4 * dt);
     }
     /*
     Salto instantâneo só quando a bola foi REPOSTA (fora de PLAY: golo, canto,
@@ -497,16 +498,40 @@ function computeBlock(bb) {
     const profundidade = CAMPO_COMP * B.profundidade[compacLength];
 
     const gkHoldingBall = typeof Match !== 'undefined' && Match.gkHoldingBall && Match.gkHoldingBall[bb.team];
+    const isGoalKick = typeof Match !== 'undefined' && Match.state === 'GOAL_KICK';
+    const defendingGoalKick = isGoalKick && !bb.isAttacking;
 
     let centro;
     const ment = MentalidadeModel[Tatics.estilo] || MentalidadeModel.balanceado;
 
-    if (gkHoldingBall) {
+    if (defendingGoalKick) {
+        // No tiro de meta adversário, o time que defende volta para o meio-campo
+        centro = 0;
+    } else if (isGoalKick && bb.isAttacking) {
+        // No próprio tiro de meta, avança o time 10m para a frente
+        centro = (bb.momentumZ * bb.dir) + 10 + ment.blocoZ;
+    } else if (gkHoldingBall) {
         // Centro a 10 metros a frente da linha da grande area
         centro = -26.5; 
     } else {
         // O centro do bloco no eixo Z acompanha a bola.
         centro = bb.momentumZ * bb.dir;
+
+        if (typeof TeamState !== 'undefined') {
+            if (bb.state === TeamState.TRANSITION_OFFENSIVE) {
+                centro += 10;
+            } else if (bb.state === TeamState.TRANSITION_DEFENSIVE) {
+                centro -= 3;
+            }
+        }
+
+        // O centro não pode ficar para trás da linha da bola (longitudinalmente)
+        const bolaDir = bb.ballZ * bb.dir;
+        if (bb.isAttacking) {
+            if (centro < bolaDir) centro = bolaDir;
+        } else {
+            if (centro > bolaDir) centro = bolaDir;
+        }
 
         /*
         MENTALIDADE: o offset do painel, aplicado ao bloco INTEIRO e nas DUAS
@@ -631,6 +656,11 @@ function computeBlock(bb) {
     */
     let centroX = THREE.MathUtils.clamp(
         bb.momentumX * (CAMPO_LARG / 2), -maxCentroX, maxCentroX);
+
+    // O centro não pode ficar para trás da linha da bola (lateralmente)
+    let bolaX = bb.ballX;
+    if (bolaX > 0 && centroX < bolaX) centroX = bolaX;
+    if (bolaX < 0 && centroX > bolaX) centroX = bolaX;
 
     // Sem basculacao extra por postura: o centro segue a bola e mais nada.
 

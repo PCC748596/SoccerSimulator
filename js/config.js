@@ -469,9 +469,9 @@ const BlockShape = {
     um número só, e todas as posições abrem ou fecham em proporção.
     */
     amplitude: {
-        short: 0.60,          // 60%
-        median: 0.70,         // 70%
-        large: 0.80           // 80%
+        short: 0.70,          // 70%
+        median: 0.80,         // 80%
+        large: 0.90           // 90%
     },
 
     /*
