@@ -730,67 +730,44 @@ const Match = {
             else if (Tatics.compactness === 'short') compMult = 0.6;
         }
 
-        const fData = FormationsData[Tatics.formacao];
+        const fDataA = FormationsData[typeof Tatics !== 'undefined' && Tatics.formacaoA ? Tatics.formacaoA : '442'];
+        const fDataB = FormationsData[typeof Tatics !== 'undefined' && Tatics.formacaoB ? Tatics.formacaoB : '442'];
 
-        /*
-        Slot normalizado: onde este jogador fica DENTRO do bloco, em fracções.
+        const processTeam = (teamList, fData, isTeamA) => {
+            const campo = fData.filter(f => f.role !== 'gk');
+            const zMin = Math.min(...campo.map(f => f.z));
+            const zMax = Math.max(...campo.map(f => f.z));
+            const zSpan = (zMax - zMin) || 1;
+            const contagemPos = {};
 
-            u  0 = lado esquerdo do bloco, 1 = lado direito
-            v  0 = última linha,           1 = frente do bloco
+            for (let i = 0; i < 11; i++) {
+                const uVal = isTeamA ? (fData[i].x + 1) / 2 : (-fData[i].x + 1) / 2;
+                const slot = (fData[i].role === 'gk') ? null : {
+                    u: uVal,
+                    v: (fData[i].z - zMin) / zSpan
+                };
 
-        O u sai directo do FormationsData (que já vem em -1..1). O v é
-        normalizado contra o alcance real dos jogadores de campo desta
-        formação, para o bloco ser usado todo — um 4-4-2 vai de -0.7 a 0.4, e
-        sem esta normalização os defesas nunca chegavam à traseira do bloco.
+                const x = isTeamA ? fData[i].x : -fData[i].x;
+                const z = isTeamA ? fData[i].z : -fData[i].z;
 
-        O guarda-redes não tem slot: o posicionamento dele é próprio e vive em
-        FootballPlayer.updateGK().
-        */
-        const campo = fData.filter(f => f.role !== 'gk');
-        const zMin = Math.min(...campo.map(f => f.z));
-        const zMax = Math.max(...campo.map(f => f.z));
-        const zSpan = (zMax - zMin) || 1;
-
-        // Conta quantos jogadores já passaram por esta posição nesta
-        // formação, pra dar estilos diferentes ao 1º e ao 2º do mesmo posto
-        // (ver EstiloPorOmissao — CM(1) != CM(2), CF(1) != CF(2), etc).
-        const contagemPos = {};
-
-        for (let i = 0; i < 11; i++) {
-            const slotA = (fData[i].role === 'gk') ? null : {
-                u: (fData[i].x + 1) / 2,
-                v: (fData[i].z - zMin) / zSpan
-            };
-
-            this.players[i].baseTarget.set(fData[i].x * (CAMPO_LARG / 2) * compMult, ALTURA_BASE_Y, fData[i].z * (CAMPO_COMP / 2));
-            this.players[i].role = fData[i].role;
-            this.players[i].slot = slotA;
-            this.players[i].updateShirt(fData[i].num, fData[i].pos);
-            const idxPos = contagemPos[fData[i].pos] || 0;
-            contagemPos[fData[i].pos] = idxPos + 1;
-            this.aplicarPlayingStyle(this.players[i], fData[i].pos, idxPos);
-            // TeamA guarda o GR ofensivo (sweeper); ver aplicarPlayingStyle.
-            if (fData[i].role === 'gk') {
-                this.players[i].gkStyleBase = 'offensive';
-                this.players[i].playingStyle = 'offensive_gk';
+                teamList[i].baseTarget.set(x * (CAMPO_LARG / 2) * compMult, ALTURA_BASE_Y, z * (CAMPO_COMP / 2));
+                teamList[i].role = fData[i].role;
+                teamList[i].slot = slot;
+                teamList[i].updateShirt(fData[i].num, fData[i].pos);
+                
+                const idxPos = contagemPos[fData[i].pos] || 0;
+                contagemPos[fData[i].pos] = idxPos + 1;
+                this.aplicarPlayingStyle(teamList[i], fData[i].pos, idxPos);
+                
+                if (fData[i].role === 'gk') {
+                    teamList[i].gkStyleBase = isTeamA ? 'offensive' : 'defensive';
+                    teamList[i].playingStyle = isTeamA ? 'offensive_gk' : 'defensive_gk';
+                }
             }
+        };
 
-            // O adversário ataca ao contrário, mas o slot está no referencial
-            // de ataque dele — logo é o mesmo. Só o baseTarget e o u são espelhados.
-            const slotB = (fData[i].role === 'gk') ? null : {
-                u: (-fData[i].x + 1) / 2,
-                v: (fData[i].z - zMin) / zSpan
-            };
-            this.opponents[i].baseTarget.set(-fData[i].x * (CAMPO_LARG / 2) * compMult, ALTURA_BASE_Y, -fData[i].z * (CAMPO_COMP / 2));
-            this.opponents[i].role = fData[i].role;
-            this.opponents[i].slot = slotB;
-            this.opponents[i].updateShirt(fData[i].num, fData[i].pos);
-            this.aplicarPlayingStyle(this.opponents[i], fData[i].pos, idxPos);
-            if (fData[i].role === 'gk') {
-                this.opponents[i].gkStyleBase = 'defensive';
-                this.opponents[i].playingStyle = 'defensive_gk';
-            }
-        }
+        processTeam(this.players, fDataA, true);
+        processTeam(this.opponents, fDataB, false);
     },
 
     /*
@@ -1007,7 +984,7 @@ const Match = {
         // livremente pelo campo (runTeamAI/BT não corre) até o timer zerar,
         // e aí o "taker" toca para o apoio — isso é que dá o pontapé de saída.
         this.kickoffActive = true;
-        this.kickoffTimer = 4.0;
+        this.kickoffTimer = 0.0;
         this.kickoffTaker = taker;
         this.kickoffApoio = apoio;
     },
@@ -1294,8 +1271,8 @@ const Match = {
 
         // Nível 2 (onde cada jogador se coloca) e a coesão que depende dele só
         // fazem sentido em jogo corrido — em bola parada quem posiciona é o
-        // próprio setupSetPiece, directamente.
-        if (this.state !== 'PLAY') return;
+        // próprio setupSetPiece, directamente (excepto tiro de meta, que usa o TeamBT).
+        if (this.state !== 'PLAY' && this.state !== 'GOAL_KICK') return;
 
         this.players.forEach(p => PosicionamentoAI.tick(p, bbA));
         this.opponents.forEach(p => PosicionamentoAI.tick(p, bbB));
@@ -1943,7 +1920,50 @@ const Match = {
             }
         }
 
-        if ((this.state === 'GOAL' || this.state === 'OUT') && this.ballVel.lengthSq() < 0.5) {
+        if (this.state === 'GOAL' && this.ballVel.lengthSq() < 0.5) {
+            if (this.goalSequenceStage === undefined) {
+                this.goalSequenceStage = 0;
+            }
+            
+            if (this.goalSequenceStage === 0) {
+                const gkToFetch = this.lastTouchedTeam === 'TeamA' ? this.opponents[0] : this.players[0];
+                
+                [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+                    list.forEach(p => {
+                        if (p === gkToFetch) {
+                            p.dynamicTarget = this.ball.position;
+                        } else {
+                            p.dynamicTarget = new THREE.Vector3(p.baseTarget.x, ALTURA_BASE_Y, p.baseTarget.z * dir);
+                        }
+                        p.fsm.changeState('MOVE_TO_POS');
+                        p.speedMult = 3.5;
+                    });
+                });
+                this.goalSequenceStage = 1;
+            } else if (this.goalSequenceStage === 1) {
+                const gkToFetch = this.lastTouchedTeam === 'TeamA' ? this.opponents[0] : this.players[0];
+                // Manter o alvo atualizado caso a bola se mexa um pouco
+                gkToFetch.dynamicTarget = this.ball.position;
+                if (gkToFetch.model.position.distanceTo(this.ball.position) < 1.5) {
+                    const target = new THREE.Vector3(0, BallPhysics.raio, 0);
+                    const vel = target.clone().sub(this.ball.position).normalize().multiplyScalar(15);
+                    this.ballVel.copy(vel);
+                    this.ballVel.y = 5;
+                    this.goalSequenceStage = 2;
+                    gkToFetch.dynamicTarget = new THREE.Vector3(gkToFetch.baseTarget.x, ALTURA_BASE_Y, gkToFetch.baseTarget.z * (gkToFetch.team === 'TeamA' ? 1 : -1));
+                }
+            } else if (this.goalSequenceStage === 2) {
+                // Wait for ball to arrive near center
+                if (this.ball.position.lengthSq() < 100 || this.ballVel.lengthSq() < 0.5) {
+                    this.tempoParada += this.delta;
+                    if (this.tempoParada > 1.0) {
+                        this.tempoParada = 0;
+                        this.goalSequenceStage = undefined;
+                        this.resetPlay();
+                    }
+                }
+            }
+        } else if (this.state === 'OUT' && this.ballVel.lengthSq() < 0.5) {
             this.tempoParada += this.delta;
             if (this.tempoParada > 2.0) {
                 this.tempoParada = 0;

@@ -120,11 +120,16 @@ class TeamBlackboard {
         this.isAttacking = (match.possessionTeam === this.team);
         this.isCounter = (match.counterAttackTeam === this.team);
         
+        const gkHoldingBall = typeof Match !== 'undefined' && Match.gkHoldingBall && Match.gkHoldingBall[this.team];
+        const isGoalKick = typeof Match !== 'undefined' && Match.state === 'GOAL_KICK' && Match.setPieceTaker && Match.setPieceTaker.team === this.team;
+
         if (this.isAttacking !== this.wasAttacking) {
             this.possessionTime = 0;
             this.wasAttacking = this.isAttacking;
         } else {
-            this.possessionTime = (this.possessionTime || 0) + (match.delta || 0.016);
+            if (!gkHoldingBall && !isGoalKick) {
+                this.possessionTime = (this.possessionTime || 0) + (match.delta || 0.016);
+            }
         }
 
         if (this.isAttacking) {
@@ -491,17 +496,26 @@ function computeBlock(bb) {
     // bola - esticar a atacar nao e comportamento pedido nesta conversa.
     const profundidade = CAMPO_COMP * B.profundidade[compacLength];
 
-    // O centro do bloco no eixo Z acompanha a bola.
-    let centro = bb.momentumZ * bb.dir;
+    const gkHoldingBall = typeof Match !== 'undefined' && Match.gkHoldingBall && Match.gkHoldingBall[bb.team];
 
-    /*
-    MENTALIDADE: o offset do painel, aplicado ao bloco INTEIRO e nas DUAS
-    fases. Antes vivia so neste ramo `isAttacking`, e o ramo sem bola nao
-    tinha termo nenhum - em Muito Ofensiva a perda de posse mudava o centro
-    de +12+5 para -3, 20 m num frame, e a equipa toda arrancava para tras.
-    */
+    let centro;
     const ment = MentalidadeModel[Tatics.estilo] || MentalidadeModel.balanceado;
-    centro += ment.blocoZ;
+
+    if (gkHoldingBall) {
+        // Centro a 10 metros a frente da linha da grande area
+        centro = -26.5; 
+    } else {
+        // O centro do bloco no eixo Z acompanha a bola.
+        centro = bb.momentumZ * bb.dir;
+
+        /*
+        MENTALIDADE: o offset do painel, aplicado ao bloco INTEIRO e nas DUAS
+        fases. Antes vivia so neste ramo `isAttacking`, e o ramo sem bola nao
+        tinha termo nenhum - em Muito Ofensiva a perda de posse mudava o centro
+        de +12+5 para -3, 20 m num frame, e a equipa toda arrancava para tras.
+        */
+        centro += ment.blocoZ;
+    }
 
     let z0 = centro - (profundidade / 2);
     let z1 = centro + (profundidade / 2);

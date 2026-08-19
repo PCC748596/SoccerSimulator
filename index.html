@@ -24,8 +24,15 @@
                 <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-pause" onclick="Match.togglePause()">Continue</button>
             </div>
 
-            <label>Formação</label>
-            <select id="t-formacao" onchange="Tatics.update()">
+            <label>Formation Team A</label>
+            <select id="t-formacao-A" onchange="Tatics.update()">
+                <option value="442">4-4-2</option>
+                <option value="433">4-3-3</option>
+                <option value="4231">4-2-3-1</option>
+            </select>
+
+            <label>Formation Team B</label>
+            <select id="t-formacao-B" onchange="Tatics.update()">
                 <option value="442">4-4-2</option>
                 <option value="433">4-3-3</option>
                 <option value="4231">4-2-3-1</option>
@@ -60,9 +67,9 @@
 
             <label>Width Compactness</label>
             <select id="t-compactness" onchange="Tatics.update()">
-                <option value="large">Large (70%)</option>
-                <option value="median" selected>Medium (60%)</option>
-                <option value="short">Small (50%)</option>
+                <option value="large">Large (80%)</option>
+                <option value="median" selected>Medium (70%)</option>
+                <option value="short">Small (60%)</option>
             </select>
 
             <label>Length Compactness</label>
@@ -199,8 +206,7 @@
                     ON</button>
                 <button type="button" class="btn-sector" id="btn-teambtpos" onclick="toggleTeamBTPos()">Team BT POS:
                     OFF</button>
-                <button type="button" class="btn-sector" id="btn-positionbt" onclick="togglePositionBT()">Position BT:
-                    OFF</button>
+
                 <button type="button" class="btn-sector" id="btn-playingstylebt" onclick="togglePlayingStyleBT()">PlayingStyleBT:
                     OFF</button>
                 <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">SG
@@ -321,7 +327,7 @@
     <script src="js/spatial_grid.js"></script>
     <script src="js/pass_candidates.js"></script>
     <script src="js/pass_types.js"></script>
-    <script src="js/marking_debug.js"></script>
+
 
     <!-- Decisão em 3 níveis: equipa -> posição -> jogador -->
     <script src="js/bt/core.js"></script>

@@ -469,9 +469,9 @@ const BlockShape = {
     um número só, e todas as posições abrem ou fecham em proporção.
     */
     amplitude: {
-        short: 0.50,          // 50%
-        median: 0.60,         // 60%
-        large: 0.70           // 70%
+        short: 0.60,          // 60%
+        median: 0.70,         // 70%
+        large: 0.80           // 80%
     },
 
     /*
@@ -1885,7 +1885,8 @@ const TeamPlayStyles = {
 };
 
 const Tatics = {
-    formacao: '442',
+    formacaoA: '442',
+    formacaoB: '442',
     estilo: 'balanceado',
     teamPlayStyle: 'positional',
     linhaDefensiva: 'medium',
@@ -1943,7 +1944,8 @@ const Tatics = {
     },
 
     update: function () {
-        this.formacao = document.getElementById('t-formacao').value;
+        this.formacaoA = document.getElementById('t-formacao-A').value;
+        this.formacaoB = document.getElementById('t-formacao-B').value;
         this.estilo = document.getElementById('t-estilo').value;
         const teamStyleEl = document.getElementById('t-team-style');
         if (teamStyleEl) this.teamPlayStyle = teamStyleEl.value;

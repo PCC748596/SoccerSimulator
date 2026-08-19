@@ -268,11 +268,6 @@ function popularPainelJogadores() {
             };
             linha.appendChild(estiloSpan);
 
-            const fitSpan = document.createElement('span');
-            fitSpan.className = 'lj-fit';
-            fitSpan.textContent = 'FIT ' + p.skills.fitness;
-            fitSpan.onclick = () => abrirModalSkills(p);
-            linha.appendChild(fitSpan);
 
             el.appendChild(linha);
         });
