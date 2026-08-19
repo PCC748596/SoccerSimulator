@@ -1514,7 +1514,13 @@ const Match = {
         com a bola nos pés cabeceava na mesma, e o contacto era medido a
         partir da origem do modelo (à altura da barriga, no salto).
         */
-        if (bestAltura > ALTURA_CABECA - 0.35) {
+        /*
+        Contacto à altura da TESTA. Era `> ALTURA_CABECA - 0.35`, ou seja
+        qualquer coisa acima de 1.37 m contava como cabeceio, incluindo bolas
+        que passavam bem por cima do crânio — cabeceava-se sem tocar nela.
+        A janela é agora simétrica à volta da testa (ver ALTURA_TESTA).
+        */
+        if (Math.abs(bestAltura - ALTURA_TESTA) <= HeaderModel.janelaContacto) {
             best.executeHeader();
         } else {
             window.bolaChutada = false;

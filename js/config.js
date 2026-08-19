@@ -113,6 +113,17 @@ põe o centro da cabeça a ~1.64 m e a testa a ~1.75 m. Este valor é o ponto de
 contacto de um cabeceio — ver distanciaAoCorpo() em utils.js.
 */
 const ALTURA_CABECA = 1.72;
+
+/*
+ALTURA DA TESTA — onde a bola bate num cabeceio.
+
+Cabeça-se com a TESTA, um pouco abaixo do topo do crânio. `ALTURA_CABECA` é
+o topo: mirar aí punha a bola a raspar por cima, e o jogador a "cabecear" uma
+bola em que nunca tocava. Toda a decisão de cabeceio mede-se a partir daqui —
+sem salto, a testa está a esta altura; a saltar, a esta altura mais a subida
+do salto.
+*/
+const ALTURA_TESTA = ALTURA_CABECA - 0.10;   // 1.62
 const CAMPO_LARG = 68; const CAMPO_COMP = 106;
 
 const _v1 = new THREE.Vector3();
@@ -1689,7 +1700,14 @@ vida real.
 const HeaderModel = {
     alcanceMax: 10.0,
     // Trajectória curta e alta, típica de quem desvia com a testa.
-    elevacao: 32 * Math.PI / 180
+    elevacao: 32 * Math.PI / 180,
+
+    /*
+    Meia-largura, em metros, da faixa à volta de ALTURA_TESTA onde o contacto
+    conta como cabeceio. Abaixo dela é peito; acima, a bola passa por cima
+    da cabeça e não há contacto nenhum.
+    */
+    janelaContacto: 0.22
 };
 
 /*

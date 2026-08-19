@@ -810,7 +810,7 @@ class FootballPlayer {
         _v1.set(0, 0, 0.22).applyQuaternion(this.model.quaternion);
         Match.ball.position.set(
             this.model.position.x + _v1.x,
-            this.model.position.y + ALTURA_CABECA - 0.1,
+            this.model.position.y + ALTURA_TESTA,
             this.model.position.z + _v1.z);
 
         let distToGoal = Math.abs(this.targetGoalZ - this.model.position.z);
@@ -1069,14 +1069,25 @@ class FootballPlayer {
             this.lastLabelText = '';
         }
 
-        // Anel grande = Team BT POS (nível 1, slot puro, sem desvios).
-        // Anel pequeno = Position BT (nível 2, já com os desvios). A linha
-        // entre os dois só faz sentido com os dois ligados ao mesmo tempo.
+        /*
+        Anel grande = Team BT POS: o slot puro do nível 1, sem desvios.
+        Anel pequeno = Position BT: o ALVO A SÉRIO, `dynamicTarget` — o
+        mesmo ponto para onde o steerArrive conduz o jogador.
+
+        Mostrava o `tacticalTarget`, que é o alvo do nível 2 ANTES da camada
+        posicional do playing style, e antes das passagens que correm depois
+        dos ticks individuais (a triangulação de Delaunay, o afastamento do
+        próprio guarda-redes). Ou seja: nenhum dos três anéis marcava o sítio
+        para onde o jogador estava mesmo a ir, e por isso não havia maneira
+        de ver se ele obedecia ou não. Agora o anel pequeno é a verdade.
+
+        A linha entre os dois só faz sentido com os dois ligados ao mesmo tempo.
+        */
         const showForTeam = (window.teamBTPosState === this.team || window.teamBTPosState === 'Both');
         const showForPos = (window.positionBTToggleState === this.team || window.positionBTToggleState === 'Both');
         const showForStyle = (window.playingStyleBTToggleState === this.team || window.playingStyleBTToggleState === 'Both');
         const teamTarget = this.slotTarget || this.tacticalTarget || this.dynamicTarget;
-        const posTarget = this.tacticalTarget || this.dynamicTarget;
+        const posTarget = this.dynamicTarget || this.tacticalTarget;
         const styleTarget = this.styleTarget || this.dynamicTarget;
 
         if (this.btTargetGroup) {
@@ -1310,7 +1321,12 @@ class FootballPlayer {
             (!this.jumpCooldown || this.jumpCooldown <= 0)) {
             const S = SaltoCabeceio;
             const prev = preverBolaEm(S.duracao * 0.5);
-            const subida = prev.y - (ALTURA_BASE_Y + ALTURA_CABECA);
+            /*
+            Medido da TESTA, não do topo da cabeça: é a testa que bate na
+            bola. Com ALTURA_CABECA o salto levava o TOPO do crânio à bola e
+            ela passava por cima sem contacto.
+            */
+            const subida = prev.y - (ALTURA_BASE_Y + ALTURA_TESTA);
             const dXZ = Math.hypot(this.model.position.x - prev.x, this.model.position.z - prev.z);
             if (dXZ < S.alcanceXZ && subida > S.alturaSemPulo && subida < S.alturaMax) {
                 this.jumpTimer = S.duracao;
