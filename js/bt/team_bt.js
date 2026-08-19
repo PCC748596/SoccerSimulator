@@ -19,6 +19,14 @@ Nada aqui deve saber desenhar, animar ou mover — só decidir.
 =============================================================================
 */
 
+const TeamState = {
+    OFFENSIVE: 'Offensive',
+    DEFENSIVE: 'Defensive',
+    TRANSITION_OFFENSIVE: 'T.Offensive',
+    TRANSITION_DEFENSIVE: 'T.Defensive'
+};
+window.TeamState = TeamState;
+
 /* --- Vocabulário de posturas -------------------------------------------- */
 
 const TeamPosture = {
@@ -125,7 +133,19 @@ class TeamBlackboard {
 
         this.isAttacking = (match.possessionTeam === this.team);
         this.isCounter = (match.counterAttackTeam === this.team);
-        this.phase = match.possessionTimer < 3 ? 1 : (match.possessionTimer < 6 ? 2 : 3);
+        
+        if (this.isAttacking !== this.wasAttacking) {
+            this.possessionTime = 0;
+            this.wasAttacking = this.isAttacking;
+        } else {
+            this.possessionTime = (this.possessionTime || 0) + (match.delta || 0.016);
+        }
+
+        if (this.isAttacking) {
+            this.state = (this.possessionTime < 3) ? TeamState.TRANSITION_OFFENSIVE : TeamState.OFFENSIVE;
+        } else {
+            this.state = (this.possessionTime < 3) ? TeamState.TRANSITION_DEFENSIVE : TeamState.DEFENSIVE;
+        }
 
         // Reivindicação de "vou intercetar" desta equipa neste frame — ver
         // podeIntercetar em player_bt.js. Limpa aqui (nível 1, antes do nível
@@ -683,40 +703,27 @@ function computeBlock(bb) {
     // de propósito, não é comportamento pedido nesta conversa.
     let profundidade = CAMPO_COMP * B.profundidade[compacLength];
 
-    /*
-    GR (de qualquer um dos dois lados) com a bola na mão: ninguém pressiona
-    (ver pickChaser) nem precisa fugir pra dentro da própria área — os dois
-    blocos reorganizam pro MEIO do campo em vez de seguir `ballZ*dir` cru,
-    que arrastava o bloco INTEIRO (incluindo atacantes) até perto do próprio
-    GR quando ele segurava a bola bem no fundo. O resto da função (largura,
-    fora-de-jogo, etc.) continua igual a partir daqui.
-    */
-    const gkComABola = (bb.carrier && bb.carrier.role === 'gk') || (bb.oppCarrier && bb.oppCarrier.role === 'gk');
-
-    // O centro do bloco no eixo Z acompanha a bola — excepto com um GR
-    // segurando a bola, aí vai pro meio do campo (ver acima).
-    let blockCenterZ = gkComABola ? 0 : bb.momentumZ * bb.dir;
+    // O centro do bloco no eixo Z acompanha a bola
+    let blockCenterZ_Rel = bb.momentumZ * bb.dir;
 
     // A pedido do utilizador: Puxar o bloco à frente ou atrás consoante a postura
-    if (gkComABola) {
-        // sem ajustes de postura — bloco fica centrado no meio-campo.
-    } else if (bb.isAttacking) {
+    if (bb.isAttacking) {
         if (bb.posture === TeamPosture.COUNTER) {
-            blockCenterZ += 10.0;
+            blockCenterZ_Rel += 10.0;
         } else if (bb.posture === TeamPosture.BUILD_UP || bb.posture === TeamPosture.ATTACK_SUSTAINED || bb.posture === TeamPosture.FINAL_THIRD) {
-            blockCenterZ += 5.0;
+            blockCenterZ_Rel += 5.0;
         }
         // Estilo (painel Defesa/Balanceado/Ataque) — antes só entrava na
         // condição da Pressão Alta; fora isso "Balanceado" e "Ataque"
         // produziam o MESMO bloco. Agora cada opção desloca visivelmente:
         // Balanceado já fica um pouco à frente da linha da bola (+2),
         // Ataque mais (+6), Defesa nem tanto (0).
-        blockCenterZ += EstiloBlockOffset[Tatics.estilo] ?? EstiloBlockOffset.balanceado;
+        blockCenterZ_Rel += EstiloBlockOffset[Tatics.estilo] ?? EstiloBlockOffset.balanceado;
     } else {
         if (bb.posture === TeamPosture.LOW_BLOCK) {
-            blockCenterZ -= 6.0;
+            blockCenterZ_Rel -= 6.0;
         } else if (bb.posture === TeamPosture.MID_BLOCK) {
-            blockCenterZ -= 3.0;
+            blockCenterZ_Rel -= 3.0;
         }
         // HIGH_PRESS mantém-se na linha da bola (sem offset)
 
@@ -729,11 +736,11 @@ function computeBlock(bb) {
         campo de ataque (Balanced), 2/3 (High) — ver TeamShape.pressaoLineCap.
         */
         const pressCap = TeamShape.pressaoLineCap[Tatics.pressaoDefensiva] ?? TeamShape.pressaoLineCap.balanced;
-        blockCenterZ = Math.min(blockCenterZ, pressCap);
+        blockCenterZ_Rel = Math.min(blockCenterZ_Rel, pressCap);
     }
 
-    let z0 = blockCenterZ - (profundidade / 2);
-    let z1 = blockCenterZ + (profundidade / 2);
+    let z0 = blockCenterZ_Rel - (profundidade / 2);
+    let z1 = blockCenterZ_Rel + (profundidade / 2);
 
     // O fora-de-jogo trava a frente do bloco (só a atacar)
     if (bb.isAttacking && bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
@@ -839,7 +846,11 @@ function slotNoBloco(p, bb) {
     // u: fecha lateralmente em torno do eixo central do bloco (0.5).
     const fechoLinha = LineShape.fecho[p.role] || LineShape.fecho.mid;
     const fecho = bb.isAttacking ? fechoLinha.comBola : fechoLinha.semBola;
-    const u = 0.5 + (p.slot.u - 0.5) * fecho;
+    let u = 0.5 + (p.slot.u - 0.5) * fecho;
+
+    if (bb.dir === -1) {
+        u = 1 - u;
+    }
 
     return {
         x: bloco.x0 + u * (bloco.x1 - bloco.x0),

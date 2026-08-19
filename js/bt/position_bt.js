@@ -398,23 +398,23 @@ function defendFullBack(ctx) {
     ctx.targetX += (bb.ballX * 0.18) - flankSign * 1.5;
 }
 
-// Central a defender: marca quem entra na zona; se um colega já pressiona,
-// faz a cobertura atrás da bola.
 function defendCB(ctx) {
     const p = ctx.p, bb = ctx.bb;
 
-    let naMinhaZona = false;
-    for (const opp of ctx.opponents) {
-        if (opp.role === 'gk') continue;
-        if (Math.abs(opp.model.position.x) < 18 && opp.model.position.z * p.dirZ < -15.0) {
-            naMinhaZona = true;
-            break;
-        }
-    }
+    if (p.markingTarget) {
+        // Acompanha o atacante horizontalmente para não deixá-lo livre nas pontas,
+        // mas com um limite (clamp) para não abrir um buraco no meio da defesa 
+        // se ele for completamente para a linha lateral.
+        const targetX = p.markingTarget.model.position.x;
+        const targetZ = p.markingTarget.model.position.z;
+        const puxaoX = targetX - ctx.targetX;
+        ctx.targetX += THREE.MathUtils.clamp(puxaoX, -10, 10);
 
-    if (naMinhaZona && p.markingTarget) {
-        marcar(ctx, p.markingTarget);
-        return;
+        // Se o atacante entra na zona de perigo, engaja a marcação por trás.
+        if (Math.abs(targetX) < 22 && targetZ * p.dirZ < -10.0) {
+            marcar(ctx, p.markingTarget);
+            return;
+        }
     }
 
     let colegaPressiona = false;
@@ -430,8 +430,8 @@ function defendCB(ctx) {
     }
 
     if (colegaPressiona) {
-        // Cobertura: cai atrás da bola, do lado dela.
-        aproximar(ctx, bb.ballX * 0.45, bb.ballZ - p.dirZ * 7.5, MarkingModel.coberturaBiasMax);
+        // Cobertura: cai atrás da bola, mas mantendo a SUA posição relativa
+        aproximar(ctx, p.baseTarget.x + bb.ballX * 0.14, bb.ballZ - p.dirZ * 7.5, MarkingModel.coberturaBiasMax);
     } else {
         ctx.targetX += bb.ballX * 0.14;
     }
@@ -558,24 +558,17 @@ const PositionAI = {
             const hx = p.markingTarget.model.position.x;
             const hz = p.markingTarget.model.position.z;
             const raio = MarkingModel.distanciaPara(p.markingTarget.model.position.z * p.dirZ);
-            let dx = targetX - hx, dz = targetZ - hz;
+            
+            // Marker stays between the target and their own goal
+            // p.ownGoalZ is either -53 or 53.
+            let dz = p.ownGoalZ - hz;
+            let dx = 0 - hx; // Goal is at x=0
             let d = Math.hypot(dx, dz);
-            if (d < 0.001) {
-                // Alvo em cima do homem: sai pelo lado da própria baliza.
-                dx = 0; dz = (p.ownGoalZ - hz) >= 0 ? 1 : -1; d = 1;
-            }
-            if (d < raio) {
+            
+            if (d > 0.001) {
                 targetX = hx + (dx / d) * raio;
                 targetZ = hz + (dz / d) * raio;
             }
-        }
-
-        // Tiki-taka: com bola e passe curto, puxa ligeiramente para a bola.
-        // Peso baixo de propósito — é uma correcção do nível 2 sobre o slot,
-        // não pode competir com a forma do rectângulo do nível 1.
-        if (Tatics.passe === 'curto' && ctx.bb.isAttacking) {
-            targetX = lerp(targetX, Match.ball.position.x, 0.30);
-            targetZ = lerp(targetZ, Match.ball.position.z, 0.30);
         }
 
         /*

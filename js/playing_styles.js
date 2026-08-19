@@ -201,7 +201,19 @@ function avaliarEstilo(p, bb, dt) {
         distBola: p.model.position.distanceTo(Match.ball.position)
     };
 
-    const quer = !!gatilho(p, bb, s);
+    let quer = !!gatilho(p, bb, s);
+
+    // REGRA DE ESTADOS TÁTICOS
+    // Se não estiver no estado ofensivo (posse estabelecida), desliga os estilos de movimentação
+    // Exceção: estilos puramente defensivos ou que sempre ficam ativos na defesa
+    if (typeof TeamState !== 'undefined' && bb.state !== TeamState.OFFENSIVE) {
+        if (p.playingStyle !== 'anchor_man' && 
+            p.playingStyle !== 'defensive_fullback' && 
+            p.playingStyle !== 'the_destroyer') {
+            quer = false;
+        }
+    }
+
     const antes = !!p.styleAtivo;
 
     // Histerese por tempo: só troca depois de aguentar o mínimo no estado
