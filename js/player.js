@@ -2524,6 +2524,73 @@ class FootballPlayer {
     puntBall(), com elevação e direcção sorteadas lá dentro.
     */
     releaseFromHands() {
+        const teamStyle = (typeof Tatics !== 'undefined' && Tatics.teamPlayStyle) ? Tatics.teamPlayStyle : 'positional';
+        const myTeam = (this.team === 'TeamA') ? Match.players : Match.opponents;
+        
+        let rand = Math.random();
+        let targetPlayer = null;
+
+        const getCandidates = (posList, filterFn = null) => {
+            const c = myTeam.filter(p => p !== this && posList.includes(p.pos) && (!filterFn || filterFn(p)));
+            return c.length > 0 ? c : null;
+        };
+
+        const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+        if (teamStyle === 'positional' || teamStyle === 'possession') {
+            if (rand < 0.4) {
+                let c = getCandidates(['LB', 'LWB']);
+                if (c) targetPlayer = pickRandom(c);
+            } else if (rand < 0.8) {
+                let c = getCandidates(['RB', 'RWB']);
+                if (c) targetPlayer = pickRandom(c);
+            }
+        } else if (teamStyle === 'direct') {
+            if (rand < 0.4) {
+                let c = getCandidates(['LM', 'LW']);
+                if (c) targetPlayer = pickRandom(c);
+            } else if (rand < 0.8) {
+                let c = getCandidates(['RM', 'RW']);
+                if (c) targetPlayer = pickRandom(c);
+            }
+        } else if (teamStyle === 'counter_attack') {
+            if (rand < 0.8) {
+                let c = getCandidates(['CM', 'DM', 'AM', 'LM', 'RM']);
+                if (c) targetPlayer = pickRandom(c);
+            } else {
+                let c = getCandidates(['CF', 'ST', 'LW', 'RW']);
+                if (c) targetPlayer = pickRandom(c);
+            }
+        } else if (teamStyle === 'wing_play') {
+            // 50% esquerdo, 50% direito. Esquerda = x * dirZ > 0
+            let side = (rand < 0.5) ? 1 : -1;
+            let c = getCandidates(['LM', 'RM', 'CM', 'AM'], p => (p.baseTarget.x * p.dirZ * side > 0));
+            if (!c) c = getCandidates(['LM', 'RM', 'CM', 'AM'], p => (p.model.position.x * p.dirZ * side > 0));
+            if (c) targetPlayer = pickRandom(c);
+        }
+
+        if (targetPlayer) {
+            this.passTarget = targetPlayer;
+            this.passTargetPos = targetPlayer.model.position.clone();
+            
+            const dist = this.model.position.distanceTo(targetPlayer.model.position);
+            if (dist > 25) {
+                this.isThroughBall = true;
+                this.throughBallTarget = targetPlayer.model.position.clone();
+                this.throughBallAlto = true;
+            } else {
+                this.isThroughBall = false;
+                this.isCross = false;
+            }
+
+            if (typeof executePassGameplay !== 'undefined') {
+                executePassGameplay(this);
+            } else {
+                this.puntBall();
+            }
+            return;
+        }
+
         this.puntBall();
     }
 
