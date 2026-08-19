@@ -470,8 +470,8 @@ const BlockShape = {
     commit: em vez de empurrar cada jogador contra um limite fixo, desloca-se o
     rectângulo inteiro. Ninguém se sobrepõe a ninguém porque a forma não muda.
     */
-    bascular: 0.22,       // sem bola: o bloco desliza 22% do desvio da bola
-    bascularComBola: 0.10,   // com bola desliza menos: a largura é para manter
+    // Sem factor de basculação: o centro do bloco segue o x da bola 1:1 até
+    // encostar à margem do campo (ver computeBlock em team_bt.js).
 
     // Margem para o rectângulo não sair do campo.
     margemLateral: 0.94,

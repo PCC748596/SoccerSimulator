@@ -455,7 +455,7 @@ function defendDM(ctx) {
 /*
 Basculação para o flanco em perigo.
 
-O bloco já basculou (BlockShape.bascular desloca o rectângulo para o lado da
+O bloco já basculou (o centro do rectângulo segue o x da bola, para o lado da
 bola). Aqui só se acrescenta o que é específico: quem sai ao portador e quem
 faz a cobertura por dentro.
 */

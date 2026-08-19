@@ -787,16 +787,20 @@ function computeBlock(bb) {
     const maxCentroX = borda - meiaLarg;
 
     /*
-    Basculacao: o rectangulo desliza para o lado da bola em PROPORCAO da folga
-    que tem. Com a bola encostada a linha lateral o bloco encosta-se tambem -
-    e o comportamento pedido, e por isso a escala e `maxCentroX` (a folga
-    entre a borda do bloco e a margem do campo) e nao uma fraccao fixa.
+    BASCULACAO: o centro do rectangulo ACOMPANHA A BOLA, 1:1, ate onde o campo
+    deixa.
 
-    Uma versao intermedia usou `BlockShape.bascular` (0.22) como factor: com a
-    bola na linha lateral o bloco parava a 6.6 m do centro em vez de 11.6 m e
-    ficava visivelmente descolado do lado da jogada.
+    Nao e uma fraccao do desvio da bola. Com a bola em x = 10 o centro esta em
+    x = 10; a partir dai o rectangulo encosta a margem e o centro fica em
+    maxCentroX (a folga entre a borda do bloco e a margem do campo), que e o
+    mais longe que ele pode ir sem sair do campo.
+
+    Duas versoes anteriores escalavam o desvio - `momentumX * maxCentroX`
+    (1:0.34) e `momentumX * (CAMPO_LARG/2) * BlockShape.bascular` (1:0.22) - e
+    o bloco andava sempre muito menos do que a bola.
     */
-    let centroX = bb.momentumX * maxCentroX;
+    let centroX = THREE.MathUtils.clamp(
+        bb.momentumX * (CAMPO_LARG / 2), -maxCentroX, maxCentroX);
 
     // Basculacao extra para postura FLANK_SHIFT (4 m para o lado em perigo)
     if (!bb.isAttacking && bb.posture === TeamPosture.FLANK_SHIFT) {
