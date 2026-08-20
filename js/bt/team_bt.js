@@ -183,7 +183,14 @@ function updateMomentum(bb, dt) {
     const alvoX = THREE.MathUtils.clamp(bb.ballX / (CAMPO_LARG / 2), -1, 1);
     const kX = 1 - Math.exp(-0.8 * dt);
     bb.momentumX += (alvoX - bb.momentumX) * kX;
-    const alvoZ = bb.ballZ;
+    
+    let alvoZ = bb.ballZ;
+    if (bb.state === TeamState.TRANSITION_OFFENSIVE) {
+        alvoZ += 10 * bb.dir;
+    } else if (bb.state === TeamState.TRANSITION_DEFENSIVE) {
+        alvoZ -= 3 * bb.dir;
+    }
+
     let kZ;
     if (bb.isAttacking) {
         if (alvoZ * bb.dir < bb.momentumZ * bb.dir) kZ = 1 - Math.exp(-0.25 * dt);
