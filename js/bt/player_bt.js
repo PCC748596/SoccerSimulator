@@ -993,6 +993,10 @@ function tratarBolaParada(p) {
         if (s !== 'SET_PIECE_TAKER' && s !== 'SET_PIECE_WAIT' && s !== 'MOVE_TO_POS') {
             fsm.changeState('SET_PIECE_WAIT');
         }
+    } else if (Match.state === 'GOAL') {
+        if (s !== 'MOVE_TO_POS') {
+            fsm.changeState('IDLE');
+        }
     } else {
         fsm.changeState('IDLE');
     }

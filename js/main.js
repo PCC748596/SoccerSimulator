@@ -457,23 +457,9 @@ function animate(time) {
 
     if (TeamAI && TeamAI.blackboards) {
         const bbA = TeamAI.blackboards['TeamA'];
-        const mapPosture = (posture) => {
-            switch (posture) {
-                case 'BUILD_UP':
-                case 'ATTACK_SUSTAINED':
-                case 'FINAL_THIRD': return 'Offensive';
-                case 'COUNTER': return 'To Offensive';
-                case 'HIGH_PRESS': return 'To Defensive';
-                case 'MID_BLOCK':
-                case 'LOW_BLOCK':
-                case 'FLANK_SHIFT': return 'Defensive';
-                case 'SET_PIECE': return 'Set Piece';
-                default: return posture;
-            }
-        };
-        if (bbA && bbA.posture) document.getElementById('hud-state-a').innerText = mapPosture(bbA.posture);
+        if (bbA && bbA.state) document.getElementById('hud-state-a').innerText = bbA.state;
         const bbB = TeamAI.blackboards['TeamB'];
-        if (bbB && bbB.posture) document.getElementById('hud-state-b').innerText = mapPosture(bbB.posture);
+        if (bbB && bbB.state) document.getElementById('hud-state-b').innerText = bbB.state;
 
 
         // Alimenta a aba do fluxograma do TeamBT (teamBtView.html), se aberta.

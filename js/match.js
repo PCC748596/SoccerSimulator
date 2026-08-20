@@ -1945,7 +1945,7 @@ const Match = {
                             p.dynamicTarget = new THREE.Vector3(p.baseTarget.x, ALTURA_BASE_Y, z);
                         }
                         p.fsm.changeState('MOVE_TO_POS');
-                        p.speedMult = 1.0; // Trote/caminhada normal
+                        p.speedMult = 3.5; // Retorno mais rápido, a meia velocidade do sprint
                     });
                 });
                 this.goalSequenceStage = 1;

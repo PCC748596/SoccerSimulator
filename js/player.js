@@ -595,6 +595,37 @@ class FootballPlayer {
             // Bónus por estar livre de marcação
             score += Math.min(50, Math.max(0, (minOppDist - safetyLimit) * 8));
 
+            // Bónus de prioridade de passes (Triangulações)
+            let priorityBonus = 0;
+            const pRole = this.pos;
+            const oRole = opt.pos;
+            const pSideAtk = ownX * dirZ;
+            const oSideAtk = optPos.x * dirZ;
+            const isSameSide = Math.sign(pSideAtk) === Math.sign(oSideAtk) || Math.abs(pSideAtk) < 5 || Math.abs(oSideAtk) < 5;
+
+            if (pRole === 'GK') {
+                if (['CB', 'LB', 'RB', 'CM', 'RM', 'LM'].includes(oRole)) priorityBonus = 40;
+            } else if (pRole === 'CB') {
+                if (['CB', 'DM', 'CM'].includes(oRole)) priorityBonus = 40;
+                if (['LB', 'RB', 'LM', 'RM'].includes(oRole) && isSameSide) priorityBonus = 40;
+            } else if (pRole === 'LB' || pRole === 'RB') {
+                if (['CB', 'CM', 'LM', 'RM'].includes(oRole) && isSameSide) priorityBonus = 40;
+            } else if (pRole === 'CM') {
+                if (['AM', 'CF'].includes(oRole)) priorityBonus = 40;
+                if (['LM', 'RM'].includes(oRole) && isSameSide) priorityBonus = 40;
+            } else if (pRole === 'AM') {
+                if (['CM', 'CF', 'LW', 'RW'].includes(oRole)) priorityBonus = 40;
+                if (['LM', 'RM'].includes(oRole) && isSameSide) priorityBonus = 40;
+            } else if (pRole === 'CF') {
+                if (['AM', 'LW', 'RW', 'ST'].includes(oRole)) priorityBonus = 40;
+                if (['LM', 'RM'].includes(oRole) && isSameSide) priorityBonus = 40;
+            } else if (pRole === 'RW') {
+                if (['RM', 'CM', 'AM', 'CF', 'ST'].includes(oRole)) priorityBonus = 40;
+            } else if (pRole === 'LW') {
+                if (['LM', 'CM', 'AM', 'CF', 'ST'].includes(oRole)) priorityBonus = 40;
+            }
+            score += priorityBonus;
+
             // Grid espacial (camada PASSE)
             if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {
                 score += SpatialGrid.layerValueAt('pass', optPos.x, optPos.z, this.team) * 0.4;
