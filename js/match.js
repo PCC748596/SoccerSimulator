@@ -921,7 +921,7 @@ const Match = {
                 // p.update(dt), mesmo com o runTeamAI travado no kickoff.
                 p.dynamicTarget = p.model.position.clone();
                 p.fsm.changeState('MOVE_TO_POS');
-                p.speedMult = 3.5;
+                p.speedMult = 4.5;
             });
         });
 
@@ -984,7 +984,7 @@ const Match = {
         // livremente pelo campo (runTeamAI/BT não corre) até o timer zerar,
         // e aí o "taker" toca para o apoio — isso é que dá o pontapé de saída.
         this.kickoffActive = true;
-        this.kickoffTimer = 0.0;
+        this.kickoffTimer = 3.0; // 3 segundos de delay no kickoff
         this.kickoffTaker = taker;
         this.kickoffApoio = apoio;
     },
@@ -1945,7 +1945,7 @@ const Match = {
                             p.dynamicTarget = new THREE.Vector3(p.baseTarget.x, ALTURA_BASE_Y, z);
                         }
                         p.fsm.changeState('MOVE_TO_POS');
-                        p.speedMult = 3.5; // Retorno mais rápido, a meia velocidade do sprint
+                        p.speedMult = 4.5;
                     });
                 });
                 this.goalSequenceStage = 1;
@@ -1976,13 +1976,6 @@ const Match = {
                 });
 
                 if (allInPosition) {
-                    this.tempoParada = 0;
-                    this.goalSequenceStage = 2;
-                }
-            } else if (this.goalSequenceStage === 2) {
-                // Espera mais 3 segundos após todos estarem em posição
-                this.tempoParada += this.delta;
-                if (this.tempoParada > 3.0) {
                     this.tempoParada = 0;
                     this.goalSequenceStage = undefined;
                     this.resetPlay();
