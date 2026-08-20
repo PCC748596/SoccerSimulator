@@ -1300,3 +1300,7 @@ padrão de fluxograma pro PositionBT/PlayerBT.
 | Pose da matada no peito / cabeceio de pé | `player.js` → `aplicarCamadaPeito()` / `aplicarCamadaCabeceioDePe()` |
 | Cabeçada com salto (fase subida/contacto/descida) | `player.js` → `animateBones()`, bloco do `jumpTimer` |
 | Passe chegando atrás/à frente de quem corre (lead) | `player.js` → `initiatePass()` — `pesoVel`/`travelTime`/`maxLeadTotal` |
+| Velocidade de retorno à posição após golo/reinício | `match.js` → `resetPlay()` e bloco de `GOAL` (`speedMult`) |
+| Atraso (delay) antes da bola rolar na saída | `match.js` → `resetPlay()` (`kickoffTimer`) |
+| Avanço/recuo das linhas (momentum) durante as transições | `bt/team_bt.js` → `updateMomentum()` |
+| Triangulações e afinidades de passe entre posições | `player.js` → `findPassTarget()` (`priorityBonus`) |
