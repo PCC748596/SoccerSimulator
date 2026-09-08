@@ -551,7 +551,38 @@ Object.assign(Match, {
         const atingiuLimiteCabeca = this.aerialHeaderCount >= maxHeaders;
 
         const maxPeitos = BallControl.maxPeitosSeguidos;
-        if ((bestAltura >= BallControl.peitoYMin && bestAltura <= BallControl.peitoYMax && best.jumpTimer <= 0) ||
+        /*
+        PEITO OU CABEÇA? DEPENDE DE QUEM VEM A CHEGAR.
+
+        `BallControl.peitoSemPressao` e `peitoAlturaLivre` estavam no config com
+        a regra escrita ao lado — "sem ninguém em cima, ele tem tempo de a
+        ajeitar com o peito alto" — e NINGUÉM os lia: um grep dava a definição e
+        mais nada. A decisão era só de altura, e a faixa tinha 20 cm
+        (1.15 a 1.35). Medido em 73 min: 6 matadas no peito e 15 cabeceios,
+        contra centenas de contactos a essa altura — tudo o resto era tratado
+        como bola no chão, e um domínio falhado a 1.5 m manda a bola para longe.
+        É o relato: "praticamente nenhuma matada no peito".
+
+        Livre, o tecto sobe até `peitoAlturaLivre`; com um adversário dentro de
+        `peitoSemPressao`, fica na faixa estreita — ali o peito é lento de mais
+        e o que serve é a cabeça.
+        */
+        let tectoPeito = BallControl.peitoYMax;
+        if (typeof BallControl.peitoSemPressao === 'number' &&
+            typeof BallControl.peitoAlturaLivre === 'number') {
+            const rivais = (best.team === 'TeamA') ? this.opponents : this.players;
+            let maisPerto = Infinity;
+            for (const o of rivais) {
+                if (!o || !o.model) continue;
+                const d = o.model.position.distanceTo(best.model.position);
+                if (d < maisPerto) maisPerto = d;
+            }
+            if (maisPerto > BallControl.peitoSemPressao) {
+                tectoPeito = Math.max(tectoPeito, BallControl.peitoAlturaLivre);
+            }
+        }
+
+        if ((bestAltura >= BallControl.peitoYMin && bestAltura <= tectoPeito && best.jumpTimer <= 0) ||
             (atingiuLimiteCabeca && bestAltura <= (ALTURA_TESTA + HeaderModel.janelaContacto) && best.jumpTimer <= 0)) {
             /*
             LIMITE DE PEITOS SEGUIDOS. Sem ele, dois jogadores lado a lado

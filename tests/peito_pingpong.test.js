@@ -95,7 +95,10 @@ console.log(LF + '2 — porque é que o ciclo se fecha sozinho');
 console.log(LF + '3 — o limite corta a sequência');
 {
     const i = srcMatch.indexOf('const maxPeitos');
-    const bloco = i < 0 ? '' : srcMatch.slice(i, i + 1600);
+    // Janela larga: entre o `maxPeitos` e a condição mora a regra da pressão
+    // (peitoSemPressao/peitoAlturaLivre), e uma janela curta falhava por causa
+    // do comentário dela e não do código.
+    const bloco = i < 0 ? '' : srcMatch.slice(i, i + 3200);
 
     if (!bloco) {
         erro('o limite não está no resolveBallContact');

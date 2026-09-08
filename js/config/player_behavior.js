@@ -395,6 +395,23 @@ const CarryModel = {
     margemDisputa: 0.15,
 
     /*
+    E QUEM ENTRA NA DISPUTA. A conta era a distância em linha recta ao ponto
+    onde a bola vai ficar, e por isso o defesa colado às COSTAS ganhava sempre
+    a corrida — para lá chegar teria de passar por cima do portador, a correr
+    mais depressa do que ele.
+
+    Medido em 74 min: **76% das decisões de toque cortadas a zero**, e no caso
+    do relato — alguém atrás a menos de 6 m com o campo aberto à frente — 1245
+    de 1280. O portador levava a bola colada ao pé exactamente quando devia
+    adiantá-la para ganhar velocidade.
+
+    `disputaProjMin` é a projecção mínima na direcção da corrida para o
+    adversário contar: 0 é a linha dos ombros do portador. Quem está atrás dela
+    sai da disputa; quem está ao lado ou à frente continua a contar.
+    */
+    disputaProjMin: 0.0,
+
+    /*
     Até onde um DEFESA conduz a bola, no referencial de ataque. Ele conduz para
     sair a jogar, não para atacar: passada esta linha tem de largar a bola.
     0 = meio-campo. Sem este tecto, um central que recebesse com campo aberto
@@ -574,7 +591,21 @@ const BallControl = {
     // Alturas medidas a partir dos PÉS do jogador (ver distanciaAoCorpo).
     // peitoYMin tem de ser >= peitoAltura (1.20, mais abaixo): bola abaixo do
     // peito de verdade não faz sentido matar no peito, é toque de pé normal.
-    peitoYMin: 1.15,       // altura mínima do contacto para contar como peito
+    /*
+    A FAIXA DO PEITO TINHA 20 CM (1.15 a 1.35) e a bola quase nunca lá chega:
+    medido em 74 min, das ~1200 bolas que chegam ao corpo de alguém, 850 vêm
+    rasteiras (0.1 m) e 500 acima da cabeça — na faixa do peito passavam 30, e
+    saíam 3 a 7 matadas por jogo. O que fica entre a coxa e o peito era tratado
+    como bola no chão: um domínio falhado a 1.1 m manda-a para longe, que é o
+    relato ("normalmente a bola vai pra longe").
+
+    O piso desce à COXA. A bola já não é colada a uma altura fixa — segue a
+    altura do contacto (ver peitoAlturaMinCola/MaxCola e colarBolaAoPeito) —, e
+    por isso o piso pode descer sem a bola dar um salto no frame do toque.
+    */
+    peitoYMin: 0.95,       // altura mínima do contacto para contar como peito
+    peitoAlturaMinCola: 0.90,  // limites de corpo para a bola colada
+    peitoAlturaMaxCola: 1.75,
     peitoYMax: 1.35,      // acima disto é cabeça (ver ALTURA_CABECA), não peito
     peitoBase: 0.45,      // probabilidade base de amortecer bem (só animação/stats)
     peitoDur: 0.55,       // duração (s) do gesto
@@ -1036,6 +1067,15 @@ const RepositionPace = {
     ganhoSkill: 0.20,
     // Contra-ataque: a transição é a rajada, aqui sim.
     bonusContraAtaque: 1.25,
+
+    /*
+    E SAIR A JOGAR DE TRÁS. Com a bola nas mãos do guarda-redes a equipa tem
+    oito segundos para lhe dar opções — medido, andava a 3.6 m/s de média com
+    18% dos companheiros parados, e 46% das leituras tinham alguém atrás dele.
+    Quem lê a marca é o `actReposition` (player_bt.js); quem a escreve é o
+    `tickFinal` (team_bt.js), no mesmo sítio onde põe o piso à frente dele.
+    */
+    bonusSaidaDeBola: 1.25,
 
     /*
     RECUAR É UMA RAJADA TAMBÉM — o contrário do contra-ataque, e faltava.

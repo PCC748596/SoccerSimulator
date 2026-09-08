@@ -57,6 +57,29 @@ sequencia do golo). Eram 3 s, e 3 s nao chegam para atravessar meio campo a
 correr: quem estava na area adversaria nunca chegava a tempo e caia sempre no
 teletransporte.
 */
+/*
+=============================================================================
+SAIR A JOGAR DE TRÁS — a forma da equipa com a bola nas mãos do guarda-redes
+=============================================================================
+Relato, com captura: "quando o goleiro pega a bola os jogadores do time com a
+bola demoram a se reposicionar para sair jogando; tem jogadores ficando atrás do
+goleiro (entre o goleiro e seu próprio gol)".
+
+Medido em 74 min, durante os segundos de posse dele: 1.24 companheiros ATRÁS
+dele por leitura, pior caso 8, e 46% das leituras com pelo menos um. Um jogador
+ali não é opção de passe nenhuma — está fora do campo de jogo útil.
+
+`margemAFrente` é o piso: ninguém da equipa fica a menos disto à frente da
+linha do guarda-redes enquanto ele segura a bola. Não é o bloco inteiro a subir
+— é só o chão de quem tinha caído atrás dele.
+=============================================================================
+*/
+const SaidaDeBolaShape = {
+    margemAFrente: 4.0
+};
+
+if (typeof window !== 'undefined') window.SaidaDeBolaShape = SaidaDeBolaShape;
+
 const TOLERANCIA_SAIDA = 2.0;
 const PRAZO_CAMINHADA_SAIDA = 9.0;
 

@@ -75,7 +75,7 @@ console.log('1 — quem marca o recuo é o passe com o pé');
     if (!/executeHeader[\s\S]{0,400}limparRecuoParaGR/.test(headerSrc)) {
         erro('a cabeçada deixou de devolver as mãos ao guarda-redes');
     } else ok('a cabeçada devolve as mãos (pode ser agarrada)');
-    if (!/controlarNoPeito[\s\S]{0,1400}limparRecuoParaGR/.test(headerSrc)) {
+    if (!/controlarNoPeito[\s\S]{0,2400}limparRecuoParaGR/.test(headerSrc)) {
         erro('a matada no peito deixou de devolver as mãos ao guarda-redes');
     } else ok('o peito devolve as mãos');
 }

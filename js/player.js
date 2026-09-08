@@ -1875,6 +1875,15 @@ class FootballPlayer {
         lookAtBola(this.model, Match.ball.position);
 
         this.peitoBom = bom;
+        /*
+        A ALTURA DO CONTACTO, guardada. A bola era colada sempre à
+        `peitoAltura` fixa (1.20 m): com a faixa a começar em 1.15 dava quase no
+        mesmo, mas assim que ela se alarga — a bola à coxa, ou a bola alta que
+        um jogador livre ajeita — colá-la a 1.20 é vê-la SALTAR para lá no
+        frame do contacto. Fica a altura real, dentro de limites de corpo.
+        */
+        this.peitoAlturaContacto = THREE.MathUtils.clamp(
+            altura, B.peitoAlturaMinCola || 0.9, B.peitoAlturaMaxCola || 1.75);
         this.peitoCola = B.peitoCola;
         this.peitoHopTimer = (altura > B.peitoPuloLimiar) ? B.peitoDur : 0;
         this.colarBolaAoPeito();
@@ -1911,10 +1920,12 @@ class FootballPlayer {
     */
     colarBolaAoPeito() {
         const B = BallControl;
+        const h = (typeof this.peitoAlturaContacto === 'number')
+            ? this.peitoAlturaContacto : B.peitoAltura;
         _v1.set(0, 0, B.peitoDistCorpo).applyQuaternion(this.model.quaternion);
         Match.ball.position.set(
             this.model.position.x + _v1.x,
-            this.model.position.y + B.peitoAltura,
+            this.model.position.y + h,
             this.model.position.z + _v1.z);
         Match.ballVel.set(0, 0, 0);
     }
@@ -1939,7 +1950,9 @@ class FootballPlayer {
         const frac = THREE.MathUtils.clamp(tec / 100, 0, 1);
         const vy = B.peitoVelYMa + (B.peitoVelYBoa - B.peitoVelYMa) * frac;
 
-        const queda = Math.max(0.1, B.peitoAltura - BallPhysics.raio);
+        const h = (typeof this.peitoAlturaContacto === 'number')
+            ? this.peitoAlturaContacto : B.peitoAltura;
+        const queda = Math.max(0.1, h - BallPhysics.raio);
         const t = (vy + Math.sqrt(vy * vy + 2 * g * queda)) / g;
         const vh = dist / Math.max(0.1, t);
 

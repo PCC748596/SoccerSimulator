@@ -94,6 +94,106 @@ aproxima a defesa da bola, alargar só o lateral não.
 Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
 `tests/nivel2_prioridades.test.js`.
 
+#### Jogadores atrás do próprio guarda-redes, com a bola nas mãos dele
+
+Relato, com captura: *"quando o goleiro pega a bola os jogadores do time com a
+bola demoram a se reposicionar para sair jogando; tem jogadores ficando atrás do
+goleiro, entre o goleiro e seu próprio gol; eles têm que ter um pouco mais de
+agilidade para dar opções"*.
+
+Medido em 74 min de jogo corrido, durante os segundos de posse dele
+(`tools/headless/saida_do_guarda_redes.js`):
+
+    companheiros ATRÁS dele        1.24 por leitura (pior caso 8)
+    leituras com algum atrás       46%
+    velocidade média deles         3.62 m/s, com 18% parados
+
+A causa é o bloco: é desenhado à volta da BOLA, e com a bola dentro da pequena
+área o rectângulo desce até `margemFundoDoBloco` (3 m) da linha de fundo. Quem
+calha no terço de trás dele fica entre o guarda-redes e a baliza — onde não há
+passe nenhum para dar.
+
+`SaidaDeBolaShape.margemAFrente` (4 m) é o piso, e `RepositionPace.bonusSaidaDeBola`
+(+25%) a pressa. Mais duas coisas que a medição obrigou a corrigir, e são a
+lição do dia:
+
+- **O piso posto a meio do pipeline mediu PIOR** — 1.24 para 1.69 atrás dele.
+  O `restDefense` (que prende os mais recuados atrás da BOLA, e a bola está na
+  mão dele), a separação lateral↔meia e o clamp do lateral do lado contrário
+  corriam depois e voltavam a empurrá-los para lá. Tem de ser o último a falar.
+- **E tem de ser aplicado outra vez DEPOIS do alisamento**, pela mesma razão que
+  a transição defensiva já o fazia: o lerp traz o alvo do frame anterior — o de
+  trás — e arrasta-o mais de um segundo.
+- **A espera pelo posto (`esperarPeloSlot`) congelava-os lá.** Ela põe o alvo na
+  posição ACTUAL de quem vê o slot vir ao encontro; com a bola nas mãos do
+  guarda-redes é exactamente o contrário do que se quer, e quem estava atrás
+  dele ficava os oito segundos todos. Sai da regra enquanto durar a saída.
+
+Depois, em jogo corrido: **1.24 → 0.45 atrás dele**, 46% → 36% das leituras,
+velocidade 3.62 → 5.21 m/s e parados 18% → 13%.
+Teste: `tests/saida_do_guarda_redes.test.js`.
+
+#### O toque de condução que nunca saía com um marcador nas costas
+
+Relato: *"quando o jogador tem a bola dominada no meio campo ele dá pequenas
+adiantadas no meio de um monte de adversários; mas quando recebe a bola na
+frente ou tem alguém atrás dele, não adianta para poder ter mais velocidade"*.
+
+O tamanho do toque é escolhido por faixas de distância ao adversário da frente
+e depois VALIDADO por uma corrida: `maiorToqueSeguro` (utils.js) pergunta quem
+chega primeiro ao ponto onde a bola vai ficar. Só que media a distância em
+LINHA RECTA, **para todos os adversários** — e um defesa colado às costas, que
+para lá chegar teria de passar por cima do portador e correr mais depressa do
+que ele, ganhava sempre essa corrida.
+
+Medido em 74 min (`tools/headless/toque_conducao.js`):
+
+    decisões de toque                                    5419
+    cortadas a zero (bola no pé)                     4128 = 76%
+    com alguém atrás (<6 m) e o campo aberto à frente  1245 de 1280
+
+Ou seja: **exactamente no lance do relato, o toque era cancelado em 97% dos
+casos.**
+
+`CarryModel.disputaProjMin` (0 m — a linha dos ombros) tira da disputa quem
+está atrás dela. Quem está ao lado ou à frente continua a contar como contava.
+Depois: **17% cortadas a zero**, e ZERO no caso do relato (461 casos, todos com
+o toque pedido inteiro). Teste: `tests/toque_com_marcador_atras.test.js`.
+
+#### A matada no peito: faz o que o modelo diz, mas quase nunca acontece
+
+Relato: *"praticamente nenhuma matada no peito a bola cai na frente do jogador
+que matou a bola; normalmente a bola vai pra longe"*.
+
+Medido primeiro o que já havia (`tools/headless/peito_queda.js`): quando a
+matada acontece, **a bola cai a 0.57 m à frente e ele fica com ela em 3 de
+4 casos** — o modelo (`quedaNoPeito`, 0.35 m a TEC 100 e 1.6 m a TEC 0) está a
+ser cumprido. O que não acontece é a matada: **3 a 7 por jogo**.
+
+A causa é a altura a que a bola chega ao corpo de alguém. Medido em 74 min, das
+~1200 bolas que chegam ao alcance de um jogador: **850 vêm rasteiras (0.1 m) e
+~500 acima da cabeça** — na faixa do peito passam umas dezenas. E a faixa tinha
+**20 cm** (1.15 a 1.35). O que fica entre a coxa e o peito era tratado como bola
+no chão, e a essa altura o domínio falha e a bola vai para longe: nos passes de
+mais de 25 m, **39% de `dominioFalhado`**.
+
+Duas correcções, e as duas eram config que ninguém lia:
+
+- **`peitoSemPressao` / `peitoAlturaLivre`** (7 m / 1.75 m) estavam escritos com
+  a regra ao lado — "sem ninguém em cima ele tem tempo de a ajeitar com o peito
+  alto" — e um grep dava só a definição. O tecto da faixa passa a subir quando o
+  adversário mais próximo está a mais de 7 m.
+- **O piso desce à coxa** (1.15 → 0.95). Só foi possível porque a bola deixou de
+  ser colada a uma altura FIXA: segue agora a altura do contacto
+  (`peitoAlturaMinCola`/`MaxCola`), senão dava um salto para 1.20 m no frame do
+  toque.
+
+Depois: `dominioFalhado` nos passes de 25 m+ **39% → 33%**, e a bola continua a
+cair a 0.56 m do peito. **O número de matadas não subiu** (5 por jogo): o
+travão não é a faixa, é a trajectória dos passes altos, que chegam de cima de
+2 m ou rasteiros e quase nunca no meio. Fica anotado como o próximo fio deste
+lado.
+
 #### A bola atrasada que o guarda-redes agarrava na mesma
 
 Relato: *"o goleiro não pode pegar com a mão as bolas atrasadas, só se for de
@@ -5887,6 +5987,9 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `saida_do_guarda_redes.js [segundos] [semente]` — com a bola nas mãos dele: quantos companheiros ficam ATRÁS do guarda-redes, a que distância está a opção mais perta, e a que velocidade se mexem. Separa por estado do jogo, porque em bola parada as posições são impostas e não valem para esta leitura.
+- `peito_queda.js [segundos] [semente]` — a matada no peito: a que distância do peito a bola toca o chão, onde acaba o lance e de quem fica.
+- `toque_conducao.js [segundos] [semente]` — o toque de condução: que tamanho as faixas pediram, o que a validação por disputa deixou passar, e o caso "alguém atrás com o campo aberto à frente" isolado.
 - `recuo_gk.js [segundos] [semente]` — de onde vinha cada bola que o guarda-redes agarrou com a mão: último toque, com que parte do corpo, de que equipa, e quantos metros a bola andou para trás desde esse toque. Foi ela que mostrou que o recuo só era marcado no passe endereçado a ele.
 - `tiro_de_meta.js [quantos]` — força N tiros de meta e mede a profundidade das duas equipas no referencial de ataque de quem bate. Mede COM O LANCE DE PÉ: deixar o estado sair de GOAL_KICK mede o jogo a recomeçar.
 - `golos_origem.js [segundos] [semente]` — de onde vêm os golos: distância e tipo do remate, ponto de entrada na baliza, estado e distância do guarda-redes, e os contadores ao lado dos remates REAIS (os que passaram pelo `tipoDeRemate`).

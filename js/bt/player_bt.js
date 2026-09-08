@@ -2311,6 +2311,16 @@ function actHoldPosition(ctx) {
         }
 
         /*
+        SAIR A JOGAR TAMBÉM É PRESSA. Com a bola nas mãos do guarda-redes a
+        equipa tem oito segundos para se oferecer, e media-se 3.6 m/s de
+        velocidade média com 18% dos companheiros parados. A marca vem do
+        posicionamento (`saidaDeBolaPressa`, tickFinal em team_bt.js).
+        */
+        if (p.saidaDeBolaPressa && RepositionPace.bonusSaidaDeBola) {
+            p.speedMult *= RepositionPace.bonusSaidaDeBola;
+        }
+
+        /*
         A RECUPERAÇÃO PARA TRÁS É SPRINT, não trote (relato: "a defesa está
         recuando muito devagar e está se embolando com o meio campo").
 

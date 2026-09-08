@@ -2863,6 +2863,49 @@ const PosicionamentoAI = {
                 }
             }
         }
+        /*
+        NINGUÉM ATRÁS DO GUARDA-REDES QUANDO ELE TEM A BOLA NA MÃO.
+
+        Relato, com captura: "tem jogadores ficando atrás do goleiro, entre o
+        goleiro e seu próprio gol; eles têm que ter um pouco mais de agilidade
+        para dar opções". Medido em 74 min, durante os segundos de posse dele:
+        1.24 companheiros atrás dele por leitura, pior caso 8, e 46% das
+        leituras com pelo menos um.
+
+        A causa é o bloco: ele é desenhado à volta da BOLA, e com a bola dentro
+        da pequena área o rectângulo desce até `margemFundoDoBloco` da linha de
+        fundo — quem calha no terço de trás dele fica literalmente entre o
+        guarda-redes e a baliza, onde não há passe nenhum para dar.
+
+        O piso é a linha DELE mais `SaidaDeBolaShape.margemAFrente`, e é o
+        ÚLTIMO a falar: posto mais acima, o `restDefense` (que prende os mais
+        recuados atrás da BOLA — e a bola está na mão dele), a separação do
+        lateral com o meia-ala e o clamp do lateral do lado contrário voltavam a
+        empurrá-los para trás. Medido com o piso a meio do pipeline: 1.24 -> 1.69
+        companheiros atrás dele, ou seja, PIOR do que não o ter.
+
+        Cede a quem tem tarefa de bola, como os outros limites.
+        */
+        const S_GK = (typeof SaidaDeBolaShape !== 'undefined') ? SaidaDeBolaShape : null;
+        if (S_GK && !temTarefaDeBola && p.role !== 'gk' && typeof Match !== 'undefined') {
+            const meuGK = (p.team === 'TeamA') ? Match.players[0] : Match.opponents[0];
+            const seguraABola = meuGK && meuGK.model &&
+                ((Match.gkHoldingBall && Match.gkHoldingBall[p.team]) || Match.ballCarrier === meuGK);
+            if (seguraABola) {
+                const piso = meuGK.model.position.z * p.dirZ + S_GK.margemAFrente;
+                if (sepZ * p.dirZ < piso) sepZ = piso * p.dirZ;
+                /*
+                E VÃO DEPRESSA: os oito segundos que ele pode segurar a bola são
+                o tempo TODO que a equipa tem para se oferecer. A pressa é lida
+                no nível 3 (ver RepositionPace.bonusSaidaDeBola).
+                */
+                p.saidaDeBolaPressa = true;
+            } else {
+                p.saidaDeBolaPressa = false;
+            }
+        }
+
+
         molaX = sepX;
         finalZ = sepZ;
         const tx = THREE.MathUtils.clamp(molaX, -34, 34);
@@ -2915,7 +2958,13 @@ const PosicionamentoAI = {
             const semTarefaDeBola = !p.hasBall &&
                 !(bb && (bb.chaser === p || bb.intercetor === p)) &&
                 !(typeof Match !== 'undefined' && Match.intendedReceiver === p);
-            if (semTarefaDeBola) {
+            /*
+            E NINGUÉM ESPERA PELO POSTO ENQUANTO O GUARDA-REDES TEM A BOLA NA
+            MÃO: a espera congela o alvo na posição ACTUAL, e quem estava atrás
+            dele ficava lá os oito segundos todos. É o lance em que a equipa
+            tem mais pressa, não menos.
+            */
+            if (semTarefaDeBola && !p.saidaDeBolaPressa) {
                 esperar = esperarPeloSlot({
                     px: p.model.position.x, pz: p.model.position.z,
                     slotX: tx, slotZ: tz,
@@ -2949,6 +2998,21 @@ const PosicionamentoAI = {
         o alvo cru deixava passar exactamente o caso que a regra existe para
         apanhar.
         */
+        /*
+        E O PISO DA SAÍDA DE BOLA OUTRA VEZ, DEPOIS DO ALISAMENTO — pela mesma
+        razão que a transição defensiva o repete: o lerp traz o alvo do frame
+        anterior, que era o de trás, e arrasta-o durante mais de um segundo.
+        Medido só com o corte antes do alisamento: o alvo alisado continuava
+        atrás dele em quase um jogador por leitura.
+        */
+        if (p.saidaDeBolaPressa && typeof SaidaDeBolaShape !== 'undefined' && p.model) {
+            const meuGK = (p.team === 'TeamA') ? Match.players[0] : Match.opponents[0];
+            if (meuGK && meuGK.model) {
+                const piso = meuGK.model.position.z * p.dirZ + SaidaDeBolaShape.margemAFrente;
+                if (p.dynamicTarget.z * p.dirZ < piso) p.dynamicTarget.z = piso * p.dirZ;
+            }
+        }
+
         const B_TR = (typeof BlockShape !== 'undefined') ? BlockShape : null;
         if (B_TR && B_TR.transicaoDefensivaRecuaSo && bb &&
             bb.state === TeamState.TRANSITION_DEFENSIVE &&

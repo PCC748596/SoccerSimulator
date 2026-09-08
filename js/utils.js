@@ -1836,6 +1836,25 @@ function maiorToqueSeguro(px, pz, dirX, dirZ, velPortador, leadInicial, adversar
         let seguro = true;
         for (let i = 0; i < adversarios.length; i++) {
             const o = adversarios[i];
+            /*
+            QUEM VEM ATRAS NAO DISPUTA UMA BOLA ADIANTADA.
+
+            O teste media a distancia em linha recta ao ponto onde a bola vai
+            ficar, e por isso um defesa colado as costas — que para la chegar
+            teria de passar POR CIMA do portador, a correr mais depressa do que
+            ele — ganhava sempre a corrida. Medido em 74 min: 76% das decisoes
+            de toque cortadas a zero, e no caso do relato (alguem atras a menos
+            de 6 m e o campo aberto a frente) 1245 de 1280. O portador levava a
+            bola colada ao pe exactamente quando devia adianta-la para ganhar
+            velocidade.
+
+            `proj` e a projeccao do adversario na direccao da corrida: negativo
+            e atras do ombro dele. Esses saem da disputa; quem esta a frente ou
+            ao lado continua a contar como contava.
+            */
+            const proj = (o.x - px) * dirX + (o.z - pz) * dirZ;
+            if (proj < (C.disputaProjMin !== undefined ? C.disputaProjMin : 0)) continue;
+
             const tDele = Math.hypot(o.x - ax, o.z - az) / vAdv;
             if (tMeu + margem >= tDele) { seguro = false; break; }
         }
