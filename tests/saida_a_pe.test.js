@@ -4,7 +4,7 @@ DEPOIS DO GOLO OS JOGADORES VOLTAM A PÉ AO MEIO-CAMPO.
 O relato foi "não caminham para o centro do campo, são teletransportados de uma
 vez". A sequência do golo (`goalSequenceStage`) sempre teve um estágio à espera
 de "toda a gente perto da posição" — mas NINGUÉM lhes escrevia essa posição: o
-nível 2 não corre fora do PLAY (`nivelActivo`), e o ramo `BolaParada` da árvore
+nível 2 não corre fora do PLAY (`nivel2Activo`), e o ramo `BolaParada` da árvore
 põe toda a gente em IDLE no estado GOAL. O teste de chegada dava sempre falso,
 o timeout de 3 s passava, e o `setupKickoff` colocava os 22 à mão.
 
@@ -17,6 +17,19 @@ Corre com: node tests/saida_a_pe.test.js
 */
 const test = require('node:test');
 const assert = require('node:assert');
+
+/*
+SEMENTE FIXA. Sem isto o teste corre com o `Math.random` do Node e uma medição
+de jogo — que depende de 600 s de simulação antes do lance — passa ou falha
+conforme o dia. O mulberry32 é o mesmo das ferramentas em tools/headless.
+*/
+const mulberry32 = (a) => () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+Math.random = mulberry32(1000);
 
 require('../tools/headless/harness.js');
 

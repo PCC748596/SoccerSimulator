@@ -1070,40 +1070,38 @@ Object.assign(Match, {
             player_bt.js) — sem essa excepção o BT reescrevia o estado para
             IDLE no frame seguinte e ninguém saía do sítio.
             */
-            const capGK = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
-            attackingPlayers.forEach(p => {
-                if (p.role === 'gk') return;
-                p.hasBall = false;
+            /*
+            AS DUAS EQUIPAS À VOLTA DO MEIO-CAMPO — que é onde um tiro de meta
+            se joga.
 
-                const atkZ = p.baseTarget.z * p.dirZ;
-                const tecto = Math.max(atkZ, capGK);
-                const novoAtkZ = Math.min(atkZ + 6.0, tecto);
+            O que se via (e o pedido: "um time deveria estar no meio campo e o
+            time do batedor um pouco antes"): os 22 amontoados numa ponta.
+            Medido com `tools/headless/tiro_de_meta.js`, a profundidade no
+            referencial de ataque de quem bate — 0 é o meio-campo:
 
-                p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, novoAtkZ * p.dirZ);
-                p.speedMult = 4.0;
-                p.fsm.changeState('MOVE_TO_POS');
-            });
+                equipa que bate     média -10.1   (do -29.7 ao +17.2)
+                equipa que recebe   média +11.7   (do -17.9 ao +35.1)
+
+            A equipa que RECEBE estava enfiada na PRÓPRIA área (+35 é o risco
+            da grande área dela), a 60 m da bola, porque o `nivel2Activo()`
+            deixava o nível 2 ligado no GOAL_KICK e o bloco dela é o bloco de
+            quem NÃO tem a bola: ancorado à própria baliza. Um tiro de meta não
+            é isso — quem recebe sobe ao meio-campo à espera da bola longa.
+
+            Agora cada equipa é DISTRIBUÍDA numa faixa: a forma da formação
+            (a ordem em profundidade e a largura em x) mantém-se, só se
+            re-escala a profundidade para dentro da faixa. E o GOAL_KICK saiu
+            do `nivel2Activo()`, senão o bloco reescrevia isto no frame
+            seguinte.
+            */
+            this.formaDoTiroDeMeta(team, true);
+
             defendingPlayers.forEach(p => {
                 if (p.role === 'gk') return;
-                // Empurra para fora da grande área adversária.
-                const dentroArea = Area.contem(p.model.position.x, p.model.position.z, linhaZ);
-                if (dentroArea) {
+                // Ninguém DENTRO da grande área de quem bate — é regra do lance.
+                if (Area.contem(p.model.position.x, p.model.position.z, linhaZ)) {
                     p.model.position.z = linhaZ + attDir * (Area.profundidade + 1.0);
                 }
-
-                /*
-                Antes ficavam SET_PIECE_WAIT logo aqui — que zera a velocity
-                todos os frames e só vira para a bola, nunca anda. Quem já
-                estava fora da área ficava plantado onde a bola saiu, sem se
-                reorganizar (ver screenshot: adversário todo desalinhado no
-                tiro de meta). MOVE_TO_POS sobrevive ao BolaParada do
-                PlayerBT durante GOAL_KICK (ver esperarLance em
-                player_bt.js) — usa-se o mesmo caminho de quem bate, só que
-                para a posição de formação normal.
-                */
-                p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, p.baseTarget.z);
-                p.speedMult = 4.0;
-                p.fsm.changeState('MOVE_TO_POS');
             });
         }
     },
@@ -1174,36 +1172,75 @@ Object.assign(Match, {
         this.setupSetPiece('CORNER_KICK', team);
     },
 
+    /*
+    A FORMA DO TIRO DE META — as duas equipas à volta do meio-campo.
+
+    Era escrita em DOIS sítios com a mesma conta (`setupSetPiece` uma vez, e o
+    `updateGoalKickWait` outra vez por frame). Mudar a do setup não mudava
+    nada: a do frame seguinte mandava. Agora é esta função, chamada pelos dois.
+
+    `mover` só é verdade na montagem — daí em diante actualiza-se o alvo de
+    quem ainda vem a caminho, sem mexer no estado de quem já chegou.
+
+    As faixas (GoalKickShape, config/player_behavior.js) estão no referencial
+    de ATAQUE DE QUEM BATE; quem recebe usa-as com o sinal trocado, porque a
+    distribuição trabalha no referencial de cada jogador.
+    */
+    formaDoTiroDeMeta: function (team, mover) {
+        const S = (typeof GoalKickShape !== 'undefined') ? GoalKickShape : {
+            bateDe: -34, bateAte: 2, recebeDe: -28, recebeAte: 18
+        };
+        const bate = (team === 'TeamA') ? this.players : this.opponents;
+        const recebe = (team === 'TeamA') ? this.opponents : this.players;
+        const attDir = (team === 'TeamA') ? 1 : -1;
+        const linhaZ = -attDir * LINHA_FUNDO;      // linha de fundo de quem bate
+
+        const distribuir = (lista, deAtk, ateAtk) => {
+            const campo = lista.filter(p => p.role !== 'gk');
+            if (!campo.length) return;
+            const zs = campo.map(p => p.baseTarget.z * p.dirZ);
+            const zMin = Math.min(...zs), zMax = Math.max(...zs);
+            const span = (zMax - zMin) || 1;
+            campo.forEach(p => {
+                if (!mover && p.fsm.currentState !== 'MOVE_TO_POS') return;
+                p.hasBall = false;
+                const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;   // 0 = o mais recuado
+                const novoAtk = deAtk + (ateAtk - deAtk) * v;
+                p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, novoAtk * p.dirZ);
+
+                // Ninguém com o alvo dentro da grande área de quem bate.
+                if (p.team !== team && Area.contem(p.dynamicTarget.x, p.dynamicTarget.z, linhaZ)) {
+                    p.dynamicTarget.z = linhaZ + attDir * (Area.profundidade + 1.0);
+                }
+
+                p.speedMult = 4.0;
+                if (mover) p.fsm.changeState('MOVE_TO_POS');
+                else if (p.model.position.distanceTo(p.dynamicTarget) < 1.5) {
+                    p.fsm.changeState('SET_PIECE_WAIT');
+                }
+            });
+        };
+
+        /*
+        Quem BATE fica um pouco antes do meio-campo: os defesas à saída da área
+        (para receber curto) e os avançados na linha do meio-campo. Quem RECEBE
+        sobe: o homem mais adiantado a espreitar a saída curta à entrada da
+        área, e a linha de trás uns metros atrás do meio-campo, que é onde a
+        bola longa vai cair.
+        */
+        distribuir(bate, S.bateDe, S.bateAte);
+        // Sinal trocado: o que para quem bate é -28 (a pressionar a área dele)
+        // é, para quem recebe, +28 no referencial DELE.
+        distribuir(recebe, -S.recebeAte, -S.recebeDe);
+    },
+
     updateGoalKickWait: function (dt) {
         if (this.state !== 'GOAL_KICK') return;
 
         const team = this.setPieceTaker ? this.setPieceTaker.team : null;
         const atacantes = (team === 'TeamA') ? this.players : this.opponents;
 
-        // Recuperar a linha defensiva caso a equipe batedora mude de tática
-        const capGK = (typeof TeamShape !== 'undefined' && typeof Tatics !== 'undefined' && TeamShape.linhaDefensiva) 
-            ? (TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium)
-            : -18.25;
-
-        this.players.concat(this.opponents).forEach(p => {
-            if (p.role === 'gk') return;
-            if (p.fsm.currentState === 'MOVE_TO_POS') {
-                const isAtacante = (p.team === team);
-                
-                if (isAtacante) {
-                    const atkZ = p.baseTarget.z * p.dirZ;
-                    const tecto = Math.max(atkZ, capGK);
-                    const novoAtkZ = Math.min(atkZ + 6.0, tecto);
-                    p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, novoAtkZ * p.dirZ);
-                } else {
-                    p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, p.baseTarget.z);
-                }
-
-                if (p.model.position.distanceTo(p.dynamicTarget) < 1.5) {
-                    p.fsm.changeState('SET_PIECE_WAIT');
-                }
-            }
-        });
+        if (team) this.formaDoTiroDeMeta(team, false);
 
         if (!this.golKickProntos) {
             const todosProntos = atacantes.every(p => {

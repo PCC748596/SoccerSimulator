@@ -861,7 +861,7 @@ Object.assign(Match, {
 
     O `goalSequenceStage` sempre esperou que toda a gente estivesse "proxima da
     posicao" — mas ninguem lhes escrevia essa posicao: o nivel 2 nao corre fora
-    do PLAY (ver `nivelActivo`), o ramo `BolaParada` da arvore poe-nos em IDLE
+    do PLAY (ver `nivel2Activo`), o ramo `BolaParada` da arvore poe-nos em IDLE
     no estado GOAL, e o teste de chegada dava sempre falso. Passados os 3 s do
     timeout o `setupKickoff` teletransportava os 22.
 

@@ -17,7 +17,7 @@ o centro do campo. São teletransportados de uma vez"*.
 
 O `goalSequenceStage` (match_physics.js) sempre teve um estágio 1 à espera de
 "toda a gente perto da posição". **Só que ninguém lhes escrevia essa posição:**
-o nível 2 não corre fora do PLAY (`nivelActivo`), e o ramo `BolaParada` da
+o nível 2 não corre fora do PLAY (`nivel2Activo`), e o ramo `BolaParada` da
 árvore põe toda a gente em IDLE no estado GOAL. O teste de chegada dava sempre
 falso, o timeout de 3 s passava, e o `setupKickoff` colocava os 22 à mão com
 `model.position.set`.
@@ -94,12 +94,81 @@ aproxima a defesa da bola, alargar só o lateral não.
 Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
 `tests/nivel2_prioridades.test.js`.
 
+#### O tiro de meta com as duas equipas na mesma ponta
+
+Relato: *"esse é o ajuste do tiro de meta, completamente sem sentido — um time
+deveria estar no meio campo e o time do batedor um pouco antes"*.
+
+Medido (`tools/headless/tiro_de_meta.js`), a profundidade no referencial de
+ataque de quem bate, com 0 no meio-campo:
+
+    equipa que bate     média  -8.9   (do -29.7 ao +20.8)
+    equipa que recebe   média +12.6   (do -19.7 ao +35.6)   <- dentro da PRÓPRIA área
+
+Duas causas, e a segunda tornava a primeira invisível:
+
+1. **O `nivel2Activo()` incluía o GOAL_KICK.** O bloco de quem NÃO tem a bola
+   está ancorado à própria baliza, portanto quem recebia o tiro de meta ia todo
+   para a sua área — a 60 m da bola. Saiu do nível 2, como o canto e o livre.
+2. **A forma estava escrita em DOIS sítios com a mesma conta** — o
+   `setupSetPiece` uma vez e o `updateGoalKickWait` outra vez POR FRAME. Mudar a
+   do setup não mudava nada: a do frame seguinte mandava. (É o mesmo defeito da
+   posição de saída, no mesmo dia, em ficheiros diferentes.) Agora é
+   `Match.formaDoTiroDeMeta`, chamada pelos dois.
+
+Cada equipa é distribuída numa FAIXA (`GoalKickShape`), mantendo a ordem em
+profundidade e o x da formação:
+
+    equipa que bate     média -16.5   (do -32.6 ao +3.5)
+    equipa que recebe   média  -0.3   (do -26.6 ao +19.2)
+
+Teste: `tests/tiro_de_meta_forma.test.js`.
+
+#### Os golos: o "1.82" da sessão anterior era UMA corrida com UM golo
+
+O varrimento que fixou a mola de coesão dava 1.82 golos/90 para `0.08/7.5/0.76`
+e 4.63 para `0.03/4.5/0.88`. Repetido agora com sementes fixas
+(`tools/headless/largura_golos.js`, mulberry32, 600 s por corrida):
+
+    config                    golos/90 por semente                  média
+    0.08/7.5 (actual)   5.51 3.66 7.39 7.35 5.48 11.19 5.51 7.35    6.68
+    0.03/4.5 (solta)    7.39 3.66 7.39 1.82 ...                     ~5
+
+**Uma corrida de 600 s tem 1 a 6 golos.** O 1.82 é exactamente "1 golo em 49
+min" — e apareceu-me aqui na mola SOLTA, a configuração a que o varrimento
+tinha atribuído 4.63. A tabela da sessão anterior não distingue as
+configurações: distingue o ruído. A relação largura↔golos pode existir, mas
+não está medida.
+
+O número honesto, medido em 8 sementes e igual antes e depois das correcções
+desta sessão (e igual no commit anterior, `19c81d3`): **6.7 golos/90** contra os
+2.52 do alvo.
+
+A cadeia, medida em três sementes (`tools/headless/golos_origem.js` e
+`gk_defesa.js`):
+
+- **remates 13-23/90** — dentro do alvo (26);
+- **golos por remate 17-45%**, contra os ~10% reais. **É aqui que está tudo**:
+  o número de remates está certo, a conversão é que é o dobro ou o triplo;
+- os golos entram a **2.3-2.5 m do eixo e a 0.6-0.7 m de altura** (canto baixo),
+  de remates de **15-20 m**, todos de CF;
+- no instante em que a bola passa a linha o guarda-redes está a **5.4 m** dela,
+  em `mergulho`: precisava de 3.0 m de deslocamento lateral e andou 2.1 m.
+
+E um contador que não bate certo, no caminho: **`remates.tentados` conta 26-30
+quando só saíram 11-18 do pé.** O `initiateShoot` incrementa no ARRANQUE do
+gesto e o `tipoDeRemate` só corre no contacto — um gesto interrompido conta como
+remate. É a outra metade do "metade dos remates não vem do ramo de remate" que
+ficou por explicar na sessão anterior, e explica também porque é que o mesmo
+lote dá "4 golos em 4 remates enquadrados".
+
 #### Por explicar, e medido esta sessão
 
-- **O headless dá 6.5 golos/90 nas quatro sementes**, com e sem estas
-  correcções, contra os 1.82 do varrimento da sessão anterior e os ~2.5 do
-  alvo. Ou o número da sessão anterior foi medido noutras condições, ou entrou
-  uma regressão entretanto. É a primeira coisa a puxar.
+- **Conversão a 2-3x o real, com o volume de remates certo.** As duas pontas
+  medidas: o guarda-redes não chega a bolas a 3 m dele (mergulho curto, ou
+  tardio) e a pontaria acerta demasiadas vezes o canto baixo. Nenhuma das duas
+  foi tocada — é o fio seguinte, e agora com ferramenta.
+- **`remates.tentados` conta gestos, não remates** (ver acima).
 
 ### Sessão de 8 de Setembro de 2026 — quatro lotes, e o preço de calibrar por modelo
 
@@ -5781,6 +5850,9 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `tiro_de_meta.js [quantos]` — força N tiros de meta e mede a profundidade das duas equipas no referencial de ataque de quem bate. Mede COM O LANCE DE PÉ: deixar o estado sair de GOAL_KICK mede o jogo a recomeçar.
+- `golos_origem.js [segundos] [semente]` — de onde vêm os golos: distância e tipo do remate, ponto de entrada na baliza, estado e distância do guarda-redes, e os contadores ao lado dos remates REAIS (os que passaram pelo `tipoDeRemate`).
+- `gk_defesa.js [segundos] [semente]` — por remate: quanto tempo o guarda-redes teve, quantos metros de lado precisava, quantos andou, e a que distância a mão mais perto passou da bola.
 - `gk_aglomeracao.js` / `gk_aglomeracao_real.js` — aglomeração à volta do guarda-redes que segura a bola. O `_real` mede só apanhadas de jogo e SÓ enquanto a bola está nas mãos: incluir o instante em que ele larga mede o jogo a recomeçar e leva a conclusões erradas (aconteceu).
 
 A instrumentação vive nestes scripts, a embrulhar as funções globais — o código

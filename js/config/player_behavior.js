@@ -703,6 +703,41 @@ cabeçada dá; se ele estiver mais longe, a bola fica pelo caminho, como na
 vida real.
 */
 
+/*
+TIRO DE META: A FAIXA DE CADA EQUIPA.
+
+Relato: "esse é o ajuste do tiro de meta, completamente sem sentido — um time
+deveria estar no meio campo e o time do batedor um pouco antes".
+
+Medido antes (`tools/headless/tiro_de_meta.js`), a profundidade no referencial
+de ataque de quem bate, onde 0 é o meio-campo e -35.5 o risco da grande área
+dele:
+
+    equipa que bate     média -10.1   (do -29.7 ao +17.2)
+    equipa que recebe   média +11.7   (do -17.9 ao +35.1)
+
+Quem RECEBIA estava dentro da própria área, a 60 m da bola: o nível 2 continuava
+ligado no GOAL_KICK e o bloco de quem não tem a bola está ancorado à própria
+baliza. Ver `nivel2Activo` em match_loop.js.
+
+Os quatro números são os EXTREMOS da faixa em que cada equipa é distribuída,
+sempre no referencial de ataque de QUEM BATE. A forma da formação não se perde:
+mantém-se a ordem em profundidade e o x, só se re-escala a profundidade.
+
+    bateDe/bateAte      dos defesas à saída da área até aos avançados na
+                        linha do meio-campo
+    recebeDe/recebeAte  do primeiro homem à entrada da área dele (fora da
+                        grande área, que é regra do lance) até à linha de trás
+                        uns metros atrás do meio-campo, que é onde a bola
+                        longa vai cair
+*/
+const GoalKickShape = {
+    bateDe: -34.0,
+    bateAte: 2.0,
+    recebeDe: -28.0,
+    recebeAte: 18.0
+};
+
 const ThrowInModel = {
     alcanceMin: 9.0,
 

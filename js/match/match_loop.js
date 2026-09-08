@@ -949,11 +949,19 @@ Object.assign(Match, {
     nivel2Activo: function () {
         // THROW_IN incluído: só o batedor fica parado na linha, os outros dez
         // continuam a mover-se para dar e tapar linhas de reposição.
-        return this.state === 'PLAY' || this.state === 'GOAL_KICK' ||
-            this.state === 'THROW_IN';
+        return this.state === 'PLAY' || this.state === 'THROW_IN';
         // FREE_KICK e PENALTY ficam de FORA: ali as posições são impostas pelo
         // setupSetPiece (barreira, meia-lua) e o nível 2 desfá-las-ia no frame
         // seguinte, como acontece no canto.
+        /*
+        E o GOAL_KICK saiu daqui, pelo mesmo motivo. O bloco de quem NÃO tem a
+        bola está ancorado à própria baliza: com a bola na quina da pequena
+        área do outro lado do campo, a equipa que recebe o tiro de meta ia toda
+        para a PRÓPRIA área — medido, +11.7 m de profundidade média (o mais
+        recuado no risco da grande área dela), a 60 m da bola. Um tiro de meta
+        joga-se à volta do meio-campo, e quem o desenha é o `setupSetPiece`
+        (ver GoalKickShape).
+        */
     },
 
     updateCrowd: function (dt) {

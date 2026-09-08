@@ -18,6 +18,19 @@ Corre com: node tests/laterais_largura.test.js
 const test = require('node:test');
 const assert = require('node:assert');
 
+/*
+SEMENTE FIXA. Sem isto o teste corre com o `Math.random` do Node e uma medição
+de jogo — que depende de 600 s de simulação antes do lance — passa ou falha
+conforme o dia. O mulberry32 é o mesmo das ferramentas em tools/headless.
+*/
+const mulberry32 = (a) => () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+Math.random = mulberry32(1000);
+
 require('../tools/headless/harness.js');
 
 const dt = 1 / 60;
