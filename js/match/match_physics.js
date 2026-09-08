@@ -311,6 +311,16 @@ Object.assign(Match, {
                 this.tempoParada = 0;
             }
             
+            /*
+            OS 22 VOLTAM A PE, e nao de um salto. O alvo tem de ser reescrito
+            todos os frames: no estado GOAL o nivel 2 nao corre e o ramo
+            `BolaParada` da arvore poe toda a gente em IDLE assim que apanha um
+            estado diferente de MOVE_TO_POS.
+            */
+            if (this.goalSequenceStage <= 1 && typeof this.caminharParaSaida === 'function') {
+                this.caminharParaSaida();
+            }
+
             if (this.goalSequenceStage === 0) {
                 // Estágio 0: A bola fica na baliza e a câmara foca a bola enquanto os jogadores se dirigem para as suas posições
                 this.tempoParada += this.delta;
@@ -337,32 +347,22 @@ Object.assign(Match, {
                 }
             } else if (this.goalSequenceStage === 1) {
                 this.tempoParada += this.delta;
-                // Espera todo mundo estar próximo da posição ou timeout breve
+                // Espera todo mundo estar próximo da posição ou timeout breve.
+                // O ponto é o MESMO que a caminhada persegue e que o
+                // setupKickoff usa (Match.posicaoDeSaida) — com duas contas
+                // diferentes o teste de chegada nunca fechava.
                 let allInPosition = true;
-                const margem = 1.5;
                 [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
                     list.forEach(p => {
-                        let targetZ, targetX = p.baseTarget.x;
-                        if (p.role === 'gk') {
-                            targetZ = -48 * dir;
-                            targetX = 0;
-                        } else {
-                            let z = p.baseTarget.z;
-                            if (p.role === 'def') {
-                                const cap = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
-                                z = cap * dir;
-                            }
-                            if (z * dir > -margem) z = -margem * dir;
-                            targetZ = z;
-                        }
-                        const distSq = p.model.position.distanceToSquared(_v1.set(targetX, ALTURA_BASE_Y, targetZ));
-                        if (distSq > 9.0) { // Raio de tolerância (3m)
+                        const alvo = this.posicaoDeSaida(p, dir);
+                        const distSq = p.model.position.distanceToSquared(_v1.set(alvo.x, ALTURA_BASE_Y, alvo.z));
+                        if (distSq > TOLERANCIA_SAIDA * TOLERANCIA_SAIDA) {
                             allInPosition = false;
                         }
                     });
                 });
 
-                if (allInPosition || this.tempoParada > 3.0) {
+                if (allInPosition || this.tempoParada > PRAZO_CAMINHADA_SAIDA) {
                     this.tempoParada = 0;
                     this.goalSequenceStage = 2;
                 }

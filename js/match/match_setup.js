@@ -827,6 +827,133 @@ Object.assign(Match, {
         this.assignFormations();
     },
 
+    /*
+    ONDE CADA JOGADOR SE POE NA SAIDA DE BOLA.
+
+    Uma so conta, lida por tres sitios: a caminhada de volta ao meio-campo
+    depois do golo (goalSequenceStage, em match_physics.js), o teste de "ja
+    chegaram?" dessa caminhada, e o proprio setupKickoff. Estava escrita duas
+    vezes, e por isso a caminhada podia apontar para um ponto e a montagem do
+    kickoff para outro — o jogador andava e depois era teletransportado na
+    mesma.
+
+    `dir` e o sentido de ataque da equipa: o campo de defesa e o lado oposto,
+    e e por isso que o clamp usa z*dir <= -margem.
+    */
+    posicaoDeSaida: function (p, dir) {
+        const margem = 1.5;
+        if (p.role === 'gk') return { x: 0, z: -48 * dir };
+
+        let z = p.baseTarget.z;
+        if (p.role === 'def') {
+            // Linha de defesa respeita o ajuste "Linha Defensiva" do painel
+            // tambem na saida, nao so durante o jogo — TeamShape.linhaDefensiva
+            // esta no referencial de ataque, por isso converte para mundo por *dir.
+            const cap = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
+            z = cap * dir;
+        }
+        if (z * dir > -margem) z = -margem * dir;   // força para o campo de defesa
+        return { x: p.baseTarget.x, z: z };
+    },
+
+    /*
+    A CAMINHADA DE VOLTA AO MEIO-CAMPO, depois do golo.
+
+    O `goalSequenceStage` sempre esperou que toda a gente estivesse "proxima da
+    posicao" — mas ninguem lhes escrevia essa posicao: o nivel 2 nao corre fora
+    do PLAY (ver `nivelActivo`), o ramo `BolaParada` da arvore poe-nos em IDLE
+    no estado GOAL, e o teste de chegada dava sempre falso. Passados os 3 s do
+    timeout o `setupKickoff` teletransportava os 22.
+
+    Aqui escreve-se o alvo TODOS OS FRAMES enquanto o golo esta a ser
+    festejado, e o MOVE_TO_POS leva-os la a pe. Quem sobrar longe no fim
+    continua a ser colocado a mao pelo setupKickoff — a saida nao pode ficar
+    refem de um jogador preso.
+    */
+    caminharParaSaida: function () {
+        const plano = this.planoDeSaida(this.nextKickoffTeam);
+        const raioCirculo = 9.15 + 0.5;
+
+        [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+            list.forEach(p => {
+                if (!p || p.role === 'gk') return;   // o GK volta pela lerp do updateGK
+
+                let alvo;
+                if (plano && p === plano.taker) alvo = plano.takerPos;
+                else if (plano && p === plano.apoio) alvo = plano.apoioPos;
+                else {
+                    alvo = this.posicaoDeSaida(p, dir);
+                    /*
+                    O CÍRCULO CENTRAL É DE QUEM DÁ A SAÍDA. Quem não a dá é
+                    empurrado para fora dele — a mesma conta do setupKickoff,
+                    feita aqui para ele CAMINHAR para fora em vez de ser
+                    empurrado no último frame.
+                    */
+                    if (plano && p.team !== plano.team) {
+                        const d = Math.hypot(alvo.x, alvo.z);
+                        if (d < raioCirculo && d > 0.001) {
+                            const k = raioCirculo / d;
+                            alvo = { x: alvo.x * k, z: alvo.z * k };
+                        }
+                    }
+                }
+
+                if (!p.dynamicTarget) p.dynamicTarget = new THREE.Vector3();
+                p.dynamicTarget.set(alvo.x, ALTURA_BASE_Y, alvo.z);
+                p.hasBall = false;
+                if (p.fsm.currentState !== 'MOVE_TO_POS') p.fsm.changeState('MOVE_TO_POS');
+            });
+        });
+    },
+
+    /*
+    QUEM DÁ A SAÍDA, E ONDE — decidido UMA vez e guardado.
+
+    O batedor e o apoio eram escolhidos dentro do `setupKickoff`, no instante em
+    que a bola volta ao centro: a caminhada de volta (acima) não tinha como
+    saber quem eles eram e mandava-os para o posto da formação, de onde eram
+    depois colocados à mão no círculo. Eram os dois únicos saltos que sobravam
+    da caminhada — medidos até 21 m.
+
+    O sorteio do apoio (a posição à volta do batedor) também tem de ser feito
+    uma vez só: sorteado outra vez na montagem, o ponto mudava debaixo dos pés
+    de quem já lá tinha chegado.
+
+    `equipa` a null significa "ainda não há equipa decidida" (arranque de jogo,
+    intervalo) — aí não há plano nenhum e toda a gente vai para o posto.
+    */
+    planoDeSaida: function (equipa) {
+        if (!equipa) return null;
+        if (this.saidaPlano && this.saidaPlano.team === equipa) return this.saidaPlano;
+
+        const startA = (equipa === 'TeamA');
+        const takerList = startA ? this.players : this.opponents;
+        const attDir = startA ? 1 : -1;
+
+        const atacantes = takerList.filter(p => p.role === 'atk');
+        const taker = atacantes[0] || takerList.find(p => p.role !== 'gk');
+
+        // Apoio sorteado entre o outro atacante e os meio-campistas — cada
+        // saída escolhe um companheiro diferente, não sempre o mesmo.
+        const candidatosApoio = takerList.filter(p => p !== taker && (p.role === 'atk' || p.role === 'mid'));
+        const apoio = candidatosApoio.length
+            ? candidatosApoio[Math.floor(Math.random() * candidatosApoio.length)]
+            : takerList.find(p => p.role === 'mid');
+
+        this.saidaPlano = {
+            team: equipa,
+            startA: startA,
+            attDir: attDir,
+            taker: taker,
+            apoio: apoio,
+            // Encostado à bola (~0.4 m), do lado do campo dele.
+            takerPos: { x: 0, z: attDir * 0.4 },
+            // Perto do batedor, mas nunca no mesmo sítio duas saídas seguidas.
+            apoioPos: { x: (Math.random() - 0.5) * 6, z: -attDir * (3 + Math.random() * 3) }
+        };
+        return this.saidaPlano;
+    },
+
     assignFormations: function () {
         let compMult = 0.8;
         if (Tatics.compactness) {
@@ -937,13 +1064,19 @@ Object.assign(Match, {
 
         this.ball.position.set(0, BallPhysics.raio, 0);
 
-        this.players[0].model.position.set(0, ALTURA_BASE_Y, -48);
-        lookAtBola(this.players[0].model, this.ball.position);
-        this.players[0].fsm.changeState('IDLE');
-
-        this.opponents[0].model.position.set(0, ALTURA_BASE_Y, 48);
-        lookAtBola(this.opponents[0].model, this.ball.position);
-        this.opponents[0].fsm.changeState('IDLE');
+        /*
+        Os guarda-redes voltam pela lerp do `updateGK` durante o estado GOAL
+        (ver alvoGkX/alvoGkZ em player.js), por isso valem-lhes as mesmas
+        contas dos outros: quem já lá está fica, quem ficou longe é colocado.
+        */
+        [{ gk: this.players[0], z: -48 }, { gk: this.opponents[0], z: 48 }].forEach(({ gk, z }) => {
+            if (!gk) return;
+            if (Math.hypot(gk.model.position.x, gk.model.position.z - z) > TOLERANCIA_SAIDA) {
+                gk.model.position.set(0, ALTURA_BASE_Y, z);
+            }
+            lookAtBola(gk.model, this.ball.position);
+            gk.fsm.changeState('IDLE');
+        });
 
         // Reset do estado por-instância de cada GK. Kickoff pode interromper
         // um GR a meio dos 8s de segurando — sem isto o gkHoldingBall ficava
@@ -992,22 +1125,27 @@ Object.assign(Match, {
 
         // dirA/dirB: sentido de ataque de cada equipa. O campo de defesa é o
         // lado oposto — por isso o clamp abaixo usa z*dir <= -margem.
-        const margem = 1.5;
         [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
             list.forEach(p => {
                 p.isCross = false;
                 if (p.role !== 'gk') {
-                    let z = p.baseTarget.z;
-                    if (p.role === 'def') {
-                        // Linha de defesa respeita o ajuste "Linha Defensiva"
-                        // do painel também na saída, não só durante o jogo —
-                        // TeamShape.linhaDefensiva está no referencial de
-                        // ataque, por isso converte para mundo por *dir.
-                        const cap = TeamShape.linhaDefensiva[Tatics.linhaDefensiva] ?? TeamShape.linhaDefensiva.medium;
-                        z = cap * dir;
-                    }
-                    if (z * dir > -margem) z = -margem * dir; // força para o campo de defesa
-                    p.model.position.set(p.baseTarget.x, ALTURA_BASE_Y, z);
+                    const alvo = this.posicaoDeSaida(p, dir);
+                    /*
+                    QUEM JA LA CHEGOU A PE FICA ONDE ESTA.
+
+                    Depois do golo os 22 caminham para ca (ver
+                    `caminharParaSaida`); teletransporta-los na mesma apagava a
+                    caminhada toda no ultimo frame — era o que se via. O
+                    `TOLERANCIA_SAIDA` e a folga que se aceita: dois metros ao
+                    lado do posto nao valem um salto, e ninguem esta em posicao
+                    irregular por causa deles (o campo de defesa ja e garantido
+                    pela caminhada, que persegue este mesmo ponto).
+
+                    Quem ficou longe — inicio de jogo, intervalo, um jogador
+                    preso — continua a ser colocado a mao.
+                    */
+                    const longe = Math.hypot(p.model.position.x - alvo.x, p.model.position.z - alvo.z) > TOLERANCIA_SAIDA;
+                    if (longe) p.model.position.set(alvo.x, ALTURA_BASE_Y, alvo.z);
                     p.hasBall = false;
                     // Sem isto ficavam com a rotação da jogada anterior — de
                     // costas, de lado, o que calhasse — em vez de virados
@@ -1024,32 +1162,34 @@ Object.assign(Match, {
             });
         });
 
-        // Sorteio do time que dá a saída, ou usa o time forçado.
-        const startA = forcingKickoffTeam ? (forcingKickoffTeam === 'TeamA') : (Math.random() < 0.5);
-        const takerList = startA ? this.players : this.opponents;
-        const attDir = startA ? 1 : -1;
-
-        const atacantes = takerList.filter(p => p.role === 'atk');
-        const taker = atacantes[0] || takerList.find(p => p.role !== 'gk');
-
-        // Apoio sorteado entre o outro atacante e os meio-campistas — cada
-        // saída escolhe um companheiro diferente, não sempre o mesmo.
-        const candidatosApoio = takerList.filter(p => p !== taker && (p.role === 'atk' || p.role === 'mid'));
-        const apoio = candidatosApoio.length
-            ? candidatosApoio[Math.floor(Math.random() * candidatosApoio.length)]
-            : takerList.find(p => p.role === 'mid');
+        /*
+        Sorteio do time que dá a saída, ou usa o time forçado. O plano (quem
+        bate, quem apoia e onde) pode JÁ existir da caminhada de volta ao
+        meio-campo — reutilizá-lo é o que evita que os dois sejam
+        teletransportados para o sítio para onde acabaram de andar.
+        */
+        const equipaDaSaida = forcingKickoffTeam || ((Math.random() < 0.5) ? 'TeamA' : 'TeamB');
+        const plano = this.planoDeSaida(equipaDaSaida);
+        const startA = plano.startA;
+        const attDir = plano.attDir;
+        const taker = plano.taker;
+        const apoio = plano.apoio;
 
         if (taker) {
             // Ele é quem dá a saída — pode ficar no campo de ataque, encostado
             // à bola (~0.4m), diferente do resto da equipa que fica atrás.
-            taker.model.position.set(0, ALTURA_BASE_Y, attDir * 0.4);
+            if (Math.hypot(taker.model.position.x - plano.takerPos.x,
+                taker.model.position.z - plano.takerPos.z) > TOLERANCIA_SAIDA) {
+                taker.model.position.set(plano.takerPos.x, ALTURA_BASE_Y, plano.takerPos.z);
+            }
             taker.fsm.changeState('IDLE');
         }
         if (apoio) {
-            // Posição varia a cada saída — perto do taker, mas nunca igual.
-            const apoioX = (Math.random() - 0.5) * 6;
-            const apoioDist = 3 + Math.random() * 3;
-            apoio.model.position.set(apoioX, ALTURA_BASE_Y, -attDir * apoioDist);
+            // Posição sorteada uma vez no plano — perto do taker, mas nunca igual.
+            if (Math.hypot(apoio.model.position.x - plano.apoioPos.x,
+                apoio.model.position.z - plano.apoioPos.z) > TOLERANCIA_SAIDA) {
+                apoio.model.position.set(plano.apoioPos.x, ALTURA_BASE_Y, plano.apoioPos.z);
+            }
             apoio.fsm.changeState('IDLE');
             lookAtBola(apoio.model, this.ball.position);
             // alvoDePasse mira o tacticalTarget do BT (posição da jogada
@@ -1097,6 +1237,8 @@ Object.assign(Match, {
         this.kickoffTeam = startA ? 'TeamA' : 'TeamB';
         this.kickoffPendingPassToDef = true;
         this.kickoffPassToDefTimer = KICKOFF_PRAZO_PASSE_DEFESA;
+        // O plano morre com a saída que o usou: a próxima escolhe de novo.
+        this.saidaPlano = null;
     },
 
     reporExpulsos: function () {

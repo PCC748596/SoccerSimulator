@@ -2654,7 +2654,6 @@ const PosicionamentoAI = {
                 }
             }
         }
-
         // Afastar companheiros de equipa no mesmo espaco (evitar o empilhamento tatico como o caso LB + LM + LW)
         if (p.role !== 'gk' && typeof Match !== 'undefined') {
             const companheiros = (p.team === 'TeamA' ? Match.players : Match.opponents).filter(c => c !== p && c.role !== 'gk' && c.postoBase);
@@ -2708,7 +2707,6 @@ const PosicionamentoAI = {
             // Suaviza a tentativa de espacamento mantendo-a dentro da faixa de accao original (nao empurrar alas pra lateral muito longe)
             // molaX ja estara com a forca aplicada
         }
-
         // Regra do lateral do lado oposto da jogada: fica entre a linha da bola e a linha dos zagueiros
         const isLateral = (p.pos === 'LB' || p.pos === 'RB' || p.pos === 'LWB' || p.pos === 'RWB');
         if (isLateral) {
@@ -2770,22 +2768,52 @@ const PosicionamentoAI = {
             const par = meus.find(o => o && o.pos === parPos && o.model);
             const meuLado = Math.sign(sepX) || 1;
             if (par && Math.sign(par.model.position.x) === meuLado) {
-                // EM X: por dentro do meia, com a separacao minima.
-                const xPar = par.model.position.x;
-                const sep = B_SEP.separacaoLateral || 6.0;
-                if (Math.abs(sepX) > Math.abs(xPar) - sep) {
-                    sepX = Math.sign(xPar || meuLado) * Math.max(0, Math.abs(xPar) - sep);
-                }
-                // EM Z: atras dele, para dar apoio.
+                // EM Z PRIMEIRO: atras dele, para dar apoio. A ordem importa —
+                // e o recuo que decide se ainda ha embolamento nenhum para
+                // desfazer em x (ver a guarda seguinte).
                 const recuo = B_SEP.recuoDeApoio || 0;
                 if (recuo > 0) {
                     const zParDir = par.model.position.z * p.dirZ;
                     const zMeuDir = sepZ * p.dirZ;
                     if (zMeuDir > zParDir - recuo) sepZ = (zParDir - recuo) * p.dirZ;
                 }
+
+                /*
+                EM X, E SO QUANDO ELES ESTAO MESMO NA MESMA FAIXA.
+
+                A regra corria sempre que o lateral estivesse a menos de `sep`
+                do meia EM X, sem olhar a profundidade nenhuma, e por isso
+                pagava-se a largura toda por um embolamento que nao existia:
+                medido, o alvo do lateral passava de 18.2 m para 10.4 m de |x|
+                por causa desta linha — a maior perda de largura do pipeline,
+                maior do que a mola de coesao.
+
+                Duas guardas:
+
+                  - `separacaoZ`: dois jogadores separados em profundidade nao
+                    estao embolados. Depois do recuo acima, o par ja esta
+                    `recuoDeApoio` metros afastado em z na maioria dos frames,
+                    e a regra deixa de disparar.
+                  - o PISO: quem cede e o lateral, mas nao ate ao eixo. Com o
+                    meia a fechar para dentro (|x| 5 m), o `Math.max(0, ...)`
+                    antigo mandava o lateral para x = 0 — era ele a acabar
+                    ENTRE os dois centrais, que e exactamente o que se via no
+                    ecra. O lateral abdica no maximo de `sep` metros do slot
+                    dele; se o meia esta mais para dentro do que isso, o
+                    fora-de-sitio e do meia.
+                */
+                const sep = B_SEP.separacaoLateral || 6.0;
+                const sepZmin = (typeof B_SEP.separacaoZLateral === 'number') ? B_SEP.separacaoZLateral : 6.0;
+                const dzPar = Math.abs(sepZ - par.model.position.z);
+                if (dzPar < sepZmin) {
+                    const xPar = par.model.position.x;
+                    const xSlot = p.slotTarget ? Math.abs(p.slotTarget.x) : Math.abs(sepX);
+                    const piso = Math.max(0, xSlot - sep);
+                    const alvo = Math.max(piso, Math.abs(xPar) - sep);
+                    if (Math.abs(sepX) > alvo) sepX = meuLado * alvo;
+                }
             }
         }
-
         /*
         E ABRE A LINHA DE PASSE (pedido).
 
@@ -2835,7 +2863,6 @@ const PosicionamentoAI = {
                 }
             }
         }
-
         molaX = sepX;
         finalZ = sepZ;
         const tx = THREE.MathUtils.clamp(molaX, -34, 34);

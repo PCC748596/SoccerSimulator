@@ -111,6 +111,9 @@ const Match = {
     // Segundos com a bola parada e sem dono (ver PerceptionModel.prazoBolaParada).
     tempoBolaParada: 0,
     kickoffTeam: null, kickoffPendingPassToDef: false, kickoffPassToDefTimer: 0,
+    // Quem bate a próxima saída e onde ficam ele e o apoio, decidido a tempo de
+    // eles caminharem para lá (ver Match.planoDeSaida).
+    saidaPlano: null,
 
     // Migração por eventos (ver EventBus) — parte 1: GK. Substitui o polling
     // directo de gk.gkEstado === 'apanhar'/'segurando' espalhado por vários

@@ -111,11 +111,24 @@ test('a separação lateral↔extremo tem número e um lado que cede', () => {
     */
     assert.ok(srcTeam.includes('B_SEP.separacaoLateral'), 'a separação da ala já não é aplicada');
     const ini = srcTeam.indexOf('B_SEP.separacaoLateral');
-    const corpo = srcTeam.slice(ini - 900, ini + 900);
+    const corpo = srcTeam.slice(ini - 3000, ini + 900);
     assert.ok(corpo.includes("p.pos === 'LB'"),
         'a regra deixou de dizer quem é que cede — sem isso os dois cedem, ou nenhum');
     assert.ok(corpo.includes('recuoDeApoio'),
         'o lateral deixou de ficar atrás do meia a dar apoio');
+
+    /*
+    E CEDER NÃO É DESAPARECER PARA O MEIO. A regra corria sem olhar à
+    profundidade e com piso zero: media-se o alvo do lateral a cair de 18.2 m
+    para 10.4 m de |x| — a maior perda de largura do pipeline — e com o meia
+    fechado o lateral acabava entre os dois centrais.
+    */
+    assert.ok(BlockShape.separacaoZLateral >= 3 && BlockShape.separacaoZLateral <= 12,
+        `separacaoZLateral=${BlockShape.separacaoZLateral}: fora do que separa duas faixas em profundidade`);
+    assert.ok(corpo.includes('separacaoZLateral'),
+        'a separação em x voltou a correr sem olhar à profundidade: o meia 20 m à frente já não está embolado com o lateral');
+    assert.ok(corpo.includes('piso'),
+        'o lateral voltou a poder ser empurrado até ao eixo — é assim que ele aparece entre os dois centrais');
 });
 
 test('o fora-de-jogo é um LIMITE, e é o último a falar', () => {

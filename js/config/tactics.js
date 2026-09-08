@@ -45,6 +45,22 @@ lance. Ver o ramo `kickoffActive` no Match.update.
 const APITO_ANTES_DA_SAIDA = 1.0;
 
 /*
+DEPOIS DO GOLO OS JOGADORES VOLTAM A PE AO MEIO-CAMPO.
+
+`TOLERANCIA_SAIDA` e a folga, em metros, dentro da qual o `setupKickoff` deixa
+o jogador onde ele chegou em vez de o colocar a mao no posto. Sem ela a
+caminhada era apagada no ultimo frame — andavam os segundos todos e apareciam
+teletransportados na mesma.
+
+`PRAZO_CAMINHADA_SAIDA` e o tempo maximo que se espera por eles (estagio 1 da
+sequencia do golo). Eram 3 s, e 3 s nao chegam para atravessar meio campo a
+correr: quem estava na area adversaria nunca chegava a tempo e caia sempre no
+teletransporte.
+*/
+const TOLERANCIA_SAIDA = 2.0;
+const PRAZO_CAMINHADA_SAIDA = 9.0;
+
+/*
 =============================================================================
 PRAZOS DE BOLA PARADA (DESENCRAVE / SEGURANÇA)
 =============================================================================
@@ -521,6 +537,19 @@ const BlockShape = {
     dentro dele quando sobe, que e a forma como o par funciona no futebol.
     */
     separacaoLateral: 6.0,
+
+    /*
+    E SO CONTA COMO EMBOLAMENTO SE ELES ESTIVEREM NA MESMA FAIXA.
+
+    A `separacaoLateral` corria sem olhar a profundidade: bastava o lateral
+    estar a menos de 6 m do meia EM X, mesmo com o meia 20 m a frente. Medido
+    em 240 s, o |x| do alvo do lateral: 18.2 m antes desta linha, 10.4 m
+    depois — mais largura perdida aqui do que na mola de coesao inteira.
+
+    `separacaoZLateral` e a distancia em z abaixo da qual os dois contam como
+    estando na mesma faixa. Acima dela nao ha nada para desfazer.
+    */
+    separacaoZLateral: 6.0,
     /*
     E EM PROFUNDIDADE: com o meio a ter a bola na ala, o lateral fica ATRAS do
     meia-lateral para lhe dar apoio (pedido). Ir para o lado dele nao e linha

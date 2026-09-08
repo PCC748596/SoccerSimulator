@@ -5,6 +5,102 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Agosto 2026)
 
+### Sessão de 8 de Setembro de 2026 (continuação) — a caminhada depois do golo, e onde a largura se perdia
+
+Dois relatos, os dois com a mesma forma: **o que se via em campo tinha uma
+causa concreta e mensurável, e não era a que a leitura do config sugeria.**
+
+#### Depois do golo ninguém caminhava — e a sequência já estava escrita para isso
+
+Relato: *"depois do gol, os jogadores do time que levou o gol não caminham para
+o centro do campo. São teletransportados de uma vez"*.
+
+O `goalSequenceStage` (match_physics.js) sempre teve um estágio 1 à espera de
+"toda a gente perto da posição". **Só que ninguém lhes escrevia essa posição:**
+o nível 2 não corre fora do PLAY (`nivelActivo`), e o ramo `BolaParada` da
+árvore põe toda a gente em IDLE no estado GOAL. O teste de chegada dava sempre
+falso, o timeout de 3 s passava, e o `setupKickoff` colocava os 22 à mão com
+`model.position.set`.
+
+Havia ainda uma segunda conta: o estágio 1 calculava a posição de chegada com
+código próprio, e o `setupKickoff` com outro — com dois pontos diferentes o
+teste nunca podia fechar.
+
+Agora há **uma** conta (`Match.posicaoDeSaida`), lida pelos três sítios, e uma
+`Match.caminharParaSaida` que reescreve o `dynamicTarget` de toda a gente todos
+os frames enquanto o golo é festejado (tem de ser todos os frames: o ramo
+`BolaParada` volta a pô-los em IDLE assim que apanha outro estado). O
+`setupKickoff` deixa onde está quem já lá chegou (`TOLERANCIA_SAIDA`, 2 m) e só
+coloca à mão quem ficou longe — arranque de jogo, intervalo, um jogador preso.
+
+O batedor e o apoio eram os dois saltos que sobravam: escolhidos DENTRO do
+`setupKickoff`, a caminhada não sabia quem eram e mandava-os para o posto da
+formação. `Match.planoDeSaida` decide-os (e sorteia a posição do apoio) a tempo
+de eles irem a pé.
+
+Medido em 900 s, com `tools/headless/saida_caminhada.js`:
+
+    reposição          movidos à mão   maior salto
+    antes                4-14 / 20        47.8 m
+    depois                  0 / 20         0.2 m
+
+Teste: `tests/saida_a_pe.test.js` (força um golo e mede o maior salto por
+frame). `PRAZO_CAMINHADA_SAIDA` subiu de 3 s para 9 s — 3 s não chegam para
+atravessar meio campo, e quem estava na área adversária nunca chegava a tempo.
+
+#### Os laterais: a largura perdia-se toda numa linha, e não na mola
+
+Relato: *"os laterais ainda estão fechando demais; às vezes ficam mais no meio
+que os zagueiros"*, com uma captura de um lateral a marcar o CF **entre os dois
+centrais**.
+
+A sessão anterior tinha tratado isto pela `MolaDeCoesao`. Medido fase a fase
+dentro do `tickFinal`, o |x| do alvo do lateral:
+
+    posto (slot + estilo)      19.9 m
+    marcação / inquietação     19.9 m
+    mola de coesão             18.2 m
+    desvio máximo / repulsão   18.2 m
+    separação lateral↔meia     10.4 m   <- aqui
+    final                      10.5 m
+
+**A mola custava 1.7 m; a separação lateral↔meia custava 7.8 m.** A regra
+(`BlockShape.separacaoLateral`, "o meia dá a largura, o lateral fica por dentro
+dele") corria sempre que os dois estivessem a menos de 6 m um do outro EM X,
+**sem olhar à profundidade nenhuma** — o meia 20 m à frente contava como
+embolamento — e tinha piso ZERO: com o meia fechado para |x| 5 m, o lateral era
+mandado para o eixo. É exactamente a captura.
+
+Duas guardas, e a ordem passou a importar:
+
+- o **recuo em z** (`recuoDeApoio`) é aplicado PRIMEIRO, e só depois se
+  pergunta se ainda há embolamento em x;
+- `BlockShape.separacaoZLateral` (6 m): separados em profundidade não estão
+  embolados;
+- **piso**: o lateral abdica no máximo de `separacaoLateral` metros do slot
+  DELE. Se o meia está mais para dentro do que isso, o fora-de-sítio é do meia.
+
+Medido em 240 s:
+
+    |x| do alvo do lateral        10.4 -> 17.8 m
+    por dentro do central interior 12.7% -> 0.4%
+    largura ocupada pela equipa    32.6 -> 36.0 m
+
+E, ao contrário do que a sessão anterior mediu para a mola, **esta largura não
+custou golos**: 4 sementes fixas (`tools/headless/largura_golos.js`), 6.48
+golos/90 antes e 6.45 depois. Não é a mesma alavanca — alargar o bloco inteiro
+aproxima a defesa da bola, alargar só o lateral não.
+
+Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
+`tests/nivel2_prioridades.test.js`.
+
+#### Por explicar, e medido esta sessão
+
+- **O headless dá 6.5 golos/90 nas quatro sementes**, com e sem estas
+  correcções, contra os 1.82 do varrimento da sessão anterior e os ~2.5 do
+  alvo. Ou o número da sessão anterior foi medido noutras condições, ou entrou
+  uma regressão entretanto. É a primeira coisa a puxar.
+
 ### Sessão de 8 de Setembro de 2026 — quatro lotes, e o preço de calibrar por modelo
 
 Sessão longa, com o utilizador a mandar lotes e capturas de ecrã e a corrigir a
@@ -5682,6 +5778,9 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `falta_lote.js [quantas]` — faltas espalhadas pelo terço ofensivo: distância da barreira, violações dos 9.15 m, decisão do batedor e desfecho.
 - `vibracao.js` — inversões de sentido em jogadores praticamente quietos, por estado da FSM.
 - `vibracao_pose.js` — a mesma coisa medida no ESQUELETO: quanto a coxa salta entre frames. Chama o `animateBones` à mão, porque o headless não o chama.
+- `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
+- `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
+- `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
 - `gk_aglomeracao.js` / `gk_aglomeracao_real.js` — aglomeração à volta do guarda-redes que segura a bola. O `_real` mede só apanhadas de jogo e SÓ enquanto a bola está nas mãos: incluir o instante em que ele larga mede o jogo a recomeçar e leva a conclusões erradas (aconteceu).
 
 A instrumentação vive nestes scripts, a embrulhar as funções globais — o código
