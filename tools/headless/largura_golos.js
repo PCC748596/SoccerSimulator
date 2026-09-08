@@ -8,6 +8,9 @@ exactamente o mesmo ruído.
 
 Uma semente por processo (o harness nao suporta ser recarregado).
 
+Variaveis de ambiente para varrer a mola de coesao sem editar o config:
+MOLA_COM, MOLA_SEM, MOLA_PUXAO.
+
 Uso: node tools/headless/largura_golos.js [segundos] [semente]
 */
 const segundos = Number(process.argv[2] || 600);
@@ -22,6 +25,12 @@ const mulberry32 = (a) => () => {
 
 Math.random = mulberry32(1000 + semente * 977);
 require('./harness.js');
+
+// Varrimento da mola sem tocar no config (ver MolaDeCoesao em config/defense.js).
+if (process.env.MOLA_COM) MolaDeCoesao.forcaComBola = Number(process.env.MOLA_COM);
+if (process.env.MOLA_SEM) MolaDeCoesao.forcaSemBola = Number(process.env.MOLA_SEM);
+if (process.env.MOLA_PUXAO) MolaDeCoesao.puxaoMax = Number(process.env.MOLA_PUXAO);
+
 const dt = 1 / 60;
 const scene = new THREE.Scene();
 Match.init(scene);
