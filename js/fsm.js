@@ -529,13 +529,16 @@ function executePassGameplay(p) {
     PE — a cabecada e a matada no peito tem caminhos proprios e nao passam por
     esta funcao, que e exactamente a distincao que a regra faz.
 
-    Marca a equipa; quem limpa e o toque seguinte de outra pessoa (ver
-    resolveBallContact em match.js).
+    NAO SE OLHA AO DESTINATARIO. A condicao era `p.passTarget.role === 'gk'`, e
+    com ela o unico recuo que o jogo reconhecia era o passe ENDERECADO ao
+    guarda-redes: um passe curto para um espaco que ele foi buscar, ou um que
+    ninguem alcancou, chegava-lhe as maos sem marca nenhuma. A Lei 12 fala do
+    PE, nao de para quem se joga. Ver registarToqueComPe (utils.js).
+
+    Marca a equipa; quem limpa e o toque seguinte de outra pessoa ou um toque
+    de cabeca/peito (ver resolveBallContact e controlarNoPeito).
     */
-    if (p.role !== 'gk' && p.passTarget && p.passTarget.role === 'gk' &&
-        p.passTarget.team === p.team) {
-        Match.recuoParaGR = p.team;
-    }
+    if (typeof registarToqueComPe === 'function') registarToqueComPe(p, true);
 
     Match.ballCarrier = null;
     Match.intendedReceiver = p.passTarget;

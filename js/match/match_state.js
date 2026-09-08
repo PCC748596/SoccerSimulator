@@ -81,6 +81,9 @@ const Match = {
     // Equipa cujo guarda-redes nao pode usar as maos (recuo com o pe de um
     // companheiro). Null e o caso normal. Ver maosProibidasNoRecuo em utils.js.
     recuoParaGR: null,
+    // Ultimo toque COM O PE, e onde a bola estava nesse instante: e dele que o
+    // `avaliarRecuoParaGR` (utils.js) decide, por frame, se a bola vem atrasada.
+    ultimoToque: null,
     tempoParada: 0, delta: 0,
     placarA: 0, placarB: 0, tempoDeJogo: 0,
     chaserA: null, chaserB: null,

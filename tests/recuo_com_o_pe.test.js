@@ -42,20 +42,42 @@ console.log('1 — quem marca o recuo é o passe com o pé');
     }
 
     /*
-    E a marca só é escrita no caminho do PASSE — o `executePassGameplay`. Se
-    aparecesse no caminho da cabeçada ou da matada no peito, a regra estaria
-    errada.
+    E QUEM ESCREVE A MARCA É UMA FUNÇÃO SÓ.
+
+    A marca era posta à mão dentro do `executePassGameplay`, e com a condição
+    `passTarget.role === 'gk'` — só o passe ENDEREÇADO ao guarda-redes contava.
+    Um alívio para trás, ou um toque de condução que sobra, chegavam-lhe às mãos
+    sem infracção nenhuma. Agora quem decide é o `registarToqueComPe` (marca o
+    toque com o pé) mais o `avaliarRecuoParaGR` (que, por frame, vê se a bola
+    andou para TRÁS), e a marca não é escrita à mão em mais lado nenhum.
     */
-    const fsmSrc = ler('js/fsm.js');
-    const bloco = fsmSrc.match(/Match\.recuoParaGR = p\.team;/g) || [];
-    if (bloco.length !== 1) {
-        erro('`Match.recuoParaGR` devia ser escrito num sítio só (o passe com o pé), está em ' + bloco.length);
-    } else ok('a marca é escrita só no passe com o pé');
+    for (const nome of ['registarToqueComPe', 'limparRecuoParaGR', 'avaliarRecuoParaGR']) {
+        if (!src.includes('function ' + nome)) erro('falta ' + nome + ' em utils.js');
+        else ok(nome + ' está em utils.js');
+    }
+    const escritas = [];
+    for (const f of ['js/fsm.js', 'js/player.js', 'js/bt/player_bt.js']) {
+        const n = (ler(f).match(/recuoParaGR\s*=/g) || []).length;
+        if (n) escritas.push(f + ' (' + n + ')');
+    }
+    if (escritas.length) {
+        erro('`Match.recuoParaGR` voltou a ser escrito à mão em ' + escritas.join(', '));
+    } else ok('a marca só se escreve pelas funções do utils.js');
+
+    // A bola atrasada é medida pela DIRECÇÃO, e a folga tem de existir.
+    const gkSrc = ler('js/config/goalkeeper.js');
+    const mAtraso = gkSrc.match(/atrasoMin:\s*([\d.]+)/);
+    if (!mAtraso || Number(mAtraso[1]) <= 0 || Number(mAtraso[1]) > 5) {
+        erro('GkRecuoModel.atrasoMin fora do que separa um recuo de um toque de lado');
+    } else ok('atrasoMin = ' + mAtraso[1] + ' m');
 
     const headerSrc = ler('js/player.js');
-    if (/executeHeader[\s\S]{0,3000}recuoParaGR = /.test(headerSrc)) {
-        erro('a cabeçada não pode marcar recuo — a regra permite pegar nela');
-    } else ok('a cabeçada não marca recuo (pode ser agarrada)');
+    if (!/executeHeader[\s\S]{0,400}limparRecuoParaGR/.test(headerSrc)) {
+        erro('a cabeçada deixou de devolver as mãos ao guarda-redes');
+    } else ok('a cabeçada devolve as mãos (pode ser agarrada)');
+    if (!/controlarNoPeito[\s\S]{0,1400}limparRecuoParaGR/.test(headerSrc)) {
+        erro('a matada no peito deixou de devolver as mãos ao guarda-redes');
+    } else ok('o peito devolve as mãos');
 }
 
 /* =====================================================================
@@ -90,9 +112,24 @@ console.log('2 — recuo com o pé e adversário perto: chuta como no tiro de me
         Os dois métodos são de classe (`nome() { ... }`), portanto embrulham-se
         num objecto literal para poderem ser avaliados fora dela.
         */
-        const proto = (new Function('GkRecuoModel', 'Match', 'ActionState',
+        /*
+        As funções da regra vêm do utils.js de produção: o chuto de urgência já
+        não põe `recuoParaGR = null` à mão — regista o toque, e é o
+        `avaliarRecuoParaGR` que vê a bola a sair para a frente e limpa.
+        */
+        const utilsSrc = ler('js/utils.js');
+        const trecho = (nome) => {
+            const i = utilsSrc.indexOf('function ' + nome + '(');
+            if (i < 0) throw new Error('não encontrei ' + nome + ' em utils.js');
+            return utilsSrc.slice(i, utilsSrc.indexOf(LF + '}', i) + 2);
+        };
+        const regras = (new Function('Match', 'GkRecuoModel',
+            trecho('registarToqueComPe') + trecho('avaliarRecuoParaGR') +
+            '; return { registarToqueComPe, avaliarRecuoParaGR };'))(Match, GkRecuoModel);
+
+        const proto = (new Function('GkRecuoModel', 'Match', 'ActionState', 'registarToqueComPe',
             'return {' + mAperta[0] + ',' + mChuta[0] + '};'
-        ))(GkRecuoModel, Match, ActionState);
+        ))(GkRecuoModel, Match, ActionState, regras.registarToqueComPe);
 
         const gk = {
             team: 'TeamA', role: 'gk',
@@ -130,6 +167,12 @@ console.log('2 — recuo com o pé e adversário perto: chuta como no tiro de me
         if (chamadas.indexOf('kickFromGround') < 0) {
             erro('no contacto devia resolver com a balística do tiro de meta');
         } else ok('no contacto, a mesma balística do tiro de meta');
+        /*
+        A bola saiu do pé dele PARA A FRENTE: no frame seguinte a marca cai
+        sozinha, porque ela só vale enquanto a bola andar para trás.
+        */
+        Match.ball.position.z = 40;      // 10 m à frente, no referencial dele
+        regras.avaliarRecuoParaGR(Match);
         if (Match.recuoParaGR !== null) erro('a bola saiu do pé dele: o recuo acabou');
         else ok('o recuo termina quando a bola sai');
 

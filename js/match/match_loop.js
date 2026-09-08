@@ -633,6 +633,14 @@ Object.assign(Match, {
         // Arbitragem: fora das listas de jogadores, corre à parte (officials.js).
         if (typeof Officials !== 'undefined') Officials.update(dt);
 
+        /*
+        A BOLA ATRASADA PARA O GUARDA-REDES, decidida antes de a bola andar
+        outra vez: é o `updateBall` que resolve os contactos, e a proibição das
+        mãos tem de estar escrita quando ele lá chega. Ver avaliarRecuoParaGR
+        (utils.js) e GkRecuoModel.
+        */
+        if (typeof avaliarRecuoParaGR === 'function') avaliarRecuoParaGR(this);
+
         this.updateBall();
         // Sai sozinho quando nenhuma rede está a abanar (ver NetWave.update).
         if (typeof NetWave !== 'undefined') NetWave.update(dt);

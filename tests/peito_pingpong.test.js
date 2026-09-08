@@ -124,7 +124,10 @@ console.log(LF + '4 — onde o contador volta a zero');
         erro('o contador não zera quando a bola assenta — o peito morria no jogo todo');
     } else ok('zera quando a bola toca o relvado (a sequência é "sem assentar")');
 
-    const zeraAoDominar = /best\.hasBall = true[\s\S]{0,600}?this\.peitosSeguidos\s*=\s*0/.test(srcMatch);
+    // A janela é generosa de propósito: entre o domínio e o zero mora o
+    // comentário da regra do recuo para o guarda-redes, e uma janela curta
+    // falhava por causa do texto e não do código.
+    const zeraAoDominar = /best\.hasBall = true[\s\S]{0,1600}?this\.peitosSeguidos\s*=\s*0/.test(srcMatch);
     if (!zeraAoDominar) erro('não zera quando alguém domina a bola');
     else ok('zera quando alguém domina mesmo');
 

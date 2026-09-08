@@ -326,6 +326,81 @@ function maosProibidasNoRecuo(recuoTeam, gkTeam) {
 }
 
 /*
+QUEM TOCOU, E COM QUÊ — a memória de onde o `recuoParaGR` sai.
+
+A marca era posta num sítio só, e com uma condição a mais: o passe tinha de ser
+ENDEREÇADO ao guarda-redes (`p.passTarget.role === 'gk'`). Tudo o resto que sai
+do pé de um companheiro e acaba nas mãos dele — um alívio para trás, um passe
+para um espaço que ninguém foi buscar, um toque de condução que sobra — não era
+recuo nenhum para o jogo, e ele agarrava. Medido em 74 min: das 8 bolas
+agarradas com a mão, uma vinha do pé de um companheiro e nenhuma estava marcada.
+
+A Lei 12 não fala de destinatário: fala do PÉ. Por isso a marca passa a ser
+posta em qualquer bola jogada com o pé PARA TRÁS (passe, alívio, tanto faz o
+destinatário), e limpa nos toques que a regra permite — cabeça, peito, coxa — e
+em qualquer toque do adversário. O guarda-redes a jogar com o pé limpa-a também,
+que é o que a regra manda que ele faça.
+
+Quem lê continua a ser o `maosProibidasNoRecuo`, e a guarda vive no `grabBall`.
+*/
+function registarToqueComPe(jogador, comPe) {
+    if (typeof Match === 'undefined') return;
+    if (!jogador || comPe === false) { Match.ultimoToque = null; return; }
+    /*
+    O GUARDA-REDES NAO SE ABSOLVE A SI PROPRIO. O toque dele com o pe era
+    tratado como "toque de outra pessoa" e limpava a marca — e era esse o
+    buraco por onde as bolas atrasadas continuavam a acabar nas maos dele:
+    tocava-lhe com o pe e agarrava a seguir. A Lei 12 nao devolve as maos a
+    quem joga a bola com o pe; devolve-as quando OUTRO jogador lhe toca, ou
+    quando o companheiro a serve de cabeca ou de peito.
+
+    Fica marcado como qualquer outro toque, com a equipa dele: o pontape de
+    baliza e o alivio para a frente limpam-se sozinhos (a bola vai para a
+    frente, e a marca so vale para tras), e o toque do guarda-redes ADVERSARIO
+    devolve as maos a este, que e o que a regra diz.
+    */
+    Match.ultimoToque = {
+        team: jogador.team,
+        dirZ: jogador.dirZ,
+        // Onde a bola estava no toque. E contra este ponto que se mede se ela
+        // foi jogada para TRAS — a direccao so se conhece depois de ela andar,
+        // e por isso a decisao e refeita todos os frames (avaliarRecuoParaGR).
+        z0: Match.ball ? Match.ball.position.z : 0
+    };
+}
+
+/*
+E o inverso: cabeca, peito ou coxa DEVOLVEM as maos ao guarda-redes. E a metade
+da regra que faz o companheiro pensar — nao pode passar-lhe a bola com o pe, mas
+pode servi-la de cabeca.
+*/
+function limparRecuoParaGR() {
+    if (typeof Match !== 'undefined') Match.ultimoToque = null;
+}
+
+/*
+A DECISAO, REFEITA POR FRAME.
+
+Ha duas maneiras de a bola chegar atrasada ao guarda-redes: o passe (sabe-se
+logo para onde vai) e o toque que SOBRA — o defesa que domina, conduz e a deixa
+correr para tras. A segunda so se conhece vendo a bola andar, e por isso a
+marca nao pode ser posta uma vez no instante do toque: e recalculada aqui,
+contra o ponto onde o pe lhe tocou pela ultima vez.
+
+`atrasoMin` (GkRecuoModel) e a folga: meio metro para tras a proteger a bola
+nao e um recuo.
+*/
+function avaliarRecuoParaGR(match) {
+    const m = match || (typeof Match !== 'undefined' ? Match : null);
+    if (!m) return;
+    const t = m.ultimoToque;
+    if (!t || !m.ball) { m.recuoParaGR = null; return; }
+    const atrasoMin = (typeof GkRecuoModel !== 'undefined' && typeof GkRecuoModel.atrasoMin === 'number')
+        ? GkRecuoModel.atrasoMin : 1.0;
+    const avanco = (m.ball.position.z - t.z0) * t.dirZ;
+    m.recuoParaGR = (avanco < -atrasoMin) ? t.team : null;
+}
+/*
 ONDE SE POE UM COMPANHEIRO NUM LANCAMENTO LATERAL.
 
 Quem repoe nao tinha a quem atirar: os companheiros ficavam nos slots do bloco,
@@ -3986,6 +4061,7 @@ if (typeof window !== 'undefined') {
         pontoDaFaltaDirecta, lugaresDaBarreira, alturaDaBolaEm,
         bandaDaFaltaDirecta, desfechoDaFaltaDirecta, alvoDaFaltaDirecta,
         tiroDaFaltaDirecta, tiroTensoDaFaltaDirecta, lugaresDoApoioNaFaltaDirecta,
-        passaEntreAdversarios
+        passaEntreAdversarios,
+        maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR
     });
 }

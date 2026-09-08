@@ -1046,6 +1046,7 @@ Object.assign(Match, {
         this.setPieceTaker = null;
         this.setPieceTimer = 0;
         this.recuoParaGR = null;
+        this.ultimoToque = null;
         this.peitosSeguidos = 0;
         // O lance da falta morre com a jogada: sem isto o plano sobrevivia ao
         // reset e o salto da barreira disparava no lance seguinte.

@@ -1652,6 +1652,11 @@ function actClearance(ctx) {
     Match.lastTouchedTeam = p.team;
     Match.lastTouchedPlayer = p;
     window.bolaChutada = true;
+    /*
+    O alívio é um toque COM O PÉ, e não passa pelo `executePassGameplay`: se
+    acabar nas mãos do próprio guarda-redes, é recuo na mesma (Lei 12).
+    */
+    if (typeof registarToqueComPe === 'function') registarToqueComPe(p, true);
 
     p.fsm.changeState('MOVE_TO_POS');
 }

@@ -1887,6 +1887,11 @@ class FootballPlayer {
         Match.lastTouchedPlayer = this;
         Match.possessionTeam = this.team;
         window.bolaChutada = false;
+        /*
+        PEITO DEVOLVE AS MÃOS AO GUARDA-REDES (Lei 12): a proibição é do PÉ.
+        Servi-la de peito é a maneira legal de a fazer chegar às mãos dele.
+        */
+        if (typeof limparRecuoParaGR === 'function') limparRecuoParaGR();
 
         // Não pode voltar a tocar já no frame seguinte; o repique tem de ter
         // tempo de acontecer. A duração é a mesma do gesto, para não dominar
@@ -2797,6 +2802,11 @@ class FootballPlayer {
 
     executeHeader() {
         this.showActionBanner('HEADER');
+        /*
+        CABEÇA DEVOLVE AS MÃOS AO GUARDA-REDES (Lei 12) — é a excepção que o
+        pedido nomeia: bola atrasada só se for de cabeça.
+        */
+        if (typeof limparRecuoParaGR === 'function') limparRecuoParaGR();
 
         /*
         Anti ping-pong: TODOS os cabeceios contam, não só os de fora da zona de
@@ -5909,8 +5919,13 @@ class FootballPlayer {
         this.gkKickAction = new ActionState('gkPuntChao', {
             onContact: () => {
                 this.kickFromGround();
-                // O recuo acaba aqui: a bola saiu do pe dele.
-                Match.recuoParaGR = null;
+                /*
+                O recuo acaba aqui: a bola saiu do pe dele PARA A FRENTE. Quem
+                trata disso e o proprio registo do toque — a marca so vale
+                enquanto a bola andar para tras (ver avaliarRecuoParaGR), e um
+                chutao para a frente limpa-a sozinho no frame seguinte.
+                */
+                if (typeof registarToqueComPe === 'function') registarToqueComPe(this, true);
                 if (typeof EventBus !== 'undefined') {
                     EventBus.emit('GK_BACKPASS_CLEARED', { team: this.team, gk: this });
                 }

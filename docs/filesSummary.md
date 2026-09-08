@@ -94,6 +94,43 @@ aproxima a defesa da bola, alargar só o lateral não.
 Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
 `tests/nivel2_prioridades.test.js`.
 
+#### A bola atrasada que o guarda-redes agarrava na mesma
+
+Relato: *"o goleiro não pode pegar com a mão as bolas atrasadas, só se for de
+cabeça"*.
+
+A Lei 12 já estava escrita — `Match.recuoParaGR`, `maosProibidasNoRecuo`, a
+guarda no `grabBall` — **com uma condição a mais**: a marca só era posta quando
+o passe ia ENDEREÇADO ao guarda-redes (`p.passTarget.role === 'gk'`), dentro do
+`executePassGameplay`. Tudo o resto que sai do pé de um companheiro e acaba nas
+mãos dele não era recuo nenhum: o alívio para trás (que nem passa por essa
+função), o passe curto que ninguém foi buscar, o toque de condução que sobra.
+Medido em 74 min (`tools/headless/recuo_gk.js`): das 8 bolas que ele agarrou com
+a mão, uma vinha do pé de um companheiro — e **nenhuma estava marcada**.
+
+A regra passou a ter duas metades, as duas em utils.js:
+
+- `registarToqueComPe(jogador, comPe)` guarda QUEM tocou e **onde a bola estava
+  nesse instante**; `limparRecuoParaGR()` é o que a cabeça e o peito chamam.
+- `avaliarRecuoParaGR()` decide **por frame**, antes do `updateBall`: a bola
+  andou mais de `GkRecuoModel.atrasoMin` (1 m) para trás desde esse toque? Então
+  é bola atrasada.
+
+A decisão tem de ser refeita por frame porque há duas maneiras de a bola chegar
+atrasada — o passe (sabe-se logo para onde vai) e **o toque que sobra**, o
+defesa que domina, conduz e a deixa correr para trás. A segunda só se conhece
+vendo a bola andar.
+
+E fechou-se o buraco que restava: **o guarda-redes absolvia-se a si próprio**.
+O toque dele com o pé era tratado como "toque de outra pessoa" e limpava a
+marca — tocava-lhe com o pé e agarrava a seguir. A Lei 12 só lhe devolve as mãos
+quando OUTRO jogador toca, ou quando o companheiro a serve de cabeça ou de
+peito. O pontapé de baliza e o alívio para a frente limpam-se sozinhos, porque a
+marca só vale para trás.
+
+Testes: `tests/bola_atrasada_maos.test.js` (os cinco lances) mais os dois
+antigos, actualizados.
+
 #### O tiro de meta com as duas equipas na mesma ponta
 
 Relato: *"esse é o ajuste do tiro de meta, completamente sem sentido — um time
@@ -5850,6 +5887,7 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `recuo_gk.js [segundos] [semente]` — de onde vinha cada bola que o guarda-redes agarrou com a mão: último toque, com que parte do corpo, de que equipa, e quantos metros a bola andou para trás desde esse toque. Foi ela que mostrou que o recuo só era marcado no passe endereçado a ele.
 - `tiro_de_meta.js [quantos]` — força N tiros de meta e mede a profundidade das duas equipas no referencial de ataque de quem bate. Mede COM O LANCE DE PÉ: deixar o estado sair de GOAL_KICK mede o jogo a recomeçar.
 - `golos_origem.js [segundos] [semente]` — de onde vêm os golos: distância e tipo do remate, ponto de entrada na baliza, estado e distância do guarda-redes, e os contadores ao lado dos remates REAIS (os que passaram pelo `tipoDeRemate`).
 - `gk_defesa.js [segundos] [semente]` — por remate: quanto tempo o guarda-redes teve, quantos metros de lado precisava, quantos andou, e a que distância a mão mais perto passou da bola.

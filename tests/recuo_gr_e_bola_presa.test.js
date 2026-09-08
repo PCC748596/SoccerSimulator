@@ -85,9 +85,24 @@ console.log(LF + '2 — onde a marca nasce e onde morre');
     // A função inteira, não uma janela de tamanho arbitrário: a marca fica a
     // mais de 12 000 caracteres do início e uma janela curta dava falso alarme.
     const corpoPasse = extrairFuncao(srcFsm, 'executePassGameplay(', 'js/fsm.js');
-    if (!/Match\.recuoParaGR\s*=\s*p\.team/.test(corpoPasse)) {
-        erro('o passe com o pé para o próprio guarda-redes não marca o recuo');
-    } else ok('nasce no passe com o pé (executePassGameplay)');
+    /*
+    A marca deixou de ser escrita à mão aqui: quem a põe é o
+    `registarToqueComPe` (utils.js), e quem decide se a bola veio ATRASADA é o
+    `avaliarRecuoParaGR`, por frame. A condição antiga — o passe ter de ser
+    endereçado ao guarda-redes — deixava passar o alívio para trás e o toque de
+    condução que sobra.
+    */
+    if (!/registarToqueComPe\(p, true\)/.test(corpoPasse)) {
+        erro('o passe com o pé deixou de registar o toque');
+    } else ok('nasce no passe com o pé (executePassGameplay -> registarToqueComPe)');
+    // Só o CÓDIGO conta: a condição antiga é citada no comentário que a
+    // explica, e um teste que a apanhasse aí ficava preso ao texto.
+    const semComentarios = corpoPasse
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/[^\n]*/g, '');
+    if (/passTarget\.role === 'gk'/.test(semComentarios)) {
+        erro('voltou a marcar-se só o passe ENDEREÇADO ao guarda-redes');
+    } else ok('não se olha ao destinatário, olha-se ao pé');
 
     // A cabeçada e o peito não podem marcar: a regra permite-os.
     const srcPlayer = ler('js/player.js');
@@ -97,9 +112,11 @@ console.log(LF + '2 — onde a marca nasce e onde morre');
         erro('a matada no peito não pode marcar recuo — a regra permite as mãos');
     } else ok('o peito não marca (a regra permite)');
 
-    if (!/this\.recuoParaGR\s*=\s*null/.test(srcMatch)) {
+    const srcUtilsRegra = ler('js/utils.js');
+    if (!/function avaliarRecuoParaGR/.test(srcUtilsRegra) ||
+        !/m\.recuoParaGR = \(avanco < -atrasoMin\)/.test(srcUtilsRegra)) {
         erro('nada limpa o recuo — ficaria proibido para sempre');
-    } else ok('morre no toque seguinte (resolveBallContact)');
+    } else ok('morre quando a bola deixa de vir atrasada (avaliarRecuoParaGR)');
 }
 
 /* ====================================================================== */

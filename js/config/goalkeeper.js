@@ -577,7 +577,23 @@ comportamento (sair a jogar, passe curto) continua a valer.
 const GkRecuoModel = {
     distPressao: 5.0,
     // A que distancia da bola o guarda-redes ja lhe pode bater.
-    distToque: 1.4
+    distToque: 1.4,
+
+    /*
+    QUANTOS METROS PARA TRÁS É QUE JÁ SÃO UMA BOLA ATRASADA.
+
+    A marca do recuo era posta só quando o passe ia ENDEREÇADO ao guarda-redes
+    (`passTarget.role === 'gk'`): um alívio para trás, ou um passe curto que
+    ninguém foi buscar, chegavam-lhe às mãos sem infracção nenhuma. Medido em
+    74 min, das 8 bolas que ele agarrou uma vinha do pé de um companheiro e
+    nenhuma estava marcada.
+
+    Agora conta a DIRECÇÃO: a bola jogada com o pé mais de `atrasoMin` metros
+    para trás proíbe-lhe as mãos, seja para quem for. Um toque de lado, ou meio
+    metro para trás a proteger a bola, não é um recuo — e por isso a folga
+    existe.
+    */
+    atrasoMin: 1.0
 };
 
 if (typeof window !== 'undefined') window.GkRecuoModel = GkRecuoModel;

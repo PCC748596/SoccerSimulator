@@ -622,12 +622,18 @@ Object.assign(Match, {
         best.hasBall = true;
 
         /*
-        O recuo morre no primeiro toque de outra pessoa: e o passe DELIBERADO
-        do companheiro que proibe as maos, e ele acabou de ser jogado. Vale
-        tambem para o proprio guarda-redes a tocar com o pe, que e o que a
-        regra manda fazer.
+        O TOQUE PASSA A SER DELE, e a partir daqui é contra este ponto que se
+        mede se a bola foi jogada para trás (ver `avaliarRecuoParaGR`).
+
+        Isto era `this.recuoParaGR = null` e mais nada: qualquer toque apagava a
+        marca. Um defesa que domina, conduz e deixa a bola correr para o
+        guarda-redes jogou-a com o pé tal e qual como se lha tivesse passado —
+        medido, uma dessas por hora de jogo, agarrada com as mãos sem infracção
+        nenhuma. O peito e a cabeça não chegam aqui: saem nos ramos deles, e
+        esses limpam a marca.
         */
-        this.recuoParaGR = null;
+        if (typeof registarToqueComPe === 'function') registarToqueComPe(best, true);
+        else this.recuoParaGR = null;
         // Alguém dominou a bola: a sequência de peitos acabou.
         this.peitosSeguidos = 0;
         this.intendedReceiver = null;
