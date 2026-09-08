@@ -5577,9 +5577,28 @@ class FootballPlayer {
                 this.gkProcuraTimer = 0;
                 this.gkTemLinha = !!this.findPassTarget();
             }
-            const lancarCedo = gkPodeLancar(t, this.gkTemLinha || this.gkThrowTarget);
 
-            if (lancarCedo || t >= (this.gkSegurarDur ?? GoalkeeperPose.segurarDur)) {
+            /*
+            SÓ LARGA CEDO COM UMA BOA OPÇÃO.
+
+            O gatilho era `gkTemLinha || gkThrowTarget`, e o `gkTemLinha` é o
+            `findPassTarget()` — QUALQUER companheiro com linha, marcado ou não.
+            Medido: largava aos 2.05 s de média, antes de a equipa se ter
+            organizado. A opção boa é a que o `acharLateralParaSaida` (BT) já
+            escolhe: um defesa desmarcado, dentro do alcance do braço.
+
+            Sem essa opção espera — até aos 8 s do `segurarDur`, e aí chuta para
+            a frente, que é o que a regra pedida diz. Quem decidiu chutar de
+            saída (estilo directo, ou nenhum defesa livre) larga aos
+            `segurarDirecto`: esperar os 8 s para chutar na mesma é tempo morto.
+            */
+            const opcaoBoa = this.gkThrowTarget && this.gkThrowTarget.model;
+            const lancarCedo = gkPodeLancar(t, opcaoBoa);
+            const prazo = (this.gkSaida === 'chuteFrente' && !opcaoBoa)
+                ? Math.max(GoalkeeperPose.segurarMinimo, GoalkeeperPose.segurarDirecto || 3.0)
+                : (this.gkSegurarDur ?? GoalkeeperPose.segurarDur);
+
+            if (lancarCedo || t >= prazo) {
                 const alvoLancamento = (this.gkSaida === 'laterais') ? this.gkThrowTarget : null;
                 if (alvoLancamento && alvoLancamento.model) {
                     this.gkEstado = 'lancando';
@@ -5825,8 +5844,12 @@ class FootballPlayer {
             this.gkEstado = 'segurando';
             this.gkTempoMergulho = 0;
         }
-        // Não precisa esperar sempre os 8s fixos — 5-8s, sorteado a cada captura.
-        this.gkSegurarDur = 5.0 + Math.random() * 3.0;
+        /*
+        O PRAZO É O PRAZO. Era `5 + rand*3`: os 8 s da regra nunca chegavam a
+        acontecer, e a espera acabava a meio de o bloco se organizar. Ver
+        GoalkeeperPose.segurarDur e segurarDirecto.
+        */
+        this.gkSegurarDur = GoalkeeperPose.segurarDur;
         // Procura de linha de passe enquanto segura — ver o ramo 'segurando'.
         this.gkProcuraTimer = 0;
         this.gkTemLinha = false;

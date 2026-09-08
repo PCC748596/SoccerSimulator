@@ -2810,12 +2810,20 @@ function tratarGuardaRedes(ctx) {
     if (p.gkEstado === 'segurando') {
         if (saida === 'laterais') {
             const lateral = acharLateralParaSaida(ctx);
-            if (lateral) {
-                p.gkThrowTarget = lateral;
-                return;
-            }
-            // Sem lateral livre: desiste da saída curta e cai no chutão.
-            p.gkSaida = 'chuteFrente';
+            p.gkThrowTarget = lateral || null;
+            /*
+            SEM NINGUÉM LIVRE, ELE ESPERA — NÃO DESISTE.
+
+            Isto punha `gkSaida = 'chuteFrente'` no primeiro frame sem ninguém
+            desmarcado, e a decisão ficava tomada para o resto da posse: o
+            companheiro que se desmarcava dois segundos depois já não era
+            olhado. O pedido é o contrário — esperar até aos 8 s A VER se eles
+            se põem em posição, e só depois chutar.
+
+            Quem larga é o ramo 'segurando' do updateGK, no prazo; aqui só se
+            escreve (ou apaga) o destinatário, todos os frames.
+            */
+            return;
         }
         // No 'segurando' o próprio updateGK dispara o relançamento quando
         // chegar a hora; não se chama puntBall aqui.

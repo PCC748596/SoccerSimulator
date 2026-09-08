@@ -94,6 +94,38 @@ aproxima a defesa da bola, alargar só o lateral não.
 Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
 `tests/nivel2_prioridades.test.js`.
 
+#### A reposição do guarda-redes: esperar até aos 8 s por uma boa opção
+
+Pedido: *"após o goleiro pegar a bola ele tem que esperar até 8 s para repor,
+aguardando que seus companheiros estejam em uma posição boa para o passe; caso
+não estejam, ele deve chutar pra frente"*.
+
+A mecânica existia — `segurarDur` de 8 s, `segurarMinimo` de 1.5 s,
+`acharLateralParaSaida` a escolher um defesa desmarcado — mas os três números
+não se juntavam. Medido em 73 min (`tools/headless/reposicao_do_gk.js`):
+**largava a bola aos 2.05 s de média**, com o prazo sorteado em 6.7 s. Três
+causas, todas pequenas:
+
+- **O prazo era `5 + rand*3`.** Os 8 s da regra nunca aconteciam.
+- **O gatilho de "já há a quem jogar" era o `findPassTarget()`** — qualquer
+  companheiro com linha, marcado ou não — em vez da saída curta ao homem
+  desmarcado que o `acharLateralParaSaida` já sabia escolher.
+- **Sem ninguém livre, a decisão ficava tomada:** o ramo do BT punha
+  `gkSaida = 'chuteFrente'` no primeiro frame sem opção, e o companheiro que se
+  desmarcava dois segundos depois já não era olhado.
+
+Agora: prazo de `segurarDur` (8 s), relançamento antecipado só com opção BOA, e
+o destinatário é reescrito todos os frames enquanto ele segura. Quem decidiu
+chutar POR ESTILO (Direct, e não por falta de opções) larga aos
+`segurarDirecto` (3 s) — esperar os 8 s para chutar na mesma é tempo morto.
+
+Medido depois: lançamento a **17.6 m** de distância, para um homem com o
+adversário mais próximo a **23.9 m**, e **100% de posse mantida 3 s depois**.
+Teste: `tests/reposicao_do_guarda_redes.test.js` — que só passou a medir o que
+diz depois de os marcadores serem RECOLADOS por frame: a árvore dos adversários
+afasta-os do homem em menos de um segundo, e o cenário "toda a gente marcada"
+deixava de o ser antes de o guarda-redes decidir seja o que for.
+
 #### Jogadores atrás do próprio guarda-redes, com a bola nas mãos dele
 
 Relato, com captura: *"quando o goleiro pega a bola os jogadores do time com a
@@ -5987,6 +6019,7 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `reposicao_do_gk.js [segundos] [semente]` — por posse de mão: quanto tempo segurou, como repôs (lançamento ou chutão), a que distância e para quem, com o adversário mais próximo do destinatário, e se a equipa ficou com a bola 3 s depois.
 - `saida_do_guarda_redes.js [segundos] [semente]` — com a bola nas mãos dele: quantos companheiros ficam ATRÁS do guarda-redes, a que distância está a opção mais perta, e a que velocidade se mexem. Separa por estado do jogo, porque em bola parada as posições são impostas e não valem para esta leitura.
 - `peito_queda.js [segundos] [semente]` — a matada no peito: a que distância do peito a bola toca o chão, onde acaba o lance e de quem fica.
 - `toque_conducao.js [segundos] [semente]` — o toque de condução: que tamanho as faixas pediram, o que a validação por disputa deixou passar, e o caso "alguém atrás com o campo aberto à frente" isolado.

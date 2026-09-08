@@ -110,6 +110,29 @@ const GoalkeeperPose = {
     segurarVel: 2.2,
     segurarMinimo: 1.5,
 
+    /*
+    ELE ESPERA POR UMA BOA OPÇÃO, ATÉ AOS 8 SEGUNDOS.
+
+    Pedido: "após o goleiro pegar a bola ele tem que esperar até 8 s para
+    repor, aguardando que seus companheiros estejam numa posição boa para o
+    passe; caso não estejam, ele deve chutar pra frente".
+
+    O que se media antes (`tools/headless/reposicao_do_gk.js`, 73 min): ele
+    largava a bola aos **2.05 s de média**, com o prazo sorteado em 6.7 s. Duas
+    razões:
+
+      - o prazo era `5 + rand*3` — nunca eram os 8 s, eram 5 a 8 sorteados;
+      - o gatilho de "já há a quem jogar" era o `findPassTarget()`, que devolve
+        QUALQUER companheiro com linha, e não a saída curta a um homem
+        desmarcado que o `acharLateralParaSaida` já sabia escolher.
+
+    Agora o prazo é o `segurarDur` inteiro e o gatilho é a opção boa. Quem
+    decidiu chutar (estilo directo, ou nenhum defesa livre) não fica os 8 s
+    parado: larga aos `segurarDirecto`, que é o tempo de a equipa sair da área
+    e passar a haver para onde chutar.
+    */
+    segurarDirecto: 3.0,
+
     // A andar ao longo da baliza a acompanhar o lance: de pé, passada curta.
     andar: {
         chest: 0.10,
