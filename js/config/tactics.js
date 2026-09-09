@@ -514,6 +514,34 @@ const BlockShape = {
     distanciaMaxX: 22.0,
 
     /*
+    O MÉDIO DE ALA NÃO ACABA POR DENTRO DO SEU CENTRAL.
+
+    Relato, com captura: "o RM se confundindo com o CM". A `separacaoLateral`
+    existe para o par lateral↔meia mas assume que **o meia dá a largura e o
+    lateral fica por dentro dele** — e medido
+    (`tools/headless/largura_alas.js`) a premissa está invertida no terreno:
+
+        pos    posto   slot   +estilo   alvo   corpo   |  perdido
+        LB      19.0   19.7    19.9     17.1   16.8    |   2.3 m
+        LM      19.0   20.6    20.1     16.1   15.7    |   3.4 m
+
+    o lateral está MAIS LARGO que o médio de ala, e o médio acaba mais interior
+    do que o próprio CM em 7-10% das leituras. A regra antiga está inerte —
+    desligá-la não move um número — e o embolamento acontece com os papéis
+    trocados.
+
+    Esta é o simétrico dela: o médio é empurrado para fora até ficar a
+    `separacaoMeiaCentro` do CM do seu lado, **e nunca para além do slot dele**.
+    O tecto importa: sem ele inventa-se largura que a formação não pede, que foi
+    o erro da basculação em Setembro.
+
+    Onde a largura se perde, isolado com os interruptores da ferramenta:
+    a mola de coesão custa 1.5 m ao lateral e 0.6 ao médio; o `distanciaMaxX`
+    custa 1.0 ao lateral e 0.7-1.2 ao médio.
+    */
+    separacaoMeiaCentro: 4.0,
+
+    /*
     COM A BOLA NO MEIO-CAMPO, O BLOCO SOBE.
 
     Relato: a linha de zaga ficava longe demais da linha de meio-campo. Com a

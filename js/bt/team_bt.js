@@ -2982,6 +2982,63 @@ const PosicionamentoAI = {
             p.dynamicTarget.x = p.model.position.x;
             p.dynamicTarget.z = p.model.position.z;
             p.dynamicTarget.y = ALTURA_BASE_Y;
+
+        /*
+        O MÉDIO DE ALA NÃO ACABA POR DENTRO DO SEU CENTRAL.
+
+        Relato, com captura: *"os laterais e meias pelas laterais ainda estão
+        entrando muito pelo meio — dá pra ver o RM se confundindo com o CM"*.
+
+        A `separacaoLateral`, aqui em cima, existe para isto mas do outro lado
+        do par: "o meia dá a largura, o lateral fica por dentro dele". Medida
+        (`tools/headless/largura_alas.js`), a premissa dela está INVERTIDA no
+        terreno — o lateral está mais largo do que o médio de ala:
+
+            pos    posto   slot   +estilo   alvo   corpo
+            LB      19.0   19.7    19.9     17.1   16.8
+            LM      19.0   20.6    20.1     16.1   15.7
+
+        e o médio de ala acaba mais interior do que o próprio CM em 7-10% das
+        leituras. Por isso a regra está inerte (desligá-la não muda um número) e
+        o embolamento que ela devia evitar acontece na mesma, com os papéis
+        trocados.
+
+        O piso é o simétrico do dela, e com a mesma cautela: quem dá a largura é
+        o médio, portanto é ELE que é empurrado para fora até `separacaoMeiaCentro`
+        do CM — **mas nunca para além do slot dele**. Sem esse tecto,
+        inventava-se largura que a formação não pede, e o remédio ficava pior
+        que a doença (foi o que a bascula fez em Setembro).
+
+        E SOBRE O `dynamicTarget`, não sobre o `tacticalTarget`. Escrevi isto
+        primeiro no segundo e não mudou UM número: o `tacticalTarget` é só o
+        anel do debug, e o alvo que o jogador segue é calculado à parte, do `tx`
+        anterior ao alisamento. É o mesmo sítio onde os pisos da saída de bola
+        já vivem — depois do lerp, pela mesma razão que eles: senão o alvo do
+        frame anterior, o embolado, é arrastado mais de um segundo.
+        */
+        if (p.pos === 'LM' || p.pos === 'RM') {
+            const B_MC = (typeof BlockShape !== 'undefined') ? BlockShape : {};
+            const margem = (typeof B_MC.separacaoMeiaCentro === 'number')
+                ? B_MC.separacaoMeiaCentro : 0;
+            if (margem > 0 && bb.own) {
+                const meuLadoMC = Math.sign(p.dynamicTarget.x) || 1;
+                let xCM = -1;
+                for (const o of bb.own) {
+                    if (!o || o === p || o.pos !== 'CM' || !o.model) continue;
+                    if ((Math.sign(o.model.position.x) || 1) !== meuLadoMC) continue;
+                    const ax = Math.abs(o.model.position.x);
+                    if (ax > xCM) xCM = ax;
+                }
+                if (xCM >= 0) {
+                    const tecto = p.slotTarget ? Math.abs(p.slotTarget.x) : Math.abs(p.dynamicTarget.x);
+                    const minimo = Math.min(tecto, xCM + margem);
+                    if (Math.abs(p.dynamicTarget.x) < minimo) {
+                        p.dynamicTarget.x = meuLadoMC * minimo;
+                    }
+                }
+            }
+        }
+
             return;
         }
 

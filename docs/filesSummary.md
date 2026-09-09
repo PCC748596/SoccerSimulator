@@ -7,6 +7,66 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ### Sessão de 9 de Setembro de 2026 — o pé no chão, e a área vazia
 
+#### O médio de ala por dentro do seu CM — e a regra que tinha a premissa ao contrário
+
+Relato, com captura dos anéis de debug: *"os laterais e meias pelas laterais
+ainda estão entrando muito pelo meio. Dá pra ver o RM se confundindo com o CM.
+Lateral e meia a pelo menos uns 15 metros de suas posições."*
+
+O lateral **já não é o problema** — a sessão de 8 de Setembro arrumou-o e ele
+continua arrumado: 17.2 m de |x| contra 19.0 do posto, e 1.7% por dentro do
+central. Mas a ferramenta dessa altura (`laterais_largura.js`) nunca olhou para
+o médio de ala, e é ele que o relato nomeia primeiro. Medido agora
+(`tools/headless/largura_alas.js`, 49 min):
+
+    pos    posto   slot   +estilo   alvo   corpo   |  perdido   embolado com o central
+    LB      19.0   19.7    19.9     17.1   16.8    |   2.3 m           6.2%
+    RB      19.0   19.9    20.0     17.5   17.1    |   1.9 m           1.3%
+    LM      19.0   20.6    20.1     16.1   15.7    |   3.4 m          10.2%
+    RM      19.0   20.7    20.1     16.7   15.8    |   3.2 m           7.4%
+
+**O médio de ala perde MAIS largura do que o lateral, e fica por dentro do
+próprio CM em 7-10% das leituras.** E o achado que explica porquê: a
+`separacaoLateral` existe exactamente para este par, mas assume que *"o meia dá
+a largura e o lateral fica por dentro dele"* — e no terreno **o lateral está
+mais largo do que o médio**. A premissa está invertida, e por isso a regra está
+INERTE: desligá-la (`SEPAR=0`) não move um único número.
+
+Isolado com os interruptores da ferramenta, o que come a largura é a mola de
+coesão (1.5 m ao lateral, 0.6 ao médio) e o `distanciaMaxX` (1.0 ao lateral,
+0.7-1.2 ao médio). A perda acontece toda entre `+estilo` e `alvo`, ou seja no
+`tickFinal` — a mesma fase que tirou 8.2 m ao avançado, mais atrás nesta mesma
+sessão.
+
+`BlockShape.separacaoMeiaCentro` (4 m) é o simétrico da regra antiga: o médio é
+empurrado para fora até ficar a essa distância do CM do seu lado, **e nunca
+para além do slot dele** — sem esse tecto inventa-se largura que a formação não
+pede, que foi o erro da basculação em Setembro.
+
+**E uma armadilha que custou uma medição inteira:** escrevi a regra primeiro
+sobre o `p.tacticalTarget` e não mudou UM número. O `tacticalTarget` é só o anel
+do debug; o alvo que o jogador segue é o `dynamicTarget`, calculado à parte a
+partir do `tx` anterior ao alisamento. É lá que os pisos da saída de bola já
+vivem, e é lá que este tem de estar.
+
+Medido em 3 sementes, com e sem:
+
+    embolado com o CM   sem a regra   com a regra
+    LM                  10.2 11.4 7.4   3.9 10.3 6.5
+    RM                   7.4  8.4 4.0   7.0  6.2 6.4
+    media                    8.15           6.70
+    |x| do corpo            15.67          15.58
+
+Cinco dos seis pares descem e a largura não se paga, mas **−1.4 pontos com este
+desvio é ~1.2 sigma: não é demonstrável com 3 sementes.** Entregue pelo
+mecanismo — é um piso, e um piso que garante o que o relato pede quando morde —
+e não pelo desfecho.
+
+Fica dito o que NÃO se mexeu, de propósito: os quatro homens de ala jogam a
+|x| 15-16 com o slot a 19-20 e o campo a ter 34 de meia-largura. Alargar o
+bloco é a alavanca óbvia e está MEDIDA como cara: a sessão de 8 de Setembro
+mostrou que dois metros de largura de equipa valeram um golo por jogo.
+
 #### A velocidade do carrinho deixa de ser uma constante
 
 Pergunta do utilizador, depois de eu ter escrito que o vermelho directo "não
