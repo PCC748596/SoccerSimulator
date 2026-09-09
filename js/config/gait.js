@@ -251,26 +251,31 @@ const AssentoNoChao = {
     // com fase de voo (ver GaitModel.trote/correr).
     velMax: 4.0,
     /*
-    O TECTO POR FRAME, em metros — e é ele, agora, o único travão do gesto.
+    O TECTO POR FRAME, em metros. Fica nos 0.35, e a tentativa de o apertar
+    está escrita aqui porque foi um erro instrutivo.
 
-    Era 0.35, um valor que nunca mordia porque a `suavizacao` travava primeiro.
-    Com a correcção inteira (ver abaixo) passa a ser este número a decidir o
-    que se vê, e a diferença é grande: a 0.35 o corpo desce mais de 10 cm num
-    frame em 0.48% das leituras — um pulo, e um relato novo à espera de
-    acontecer. Varrido em 3 min de jogo:
+    Com a correcção inteira (ver a `suavizacao`, abaixo) este número passou a
+    ser o único travão, e baixei-o para 0.06 a olhar para o TREMOR DO CORPO: a
+    0.35 o `model.position.y` mexia mais de 10 cm num frame em 0.48% das
+    leituras, e isso parecia um pulo à espera de ser relatado.
 
-        tecto   sola a andar   sola a girar   frames a saltar >10 cm
-        0.35        0.004          0.000              0.48%
-        0.12        0.005          0.000              0.48%
-        0.06        0.014          0.007              0.00%
-        0.03        0.036          0.018              0.00%
+    Estava a medir a peça errada. O corpo a descer enquanto as pernas esticam
+    não é defeito nenhum — é o que faz a anca subir e descer numa passada a
+    sério. O que se VÊ é a BOTA. Medido o tremor da sola, o 0.35 ganha nas duas
+    pontas:
 
-    O 0.06 tira cinco sextos da flutuação e nenhum frame passa dos 10 cm.
-    Repare-se que um TECTO converge e uma FRACÇÃO não: o tecto tira tudo o que
-    couber e o resto no frame seguinte, a fracção deixa sempre a mesma
-    proporção por corrigir.
+        tecto   sola a andar   tiro de meta   tremor da sola   sola a saltar >2 cm
+        0.35        0.004         0.000          0.0015 m         1.42%
+        0.06        0.023         0.042          0.0039 m         4.73%
+
+    E há uma razão de fundo para o tecto não poder ser apertado: como a altura
+    é reescrita em ABSOLUTO todos os frames, a correcção não acumula, e por
+    isso este número **não é um limitador de velocidade — é o tecto do total**.
+    A pose do `resetBonesToDefault` do guarda-redes levanta-o 10.2 cm; com o
+    tecto a 6 cm sobravam 4.2 cm fixos, para sempre, que é exactamente o
+    relato "depois do chute para fora o goleiro tb fica suspenso".
     */
-    correccaoMax: 0.06,
+    correccaoMax: 0.35,
     /*
     A CORRECÇÃO É INTEIRA, E TEM DE SER.
 

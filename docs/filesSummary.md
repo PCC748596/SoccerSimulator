@@ -87,11 +87,23 @@ que passem. Envolvendo o método real em 111 193 frames
 (`tools/headless/assento_convergencia.js`), a razão depois/antes deu **0.65 nos
 dois casos** — o valor exacto de `1 - 0.35`, nas duas casas decimais.
 
-A distinção que fica: **um TECTO converge, uma FRACÇÃO não.** O tecto leva tudo o
-que couber e o resto no frame seguinte; a fracção deixa sempre a mesma proporção
-por corrigir. A `suavizacao` passa a 1.0 e quem trava o gesto é o
-`correccaoMax`, que desce de 0.35 para 0.06 — a 0.35 o corpo descia mais de
-10 cm num frame em 0.48% das leituras, que é um pulo e um relato novo à espera.
+A distinção que fica: **uma FRACÇÃO deixa sempre a mesma proporção por
+corrigir.** A `suavizacao` passa a 1.0 e quem trava o gesto é o `correccaoMax`,
+que fica onde estava (0.35).
+
+**Baixei-o para 0.06 e foi um erro, medido:** a 0.35 o `model.position.y` mexia
+mais de 10 cm num frame em 0.48% das leituras, e isso parecia um pulo. Estava a
+olhar para a peça errada — o corpo a descer enquanto as pernas esticam não é
+defeito nenhum, é o que faz a anca subir e descer numa passada a sério. O que se
+VÊ é a bota, e medido o tremor da SOLA o 0.35 ganha nas duas pontas:
+
+    tecto   sola a andar   tiro de meta   tremor da sola   sola a saltar >2 cm
+    0.35        0.004         0.000          0.0015 m         1.42%
+    0.06        0.023         0.042          0.0039 m         4.73%
+
+E há uma razão de fundo: como a altura é reescrita em absoluto todos os frames,
+a correcção não acumula, e por isso o `correccaoMax` **não é um limitador de
+velocidade — é o tecto do total**.
 
 **O guarda-redes era outra coisa, e a primeira medição enganou-me:** replicar as
 CONDIÇÕES do `assentarNoChao` dava "corre em 87% dos frames dele". Envolvido o
@@ -103,17 +115,41 @@ assento só era chamado do `animateBones`. Passa a ser chamado no fim do
 Medido em 25 min, a sola sobre o relvado:
 
     caso                        antes    depois
-    a andar                     0.042    0.014
-    a girar 20-90 graus/s       0.039    0.008
-    a girar > 180 graus/s       0.036    0.012
-    parado de frente            0.027    0.001
-    guarda-redes em jogo        0.065    0.023
-    guarda-redes no livre       0.101    0.001
-    frames a saltar > 10 cm     0.00%    0.00%
+    a andar                     0.042    0.004
+    a girar 20-90 graus/s       0.039    0.000
+    a girar > 180 graus/s       0.036    0.000
+    parado de frente            0.027    0.000
+    guarda-redes em jogo        0.065    0.012
+    guarda-redes no livre       0.101    0.000
 
-Testes: `tests/assento_converge.test.js`. Fica por arrumar o tiro de meta
-(0.051): o `gkEstado` é `tiro_meta_espera` e o assento sai à entrada pela guarda
-do estado, que existe de propósito para os mergulhos.
+#### E a guarda do guarda-redes era larga de mais
+
+Dois relatos a seguir, os dois do mesmo sítio: *"depois do chute para fora o
+goleiro tb fica suspenso"* (o tiro de meta) e *"depois que o goleiro pega a bola
+com a mão tb fica suspenso"*. A guarda era `gkEstado !== 'idle'` — tudo o que
+não fosse parado escapava ao assento. Medida a sola por estado, em 25 min:
+
+    tiro_meta          0.136      tiro_meta_espera   0.102
+    mergulho           0.133      segurando          0.056
+    chutando           0.048      maos               0.021
+    idle               0.018
+
+Só o `mergulho` e o `salto_alto` saem do chão de propósito, e são os dois únicos
+sítios do `updateGK` que escrevem uma altura ACIMA da base (`+ Pm.altura` e
+`+ jumpH`). Todas as poses de pé do `GoalkeeperPose` têm `altura` 0.0, -0.05 ou
+-0.35 — agacham, nunca levantam. A guarda passa a nomear só esses dois.
+
+Depois, em 40 min: **todos os estados a 0.000** menos o mergulho (0.110, que é
+o gesto), e o `tiro_meta_espera` de 0.102 para 0.000.
+
+Foi o `tiro_meta_espera` que denunciou o tecto apertado, e a pista foi a média
+ser IGUAL ao máximo em 2385 frames: um valor constante não é ruído, é um
+equilíbrio. A pose do `resetBonesToDefault` levanta-o 10.2 cm e o tecto a 6 cm
+só tirava 6, deixando 4.2 fixos para sempre.
+
+Testes: `tests/assento_converge.test.js`, quatro cenários — a convergência, a
+chamada no `updateGK`, os estados do guarda-redes um a um, e as três excepções
+(correr, saltar, carrinho) que não podem ser assentadas.
 
 ### Sessão de 8 de Setembro de 2026 (continuação) — a caminhada depois do golo, e onde a largura se perdia
 

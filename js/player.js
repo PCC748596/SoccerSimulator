@@ -432,7 +432,27 @@ class FootballPlayer {
         if (!A || !A.activo || !this.rig || !this.rig.lBota || !this.rig.rBota) return;
         // Quem escreve a própria altura manda: saltos, mergulhos e carrinhos.
         if (this.jumpTimer > 0 || this.peitoHopTimer > 0) return;
-        if (this.role === 'gk' && this.gkEstado && this.gkEstado !== 'idle') return;
+        /*
+        O GUARDA-REDES SÓ ESCAPA QUANDO ESTÁ MESMO NO AR.
+
+        Isto era `gkEstado !== 'idle'`: tudo o que não fosse parado escapava ao
+        assento. Dois relatos vieram daí — "depois do chute para fora o goleiro
+        tb fica suspenso" (o tiro de meta) e "depois que o goleiro pega a bola
+        com a mão tb fica suspenso". Medida a sola por estado, em 25 min:
+
+            tiro_meta          0.136      tiro_meta_espera   0.102
+            mergulho           0.133      segurando          0.056
+            chutando           0.048      maos               0.021
+            idle               0.018
+
+        Só o mergulho e o salto alto saem do chão de propósito, e são os dois
+        únicos sítios do `updateGK` que escrevem uma altura ACIMA da base
+        (`+ Pm.altura` no mergulho, `+ jumpH` no salto). Todas as poses de pé do
+        `GoalkeeperPose` têm `altura` 0.0, -0.05 ou -0.35 — agacham, nunca
+        levantam —, portanto nenhuma delas tem motivo para escapar.
+        */
+        if (this.role === 'gk' &&
+            (this.gkEstado === 'mergulho' || this.gkEstado === 'salto_alto')) return;
         const st = this.fsm ? this.fsm.currentState : null;
         if (st === 'SLIDE_TACKLE') return;
         if (this.velocity.length() > A.velMax) return;

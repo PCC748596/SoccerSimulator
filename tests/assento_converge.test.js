@@ -152,6 +152,61 @@ test('o guarda-redes tambem se assenta: o updateGK chama o assentarNoChao', () =
         'e a sola dele fica a 5.8 cm do relvado em jogo e a 10.1 cm no livre.');
 });
 
+test('o guarda-redes so escapa ao assento quando esta mesmo no ar', () => {
+    /*
+    Relatos: "depois do chute para fora o goleiro tb fica suspenso" (o tiro de
+    meta) e "depois que o goleiro pega a bola com a mao tb fica suspenso".
+
+    A guarda era `gkEstado !== 'idle'` — tudo o que nao fosse parado escapava
+    ao assento. Medida a sola por estado, em 25 min:
+
+        tiro_meta          0.136      tiro_meta_espera   0.102
+        mergulho           0.133      segurando         0.056
+        chutando           0.048      maos              0.021
+        idle               0.018
+
+    So o `mergulho` e o `salto_alto` saem do chao de proposito: sao os dois
+    unicos sitios do updateGK que escrevem uma altura ACIMA da base
+    (`+ Pm.altura` do mergulho e `+ jumpH` do salto). Todas as poses de pe do
+    GoalkeeperPose tem `altura` de 0.0, -0.05 ou -0.35 — agacham, nunca
+    levantam. Logo nenhuma delas tem motivo para escapar.
+    */
+    const gk = Match.players.find(j => j.role === 'gk');
+    assert.ok(gk, 'ha guarda-redes');
+
+    const preparar = (estado) => {
+        gk.gkEstado = estado;
+        gk.jumpTimer = 0;
+        gk.peitoHopTimer = 0;
+        gk.velocity.set(0, 0, 0);
+        gk.model.position.y = ALTURA_BASE_Y;
+        gk.rig.lLeg.rotation.x = -0.8;
+        gk.rig.lKnee.rotation.x = 0.6;
+        gk.rig.rLeg.rotation.x = -0.8;
+        gk.rig.rKnee.rotation.x = 0.6;
+    };
+
+    // Os que estao de pe: tem de assentar.
+    for (const estado of ['idle', 'tiro_meta_espera', 'tiro_meta', 'chutando',
+        'segurando', 'maos', 'lancando', 'apanhar']) {
+        preparar(estado);
+        const y = gk.model.position.y;
+        gk.assentarNoChao();
+        assert.notStrictEqual(gk.model.position.y, y,
+            `com gkEstado '${estado}' ele esta de pe e tem de assentar`);
+    }
+
+    // Os dois que estao no ar de proposito: nao se lhes toca.
+    for (const estado of ['mergulho', 'salto_alto']) {
+        preparar(estado);
+        const y = gk.model.position.y;
+        gk.assentarNoChao();
+        assert.strictEqual(gk.model.position.y, y,
+            `com gkEstado '${estado}' ele escreve a propria altura`);
+    }
+    gk.gkEstado = 'idle';
+});
+
 test('o assento continua a NAO correr a correr, em saltos e em carrinhos', () => {
     /*
     As tres excepcoes que a correccao inteira nao pode estragar: a passada tem

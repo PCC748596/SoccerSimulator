@@ -58,6 +58,14 @@ correccao inteira estraga o desenho.
 */
 const tremor = [];
 const yAnterior = new Map();
+/*
+E O TREMOR DA SOLA, que e o que se VE. O corpo a descer enquanto as pernas
+esticam nao e defeito nenhum — e o que faz a anca subir e descer numa passada
+a serio. O que seria defeito era a BOTA a saltar. Medir o corpo levou-me a
+apertar o tecto pelo lado errado; fica os dois.
+*/
+const tremorSola = [];
+const solaAnterior = new Map();
 
 /*
 QUAL DAS GUARDAS RECUSA O ASSENTO. O `assentarNoChao` tem seis saídas
@@ -104,6 +112,13 @@ const f2 = (a) => med(a).toFixed(3);
 
 // --- RELATO 1: o guarda-redes, e o que se passa antes do apito.
 const gkPorEstadoDoJogo = {};
+/*
+RELATO 4: "depois do chute para fora o goleiro tb fica suspenso" — o tiro de
+meta. A guarda do assento e por `gkEstado`, e existe para os gestos que
+escrevem a propria altura (mergulho, salto). Aqui separa-se a sola POR ESTADO,
+para se ver quais e que realmente a escrevem e quais e que so estao de pe.
+*/
+const gkPorGkEstado = {};
 // --- RELATO 2: a andar, ao longo do tempo.
 const andarPorMinuto = {};
 // --- RELATO 3: a girar.
@@ -149,6 +164,13 @@ for (let i = 0; i < Math.round(segundos / dt); i++) {
             tremor.push(Math.abs(yAgora - yAnt));
         }
 
+        const solaAnt = solaAnterior.get(p);
+        solaAnterior.set(p, sola);
+        if (solaAnt !== undefined && p.jumpTimer <= 0 && p.peitoHopTimer <= 0 &&
+            p.velocity.length() < 4.0) {
+            tremorSola.push(Math.abs(sola - solaAnt));
+        }
+
         const motivo = motivoDaRecusa(p);
         const chaveR = `${p.role === 'gk' ? 'GR' : 'campo'} | ${motivo || 'assento CORREU'}`;
         recusas[chaveR] = (recusas[chaveR] || 0) + 1;
@@ -156,6 +178,8 @@ for (let i = 0; i < Math.round(segundos / dt); i++) {
         if (p.role === 'gk') {
             const k = estadoJogo;
             (gkPorEstadoDoJogo[k] || (gkPorEstadoDoJogo[k] = [])).push(sola);
+            const g = p.gkEstado || 'idle';
+            (gkPorGkEstado[g] || (gkPorGkEstado[g] = [])).push(sola);
             continue;
         }
 
@@ -178,6 +202,12 @@ console.log('Altura da SOLA sobre o relvado, em metros. 0.00 = encostado.\n');
 console.log('RELATO 1 — O GUARDA-REDES, por estado do jogo');
 for (const [k, v] of Object.entries(gkPorEstadoDoJogo).sort((a, b) => b[1].length - a[1].length)) {
     console.log(`  ${k.padEnd(14)} sola media ${f2(v).padStart(7)}   ` +
+        `max ${Math.max(...v).toFixed(3).padStart(7)}   n=${v.length}`);
+}
+
+console.log('\nRELATO 4 — O GUARDA-REDES por gkEstado (a guarda do assento e por aqui)');
+for (const [k, v] of Object.entries(gkPorGkEstado).sort((a, b) => med(b[1]) - med(a[1]))) {
+    console.log(`  ${k.padEnd(20)} sola media ${f2(v).padStart(7)}   ` +
         `max ${Math.max(...v).toFixed(3).padStart(7)}   n=${v.length}`);
 }
 
@@ -214,4 +244,11 @@ tecto por frame e o `correccaoMax`.
 const acima = (x) => (100 * tremor.filter(t => t > x).length / tremor.length).toFixed(2);
 console.log(`  frames acima de 2 cm: ${acima(0.02)}%   ` +
     `5 cm: ${acima(0.05)}%   10 cm: ${acima(0.10)}%   20 cm: ${acima(0.20)}%`);
+const acimaS = (x) => (100 * tremorSola.filter(t => t > x).length / tremorSola.length).toFixed(2);
+console.log(`
+TREMOR DA SOLA entre frames (e o que se ve)`);
+console.log(`  media ${med(tremorSola).toFixed(4)} m/frame   ` +
+    `max ${Math.max(...tremorSola).toFixed(4)} m/frame`);
+console.log(`  frames acima de 2 cm: ${acimaS(0.02)}%   ` +
+    `5 cm: ${acimaS(0.05)}%   10 cm: ${acimaS(0.10)}%`);
 console.log('');
