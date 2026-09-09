@@ -25,6 +25,122 @@ escrita onde estava, porque saber o que NÃO é a causa vale o mesmo que saber o
 que é.
 
 
+#### Os cantos a 44%: três causas medidas, e só uma delas se resolveu
+
+Relato: o lote de 30 jogos deu 4.34 cantos por jogo contra os 9.92 do alvo, e
+em queda pelo terceiro lote seguido (6.80, 5.46, 4.34). Ferramenta nova,
+`tools/headless/cantos_lote.js`, com semente fixa e o que está A MONTANTE do
+apito — contar cantos é contar um evento raro, e três lotes de suspeitas já
+tinham morrido nisso.
+
+Seis partidas headless, e o retrato:
+
+    por jogo          medido    a serio
+    cantos              3.83       ~9.9
+    tiros de meta       7.50      ~16
+    bola na linha      11.3       ~26      <- metade do trafego
+
+    bloqueios           5.2 por jogo, ZERO chegaram a linha de fundo
+    alivios ao fundo    3.7 por jogo, ~1/3 deu canto
+    defesas do GK       agarra 89%
+
+E o último toque nos cantos que existem é sempre um acidente de posse —
+`CARRY`, `BALL_CONTROL_RIGHT`, `CHEST_CONTROL`. Nenhum dos três gestos que no
+futebol produzem cantos os produzia aqui.
+
+##### O bloqueio: a regra estava errada, e arranjá-la não deu cantos nenhuns
+
+Duas coisas, as duas no ramo `bloqueado` do `executeShotGameplay` (fsm.js):
+
+ 1. **o toque ficava creditado ao REMATADOR.** O `Match.lastTouchedTeam =
+    p.team` corria no fim para os dois ramos. Pela Lei 9 quem tocou por último
+    foi o defensor — uma bola cortada que saia pela linha de fundo dava tiro de
+    meta onde a regra manda canto;
+ 2. **e ela não podia sair de qualquer maneira:** era mirada a `ball.z +
+    dirZ * 3`, três metros à frente do rematador, com potência 4.0-6.4 e altura
+    0.3. Um bloqueio não podia ricochetear para trás nem para o lado.
+
+O desvio passou a ser um ricochete a sério (`desvioDeBloqueio` em utils.js, o
+`BlockModel` em config/shooting.js): a direcção do remate rodada por um ângulo
+gaussiano, com a velocidade cortada. Quem decide se a bola sai é a DISTÂNCIA a
+que o corte aconteceu, e não um destino escolhido.
+
+**Só a atribuição, sem tocar na bola, dá números bit a bit iguais aos de base**
+— 24 partidas, golos 3.04, remates 27.77, cantos 5.06, xG 1.60 dos dois lados.
+É a prova de que a bola bloqueada antiga praticamente nunca chegava à linha: a
+regra estava errada sem consequência visível.
+
+Com o ricochete, e é aqui que a primeira calibração se pagou:
+
+    24 partidas          golos   remates   cantos     xG
+    de base               3.04     27.77     5.06    1.60
+    fraccaoVel 0.20-0.60  2.28     24.29     4.37    1.30
+    fraccaoVel 0.12-0.38  2.28     27.21     4.62    1.42
+
+Os 3.5 remates que a primeira versão perdia eram um **rebote fabricado**: a bola
+fraca a três metros da baliza era recuperada por quem atacava e rematada outra
+vez, quase sempre. Com a fracção baixada ela morre perto de onde foi cortada e
+os remates voltam ao sítio. O que fica por explicar são os 0.76 golos — 1.5
+sigma, na mesma direcção nas duas amostras, e provavelmente o mesmo rebote a
+deixar de existir.
+
+**E os cantos não se mexeram.** 5 cantos em 68 bloqueios (0.42 por jogo). A
+correcção está entregue pelo MECANISMO — é a Lei 9 e é um ricochete a sério —
+e não pelo desfecho, que é o que se procurava.
+
+Testes: `tests/remate_bloqueado.test.js` (três, um deles a varrer a forma da
+distribuição do desvio).
+
+##### O guarda-redes: o defeito não era o agarro, era a velocidade não pesar
+
+89% do que ele defende fica-lhe nas mãos. Mas baixar a `base` seria a resposta
+errada, e o dump das 212 chamadas ao `resolverDefesaGK` em 12 partidas diz
+porquê:
+
+    banda de velocidade    n     agarra
+    < 18 m/s             142      ~95%     <- bolas mansas: e para ser assim
+    18-23                 15       80%
+    24-29                 33       85%
+    30+                   22       81%
+
+Dois terços das defesas são recolhas de bola mansa, e essas devem mesmo ser
+agarradas. O que estava errado é que **um tiro de 30 m/s era segurado tão bem
+como um passe atrasado** — a `custoVel` valia 0.22, ou seja 0.14 de desconto na
+probabilidade entre uma bola a 18 e uma a 30 m/s.
+
+Varrida offline sobre as chamadas gravadas, sem voltar a correr as partidas:
+
+    custoVel     18-23    24-29     30+
+        0.22     85.0%    79.0%   71.5%
+        0.70     76.4%    53.0%   33.2%   <- entregue
+        0.85     73.7%    44.9%   21.8%
+
+E o efeito no jogo, 24 partidas com as mesmas sementes:
+
+                          golos   remates   cantos     xG
+    antes (custoVel 0.22)  2.28     27.21     4.62    1.42
+    depois (0.70)          2.36     26.79     5.51    1.45
+
+**+0.89 cantos, que é 1.4 sigma: a direcção é a certa e a demonstração não**
+**chega.** O mecanismo, esse, mede-se bem: 77% das espalmadas do jogo têm
+destino `canto` (44 de 57), e o que faltava era haver espalmadas.
+
+Fica MEDIDO e por arranjar: das 25 espalmadas com destino `canto`, **só 16
+deram canto**. Um terço é empurrado para fora da moldura e não chega a
+atravessar a linha — `GoalkeeperDive.espalmarForaZ` (0.45) trava o avanço da
+bola e há bolas lentas que ficam aquém. É a próxima alavanca, e tem número.
+
+Teste novo em `tests/gk_defesa.test.js`: a bola mansa continua agarrada em 95%,
+o tiro de 30 m/s ao corpo cai para 31% e o mergulho esticado para 5%.
+
+##### O que sobra, com número
+
+Os cantos ficam nos ~5.5 contra 9.92. O que falta não está nos gestos
+defensivos — está no tráfego: a bola atravessa a linha de fundo 11-13 vezes por
+90 contra as ~26 de um jogo a sério, e enquanto isso for verdade nenhum modelo
+de ressalto chega lá. Os `toques de defensor para a própria linha` andam nos
+12-22 por 90 e quase nenhum acaba fora.
+
 #### O médio de ala por dentro do seu CM — e a regra que tinha a premissa ao contrário
 
 Relato, com captura dos anéis de debug: *"os laterais e meias pelas laterais

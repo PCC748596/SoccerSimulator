@@ -182,3 +182,29 @@ test('bola ao centro do peito não vai para canto', () => {
         assert.notStrictEqual(d, 'canto', 'saiu para canto sem estar colocada');
     }
 });
+
+test('o TIRO nao se segura como um passe atrasado: 30 m/s fica em menos de metade', () => {
+    /*
+    A `custoVel` era 0.22, e com ela um remate a 30 m/s ao corpo ficava-lhe
+    nas maos em 7 de cada 10. Medido em 12 partidas headless
+    (tools/headless/cantos_lote.js, com o dump das chamadas): das 212 defesas,
+    142 sao bolas mansas abaixo dos 18 m/s -- e essas devem mesmo ser
+    agarradas --, mas as 70 que chegavam acima disso eram seguras em 81-85%.
+    Nao ha espalmada nenhuma nesse mundo, e sem espalmada nao ha cantos: 77%
+    das espalmadas do jogo tem destino `canto`.
+
+    Passou a 0.70. O que se pede aqui e a FORMA: a bola mansa continua a
+    ser agarrada quase sempre, e o tiro nao.
+    */
+    const mansa = pAgarra({ tipo: 'corpo', gk: 50, tec: 50, vChegada: 8, extensao: 0.2 });
+    const tiro = pAgarra({ tipo: 'corpo', gk: 50, tec: 50, vChegada: 30, extensao: 0.5 });
+    const tiroMergulho = pAgarra({ tipo: 'mergulho', gk: 50, tec: 50, vChegada: 30, extensao: 0.8 });
+
+    console.log(`  bola mansa ao corpo ${(mansa * 100).toFixed(0)}%  |  ` +
+        `tiro de 30 m/s ao corpo ${(tiro * 100).toFixed(0)}%  |  ` +
+        `tiro de 30 m/s em mergulho esticado ${(tiroMergulho * 100).toFixed(0)}%`);
+
+    assert.ok(mansa > 0.90, `bola mansa devia ser agarrada quase sempre: ${mansa.toFixed(2)}`);
+    assert.ok(tiro < 0.50, `tiro de 30 m/s agarrado em ${(tiro * 100).toFixed(0)}% -- e um passe atrasado, nao um remate`);
+    assert.ok(tiroMergulho < 0.25, `mergulho esticado a 30 m/s agarrado em ${(tiroMergulho * 100).toFixed(0)}%`);
+});

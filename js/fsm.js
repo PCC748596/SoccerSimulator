@@ -623,6 +623,13 @@ function executeShotGameplay(p) {
     const bloqueado = bloqueador && !venceuDuelo(p.skillFor('TEC'), bloqueador.skillFor('MARKING'), 0.6);
 
     let pow, alvoX, alvoY;
+    /*
+    O RICOCHETE, quando há bloqueio. Ver `desvioDeBloqueio` (utils.js) e o
+    BlockModel: a bola sai na direcção do remate, rodada e travada, e é a
+    DISTÂNCIA a que o corte aconteceu que decide se ela vai à linha de fundo.
+    Antes era mirada três metros à frente do rematador e nunca podia sair.
+    */
+    let desvioBloqueio = null;
 
     if (bloqueado) {
         if (typeof MatchStats !== 'undefined' && MatchStats.registarRemateBloqueado) {
@@ -630,10 +637,15 @@ function executeShotGameplay(p) {
             // contadores diferentes (ver MatchStats.registarRemateBloqueado).
             MatchStats.registarRemateBloqueado(bloqueador.team, p.team);
         }
-        // Bola desviada, curta e fraca — não mira a baliza.
-        pow = 4.0 + Math.random() * 2.4;
-        alvoX = p.model.position.x + (Math.random() - 0.5) * 4.0;
-        alvoY = 0.3;
+        const potenciaDoRemate = Math.max(ShotModel.potenciaMin,
+            ShotModel.potenciaBase
+            + ((p.skillFor('TEC') - 50) / 50) * ShotModel.potenciaPorSkill);
+        desvioBloqueio = desvioDeBloqueio({
+            dirX: -Match.ball.position.x,
+            dirZ: p.targetGoalZ - Match.ball.position.z,
+            potencia: potenciaDoRemate
+        });
+        pow = potenciaDoRemate; alvoX = 0; alvoY = 0.3;   // não usados neste ramo
     } else {
         /*
         TIPO, MIRA E ERRO — ver o bloco novo do ShotModel (config.js) e as
@@ -711,7 +723,7 @@ function executeShotGameplay(p) {
     m/s² a esta velocidade), por isso subestimava o tempo
     de voo duas vezes e o remate saía sempre por baixo.
     */
-    _v1.set(alvoX, alvoY, bloqueado ? Match.ball.position.z + p.dirZ * 3 : p.targetGoalZ);
+    _v1.set(alvoX, alvoY, p.targetGoalZ);
     const dxR = _v1.x - Match.ball.position.x;
     const dzR = _v1.z - Match.ball.position.z;
     const distHR = Math.hypot(dxR, dzR);
@@ -720,11 +732,15 @@ function executeShotGameplay(p) {
     // ângulo de alcance máximo em vez de rasteiro ao chão.
     const eR = (elevR === null) ? ShotModel.elevacaoRecurso : elevR;
     const vhR = pow * Math.cos(eR);
-    Match.ballVel.set(
-        (distHR > 0.001 ? dxR / distHR : 0) * vhR,
-        pow * Math.sin(eR),
-        (distHR > 0.001 ? dzR / distHR : p.dirZ) * vhR
-    );
+    if (desvioBloqueio) {
+        Match.ballVel.set(desvioBloqueio.x, desvioBloqueio.y, desvioBloqueio.z);
+    } else {
+        Match.ballVel.set(
+            (distHR > 0.001 ? dxR / distHR : 0) * vhR,
+            pow * Math.sin(eR),
+            (distHR > 0.001 ? dzR / distHR : p.dirZ) * vhR
+        );
+    }
     // Remate: o chute mais forte que há, sempre no máximo do som.
     if (typeof EfeitosSonoros !== 'undefined') {
         EfeitosSonoros.chute(Match.ball.position, 1.0);
@@ -734,8 +750,14 @@ function executeShotGameplay(p) {
     p.jogarDePrimeira = false;
     p.hasBall = false; p.touchLock = BallControl.touchLock;
     Match.ballCarrier = null;
-    Match.lastTouchedTeam = p.team;
-    Match.lastTouchedPlayer = p;
+    /*
+    O TOQUE É DE QUEM BLOQUEIA. Corria sempre com `p`, o rematador, mesmo no
+    ramo do bloqueio — e por isso uma bola cortada que saísse pela linha de
+    fundo dava tiro de meta onde a Lei 9 manda canto.
+    */
+    const tocou = bloqueado ? bloqueador : p;
+    Match.lastTouchedTeam = tocou.team;
+    Match.lastTouchedPlayer = tocou;
 
     // Impede que jogadores colados (colegas ou adversários) dominem o remate
     // no frame imediatamente a seguir, travando a bola.

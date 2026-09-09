@@ -2685,6 +2685,44 @@ Aqui é só a conta, pura e sem dependências do jogo, para poder ser medida
 Devolve `{ resultado, pAgarra, pRoca, qualidade }` com resultado em
 'agarra' | 'espalma' | 'roca'.
 */
+/*
+O RICOCHETE DO BLOQUEIO. Ver o BlockModel (config/shooting.js) para o porque.
+
+Recebe a direccao do remate no plano XZ e a potencia com que ele saiu, e
+devolve a VELOCIDADE da bola depois de bater no defensor: a mesma direccao
+rodada por um angulo gaussiano, com a velocidade cortada. Nao decide destinos
+— se a bola sai pela linha de fundo ou morre no campo e a distancia a que o
+corte aconteceu que diz, como no futebol.
+
+Pura, com o `rnd` injectado, para a forma da distribuicao poder ser varrida em
+teste (tests/remate_bloqueado.test.js).
+*/
+function desvioDeBloqueio(o) {
+    const M = BlockModel;
+    const rnd = (typeof o.rnd === 'function') ? o.rnd : Math.random;
+    const dirX = o.dirX || 0;
+    const dirZ = (o.dirZ === undefined) ? 1 : o.dirZ;
+    const norma = Math.hypot(dirX, dirZ) || 1;
+    const base = Math.atan2(dirX / norma, dirZ / norma);
+
+    let desvio = M.anguloSigma * amostraGaussiana(rnd);
+    desvio = Math.max(-M.anguloMax, Math.min(M.anguloMax, desvio));
+    const ang = base + desvio;
+
+    const potencia = Math.max(0, o.potencia || 0);
+    const fraccao = M.fraccaoVelMin + rnd() * (M.fraccaoVelMax - M.fraccaoVelMin);
+    const v = Math.max(M.velocidadeMin, potencia * fraccao);
+
+    const elev = M.elevacaoMax * rnd();
+    const vh = v * Math.cos(elev);
+    return {
+        x: Math.sin(ang) * vh,
+        y: v * Math.sin(elev),
+        z: Math.cos(ang) * vh,
+        angulo: desvio
+    };
+}
+
 function resolverDefesaGK(o) {
     const M = GkCatchModel;
     const tipo = o.tipo || 'mergulho';

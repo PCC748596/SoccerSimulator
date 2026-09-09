@@ -643,7 +643,7 @@ const GkCatchModel = {
     tiro.
     */
     vRef: 18.0,
-    custoVel: 0.22,
+    custoVel: 0.70,
 
     // Altura do peito do guarda-redes: é daqui para cima que a bola começa a
     // custar a segurar (acima da cabeça agarra-se com as pontas dos dedos).

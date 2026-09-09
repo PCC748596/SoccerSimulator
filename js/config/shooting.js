@@ -390,6 +390,55 @@ const ShotModel = {
     }
 };
 
+/*
+=============================================================================
+O BLOQUEIO — o ricochete, e nao um empurrao para a frente
+=============================================================================
+A bola bloqueada era mirada a `ball.z + dirZ * 3`: tres metros a frente do
+rematador, sempre no sentido do ataque, com potencia 4.0-6.4 e altura 0.3.
+Medido em 6 partidas headless (tools/headless/cantos_lote.js): 5.2 bloqueios
+por jogo e NENHUM a chegar a linha de fundo, com os cantos em 3.8 por jogo
+contra os 9.9 de um jogo a serio.
+
+Um bloqueio a serio nao decide para onde a bola vai — desvia-a. Mantem-se a
+direccao do remate, roda-se um angulo e perde-se velocidade. Quem decide se
+ela sai passa a ser a DISTANCIA a que o corte aconteceu: um a 8 m da linha vai
+la fora e da canto, um a 25 m morre no campo. Nada aqui aponta a bola para
+fora de proposito.
+*/
+const BlockModel = {
+    /*
+    Desvio gaussiano em radianos. 0.55 rad = 32 graus de sigma: a maioria dos
+    cortes devolve a bola quase no sentido em que ela vinha (e por isso ela
+    segue para a linha de fundo, que e onde o remate apontava), e a cauda leva
+    ao ricochete de lado.
+    */
+    anguloSigma: 0.55,
+    /*
+    Tecto do desvio, acima dos 90 graus para que o corte possa devolver a bola
+    para tras — o ressalto que volta aos pes do rematador.
+    */
+    anguloMax: 2.0,
+
+    /*
+    Fraccao da potencia do remate que sobrevive ao corte, e o unico numero
+    daqui que foi CALIBRADO em vez de escolhido.
+
+    Com 0.20-0.60 a bola bloqueada fugia da area e os remates caiam de 27.8
+    para 24.3 por 90 (24 partidas, ~2 sigma): o rebote fabricado que o modelo
+    antigo criava -- bola fraca a tres metros da baliza -- estava a alimentar
+    uma parte dos remates. Com 0.12-0.38 ela morre perto de onde foi cortada e
+    os remates ficam nos 27.2, dentro do ruido.
+    */
+    fraccaoVelMin: 0.12,
+    fraccaoVelMax: 0.38,
+    // Chao para bolas travadas por um remate fraco: fica sempre disputavel.
+    velocidadeMin: 2.0,
+
+    // Elevacao do ressalto, em radianos (0 a ~34 graus).
+    elevacaoMax: 0.60
+};
+
 const FreeKickModel = {
     /*
     DECISÃO DA COBRANÇA — ver decisaoDeFalta em utils.js. Três casos:
