@@ -139,8 +139,8 @@ console.log(`  amarelos                   ${conta.amarelo}  (${por90(conta.amare
 console.log(`  vermelhos DIRECTOS         ${conta.directo}  (${por90(conta.directo)}/90)`);
 console.log(`  vermelhos por 2.o amarelo  ${conta.segundoAmarelo}  (${por90(conta.segundoAmarelo)}/90)`);
 console.log(`  sem cartao                 ${conta.nada}`);
-console.log(`\n  contadores do jogo: amarelos ${por90(A.amarelos + B.amarelos)}/90  ` +
-    `vermelhos ${por90(A.vermelhos + B.vermelhos)}/90   (alvo 5.22 e 0.08)`);
+console.log(`\n  contadores do jogo: amarelos ${por90(A.cartoes.amarelos + B.cartoes.amarelos)}/90  ` +
+    `vermelhos ${por90(A.cartoes.vermelhos + B.cartoes.vermelhos)}/90   (alvo 5.22 e 0.08)`);
 
 const faixa = (a, b) => gravidades.filter(g => g >= a && g < b).length;
 console.log('\n  gravidade das faltas: <0.60 ' + faixa(0, 0.6) + ' | 0.60-0.85 ' + faixa(0.6, 0.85) +

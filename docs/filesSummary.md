@@ -7,6 +7,53 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ### Sessão de 9 de Setembro de 2026 — o pé no chão, e a área vazia
 
+#### A velocidade do carrinho deixa de ser uma constante
+
+Pergunta do utilizador, depois de eu ter escrito que o vermelho directo "não
+pode existir": *"porque o vermelho directo não pode acontecer? eu não coloquei
+nenhuma regra a respeito disso."* Tinha razão, e a correcção está na secção dos
+cartões. Daí saiu a causa, e é esta.
+
+O `case 'SLIDE_TACKLE'` (fsm.js) escrevia a velocidade do deslize POR CIMA da
+que o defensor trazia:
+
+    p.velocity.copy(_v2).multiplyScalar(S.velocidade * (1 - tSlide / S.deslize));
+
+`S.velocidade` era 9.0 para toda a gente. Um jogador a sprintar e outro que se
+atira parado deslizavam exactamente à mesma velocidade — e como a falta é
+sempre avaliada na mesma fase do gesto, a `velocidade` que chegava ao árbitro
+era **8.2 m/s, média igual ao máximo em todas as sementes**. Variância zero não
+é calibração, é defeito: apaga a única coisa que distingue um carrinho lançado
+em contra-ataque de um dado a passo.
+
+Medida a aproximação real, no frame em que ele entra no estado e antes de o
+deslize a reescrever (`tools/headless/carrinho_velocidade.js`, 3 sementes):
+
+    media 4.5-5.6 m/s | minimo 0.57 | mediana 4.2-6.1 | maximo 7.6
+
+O deslize passa a herdá-la mais um `impulso` (3.8 m/s, o que o salto
+acrescenta), fixado no `actSlideTackle` — que é o último sítio onde a
+aproximação ainda se conhece. **O impulso está escolhido para a MÉDIA não se
+mexer:** 5.2 + 3.8 dá os 9.0 de hoje. O que entra é só a dispersão que faltava.
+Depois:
+
+    velocidade no arbitro   8.2 / 8.2  ->  8.5-8.9 / 10.1-10.3
+
+E o topo (~11.4 no limite) é quase o "lançado a 11.7 m/s" com que o comentário
+dos limiares de cartão sempre raciocinou, e que o jogo nunca produzia.
+
+**O que isto NÃO faz, e estava previsto:** a gravidade máxima do carrinho mal
+mexeu, 0.73 para 0.74. Uma velocidade alta raramente calha no mesmo lance que
+um ângulo mau, e a soma das duas caudas é rara. Continua a não haver vermelhos
+directos — a alavanca para isso, se se quiser, é o limiar, que foi calibrado
+contra um lance que o modelo não gera.
+
+**E o efeito nos números do jogo não é demonstrável com a amostra que corri:**
+4 sementes deram faltas 24.5 -> 28.5 por 90 e amarelos 5.74 -> 4.25, mas com as
+faltas a variar de 20.8 a 36.2 entre sementes. A alteração justifica-se pelo
+mecanismo (variância reposta, média preservada), não pelo desfecho. O próximo
+lote decide.
+
 #### O passe ganhou gesto: o pé de apoio planta ao lado da bola
 
 Pedido, com uma referência: *"gostaria que essa fosse a animação do passe

@@ -1991,7 +1991,16 @@ class PlayerFSM {
                     // Depois disso fica caido, sem se arrastar pelo relvado.
                     _v2.set(0, 0, 1).applyQuaternion(p.model.quaternion).normalize();
                     if (tSlide < S.deslize) {
-                        p.velocity.copy(_v2).multiplyScalar(S.velocidade * Math.max(0, 1.0 - tSlide / S.deslize));
+                        /*
+                        `p.slideVel0` é a velocidade com que ELE chegou ao
+                        carrinho, mais o impulso do salto — fixada no
+                        `actSlideTackle`, que é o último sítio onde a
+                        aproximação ainda se conhece. O `S.velocidade` fica
+                        como recurso, para quem entre no estado por outro
+                        caminho. Ver a nota do SlideTackleModel.
+                        */
+                        const v0 = (typeof p.slideVel0 === 'number') ? p.slideVel0 : S.velocidade;
+                        p.velocity.copy(_v2).multiplyScalar(v0 * Math.max(0, 1.0 - tSlide / S.deslize));
                     } else {
                         p.velocity.multiplyScalar(0.8);
                     }

@@ -1721,6 +1721,22 @@ function actSlideTackle(ctx) {
     }
     _v1.y = p.model.position.y;
     lookAtBola(p.model, _v1);
+
+    /*
+    A VELOCIDADE DO DESLIZE FIXA-SE AQUI, e não no `case 'SLIDE_TACKLE'`.
+
+    É o último instante em que `p.velocity` ainda é a velocidade de APROXIMAÇÃO:
+    a partir do primeiro frame do estado, o case escreve a do deslize por cima.
+    Ver a nota do `SlideTackleModel.velocidade` — a constante de 9.0 para toda
+    a gente apagava a diferença entre um carrinho lançado e um dado a passo.
+    */
+    {
+        const S = SlideTackleModel;
+        const chegada = p.velocity ? p.velocity.length() : 0;
+        p.slideVel0 = THREE.MathUtils.clamp(
+            chegada + (S.impulso || 0), S.velMin || 0, S.velMax || S.velocidade);
+    }
+
     p.fsm.changeState('SLIDE_TACKLE');
 }
 

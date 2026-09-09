@@ -120,7 +120,38 @@ const SlideTackleModel = {
     paragem: 1.45,
     levantar: 1.95,
 
-    velocidade: 9.0,        // velocidade inicial do deslize, m/s
+    /*
+    A VELOCIDADE DO DESLIZE HERDA A DE APROXIMAÇÃO.
+
+    Era `velocidade: 9.0` e mais nada — escrita por cima da que o defensor
+    trazia, no `case 'SLIDE_TACKLE'` do fsm.js. Um jogador a sprintar e outro
+    que se atira parado deslizavam exactamente à mesma velocidade.
+
+    E como a falta é sempre avaliada na mesma fase do gesto, a `velocidade` que
+    chegava ao árbitro era uma CONSTANTE — medida em três sementes
+    (`tools/headless/cartoes_origem.js`): **8.2 m/s, média IGUAL ao máximo**.
+    Variância zero não é uma calibração, é um defeito: apaga a única coisa que
+    distingue um carrinho lançado em contra-ataque de um dado a passo.
+
+    Medida a aproximação real, no frame em que ele entra no estado e antes de o
+    deslize a reescrever (`tools/headless/carrinho_velocidade.js`, 3 sementes):
+
+        media 4.5-5.6 m/s | minimo 0.57 | mediana 4.2-6.1 | maximo 7.6
+
+    O `impulso` é o que o SALTO do carrinho acrescenta a essa chegada, e está
+    escolhido para a MÉDIA não se mexer: 5.2 de aproximação média + 3.8 dá os
+    9.0 de hoje. O que entra é a dispersão que faltava — a gama passa a ser
+    ~4.4 a 11.4 m/s, e o topo é quase o "lançado a 11.7" com que o comentário
+    dos limiares de cartão sempre raciocinou (ver RefereeModel.faltas) e que o
+    jogo nunca produzia.
+
+    `velocidade` fica como recurso: é o que se usa se a aproximação não se
+    souber.
+    */
+    velocidade: 9.0,        // recurso, quando a aproximação não é conhecida
+    impulso: 3.8,           // o que o salto acrescenta à velocidade de chegada
+    velMin: 4.5,            // nem o carrinho dado parado desliza mais devagar
+    velMax: 12.0,           // nem o mais lançado passa disto
     alturaAnca: -0.55,      // quanto o corpo desce ao sentar no relvado
 
     janelaToqueIni: 0.08,   // quando o pé pode começar a tocar na bola
