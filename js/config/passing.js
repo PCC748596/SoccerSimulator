@@ -716,6 +716,30 @@ const PassTypeModel = {
         cascata driblar -> atrasar a alguém perto -> conduzir para trás.
         `tecnicaDrible` é o mesmo 75 que o podeDriblar já usa.
         */
+        /*
+        A CORRIDA AO PONTO DE QUEDA (ver pontoDisputado, utils.js).
+
+        A folga da linha responde a "alguem corta isto a meio?". Falta a outra
+        metade: no sitio onde a bola vai cair, quem la chega primeiro? Medido em
+        600 s, o passe em profundidade (`leading`) e o que mais se perde — 22%
+        cortados — e **os cortes acontecem a 98% do percurso**: nao e a linha, e
+        o ponto de queda. No mapa das posses, o passe cortado e 40% de todas as
+        mortes de sequencia.
+
+        Com o ponto disputado, o candidato nao e descartado: **desce a passe
+        DIRECTO ao homem**. O passe existe na mesma, deixa de ser um passe para
+        a corrida do adversario.
+
+        `velAdversario` e generosa de proposito (o topo da corrida sem bola),
+        pela mesma razao do toque de conducao: errar por prudencia custa um
+        passe curto, errar por optimismo custa a posse.
+        */
+        disputaDoPonto: {
+            velReceptor: 6.5,
+            velAdversario: 7.0,
+            margem: 0.15
+        },
+
         notaMinima: 1.45,
         tecnicaDrible: 75,
 

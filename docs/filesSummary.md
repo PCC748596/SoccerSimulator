@@ -156,6 +156,36 @@ linha no instante em que o passe saiu.
 É aqui que está o próximo fio: não é "passar melhor", é escolher outro passe
 quando o ponto de queda é disputado.
 
+#### E o passe para a corrida do adversário
+
+O `PassTypes.escolher` mede a FOLGA DA LINHA até ao ponto de mira e descarta
+quem tem alguém em cima da recta. Nunca perguntou a outra metade: **no sítio
+onde a bola vai cair, quem lá chega primeiro?** É a mesma pergunta que o
+`maiorToqueSeguro` faz ao toque de condução, e a resposta é `pontoDisputado`
+(utils.js) — tempo de cada um até ao ponto, margem a favor de quem defende.
+
+Com o ponto disputado o candidato **não morre: desce a passe DIRECTO ao homem**.
+O passe existe na mesma; deixa de ser um passe para a corrida do adversário.
+
+Medido com sementes fixas, 900 s, o mesmo ruído dos dois lados:
+
+    metrica          antes                depois
+    ataques totais   136 131 129  (75%)   149 135 117  (76%)
+    perigosos         62  60  58  (77%)    67  59  66  (82%)
+    golos           3.65 3.65 3.65        2.42 3.64 3.65
+
+Os ataques totais não mexem — não é para isso que serve —, mas **as sequências
+que chegam ao último terço sobem de 77% para 82% do alvo** e os golos descem um
+pouco. Por tipo de passe (corrida sem semente, portanto indicativo): o `leading`
+passou de 22% para 15% de cortados, e o `direct` de 13% para 7%.
+
+**Uma coisa que tentei e estava errada, e fica escrita:** somei ao teste o
+relógio da BOLA — "só conta o adversário que lá esteja quando ela cair". É uma
+condição A MAIS, portanto ESTREITA o teste em vez de o alargar, e um defesa que
+chega ao ponto antes do destinatário ganha a bola quer ela já lá esteja quer
+chegue a seguir. O tempo de voo não muda quem ganha a corrida. Ficou a corrida
+seca. Teste: `tests/passe_ponto_disputado.test.js`.
+
 #### O guarda-redes mergulhava para onde a bola ESTAVA
 
 Lote de 60 jogos (o do utilizador, 1080 s por jogo):
@@ -6128,6 +6158,7 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `painel.js [segundos] [semente]` — as cinco linhas com que se calibra (golos, remates, ataques, perigosos, precisão de passe) numa corrida com semente fixa, para comparar duas versões com o mesmo ruído.
 - `onde_morrem_ataques.js [segundos] [semente]` — segue as SEQUÊNCIAS de posse (não o contador): quantas passam o meio-campo, quantas chegam ao último terço, e o que matou cada uma — passe cortado, bola solta, guarda-redes, bola fora.
 - `remates_contados.js [segundos] [semente]` — separa os gestos de remate dos remates a sério: com bola no pé, furados, abortados a meio, cabeçadas e bola parada, ao lado do `remates.tentados`.
 - `gk_cronologia.js [segundos] [semente]` — a cronologia da defesa: tempo de voo até à linha, quando ele reage, quando o mergulho arranca, quantos metros de lado precisava e a que distância a mão passou da bola. Foi ela que apanhou o mergulho para fora do poste.

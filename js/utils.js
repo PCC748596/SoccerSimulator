@@ -3091,6 +3091,60 @@ com a gravidade a contar para a altura, e o tempo que falta.
 
 Pura: sem Match, sem THREE.
 */
+/*
+QUEM CHEGA PRIMEIRO AO PONTO DE QUEDA — o passe em profundidade disputado.
+
+O `PassTypes.escolher` mede a FOLGA DA LINHA até ao ponto de mira e descarta
+quem tem alguém em cima da recta. O que nunca perguntou foi o resto: **e no
+sítio onde a bola vai cair, quem lá chega primeiro?**
+
+Medido em 600 s (`tools/headless/passes.js`), por tipo de passe:
+
+    tipo       recebeu  outro colega  cortado  adversario na linha a saida
+    direct       61%        20%         13%            24%
+    space        68%        16%          5%             4%
+    leading      63%        12%         22%            31%
+
+O `leading` e o que mais se perde — e **os cortes acontecem a 98% do percurso**.
+Nao e a linha tapada a meio: e o adversario a ganhar a bola no ponto de queda,
+com o passe ja feito. No mapa das posses, o passe cortado e 40% de todas as
+mortes de sequencia.
+
+E a mesma pergunta do `maiorToqueSeguro` (o toque de conducao), com os mesmos
+termos: tempo de cada um ate ao ponto, e uma margem a favor de quem defende.
+Devolve true se o ponto for DISPUTADO — isto e, se o adversario la chega antes
+do destinatario.
+
+Pura: sem Match, sem THREE. `adversarios` e uma lista de {x, z}.
+*/
+function pontoDisputado(pontoX, pontoZ, receptorX, receptorZ, adversarios, opcoes) {
+    if (!adversarios || !adversarios.length) return false;
+    const o = opcoes || {};
+    const vRec = o.velReceptor || 6.5;
+    const vAdv = o.velAdversario || 7.0;
+    const margem = (typeof o.margem === 'number') ? o.margem : 0.15;
+
+    /*
+    A PERGUNTA E SO UMA: quem chega primeiro AO PONTO, o homem ou o adversario?
+
+    Cheguei a somar aqui o relogio da BOLA — "so conta quem la esteja quando ela
+    cair". Esta errado, e por duas razoes: torna o teste mais ESTREITO (e uma
+    condicao a mais, nao a menos), e um defesa que chega ao ponto antes do
+    destinatario ganha a bola quer ela ja la esteja quer chegue a seguir. O
+    tempo de voo nao muda quem ganha a corrida; so diria quando ela comeca.
+
+    Fica a corrida, como no `maiorToqueSeguro`.
+    */
+    const tRec = Math.hypot(pontoX - receptorX, pontoZ - receptorZ) / Math.max(0.001, vRec);
+    for (let i = 0; i < adversarios.length; i++) {
+        const a = adversarios[i];
+        if (!a) continue;
+        const tAdv = Math.hypot(pontoX - a.x, pontoZ - a.z) / Math.max(0.001, vAdv);
+        if (tAdv + margem < tRec) return true;
+    }
+    return false;
+}
+
 function pontoDeIntercepcaoGK(bolaX, bolaY, bolaZ, velX, velY, velZ, gkZ, gravidade) {
     const vz = Math.abs(velZ);
     if (vz < 0.001) return null;
@@ -4113,6 +4167,6 @@ if (typeof window !== 'undefined') {
         tiroDaFaltaDirecta, tiroTensoDaFaltaDirecta, lugaresDoApoioNaFaltaDirecta,
         passaEntreAdversarios,
         maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR,
-        pontoDeIntercepcaoGK
+        pontoDeIntercepcaoGK, pontoDisputado
     });
 }

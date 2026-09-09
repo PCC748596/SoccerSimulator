@@ -480,7 +480,29 @@ const PassTypes = {
             const pontos = mapa[mate.id] || [];
 
             const tipoSorteado = this.sortear(this.misturaPara(origem, destino), rnd);
-            const res = this.pontoPara(tipoSorteado, pontos, mate, golZ, opponents);
+            let res = this.pontoPara(tipoSorteado, pontos, mate, golZ, opponents);
+
+            /*
+            E O PONTO DE QUEDA, QUEM LÁ CHEGA PRIMEIRO?
+
+            A folga da linha (mais abaixo) responde a "alguém corta isto a
+            meio?". Faltava a outra metade: medido, o passe em profundidade
+            perde-se em 22% dos casos e **os cortes acontecem a 98% do
+            percurso** — é o adversário a ganhar a bola onde ela cai.
+
+            Com o ponto disputado o candidato não morre: desce a passe DIRECTO
+            ao homem. Ver pontoDisputado (utils.js) e escolha.disputaDoPonto.
+            */
+            if (res.ponto && typeof pontoDisputado === 'function' && E.disputaDoPonto) {
+                const advs = [];
+                for (const o of opponents) {
+                    if (!o || o.role === 'gk' || !o.model) continue;
+                    advs.push({ x: o.model.position.x, z: o.model.position.z });
+                }
+                if (pontoDisputado(res.ponto.x, res.ponto.z, mx, mz, advs, E.disputaDoPonto)) {
+                    res = { tipo: this.DIRECT, ponto: null };
+                }
+            }
 
             // Progresso: quanto o PONTO DE MIRA adianta a bola para a
             // baliza. Num passe directo o ponto é o próprio companheiro.
