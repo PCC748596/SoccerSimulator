@@ -596,9 +596,33 @@ const MatchStats = {
 
     /*
     Fecha a sequência em curso e credita-a. Chamada quando a posse muda de
-    equipa, quando a bola sai de jogo e no fim do jogo — uma sequência aberta
-    que nunca fecha é uma que nunca conta, e o último ataque de cada jogo é
-    precisamente o que ficaria de fora.
+    equipa (por PORTADOR novo ou por TOQUE do outro lado) e no fim do jogo.
+
+    =========================================================================
+    O QUE É UM "ATAQUE" — a reconciliação com o alvo
+    =========================================================================
+    O alvo do relatório é 176.63 ataques totais e 77.84 perigosos por jogo, e
+    media-se 63.7 e 37.6: 36% e 48%. Isso parecia um defeito de jogo enorme.
+    Não é — ou não é só. Medido na mesma corrida, a contar sequências de posse
+    à parte (`tools/headless/onde_morrem_ataques.js`):
+
+        sequências de posse         131-136 por 90
+        passam o meio-campo         101-105
+        chegam ao último terço       58-62
+
+    A razão perigosos/totais do ALVO é 77.84/176.63 = **44%**. A razão
+    "chegam ao último terço / todas as sequências" medida no jogo é
+    62/136 = **44%**, ao metro. A razão que o código usava — último terço sobre
+    as que passam o meio-campo — dá 59%, e não bate com nada.
+
+    Ou seja: o alvo conta TODAS as sequências de posse como ataque, e chama
+    perigosa à que chega ao último terço. Era a exigência de ter passado o
+    meio-campo que estava a mais, e é ela que sai daqui.
+
+    Isto é uma correcção de MEDIÇÃO, não de jogo: nenhum jogador se move de
+    maneira diferente por causa dela. O que muda é deixar de se comparar duas
+    definições diferentes e chamar-lhe defeito.
+    =========================================================================
     */
     fecharAtaque: function () {
         const a = this._ataque;
@@ -608,11 +632,54 @@ const MatchStats = {
         const s = this[a.team];
         if (!s) return;
 
-        // Um ataque que nunca saiu do próprio meio-campo não é um ataque:
-        // é a equipa a segurar a bola atrás.
-        if (!a.passouOMeio) return;
         s.ataques.totais++;
         if (a.chegouAoTerco || a.rematou) s.ataques.perigosos++;
+    },
+
+    /*
+    A SEQUENCIA TAMBEM MUDA COM UM TOQUE, e nao so com um PORTADOR novo.
+
+    O `seguirAtaque` so corre com `Match.ballCarrier` preenchido (ver o
+    chamador, no match_loop): um corte de cabeca, um alivio ou uma deflexao do
+    adversario nao criavam sequencia nenhuma, e a posse do outro lado ficava
+    COLADA a anterior. Medido: 63.7 ataques por jogo no relatorio contra 101
+    sequencias de posse contadas a parte, na mesma corrida.
+
+    Isto fecha e abre pelo TOQUE, e e chamado uma vez por frame pelo
+    match_loop quando o `lastTouchedTeam` muda.
+    */
+    seguirToque: function (team) {
+        if (!team) return;
+        if (!this._ataque || this._ataque.team !== team) {
+            this.fecharAtaque();
+            this._ataque = {
+                team: team, passouOMeio: false,
+                chegouAoTerco: false, rematou: false
+            };
+        }
+    },
+
+    /*
+    E O ULTIMO TERCO E DA BOLA, nao do portador.
+
+    O `seguirAtaque` so corre com um portador, e marca o terco pelo `zoneAhead`
+    DELE: um passe longo que cai no terco final, um cruzamento, um remate de
+    fora — nada disso marcava a sequencia como perigosa se ninguem la chegasse
+    com a bola no pe. Medido: 47 sequencias perigosas por 90 pela conta do
+    portador contra 62 a contar pela bola, na mesma corrida.
+
+    Chamado uma vez por frame pelo match_loop, com o avanco da BOLA no
+    referencial de ataque de quem tem a posse.
+    */
+    seguirBolaNoAtaque: function (team, avancoDaBola) {
+        if (!team || !this._ataque || this._ataque.team !== team) return;
+        if (avancoDaBola > CAMPO_COMP / 6) {
+            if (!this._ataque.chegouAoTerco) {
+                const s = this[team];
+                if (s) s.entradasUltimoTerco++;
+            }
+            this._ataque.chegouAoTerco = true;
+        }
     },
 
     seguirAtaque: function (team, zoneAhead) {

@@ -649,6 +649,31 @@ Object.assign(Match, {
         // que se liga o toggle, e ficava congelado nesse frame: os jogadores
         // saíam de baixo dos pontos e parecia que os pontos desapareciam.
 
+        /*
+        A SEQUENCIA SEGUE A POSSE. O `MatchStats.seguirAtaque` só corre com um
+        portador na bola, e por isso um corte de cabeça ou uma deflexão do
+        adversário não abriam sequência nenhuma — a posse seguinte ficava colada
+        à anterior, e o relatório dava 63.7 ataques onde a contagem de posses
+        dava 136.
+
+        É a POSSE (`possessionTeam`) e não o último TOQUE: pelo toque contam-se
+        os ressaltos, e mediu-se 172.7 sequências por 90 — o dobro das posses
+        reais, com a razão perigosos/totais a cair de 44% para 23% e a deixar de
+        bater com o alvo. Uma chamada por frame, e só quando muda.
+        */
+        if (typeof MatchStats !== 'undefined' && MatchStats.seguirToque &&
+            this.possessionTeam !== this._ultimaPosseEquipa) {
+            this._ultimaPosseEquipa = this.possessionTeam;
+            MatchStats.seguirToque(this.possessionTeam);
+        }
+        // E o terço final é da BOLA (ver seguirBolaNoAtaque): um cruzamento ou
+        // um passe longo que lá cai também tornam a sequência perigosa.
+        if (typeof MatchStats !== 'undefined' && MatchStats.seguirBolaNoAtaque &&
+            this.possessionTeam && this.ball) {
+            const dirPosse = (this.possessionTeam === 'TeamA') ? 1 : -1;
+            MatchStats.seguirBolaNoAtaque(this.possessionTeam, this.ball.position.z * dirPosse);
+        }
+
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);
         correrPrazoDaSaida(this, dt);
         this.runTeamAI();

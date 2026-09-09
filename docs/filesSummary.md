@@ -94,6 +94,68 @@ aproxima a defesa da bola, alargar só o lateral não.
 Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
 `tests/nivel2_prioridades.test.js`.
 
+#### "Ataques totais a 36% do alvo" era, em grande parte, o contador
+
+O número está nos problemas conhecidos desde Agosto e parecia o maior defeito do
+simulador: 63.7 ataques por jogo contra os 176.63 do alvo, e 37.6 perigosos
+contra 77.84. **Metade dele era de medição, e a prova está numa razão:**
+
+    perigosos / totais no ALVO ............. 77.84 / 176.63 = 44%
+    a mesma razão, pelo contador antigo .................... 59%
+    e a contar sequências de posse à parte (headless) ...... 44%
+
+Ou seja, o alvo conta TODAS as posses como ataque e chama perigosa à que chega
+ao último terço. Três defeitos no contador, todos pequenos:
+
+1. **A sequência só nascia com um PORTADOR novo.** O `seguirAtaque` corre só com
+   `Match.ballCarrier` preenchido (ver o chamador, no match_loop), portanto um
+   corte de cabeça, um alívio ou uma deflexão do adversário não abriam sequência
+   nenhuma: a posse seguinte ficava colada à anterior. Agora há
+   `MatchStats.seguirToque`, chamado uma vez por frame quando a POSSE muda.
+   Pelo TOQUE não serve — contam-se os ressaltos, e mediu-se 172.7 sequências
+   por 90 com a razão a cair para 23%.
+2. **Exigia-se ter passado o meio-campo** para contar como ataque. Saiu.
+3. **O último terço era do PORTADOR, não da bola:** um cruzamento ou um passe
+   longo que lá caem não tornavam a sequência perigosa. `seguirBolaNoAtaque`
+   marca-o pela bola — 47 para 62 sequências perigosas por 90, na mesma corrida.
+
+Com sementes fixas, depois:
+
+    ataques totais     129-136 por 90   (73-77% do alvo, era 36%)
+    perigosos           58-62 por 90    (75-80% do alvo, era 48%)
+    razão                  45-46%       (o alvo é 44%)
+
+**Não se mexeu em jogo nenhum** — nenhum jogador se move de maneira diferente. O
+que sobra é um défice uniforme de ~25% nas duas linhas, e esse é real.
+Teste: `tests/ataques_contados.test.js`.
+
+#### Onde as posses morrem
+
+Com o contador arrumado, o mapa (`tools/headless/onde_morrem_ataques.js`,
+74 min, 112 sequências):
+
+    passe interceptado / não chegou   40%
+    bola solta ganha pelo adversário  25%
+    guarda-redes agarrou              11%
+    bola fora (lateral/livre/canto)   15%
+    domínio falhado                    4%
+    outros                             5%
+
+E o detalhe do passe (`tools/headless/passes.js`), que é o bloco maior:
+
+    tipo         recebeu  outro colega  cortado  morreu   adv na linha à saída
+    direct         61%        20%         13%      6%            24%
+    space          68%        16%          5%     11%             4%
+    leading        63%        12%         22%      3%            31%
+
+O `leading` (o passe em profundidade) é o que mais se perde, e **os cortes
+acontecem a 98% do percurso** — não é a linha que está tapada a meio, é o
+adversário a ganhar a bola no ponto de queda. Em 31% deles já havia alguém na
+linha no instante em que o passe saiu.
+
+É aqui que está o próximo fio: não é "passar melhor", é escolher outro passe
+quando o ponto de queda é disputado.
+
 #### O guarda-redes mergulhava para onde a bola ESTAVA
 
 Lote de 60 jogos (o do utilizador, 1080 s por jogo):
@@ -6066,6 +6128,8 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `onde_morrem_ataques.js [segundos] [semente]` — segue as SEQUÊNCIAS de posse (não o contador): quantas passam o meio-campo, quantas chegam ao último terço, e o que matou cada uma — passe cortado, bola solta, guarda-redes, bola fora.
+- `remates_contados.js [segundos] [semente]` — separa os gestos de remate dos remates a sério: com bola no pé, furados, abortados a meio, cabeçadas e bola parada, ao lado do `remates.tentados`.
 - `gk_cronologia.js [segundos] [semente]` — a cronologia da defesa: tempo de voo até à linha, quando ele reage, quando o mergulho arranca, quantos metros de lado precisava e a que distância a mão passou da bola. Foi ela que apanhou o mergulho para fora do poste.
 - `reposicao_do_gk.js [segundos] [semente]` — por posse de mão: quanto tempo segurou, como repôs (lançamento ou chutão), a que distância e para quem, com o adversário mais próximo do destinatário, e se a equipa ficou com a bola 3 s depois.
 - `saida_do_guarda_redes.js [segundos] [semente]` — com a bola nas mãos dele: quantos companheiros ficam ATRÁS do guarda-redes, a que distância está a opção mais perta, e a que velocidade se mexem. Separa por estado do jogo, porque em bola parada as posições são impostas e não valem para esta leitura.

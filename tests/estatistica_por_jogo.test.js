@@ -188,12 +188,21 @@ console.log(LF + '4 — ataques: totais, perigosos, e o que não conta');
         return MS;
     };
 
-    // Posse toda no próprio meio-campo: não é ataque nenhum.
+    /*
+    TODA A POSSE É UM ATAQUE, mesmo a que não sai do próprio meio-campo.
+
+    Era o contrário — exigia-se ter passado o meio-campo — e por isso o
+    relatório dava 63.7 ataques por jogo contra o alvo de 176.63 (36%). A razão
+    perigosos/totais do alvo é 44%, a do código antigo era 59%, e a das
+    sequências de posse medidas no jogo é 44%: o alvo conta TODAS as posses.
+    Ver `fecharAtaque` (stats.js) e tests/ataques_contados.test.js.
+    */
     let MS = correr([['TeamA', -30], ['TeamA', -20], ['TeamA', -25]]);
-    if (MS.TeamA.ataques.totais !== 0) {
-        erro(`posse só no próprio campo contou ${MS.TeamA.ataques.totais} ataques`);
+    if (MS.TeamA.ataques.totais !== 1 || MS.TeamA.ataques.perigosos !== 0) {
+        erro(`posse no próprio campo: esperava 1 ataque e 0 perigosos, deu ` +
+            `${MS.TeamA.ataques.totais} e ${MS.TeamA.ataques.perigosos}`);
     } else {
-        ok('posse só no próprio meio-campo: não é ataque');
+        ok('posse no próprio meio-campo: 1 ataque, 0 perigosos');
     }
 
     // Passou o meio-campo mas não chegou ao último terço: ataque, não perigoso.
