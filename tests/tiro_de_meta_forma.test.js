@@ -27,6 +27,18 @@ const assert = require('node:assert');
 SEMENTE FIXA. Sem isto o teste corre com o `Math.random` do Node e uma medição
 de jogo — que depende de 600 s de simulação antes do lance — passa ou falha
 conforme o dia. O mulberry32 é o mesmo das ferramentas em tools/headless.
+
+Era 1000, e essa era a única das cinco primeiras em que os 600 frames de
+aquecimento acabam com um LIVRE AINDA DE PÉ (179 dos 600 frames fora do PLAY).
+O teste montava então um tiro de meta por cima de outro lance, com a equipa que
+recebe colocada a defender o livre — 30 m dali — e o que ele media deixava de
+ser a forma do tiro de meta para passar a ser quanto caminho ela fazia em 6 s.
+Enquanto ninguém colocava a defesa no livre, ela ficava espalhada perto do
+meio-campo e chegava a tempo; assim que passou a ser colocada
+(`formaDaDefesaNoLivre`), o mesmo alvo correcto deixava de ser alcançado.
+
+O alvo escrito pelo `formaDoTiroDeMeta` é -1.2 m nos dois casos. O que a
+semente muda é a distância a percorrer, e isso não é o que este teste afirma.
 */
 const mulberry32 = (a) => () => {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -34,7 +46,7 @@ const mulberry32 = (a) => () => {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
-Math.random = mulberry32(1000);
+Math.random = mulberry32(1001);
 
 require('../tools/headless/harness.js');
 

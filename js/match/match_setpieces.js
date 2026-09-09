@@ -507,20 +507,20 @@ Object.assign(Match, {
                         bolaFK.z + dirFK.z * F.distanciaBarreira + perpFK.z * off);
                     p.naBarreiraFalta = true;
                     this.faltaDirectaBarreira.push(p);
-                } else {
-                    // Fora da barreira: só não pode estar mais perto do que 9.15 m.
-                    const dx = p.model.position.x - bolaFK.x;
-                    const dz = p.model.position.z - bolaFK.z;
-                    const d = Math.hypot(dx, dz);
-                    if (d > 0.001 && d < F.afastaAdversarios) {
-                        const k = F.afastaAdversarios / d;
-                        p.model.position.x = bolaFK.x + dx * k;
-                        p.model.position.z = bolaFK.z + dz * k;
-                    }
                 }
+                /*
+                O `else` que aqui estava — "só não pode estar mais perto do que
+                9.15 m" — era tudo o que a equipa que defende recebia, e por
+                isso nove dos dez ficavam onde a jogada anterior os deixara.
+                Passa a ser a `formaDaDefesaNoLivre`, chamada a seguir, que os
+                arruma; ela já respeita os 9.15 m pelo `FreeKickShape.de`.
+                */
                 lookAtBola(p.model, bolaFK);
                 p.fsm.changeState('SET_PIECE_WAIT');
             });
+
+            // E os que NÃO ficaram na barreira, que eram a metade sem dono.
+            this.formaDaDefesaNoLivre(defendingPlayers, bolaFK, dirFK);
 
             /*
             POSICIONAMENTO DO GOLEIRO NA FALTA:
@@ -1186,6 +1186,79 @@ Object.assign(Match, {
     de ATAQUE DE QUEM BATE; quem recebe usa-as com o sinal trocado, porque a
     distribuição trabalha no referencial de cada jogador.
     */
+    /*
+    A EQUIPA QUE DEFENDE UM LIVRE, arrumada num bloco à frente da bola.
+
+    O `setupSetPiece` colocava a barreira e mais ninguém: os outros levavam um
+    empurrão para fora dos 9.15 m e ficavam onde a jogada anterior os deixara.
+    Com a falta longe da baliza a barreira é UM jogador, portanto nove ficavam
+    ao acaso — e como o FREE_KICK está fora do `nivel2Activo()`, ninguém os
+    vinha arrumar no frame seguinte. É o relato "uns de um lado do campo e
+    outros do outro".
+
+    A faixa é medida A PARTIR DA BOLA e na direcção em que ela vai ser batida
+    (`dirFK`), e não da linha de fundo como no tiro de meta: quem defende um
+    livre põe-se entre a bola e a própria baliza. Mantém-se a ORDEM EM
+    PROFUNDIDADE da formação (o mais recuado continua o mais recuado) e o x de
+    cada um, como no `formaDoTiroDeMeta` — é a mesma ideia, com outra origem.
+
+    Quem está na barreira fica de fora: a posição dele já foi escrita, e é a
+    Lei 13 que manda nela.
+    */
+    formaDaDefesaNoLivre: function (defensores, bolaFK, dirFK) {
+        const S = (typeof FreeKickShape !== 'undefined') ? FreeKickShape
+            : { de: 9.15, ate: 34.0 };
+        const campo = defensores.filter(p =>
+            p && p.role !== 'gk' && !p.naBarreiraFalta && p.model);
+        if (!campo.length) return;
+
+        /*
+        A ordem em profundidade sai do `baseTarget` (o posto da formação), lido
+        no referencial de ataque de cada um — é o mesmo critério do tiro de
+        meta, e é o que impede que um central acabe à frente de um avançado.
+        */
+        const zs = campo.map(p => p.baseTarget.z * p.dirZ);
+        const zMin = Math.min(...zs), zMax = Math.max(...zs);
+        const span = (zMax - zMin) || 1;
+
+        /*
+        A FAIXA ENCOLHE QUANDO NÃO HÁ CAMPO.
+
+        `ate` é medido a partir da bola, na direcção da baliza que eles
+        defendem. Com o livre perto dessa baliza, os 34 m caem atrás da linha
+        de fundo e o clamp encostava o bloco todo lá — o que, medido, atrasava
+        o resto do lance: no tiro de meta seguinte a equipa ainda tinha 7.6 m
+        para andar quando a bola foi batida.
+
+        O fundo útil é a distância da bola à linha de fundo deles, menos
+        `margemDaPropriaBaliza`, que é o espaço do guarda-redes. A faixa nunca
+        fica mais curta do que `de`: a Lei 13 manda sempre.
+        */
+        const defDir = campo[0].dirZ;
+        const distAteALinha = LINHA_FUNDO + bolaFK.z * defDir;
+        const ate = Math.max(S.de + 1,
+            Math.min(S.ate, distAteALinha - (S.margemDaPropriaBaliza || 8.0)));
+
+        campo.forEach(p => {
+            // v = 0 no mais recuado da formação, 1 no mais adiantado. O mais
+            // adiantado é o que fica MAIS PERTO da bola.
+            const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;
+            const avanco = ate - (ate - S.de) * v;
+
+            const x = bolaFK.x + dirFK.x * avanco + p.baseTarget.x * 0.6;
+            const z = bolaFK.z + dirFK.z * avanco;
+            p.hasBall = false;
+            p.velocity.set(0, 0, 0);
+            p.model.position.set(
+                THREE.MathUtils.clamp(x, -CAMPO_LARG / 2 + 1, CAMPO_LARG / 2 - 1),
+                ALTURA_BASE_Y,
+                THREE.MathUtils.clamp(z, -LINHA_FUNDO + 1, LINHA_FUNDO - 1));
+            if (p.dynamicTarget) p.dynamicTarget.copy(p.model.position);
+            lookAtBola(p.model, bolaFK);
+            p.fsm.changeState('SET_PIECE_WAIT');
+        });
+    },
+
     formaDoTiroDeMeta: function (team, mover) {
         const S = (typeof GoalKickShape !== 'undefined') ? GoalKickShape : {
             bateDe: -34, bateAte: 2, recebeDe: -28, recebeAte: 18

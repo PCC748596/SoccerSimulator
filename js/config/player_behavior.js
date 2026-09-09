@@ -769,6 +769,50 @@ const GoalKickShape = {
     recebeAte: 18.0
 };
 
+/*
+=============================================================================
+A EQUIPA QUE DEFENDE UM LIVRE — a metade que ninguém colocava
+=============================================================================
+Relato, com captura de campo inteiro: "o posicionamento dos jogadores na batida
+do impedimento tá bem ruim. Uns de um lado do campo e outros do outro."
+
+O `setupSetPiece` do FREE_KICK escreve a posição do batedor, arruma os dez
+companheiros dele em `lugares`, e da equipa que defende coloca **só a
+barreira** — o resto leva um empurrão para fora dos 9.15 m e mais nada. Com a
+falta longe da baliza a barreira é UM jogador, portanto nove ficavam onde a
+jogada anterior os tinha deixado. Medido em 6 livres
+(`tools/headless/livre_impedimento.js`):
+
+    equipa            colocados pelo setup   a mais de meio campo da bola
+    que bate                10.0 / 10                  3.0 / 10
+    que recebe               1.0 / 10                  2.0 / 10
+
+E o FREE_KICK está fora do `nivel2Activo()` de propósito (as posições são
+impostas pelo lance), portanto ninguém os vinha arrumar no frame seguinte: o
+que o setup não escrever fica escrito para o lance inteiro.
+
+A faixa é medida A PARTIR DA BOLA, na direcção em que ela vai ser batida — e
+não da linha de fundo, como no tiro de meta. Quem defende um livre põe-se entre
+a bola e a própria baliza, começando na distância regulamentar.
+
+`de` é 9.15 porque é a Lei 13 e não uma escolha: mais perto do que isso o
+árbitro manda recuar. `ate` é a profundidade do bloco.
+=============================================================================
+*/
+const FreeKickShape = {
+    de: 9.15,     // distância regulamentar — o primeiro homem não pode estar antes
+    ate: 34.0,    // o mais recuado do bloco, medido da bola
+    /*
+    E A FAIXA ENCOLHE QUANDO NÃO HÁ CAMPO. Com o livre perto da baliza que eles
+    defendem, os 34 m caem atrás da linha de fundo e o clamp encostava o bloco
+    todo lá. Medido: o lance seguinte apanhava-os fora do sítio — no tiro de
+    meta a seguir ainda tinham 7.6 m para andar quando a bola foi batida.
+
+    Esta margem é o espaço que fica para o guarda-redes atrás do bloco.
+    */
+    margemDaPropriaBaliza: 8.0
+};
+
 const ThrowInModel = {
     alcanceMin: 9.0,
 

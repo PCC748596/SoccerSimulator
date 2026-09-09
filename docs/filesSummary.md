@@ -7,6 +7,62 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ### Sessão de 9 de Setembro de 2026 — o pé no chão, e a área vazia
 
+#### No livre, metade do campo não era colocada por ninguém
+
+Relato, com captura de campo inteiro: *"o posicionamento dos jogadores na
+batida do impedimento tá bem ruim. Uns de um lado do campo e outros do outro."*
+
+O `setupSetPiece` do FREE_KICK escreve a posição do batedor, arruma os dez
+companheiros dele em `lugares`, e da equipa que defende coloca **só a
+barreira** — o resto levava um empurrão para fora dos 9.15 m e mais nada. Com a
+falta longe da baliza a barreira é UM jogador, portanto nove ficavam onde a
+jogada anterior os tinha deixado. E o FREE_KICK está fora do `nivel2Activo()`
+de propósito, portanto ninguém os vinha arrumar no frame seguinte: o que o
+setup não escreve fica escrito para o lance inteiro.
+
+Medido em 6 livres (`tools/headless/livre_impedimento.js`):
+
+    equipa            colocados pelo setup   dist. media a bola   >meio campo
+    que bate, antes         10.0 / 10              37.5 m           3.0 / 10
+    que recebe, antes        1.0 / 10              39.0 m           2.0 / 10
+    que recebe, depois      10.0 / 10              24.7 m           0.0 / 10
+
+`Match.formaDaDefesaNoLivre` distribui-os numa faixa medida **a partir da
+bola**, na direcção em que ela vai ser batida — e não da linha de fundo, como
+no tiro de meta: quem defende um livre põe-se entre a bola e a própria baliza.
+Mantém a ordem em profundidade da formação e o x de cada um. `FreeKickShape.de`
+é 9.15 porque é a Lei 13, e não uma escolha.
+
+**A faixa tem de encolher quando não há campo:** com o livre perto da baliza
+que eles defendem, os 34 m de `ate` caem atrás da linha de fundo e o clamp
+encostava o bloco todo lá. O fundo útil é a distância da bola à linha deles
+menos `margemDaPropriaBaliza`.
+
+Teste: `tests/livre_forma_da_defesa.test.js` — os dez colocados, ninguém a mais
+de meio campo, a Lei 13 respeitada, e a barreira não desfeita pela forma.
+
+#### E a semente do teste do tiro de meta escondia um acoplamento
+
+O `tests/tiro_de_meta_forma.test.js` passou a falhar com a correcção acima, e a
+causa não era o tiro de meta: com a semente 1000, 179 dos 600 frames de
+aquecimento estão FORA do PLAY e o teste montava um tiro de meta por cima de um
+livre ainda de pé. A equipa que recebe estava colocada a defender esse livre —
+30 m dali — e o que o teste media deixava de ser a forma do tiro de meta para
+passar a ser quanto caminho ela fazia em 6 s.
+
+**O alvo escrito é -1.2 m nos dois casos**; o que mudava era a distância a
+percorrer. Enquanto ninguém colocava a defesa no livre ela ficava espalhada
+perto do meio-campo e chegava a tempo — o teste passava por acidente.
+
+Duas tentativas de arranjar o teste ficaram pelo caminho e são a lição: esperar
+que o lance anterior acabasse não chegou (ao frame 600 o estado já era PLAY e
+eles ainda vinham a recuar), e exigir cinco segundos seguidos de jogo corrido
+fez falhar OUTRA asserção, porque a jogada avançou. **Estava a moldar o teste
+ao resultado.** A semente passou a 1001 — das cinco primeiras, a 1000 é a única
+que acaba em cima de um lance —, e confirmou-se que o teste continua a apanhar
+o defeito que o motivou (a asserção do `nivel2Activo` dispara quando se repõe
+o GOAL_KICK no nível 2).
+
 Duas frentes. A segunda ficou a meio de propósito, com a causa localizada e uma
 hipótese refutada pelo caminho.
 
