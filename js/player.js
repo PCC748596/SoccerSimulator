@@ -5776,6 +5776,29 @@ class FootballPlayer {
             this.velocity.set(0, 0, 0);
         }
 
+        /*
+        E O GUARDA-REDES TAMBÉM ENCOSTA O PÉ.
+
+        Relato: "um pouco antes do início do jogo, o goleiro que estava na
+        posição correcta fica um pouco acima do solo".
+
+        O `assentarNoChao` só era chamado do `animateBones`, e o guarda-redes
+        não passa por lá — tem pose própria, esta. O `gkCorpo` acima é o
+        `this.model`, portanto ele escreve a altura do corpo tal como o ramo
+        de campo escreve, e ficava sem ninguém a descê-lo até à bota.
+
+        A contagem das GUARDAS do método enganava: replicá-las dava "corre em
+        87% dos frames do guarda-redes". Envolvendo o MÉTODO em 19 min de jogo
+        deram 176 chamadas dele contra 111 193 dos jogadores de campo — não era
+        recusado, era só nunca chamado. Medida a sola dele:
+        5.8 cm do relvado em jogo corrido e 10.1 cm no livre.
+
+        Fica no fim, depois de a pose estar escrita, como no `animateBones`. As
+        excepções do próprio método continuam a valer: com `gkEstado` diferente
+        de `idle` (mergulho, mãos, lançamento) ele escreve a altura sozinho e o
+        assento sai logo à entrada.
+        */
+        this.assentarNoChao();
     }
 
     /*

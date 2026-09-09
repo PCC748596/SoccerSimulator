@@ -5,6 +5,116 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Agosto 2026)
 
+### Sessão de 9 de Setembro de 2026 — o pé no chão, e a área vazia
+
+Duas frentes. A segunda ficou a meio de propósito, com a causa localizada e uma
+hipótese refutada pelo caminho.
+
+#### O contador de toques na área está certo; o jogo é que não acontece
+
+O lote de 30 jogos dá 5 `toquesNaArea` por equipa por jogo contra os 25-30
+reais, com 30 entradas no último terço e 15 remates. Quinze remates com cinco
+toques na área não existe, e o contador tinha o mesmo cheiro do de ataques —
+exige `Match.ballCarrier`, que um cruzamento ou um ressalto não têm.
+
+**Não era.** Medido o toque honesto (`registarRecepcao`, que corre no
+`resolveBallContact` uma vez por contacto de quem quer que seja), deu 2.4 e 12.1
+por 90 contra os 1.2 e 7.3 do contador. Fica dito para não se voltar a suspeitar
+dele.
+
+O que a mesma corrida mostrou (`tools/headless/area_entradas.js`, 74 min):
+
+    a bola entra na area adversaria     17.0 e 38.8 vezes por 90
+    e la fica                           74.5 e 129.7 s por 90
+    com portador da equipa que ataca    1% e 2% desse tempo
+    no instante da entrada              1.2-1.4 atacantes contra 2.0-2.5 defensores
+                                        (real: 3-5 contra 5-7)
+
+A bola vai lá; ninguém vai com ela.
+
+#### E o `remates.tentados` conta 12% a mais, não o dobro
+
+Ficava dos problemas conhecidos que "metade dos remates não vem do ramo de
+remate". Medido (`tools/headless/remates_contados.js`): 19 contados para 17
+remates reais, e a diferença são gestos abortados. Os 741 `rematar` da árvore
+contra os ~1781 remates do lote explicam-se por cabeçadas e bola parada, que não
+passam por esse ramo. O ramo não está a perder remates nenhuns.
+
+#### O que segura o avançado fora da área
+
+As quatro sondas que já existem no `team_bt.js`, para o CF, com a bola a
+16.5-25 m da baliza (a faixa do cruzamento), em metros da linha de fundo
+atacada (`tools/headless/linha_na_area.js`):
+
+    slot do bloco            13.2   <- dentro da area
+    + playing style           9.9   <- o estilo aprofunda-o ainda mais
+    + marcacao/mola/tecto    18.1   <- +8.2 m, e sai da area
+    alvo final               17.2
+    ele esta a               20.7
+
+O nível 1 e o estilo põem-no **dentro** da área; a fase 2 (`tickFinal`) tira-lhe
+8.2 m. É a mesma forma do defeito dos laterais, no mesmo sítio — e a mesma
+lição: **desligada a `MolaDeCoesao`, ela vale 1.5 dos 8.2 m.** Não é a mola.
+Sobram ~6.8 m em marcação/inquietação/tecto/alisamento, por isolar.
+
+O fora-de-jogo está inocente: cola o alvo do CF à linha em 6% dos frames, e a
+linha permite 13.4 m. Toda a gente fica 3.6-9.1 m atrás do próprio alvo, o
+lateral 9.1.
+
+**Hipótese tentada e REFUTADA, para não se repetir:** o piso do bloco defensivo
+(`minZArea`) trava a traseira exactamente na linha da área — medido a 16.4-17.0
+m, e é mesmo ele a morder. Abri-o (`folgaAtrasDaBola` 1 → 14) e a traseira desceu
+a 9.0 m como se queria, mas os números pioraram em três sementes: remates de
+dentro da área **63% → 32%**, cantos 4/7/6 → 3/4/5, toques na área sem ganho.
+Baixar o bloco enche a área de defensores e afasta o remate. Revertido.
+
+#### O pé não encosta no chão: uma FRACÇÃO nunca converge
+
+Três relatos: o guarda-redes acima do solo antes do apito, quem anda a deixar de
+encostar ao fim de alguns segundos, e quem levanta do chão ao girar.
+
+Os dois últimos são a mesma conta, e é aritmética. As duas linhas que correm
+imediatamente antes do `assentarNoChao`, no `animateBones`, escrevem a altura em
+ABSOLUTO todos os frames:
+
+    ramo de movimento   position.y = ALTURA_BASE_Y + ressalto - descida;
+    ramo parado         position.y = lerpTo(position.y, ALTURA_BASE_Y);
+
+e o assento a seguir SOMA `correccao * suavizacao`. **O que ele soma neste frame
+é apagado no seguinte, portanto a correcção nunca acumula** e a sola fica
+permanentemente a `1 - suavizacao` do levantamento da pose, por muitos frames
+que passem. Envolvendo o método real em 111 193 frames
+(`tools/headless/assento_convergencia.js`), a razão depois/antes deu **0.65 nos
+dois casos** — o valor exacto de `1 - 0.35`, nas duas casas decimais.
+
+A distinção que fica: **um TECTO converge, uma FRACÇÃO não.** O tecto leva tudo o
+que couber e o resto no frame seguinte; a fracção deixa sempre a mesma proporção
+por corrigir. A `suavizacao` passa a 1.0 e quem trava o gesto é o
+`correccaoMax`, que desce de 0.35 para 0.06 — a 0.35 o corpo descia mais de
+10 cm num frame em 0.48% das leituras, que é um pulo e um relato novo à espera.
+
+**O guarda-redes era outra coisa, e a primeira medição enganou-me:** replicar as
+CONDIÇÕES do `assentarNoChao` dava "corre em 87% dos frames dele". Envolvido o
+MÉTODO, deram 176 chamadas dele contra 111 193 dos jogadores de campo — não era
+recusado, era só nunca chamado, porque ele tem pose própria (`updateGK`) e o
+assento só era chamado do `animateBones`. Passa a ser chamado no fim do
+`updateGK`, onde a pose já está escrita.
+
+Medido em 25 min, a sola sobre o relvado:
+
+    caso                        antes    depois
+    a andar                     0.042    0.014
+    a girar 20-90 graus/s       0.039    0.008
+    a girar > 180 graus/s       0.036    0.012
+    parado de frente            0.027    0.001
+    guarda-redes em jogo        0.065    0.023
+    guarda-redes no livre       0.101    0.001
+    frames a saltar > 10 cm     0.00%    0.00%
+
+Testes: `tests/assento_converge.test.js`. Fica por arrumar o tiro de meta
+(0.051): o `gkEstado` é `tiro_meta_espera` e o assento sai à entrada pela guarda
+do estado, que existe de propósito para os mergulhos.
+
 ### Sessão de 8 de Setembro de 2026 (continuação) — a caminhada depois do golo, e onde a largura se perdia
 
 Dois relatos, os dois com a mesma forma: **o que se via em campo tinha uma

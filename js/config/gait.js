@@ -250,11 +250,59 @@ const AssentoNoChao = {
     // Até esta velocidade (m/s) o pé tem de estar no chão. Acima é corrida,
     // com fase de voo (ver GaitModel.trote/correr).
     velMax: 4.0,
-    // Tecto da correcção por frame, em metros: uma pose estranha não pode
-    // teleportar o boneco.
-    correccaoMax: 0.35,
-    // Fracção da correcção aplicada por frame — sobe/desce em vez de saltar.
-    suavizacao: 0.35
+    /*
+    O TECTO POR FRAME, em metros — e é ele, agora, o único travão do gesto.
+
+    Era 0.35, um valor que nunca mordia porque a `suavizacao` travava primeiro.
+    Com a correcção inteira (ver abaixo) passa a ser este número a decidir o
+    que se vê, e a diferença é grande: a 0.35 o corpo desce mais de 10 cm num
+    frame em 0.48% das leituras — um pulo, e um relato novo à espera de
+    acontecer. Varrido em 3 min de jogo:
+
+        tecto   sola a andar   sola a girar   frames a saltar >10 cm
+        0.35        0.004          0.000              0.48%
+        0.12        0.005          0.000              0.48%
+        0.06        0.014          0.007              0.00%
+        0.03        0.036          0.018              0.00%
+
+    O 0.06 tira cinco sextos da flutuação e nenhum frame passa dos 10 cm.
+    Repare-se que um TECTO converge e uma FRACÇÃO não: o tecto tira tudo o que
+    couber e o resto no frame seguinte, a fracção deixa sempre a mesma
+    proporção por corrigir.
+    */
+    correccaoMax: 0.06,
+    /*
+    A CORRECÇÃO É INTEIRA, E TEM DE SER.
+
+    Isto era 0.35 — "a fracção aplicada por frame, para subir/descer em vez de
+    saltar". A conta não fecha: as duas linhas que correm IMEDIATAMENTE antes
+    do `assentarNoChao`, no `animateBones`, escrevem a altura em ABSOLUTO todos
+    os frames (`= ALTURA_BASE_Y + ressalto - descida` no ramo de movimento,
+    e um `lerpTo` para a base no ramo parado). O que o assento soma neste frame
+    é apagado no seguinte, portanto a correcção NUNCA acumula e a sola fica
+    permanentemente a `1 - suavizacao` do levantamento da pose.
+
+    Não é teoria: envolvendo o método real em 111 193 frames
+    (`tools/headless/assento_convergencia.js`), a razão depois/antes deu 0.65
+    no jogador de campo e 0.65 no guarda-redes — o valor exacto de
+    `1 - 0.35`, nas duas casas.
+
+    Os relatos que isto explica: "depois de alguns segundos de jogo já não
+    encostam no chão na animação de andar" (a andar, sola a 4-5 cm ao fim de
+    oito minutos) e "quando giram para um lado ou para o outro levantam do
+    chão" (o giro muda a bota mais baixa e o seguidor a 35% fica para trás).
+    Medido depois, com a correcção inteira:
+
+                              antes    depois
+        a andar, minuto 13    0.042    0.004
+        a girar 20-90 g/s     0.039    0.000
+        a girar > 180 g/s     0.036   -0.000
+
+    A suavização protegia o desenho de um salto do corpo; quem faz esse papel
+    agora é o `correccaoMax` acima, que é o tecto por frame. Não confundir com
+    o offset persistente, que foi tentado a 8 de Setembro e MEDIU PIOR.
+    */
+    suavizacao: 1.0
 };
 if (typeof window !== 'undefined') window.AssentoNoChao = AssentoNoChao;
 /*
