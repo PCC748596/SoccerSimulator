@@ -3073,6 +3073,37 @@ function gkPodeLancar(tempoSegurando, temAlvo) {
 }
 
 /*
+ONDE A BOLA VAI PASSAR PELO GUARDA-REDES — o ponto de intercepção.
+
+O ramo principal do mergulho projectava a bola até ao plano dele
+(`x + vx * t`, com `t` do avanço em z). O SEGUNDO ramo, o da espalmada a curta
+distância (`possoEspalmar`, player.js), não: mandava-o para onde a bola estava
+NAQUELE instante.
+
+O que isso faz, medido: um remate de x = -16.2 com vx = +27 m/s (a fechar para
+o meio) punha o `gkAlvoX` em -15.8 — a 12 m para fora do poste. Ele mergulhava
+para a bandeirola enquanto a bola entrava pelo meio da baliza. No lote de 60
+jogos são 4.89 golos (194% do alvo) com o xG do próprio jogo a dizer 1.56, e
+67% dos remates enquadrados a acabarem em golo contra os ~30% reais.
+
+Agora há uma conta só, e é esta. Devolve o ponto no plano z do guarda-redes,
+com a gravidade a contar para a altura, e o tempo que falta.
+
+Pura: sem Match, sem THREE.
+*/
+function pontoDeIntercepcaoGK(bolaX, bolaY, bolaZ, velX, velY, velZ, gkZ, gravidade) {
+    const vz = Math.abs(velZ);
+    if (vz < 0.001) return null;
+    const t = Math.abs(gkZ - bolaZ) / vz;
+    const g = (typeof gravidade === 'number') ? gravidade : 9.81;
+    return {
+        t: t,
+        x: bolaX + velX * t,
+        y: bolaY + velY * t - 0.5 * g * t * t
+    };
+}
+
+/*
 Alvo de varrida. Ao contrário de gkAnchor(), vai NA DIRECÇÃO da bola: é a
 situação em que o guarda-redes sai mesmo, porque não há defensor entre o
 atacante e a baliza. sweepOut trava quão longe.
@@ -4081,6 +4112,7 @@ if (typeof window !== 'undefined') {
         bandaDaFaltaDirecta, desfechoDaFaltaDirecta, alvoDaFaltaDirecta,
         tiroDaFaltaDirecta, tiroTensoDaFaltaDirecta, lugaresDoApoioNaFaltaDirecta,
         passaEntreAdversarios,
-        maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR
+        maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR,
+        pontoDeIntercepcaoGK
     });
 }

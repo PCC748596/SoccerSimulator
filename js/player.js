@@ -4698,8 +4698,13 @@ class FootballPlayer {
                         interX = this.penaltyDiveX;
                         interY = this.penaltyDiveY;
                     } else {
-                        interX = Match.ball.position.x + (Match.ballVel.x * tempoAteGolo);
-                        interY = Match.ball.position.y + Match.ballVel.y * tempoAteGolo - 0.5 * BallPhysics.gravidade * tempoAteGolo * tempoAteGolo;
+                        // A mesma conta do outro ramo — ver pontoDeIntercepcaoGK (utils.js).
+                        const alvoInt = pontoDeIntercepcaoGK(
+                            Match.ball.position.x, Match.ball.position.y, Match.ball.position.z,
+                            Match.ballVel.x, Match.ballVel.y, Match.ballVel.z,
+                            gkCorpo.position.z, BallPhysics.gravidade);
+                        interX = alvoInt ? alvoInt.x : Match.ball.position.x;
+                        interY = alvoInt ? alvoInt.y : Match.ball.position.y;
                     }
                     interX = Math.max(-limitGKX, Math.min(limitGKX, interX)); interY = Math.max(0, Math.min(2.44, interY));
 
@@ -4853,19 +4858,40 @@ class FootballPlayer {
                             let possoEspalmar = (tempoAteMim < 0.6 && window.bolaChutada);
 
                             if (possoEspalmar) {
-                                // Mesma regra do remate: bola perto do corpo é
-                                // defesa de pé com as mãos, não mergulho.
-                                const lateralEsp = Match.ball.position.x - gkCorpo.position.x;
+                                /*
+                                PARA ONDE A BOLA VAI, e não para onde ela está.
+
+                                Este ramo mandava-o para `Match.ball.position.x`
+                                — o x do INSTANTE. Medido: um remate de x=-16.2
+                                com vx=+27 m/s punha o alvo em -15.8, doze
+                                metros para fora do poste; ele mergulhava para a
+                                bandeirola e a bola entrava pelo meio. Era este
+                                o ramo que disparava na maioria dos remates (o
+                                principal exige `gkReagiu`, que ainda é falso
+                                nos primeiros frames do voo).
+
+                                Agora usa a mesma projecção do outro ramo:
+                                pontoDeIntercepcaoGK (utils.js).
+                                */
+                                const alvoEsp = pontoDeIntercepcaoGK(
+                                    Match.ball.position.x, Match.ball.position.y, Match.ball.position.z,
+                                    Match.ballVel.x, Match.ballVel.y, Match.ballVel.z,
+                                    gkCorpo.position.z, BallPhysics.gravidade);
+                                const espX = alvoEsp ? THREE.MathUtils.clamp(alvoEsp.x, -limitGKX, limitGKX)
+                                    : Match.ball.position.x;
+                                const espY = alvoEsp ? Math.max(0, Math.min(ALTURA_BALIZA, alvoEsp.y))
+                                    : Match.ball.position.y;
+                                const lateralEsp = espX - gkCorpo.position.x;
                                 this.gkTempoMergulho = 0;
-                                this.gkAlvoX = Match.ball.position.x;
+                                this.gkAlvoX = espX;
                                 if (Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
                                     this.gkEstado = 'maos';
                                 } else {
                                     this.gkEstado = 'mergulho';
                                     this.dive = null;
                                     this.gkDirMergulho = Math.sign(lateralEsp);
-                                    this.gkAlvoY = Match.ball.position.y;
-                                    this.gkTipoMergulho = Match.ball.position.y > 1.2 ? 'alto' : 'baixo';
+                                    this.gkAlvoY = espY;
+                                    this.gkTipoMergulho = espY > 1.2 ? 'alto' : 'baixo';
                                 }
                             } else {
                                 /*
