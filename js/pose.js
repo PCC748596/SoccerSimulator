@@ -570,6 +570,33 @@ function amostrarClipRemate(norm) {
 }
 
 /*
+Amostra o clip do passe (PassClip) num tempo normalizado 0..1.
+
+Os campos são os mesmos do ShotClip de propósito: o `aplicarPoseRemate` desenha
+os dois, e é isso que faz do PassClip oito linhas de dados em vez de um
+desenhador novo.
+*/
+function amostrarClipPasse(norm) {
+    const fr = PassClip.frames;
+    const n = fr.length;
+    const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
+    const i = Math.min(n - 2, Math.floor(pos));
+    const u = pos - i;
+    const a = fr[i], b = fr[i + 1];
+    const mix = (k) => a[k] + (b[k] - a[k]) * u;
+    return {
+        leanZ: mix('leanZ'), pelvisY: mix('pelvisY'),
+        chest: mix('chest'), chestY: mix('chestY'),
+        coxaChute: mix('coxaChute'), joelhoChute: mix('joelhoChute'),
+        coxaApoio: mix('coxaApoio'), joelhoApoio: mix('joelhoApoio'),
+        bracoLx: mix('bracoLx'), bracoLz: mix('bracoLz'),
+        bracoRx: mix('bracoRx'), bracoRz: mix('bracoRz'),
+        cotoveloL: mix('cotoveloL'), cotoveloR: mix('cotoveloR'),
+        altura: mix('altura')
+    };
+}
+
+/*
 Amostra o clip do arremesso lateral (ThrowInClip) num tempo normalizado 0..1.
 */
 function amostrarClipLateral(norm) {

@@ -7,6 +7,77 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ### Sessão de 9 de Setembro de 2026 — o pé no chão, e a área vazia
 
+#### O passe ganhou gesto: o pé de apoio planta ao lado da bola
+
+Pedido, com uma referência: *"gostaria que essa fosse a animação do passe
+directo e no vazio — o jogador coloca o pé de apoio ao lado da bola e depois dá
+o passe"*.
+
+**O passe era o único gesto do jogo sem animação nenhuma.** O `case 'PASS'`
+(fsm.js) lia o tempo normalizado do ActionState e **descartava-o** — a variável
+ficava por usar. As pernas ficavam na pose que a passada tinha deixado, e não
+havia pé de apoio nenhum para se ver.
+
+A máquina já existia toda e estava provada pelo remate — `ActionState` para os
+tempos, um amostrador para interpolar, `aplicarPoseRemate` para escrever no
+esqueleto — por isso o `PassClip` são oito linhas de dados e mais nada. Os
+campos são os do `ShotClip` de propósito: é isso que dispensa um desenhador
+novo. (O preço dessa poupança: o `aplicarPoseRemate` lê o `ShotClip.pernaChute`
+para desenhar os dois, e há um teste a exigir que coincidam.)
+
+O que o distingue do remate, e é o ponto: **um passe não é um remate fraco.**
+Armação a metade (`coxaChute` até 0.55 contra 1.05), inclinação a metade, 8
+keyframes em vez de 12 e acompanhamento curto.
+
+`ActionAnimClips.pass` passou de `{0.2, 0.4}` para `{0.35, 4/7}`: a bola sai
+aos 0.20 s em vez de 0.08, e o plantar do pé fica 0.15 s antes do contacto.
+Levam o clip o PASS, o SPACE, o THROUGH e o L.PASS; o CROSS fica de fora (é
+outro gesto, e merece clip próprio). O tipo fixa-se no `initiatePass` e não por
+frame — o `p.isCross` é limpo no instante do contacto, e lido por frame um
+cruzamento arrancava sem animação e ganhava-a a meio.
+
+**O preço, medido, e o que não consigo afirmar:** o gesto mais longo custa
+passes. Seis sementes fixas, emparelhadas (`tools/headless/passes_faixas.js`):
+
+    gesto 0.20 s   72.5 71.8 61.3 71.8 73.3 73.2   media 70.7
+    gesto 0.35 s   68.7 66.1 71.8 66.2 64.8 72.3   media 68.3
+
+Cinco das seis descem, mas −2.3 pontos com este desvio é ~1 sigma: **não é
+demonstrável com esta amostra**, e um par de sementes chegou a dar 67.4 contra
+77.0 na mesma configuração. Fica entregue como pedido, com o número dito: se o
+próximo lote puser os passes certos abaixo dos ~69%, encurta-se o gesto (o
+plantar ainda se lê aos 0.24 s, que dá 0.10 s entre plantar e contacto).
+
+O clip está registado no `animEditor.html`, para se afinarem os keyframes à mão.
+Teste: `tests/passe_planta_o_pe.test.js`.
+
+##### E três testes que o gesto novo partiu — nenhum por defeito de jogo
+
+Os três dependiam de coisas que o cenário deles não fixava, e o gesto mais
+longo mudou o fluxo o suficiente para as expor. Vale a pena o padrão:
+
+- **`reposicao_do_guarda_redes`**: o `montar` repunha o `gkEstado`, o `hasBall`
+  e o `gkKickAction`, mas não a marca da Lei 12. O `grabBall` devolve **false**
+  sem tocar em nada quando `Match.recuoParaGR` diz que a bola foi jogada
+  atrasada — o cenário nem começava, e o teste media "largou aos 0.0 s". Limpam-
+  se agora as DUAS metades: o `limparRecuoParaGR()` apaga a marca do toque, mas
+  a decisão do frame anterior só se refaz no `avaliarRecuoParaGR` seguinte.
+- **`saida_do_guarda_redes`**: montava as dez posições iniciais com
+  `Math.random()`. A semente está fixa, mas o PONTO DO FLUXO a que essas dez
+  chamadas chegam depende de quantos aleatórios o aquecimento consumiu — o
+  teste media o sorteio e não o comportamento. Passou a montagem determinística,
+  e continua a apanhar o defeito (com `margemAFrente` a 0 dá 5 jogadores atrás
+  do guarda-redes contra o limite de 1).
+- **`gk_agarra_no_fim_do_gesto`**: o `ramoDoEstado` procurava
+  `this.gkEstado === 'salto_alto'` no ficheiro INTEIRO e ficava-se pela primeira
+  ocorrência. A guarda nova do `assentarNoChao`, 4 000 linhas acima do
+  `updateGK`, passou a ser essa primeira — e o teste fatiava um `return;` de
+  duas linhas. Passa a procurar só dentro do `updateGK`, que é o que ele afirma
+  inspeccionar.
+
+(`tests/cruzamento_ala.test.js` também falha, e **já falhava antes desta
+sessão** — verificado contra o `ab5175f`. Fica por arrumar.)
+
 #### O lote de 100 jogos, e duas caças que não deram nada
 
     metrica              lote 30    lote 100     alvo    % do alvo

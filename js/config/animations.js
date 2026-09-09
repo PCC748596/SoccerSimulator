@@ -7,7 +7,20 @@ Clips de keyframes para remates, reposições, laterais, guarda-redes e controlo
 */
 
 const ActionAnimClips = {
-    pass: { duration: 0.2, contactTime: 0.4 },
+    /*
+    O PASSE, com gesto (ver PassClip mais abaixo).
+
+    Era `{ 0.2, 0.4 }` — 0.2 s de estado e nenhuma animação: a bola saía 0.08 s
+    depois da decisão e o `case 'PASS'` da FSM lia o tempo normalizado sem
+    posar o esqueleto. Para se ver o pé de apoio plantar ao lado da bola antes
+    da batida é preciso tempo: 0.35 s de gesto com o contacto no keyframe 5
+    (t = 4/7) põe o plantar 0.11 s ANTES do contacto, que é o que se lê.
+
+    O PREÇO é real e está medido: a bola sai 0.12 s mais tarde do que saía, e
+    nesse tempo um adversário anda ~0.9 m. Ver a tabela de passes certos e
+    cortados em `docs/filesSummary.md`.
+    */
+    pass: { duration: 0.35, contactTime: 4 / 7 },
     // Chutão do guarda-redes (ver GoalkeeperKickClip). O contactTime cai
     // exactamente no keyframe 9 (t = 8/11), o frame do contacto pé-bola.
     gkPunt: { duration: 0.85, contactTime: 8 / 11 },
@@ -106,6 +119,74 @@ const ShotClip = {
         // 11 desaceleração, o pé desce e o tronco volta ao prumo
         { leanZ: -0.08, pelvisY: -0.18, chest: -0.04, chestY: 0.16, coxaChute: -0.95, joelhoChute: 0.22, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.22, bracoLz: 0.60, bracoRx: 0.18, bracoRz: -0.48, cotoveloL: -0.15, cotoveloR: -0.18, altura: 0.06 },
         // 12 recuperação, de novo em postura de jogo
+        { leanZ: 0.00, pelvisY: 0.00, chest: 0.00, chestY: 0.00, coxaChute: 0.00, joelhoChute: 0.10, coxaApoio: 0.00, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: Math.PI / 16, bracoRx: 0.00, bracoRz: -Math.PI / 16, cotoveloL: 0.00, cotoveloR: 0.00, altura: 0.00 }
+    ]
+};
+
+/*
+=============================================================================
+PASS_CLIP — o passe, 8 keyframes
+=============================================================================
+Pedido, com uma referência: *"o jogador coloca o pé de apoio ao lado da bola e
+depois dá o passe"*.
+
+O passe era o ÚNICO gesto sem animação nenhuma. O `case 'PASS'` (fsm.js) lia o
+tempo normalizado do ActionState — e descartava-o: as pernas ficavam na pose
+que a passada tinha deixado, e não havia pé de apoio nenhum para se ver.
+
+Mesma convenção do ShotClip, e de propósito: o `aplicarPoseRemate` (pose.js) é
+reaproveitado tal como está, e por isso os nomes dos campos têm de ser os
+mesmos.
+
+    coxaChute   > 0  perna para TRÁS   (< 0 é para a FRENTE)
+    joelhoChute > 0  joelho dobra, calcanhar sobe
+    chest       > 0  tronco para a FRENTE
+    leanZ       < 0  corpo inclina sobre o pé de apoio
+    pelvisY          rotação da bacia
+
+O QUE O DISTINGUE DO REMATE, e é o ponto: um passe não é um remate fraco. A
+armação vai a metade (`coxaChute` até 0.55 contra os 1.05 do remate), a
+inclinação a metade, e o gesto tem 8 keyframes em vez de 12 — o
+acompanhamento é curto, o pé não sobe à altura da anca.
+
+     1  arranca, a perna de apoio avança para o lado da bola
+     2  PÉ DE APOIO PLANTA ao lado da bola, tronco inclina   <- o pedido
+     3  arma: o joelho dobra, a perna de passe vai atrás
+     4  armação máxima, braço contrário abre a contrabalançar
+     5  CONTACTO — o pé fecha na bola, corpo por cima dela
+     6  pós-impacto, a perna continua pela inércia
+     7  acompanhamento curto, o pé desce
+     8  recuperação, de novo em postura de jogo
+
+O contacto cai EM CIMA do keyframe 5 (t = 4/7), como nos outros clips: é o
+frame que desenha o pé na bola, e a bola tem de sair aí.
+=============================================================================
+*/
+const PassClip = {
+    /*
+    A perna é a direita, como no remate. Não é escolha: o `aplicarPoseRemate`
+    lê o `ShotClip.pernaChute` para saber qual perna é a de passe, portanto as
+    duas TÊM de coincidir — e há um teste que o exige, para não divergirem em
+    silêncio (tests/passe_planta_o_pe.test.js).
+    */
+    pernaChute: 'r',
+    contactFrame: 5,
+    frames: [
+        // 1  arranca: a perna de apoio avança, a de passe começa a recuar
+        { leanZ: -0.03, pelvisY: 0.06, chest: 0.12, chestY: -0.06, coxaChute: 0.20, joelhoChute: 0.45, coxaApoio: -0.18, joelhoApoio: 0.28, bracoLx: -0.25, bracoLz: 0.60, bracoRx: 0.18, bracoRz: -0.30, cotoveloL: -0.45, cotoveloR: -0.55, altura: 0.00 },
+        // 2  PÉ DE APOIO PLANTA ao lado da bola, tronco inclina sobre ele
+        { leanZ: -0.08, pelvisY: 0.11, chest: 0.18, chestY: -0.11, coxaChute: 0.38, joelhoChute: 0.75, coxaApoio: -0.06, joelhoApoio: 0.30, bracoLx: -0.36, bracoLz: 0.85, bracoRx: 0.26, bracoRz: -0.34, cotoveloL: -0.36, cotoveloR: -0.60, altura: -0.01 },
+        // 3  arma: o joelho dobra, a perna de passe vai atrás
+        { leanZ: -0.12, pelvisY: 0.16, chest: 0.22, chestY: -0.16, coxaChute: 0.52, joelhoChute: 1.05, coxaApoio: 0.00, joelhoApoio: 0.32, bracoLx: -0.46, bracoLz: 1.05, bracoRx: 0.32, bracoRz: -0.38, cotoveloL: -0.28, cotoveloR: -0.64, altura: -0.02 },
+        // 4  armação máxima — metade da do remate, que isto é um passe
+        { leanZ: -0.14, pelvisY: 0.18, chest: 0.22, chestY: -0.18, coxaChute: 0.55, joelhoChute: 1.12, coxaApoio: 0.03, joelhoApoio: 0.32, bracoLx: -0.50, bracoLz: 1.15, bracoRx: 0.35, bracoRz: -0.40, cotoveloL: -0.24, cotoveloR: -0.66, altura: -0.02 },
+        // 5  CONTACTO — o pé fecha na bola, o corpo por cima dela
+        { leanZ: -0.10, pelvisY: -0.08, chest: 0.10, chestY: 0.08, coxaChute: -0.30, joelhoChute: 0.12, coxaApoio: 0.04, joelhoApoio: 0.24, bracoLx: 0.02, bracoLz: 0.80, bracoRx: -0.14, bracoRz: -0.44, cotoveloL: -0.22, cotoveloR: -0.34, altura: 0.01 },
+        // 6  pós-impacto, a perna continua pela inércia
+        { leanZ: -0.08, pelvisY: -0.14, chest: 0.02, chestY: 0.14, coxaChute: -0.62, joelhoChute: 0.08, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.16, bracoLz: 0.70, bracoRx: 0.04, bracoRz: -0.46, cotoveloL: -0.18, cotoveloR: -0.26, altura: 0.03 },
+        // 7  acompanhamento CURTO, o pé desce
+        { leanZ: -0.04, pelvisY: -0.08, chest: -0.02, chestY: 0.08, coxaChute: -0.32, joelhoChute: 0.16, coxaApoio: 0.03, joelhoApoio: 0.14, bracoLx: 0.10, bracoLz: 0.45, bracoRx: 0.08, bracoRz: -0.30, cotoveloL: -0.12, cotoveloR: -0.14, altura: 0.01 },
+        // 8  recuperação, de novo em postura de jogo
         { leanZ: 0.00, pelvisY: 0.00, chest: 0.00, chestY: 0.00, coxaChute: 0.00, joelhoChute: 0.10, coxaApoio: 0.00, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: Math.PI / 16, bracoRx: 0.00, bracoRz: -Math.PI / 16, cotoveloL: 0.00, cotoveloR: 0.00, altura: 0.00 }
     ]
 };

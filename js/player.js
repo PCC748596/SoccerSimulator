@@ -894,6 +894,20 @@ class FootballPlayer {
     }
 
     /*
+    O FRAME DO PASSE. Delega no mesmo desenhador do remate — os campos do
+    PassClip são os do ShotClip precisamente para isto. Existe à parte para o
+    gesto ser endereçável pelo nome, como os outros, e para o assento no chão
+    correr a seguir: o passe é lento o bastante (0.35 s) para se ver o boneco
+    no ar se ninguém lhe descer o corpo até à bota.
+    */
+    aplicarFramePasse(K) {
+        if (!this.rig) return;
+        aplicarPoseRemate(this.rig, K);
+        this.model.position.y = ALTURA_BASE_Y + (K.altura || 0);
+        this.assentarNoChao();
+    }
+
+    /*
     DOMÍNIO DE BOLA ORIENTADO PELA DIREITA (ball_control_right).
     Inicia o ActionState para o BallControlRightClip e transita para BALL_CONTROL_RIGHT.
     */
@@ -2465,6 +2479,16 @@ class FootballPlayer {
     }
 
     initiatePass(targetPlayer) {
+        /*
+        O TIPO DE PASSE FIXA-SE AQUI, e não por frame.
+
+        O `case 'PASS'` da FSM desenha o PassClip em tudo o que é batido com o
+        pé no chão e deixa o CRUZAMENTO de fora — mas o `p.isCross` é limpo no
+        instante do contacto (`executePassGameplay`), a meio do gesto. Lido por
+        frame, um cruzamento arrancava sem animação e ganhava-a a meio.
+        */
+        this.passeComClip = !this.isCross;
+
         if (this.isCross) {
             this.showActionBanner('CROSS');
         } else if (this.isThroughBall) {

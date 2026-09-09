@@ -1839,8 +1839,28 @@ class PlayerFSM {
                     // dispara dentro do próprio ActionState, via onContact.
                     const norm = p.actionState.update(dt, p);
 
+                    /*
+                    E AGORA DESENHA-SE O GESTO.
+
+                    Esta linha faltava, e era o defeito inteiro: o `norm` era
+                    lido e deitado fora, portanto o passe era o único gesto do
+                    jogo sem animação — as pernas ficavam na pose que a passada
+                    tinha deixado e não havia pé de apoio nenhum para se ver.
+                    Pedido: "o jogador coloca o pé de apoio ao lado da bola e
+                    depois dá o passe". Ver PassClip (config/animations.js).
+
+                    O CRUZAMENTO fica de fora: é outro gesto (inclinar para
+                    trás e levantar a bola) e merece clip próprio.
+                    */
+                    if (p.passeComClip && typeof amostrarClipPasse === 'function') {
+                        p.aplicarFramePasse(amostrarClipPasse(norm));
+                    }
+
                     if (p.actionState.isDone() || !p.hasBall) {
                         p.actionState = null;
+                        // A pose do clip fica escrita no rig: sem repor, ele
+                        // sai do passe com a perna onde o keyframe 8 a deixou.
+                        if (p.passeComClip) p.resetBonesToDefault();
                         this.changeState('IDLE');
                         if (typeof Match !== 'undefined') {
                             if (Match.passTargetVisual) Match.passTargetVisual.visible = false;

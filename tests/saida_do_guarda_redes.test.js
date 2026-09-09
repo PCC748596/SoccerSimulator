@@ -58,10 +58,23 @@ Match.ballVel.set(0, 0, 0);
 gk.grabBall();
 Match.gkHoldingBall[gk.team] = true;
 
-for (const p of equipa) {
-    p.model.position.z = gk.model.position.z - gk.dirZ * (1 + Math.random() * 4);
-    p.model.position.x = (Math.random() - 0.5) * 20;
-}
+/*
+A MONTAGEM É DETERMINÍSTICA, e tem de ser.
+
+Isto era `Math.random()` por jogador. A semente está fixa no topo, mas o ponto
+do FLUXO a que estas dez chamadas chegam depende de quantos aleatórios os 600
+frames de aquecimento consumiram — e isso muda com qualquer alteração ao jogo.
+Apanhado quando o gesto do passe passou de 0.2 s para 0.35 s: o cenário passou
+a nascer com outros jogadores noutros sítios, e o teste mediu o sorteio em vez
+do comportamento.
+
+Os dez ficam espalhados em leque atrás dele, entre 1 e 5 m, que é o pior caso
+do relato posto à mão.
+*/
+equipa.forEach((p, i) => {
+    p.model.position.z = gk.model.position.z - gk.dirZ * (1 + (i % 5) * 1.0);
+    p.model.position.x = -9 + i * 2;
+});
 
 const atras = () => {
     const gkAvanco = gk.model.position.z * gk.dirZ;

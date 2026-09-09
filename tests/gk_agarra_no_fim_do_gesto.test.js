@@ -51,7 +51,27 @@ Corpo do ramo `} else if (this.gkEstado === 'XXX') {` até ao `else if`
 seguinte. Contagem de chavetas, não regex: os ramos têm blocos aninhados e
 comentários com chavetas lá dentro.
 */
-function ramoDoEstado(src, estado) {
+/*
+SÓ DENTRO DO updateGK.
+
+Isto procurava a marca no ficheiro INTEIRO e ficava-se pela primeira ocorrência.
+Qualquer outro sítio do player.js que nomeasse o estado passava a ser "o ramo" —
+e foi o que aconteceu quando o `assentarNoChao` ganhou a guarda
+`gkEstado === 'mergulho' || gkEstado === 'salto_alto'`, que vive 4 000 linhas
+acima: o teste passou a fatiar um `return;` de duas linhas e a dizer que o ramo
+não tinha saída para 'idle'.
+
+O que ele afirma inspeccionar é o `updateGK`; passa a ser só lá que procura.
+*/
+function corpoDoUpdateGK(src) {
+    const i = src.indexOf('    updateGK(dt) {');
+    if (i < 0) return src;
+    const j = src.indexOf('\n    resolverDefesaComMaos(', i);
+    return (j > i) ? src.slice(i, j) : src.slice(i);
+}
+
+function ramoDoEstado(srcCompleto, estado) {
+    const src = corpoDoUpdateGK(srcCompleto);
     const marca = `this.gkEstado === '${estado}'`;
     const i = src.indexOf(marca);
     if (i < 0) return null;

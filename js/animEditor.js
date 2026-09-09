@@ -29,6 +29,18 @@ const CLIPS = {
         },
         amostrar: (t) => amostrarClipRemate(t)
     },
+    PassClip: {
+        // Mesmo desenhador do remate: os campos do PassClip são os do ShotClip
+        // de propósito (ver a nota no config/animations.js).
+        rotulo: 'Passe',
+        clip: () => PassClip,
+        duracao: () => ActionAnimClips.pass.duration,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseRemate(rig, K);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipPasse(t)
+    },
     GoalkeeperKickClip: {
         rotulo: 'Chutão do guarda-redes',
         clip: () => GoalkeeperKickClip,
@@ -882,7 +894,7 @@ const Editor = {
         const frenteR = (typeof LateralPose !== 'undefined' && LateralPose.peFrente === 'r');
 
         const perna = (lado) => {
-            if (c === 'ShotClip' || c === 'GoalkeeperGroundKickClip' || c === 'GoalkeeperKickClip') {
+            if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' || c === 'GoalkeeperKickClip') {
                 const ehChute = (lado === 'r') === chuteR;
                 return ehChute
                     ? { x: 'coxaChute', z: (c === 'GoalkeeperGroundKickClip' ? 'coxaChuteZ' : null) }
@@ -896,7 +908,7 @@ const Editor = {
             return null;
         };
         const joelho = (lado) => {
-            if (c === 'ShotClip' || c === 'GoalkeeperGroundKickClip' || c === 'GoalkeeperKickClip') {
+            if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' || c === 'GoalkeeperKickClip') {
                 return ((lado === 'r') === chuteR) ? { x: 'joelhoChute' } : { x: 'joelhoApoio' };
             }
             if (c === 'ThrowInClip') {
@@ -917,12 +929,12 @@ const Editor = {
 
         switch (nomeJunta) {
             case 'pelvis':
-                if (c === 'ShotClip' || c === 'BallControlRightClip') return { y: 'pelvisY', z: 'leanZ', posY: 'altura' };
+                if (c === 'ShotClip' || c === 'PassClip' || c === 'BallControlRightClip') return { y: 'pelvisY', z: 'leanZ', posY: 'altura' };
                 if (c === 'GoalkeeperGroundKickClip') return { x: 'pitchX', z: 'leanZ', posY: 'altura' };
                 if (c === 'ThrowInClip') return { x: 'pelvisX', posY: 'altura' };
                 return { posY: 'altura' };
             case 'chest':
-                return (c === 'ShotClip' || c === 'BallControlRightClip') ? { x: 'chest', y: 'chestY' } : { x: 'chest' };
+                return (c === 'ShotClip' || c === 'PassClip' || c === 'BallControlRightClip') ? { x: 'chest', y: 'chestY' } : { x: 'chest' };
             case 'neck': return { x: 'cabecaX', y: 'cabecaY' };
             case 'lLeg': return perna('l');
             case 'rLeg': return perna('r');

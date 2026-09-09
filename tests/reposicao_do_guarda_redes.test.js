@@ -73,6 +73,25 @@ const montar = (marcados, saida) => {
 
     Match.ball.position.set(gk.model.position.x, 1.0, gk.model.position.z);
     Match.ballVel.set(0, 0, 0);
+
+    /*
+    E A MARCA DA LEI 12 TAMBÉM SE LIMPA.
+
+    O cenário é "a bola nas mãos dele", e o `grabBall` devolve **false** sem
+    tocar em nada quando `Match.recuoParaGR` diz que a bola lhe foi jogada
+    atrasada com o pé. O `montar` já repunha o `gkEstado`, o `hasBall` e o
+    `gkKickAction`; faltava esta, e por isso o cenário dependia do que os 300
+    frames de aquecimento tivessem deixado — apanhado quando o gesto do passe
+    passou a 0.35 s e o aquecimento passou a acabar com a marca posta: o
+    `grabBall` recusava, o `gkEstado` nunca chegava a `segurando`, e o teste
+    media "largou aos 0.0 s" sem o lance ter sequer começado.
+    */
+    if (typeof limparRecuoParaGR === 'function') limparRecuoParaGR();
+    // E a decisao JA TOMADA do frame anterior: o `limparRecuoParaGR` apaga a
+    // marca do toque, mas o `Match.recuoParaGR` so se refaz no proximo
+    // `avaliarRecuoParaGR` — e o `grabBall` le esse.
+    Match.recuoParaGR = null;
+
     gk.grabBall();
     Match.gkHoldingBall.TeamA = true;
 };
