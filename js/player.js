@@ -4239,6 +4239,28 @@ class FootballPlayer {
                 rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, 0); rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 0);
                 rig.lLeg.rotation.z = lerpTo(rig.lLeg.rotation.z, Math.PI / 32); rig.rLeg.rotation.z = lerpTo(rig.rLeg.rotation.z, -Math.PI / 32);
             }
+
+            /*
+            E O PÉ ASSENTE, TAMBÉM AQUI.
+
+            Este ramo saía com um `return` antes do `assentarNoChao` — que é
+            quem desce o corpo até a bota tocar. O corpo já vinha para
+            `ALTURA_BASE_Y` (no topo do ramo), mas as PERNAS não: quem acaba de
+            parar traz a coxa a 40-50° da última passada, e ela só volta a zero
+            por lerp, ao longo de uns quinze frames. Nesse tempo o boneco está de
+            pé, com a perna no ar, e o corpo à altura base — ou seja, a flutuar.
+
+            Medido no caminho do browser, com a sola da bota medida no mundo:
+            10 casos em 10 minutos, com a sola entre 15 e 25 cm do relvado e a
+            coxa entre 0.65 e 0.88 rad. É o relato ("os jogadores ficam
+            flutuando no campo"), e é curto — décimas de segundo — mas com 22
+            jogadores em campo vê-se sempre alguém assim.
+
+            A cabeça vai junto pela mesma razão: o tecto do olhar também estava
+            só no outro ramo.
+            */
+            this.nivelarCabeca();
+            this.assentarNoChao();
             return;
         }
         if (speed >= 0.1) {

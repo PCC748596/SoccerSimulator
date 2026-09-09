@@ -94,6 +94,50 @@ aproxima a defesa da bola, alargar só o lateral não.
 Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
 `tests/nivel2_prioridades.test.js`.
 
+#### Os jogadores a flutuar no campo
+
+Relato, com captura: *"por algum motivo, no meio do jogo, os jogadores ficam
+flutuando no campo"*.
+
+**A medida certa é a SOLA DA BOTA no mundo, e não o `model.position.y`.** Medi
+primeiro a altura do corpo e não apanhei nada — porque o corpo pode estar na
+altura base e ser a POSE a levantar o boneco. Duas horas de medição pelo lado
+errado; fica escrito para não se repetir.
+
+E a segunda condição para o reproduzir: **medir pelo caminho do BROWSER**
+(`Sim.running = false`). No lote, quem não passa pelo `animateBones` leva
+`y = ALTURA_BASE_Y` à mão — uma rede de segurança que o browser não tem.
+
+Com as duas coisas certas (`tools/headless/flutuar.js`, 10 min):
+
+    CM IDLE          sola=0.19  corpo=-0.04  coxa=0.86
+    CB MOVE_TO_POS   sola=0.25  corpo=-0.03  coxa=-0.88
+    CM MARKING       sola=0.22  corpo=-0.03  coxa=0.81
+    ... 64 leituras assim, parado e sem salto nenhum
+
+O corpo está na base e são as PERNAS que estão no ar: quem acaba de parar traz a
+coxa a 40-50° da última passada, e ela volta a zero por lerp ao longo de uns
+quinze frames. O `assentarNoChao` existe exactamente para isto — desce o corpo
+até a bota tocar — mas **o ramo de quem está PARADO no `animateBones` saía com um
+`return` antes de lá chegar**. Só o ramo de movimento o chamava.
+
+Uma linha: o ramo parado passa a chamar `nivelarCabeca()` e `assentarNoChao()`
+antes de sair. Medido depois: **64 → 11 leituras** em 10 min. E o cenário
+isolado (as duas pernas levantadas, jogador parado) mostra as duas metades do
+mesmo defeito — sem o assento a sola ia a **−0.076 m**, oito centímetros
+ENTERRADO, depois de ter passado pelo ar.
+
+Testes: `tests/jogador_nao_flutua.test.js` e o cenário novo no
+`tests/assento_no_chao.test.js`.
+
+**O que NÃO é defeito, e quase levou a estragar isto:** 18% das leituras têm a
+sola a mais de 15 cm do relvado, e quase todas são jogadores a CORRER. É a fase
+de voo da passada, e o assento está desligado acima de `AssentoNoChao.velMax`
+(4 m/s) de propósito. Tentei duas correcções nesse sentido — assentar contra o
+mínimo do ciclo da passada, e guardar o assento como offset persistente — e as
+duas **mediram PIOR** (17% → 19%, com o pior caso a passar de 47 para 2391
+leituras acima de 40 cm). Foram revertidas.
+
 #### "Ataques totais a 36% do alvo" era, em grande parte, o contador
 
 O número está nos problemas conhecidos desde Agosto e parecia o maior defeito do
@@ -6158,6 +6202,7 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `flutuar.js [segundos] [semente]` — mede a SOLA DA BOTA no mundo (não o `model.position.y`) e diz quem está no ar, com que gesto e a que velocidade. Corre pelo caminho do BROWSER (`Sim.running = false`): pelo do lote a altura é forçada à mão e o defeito não aparece.
 - `painel.js [segundos] [semente]` — as cinco linhas com que se calibra (golos, remates, ataques, perigosos, precisão de passe) numa corrida com semente fixa, para comparar duas versões com o mesmo ruído.
 - `onde_morrem_ataques.js [segundos] [semente]` — segue as SEQUÊNCIAS de posse (não o contador): quantas passam o meio-campo, quantas chegam ao último terço, e o que matou cada uma — passe cortado, bola solta, guarda-redes, bola fora.
 - `remates_contados.js [segundos] [semente]` — separa os gestos de remate dos remates a sério: com bola no pé, furados, abortados a meio, cabeçadas e bola parada, ao lado do `remates.tentados`.

@@ -191,14 +191,31 @@ console.log(LF + '5 — a correcção tem tecto');
     } else ok('uma pose absurda não teleporta o boneco');
 }
 
-console.log(LF + '6 — o animateBones chama-o depois de escrever a pose');
+console.log(LF + '6 — o animateBones chama-o depois de escrever a pose, nos DOIS ramos');
 {
     const i = srcPlayer.indexOf('animateBones(dt) {');
-    const j = srcPlayer.indexOf('this.assentarNoChao();', i);
+    const corpo = srcPlayer.slice(i);
+    const chamadas = (corpo.match(/this\.assentarNoChao\(\);/g) || []).length;
     const k = srcPlayer.indexOf('ALTURA_BASE_Y + P.ressalto', i);
-    if (j < 0) erro('o animateBones deixou de assentar o jogador no chão');
-    else if (!(j > k)) erro('o assento corre ANTES de a passada escrever a altura');
+    const ultima = srcPlayer.lastIndexOf('this.assentarNoChao();');
+
+    if (chamadas < 1) erro('o animateBones deixou de assentar o jogador no chão');
+    else if (!(ultima > k)) erro('o assento corre ANTES de a passada escrever a altura');
     else ok('assenta-se depois de a pose estar escrita');
+
+    /*
+    E O RAMO DE QUEM ESTÁ PARADO também tem de assentar.
+
+    Era só o ramo de movimento a chamá-lo: quem acabava de parar trazia a coxa a
+    40-50° da última passada, ela voltava a zero por lerp ao longo de uns quinze
+    frames, e nesse tempo o boneco ficava de pé com a perna no ar e o corpo à
+    altura base — a flutuar. Medido no caminho do browser (sola da bota medida no
+    mundo): 64 leituras assim em 10 minutos, com a sola entre 15 e 25 cm do
+    relvado. Ver tests/jogador_nao_flutua.test.js.
+    */
+    if (chamadas < 2) {
+        erro('só um ramo do animateBones assenta o jogador — o de quem está parado ficou de fora');
+    } else ok('os dois ramos (parado e em movimento) assentam o pé');
 }
 
 if (falhas) { console.log(LF + falhas + ' problema(s).'); process.exit(1); }
