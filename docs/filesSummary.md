@@ -7,6 +7,69 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ### Sessão de 9 de Setembro de 2026 — o pé no chão, e a área vazia
 
+#### O lote de 100 jogos, e duas caças que não deram nada
+
+    metrica              lote 30    lote 100     alvo    % do alvo
+    golos                  2.70       2.67       2.52      106%
+    remates               29.69      25.72      26.11       99%
+    xG por remate         0.049      0.061      0.109       56%
+    % no alvo             23.8%      25.5%      ~33%
+    cantos                 5.82       5.46       9.92       55%
+    amarelos               4.04       3.68       5.22       70%
+    vermelhos              0.24       0.21       0.08      265%
+    impedimentos           3.13       4.88       3.20      152%
+    ataques totais       136.4      131.5      176.63       74%
+
+**A conversão deixou de ser o defeito.** Golos por remate estão em 10.4% (real
+~10%), primeira vez que essa linha bate certo; golos por remate enquadrado 41%,
+contra os 67% de Setembro. O que sobra do lado ofensivo é a QUALIDADE da
+chance — xG por remate a 56% —, que é o fio da área vazia.
+
+##### Os impedimentos subiram, e não consegui atribuir a subida
+
+3.13 → 4.88 entre os dois lotes. Medido headless com 8 sementes fixas: 2.96
+antes da sessão, 4.57 depois — mesma direcção, e as duas medições casam bem
+(2.96↔3.13 e 4.57↔4.88). Mas com desvio da ordem da média, 8 sementes dão
+~1.3 sigma: **a contagem de apitos é ruidosa de mais** para atribuir.
+
+Três mecanismos propostos e os TRÊS refutados por medição directa:
+
+- *"a forma da defesa no livre junta o bloco e sobe a linha de fora-de-jogo"* —
+  a linha em jogo corrido não mexe: 31.6 m contra 31.7 m;
+- *"no instante da batida ficam atacantes já para lá da linha"* — zero dos dois
+  lados, e a linha ao bater fica MAIS BAIXA com a forma (8.1 m contra 20.5);
+- e a medida a montante, que tem amostra a sério (n≈10 000 por corrida):
+  jogadores com o ALVO além da linha 9.74% antes contra 9.69% depois, e com o
+  CORPO além dela 1.47% contra 1.60%. **O que produz impedimentos não mudou.**
+
+Fica para o próximo lote decidir. Se persistir, a alavanca documentada é o
+`RunIntoSpaceModel.riscoAlemDaLinha` (4.5), que tem curva medida.
+Ferramenta: `tools/headless/impedimentos_lote.js`.
+
+##### Os vermelhos: o diagnóstico é bom, o arranjo óbvio mediu pior
+
+0.21 por jogo contra 0.08. A razão que denuncia: **5.7% dos amarelos acabam em
+vermelho, contra os 1.5% reais.** Medido (`tools/headless/cartoes_origem.js`,
+4 sementes):
+
+- **o vermelho DIRECTO não existe, e não pode existir**: nenhuma falta chega a
+  0.85 de gravidade, quanto mais aos 0.95 do limiar. Baixar o `limiarVermelho`
+  não é a alavanca — o que estava a ser calibrado ali não tem efeito nenhum.
+- **100% dos amarelos vêm de `travouAtaque`**, e não da violência do lance.
+  Logo todo o vermelho é segundo amarelo.
+- as faltas repartem-se em contacto ~48%, desarme ~28%, carrinho ~24%, e os
+  jogadores JÁ ADVERTIDOS reincidem em contacto e desarme — **nunca em
+  carrinho**. O `podeFazerCarrinho` funciona; o que ele cobre é o gesto errado.
+- e há um detalhe que o explica: quando o advertido é travado, o ramo do
+  carrinho **cai para o `actTackle`** — que é o desarme. O travão REDIRIGE em
+  vez de travar.
+
+O arranjo óbvio — estender o travão ao desarme — **mediu PIOR**: as faltas de
+advertidos passaram de 6 para 10 nas mesmas 4 sementes. Não foi entregue. Fica
+escrito para não se repetir: tirar-lhe a disputa não lhe tira as faltas, e a
+alavanca dos vermelhos está na CONCENTRAÇÃO dos amarelos por jogador, que
+ainda não foi medida.
+
 #### No livre, metade do campo não era colocada por ninguém
 
 Relato, com captura de campo inteiro: *"o posicionamento dos jogadores na

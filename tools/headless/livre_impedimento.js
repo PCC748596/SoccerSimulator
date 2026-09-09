@@ -40,8 +40,13 @@ const p50 = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
 
 const acc = {
     bate: { dist: [], longe: [], prof: [], movidos: [] },
-    recebe: { dist: [], longe: [], prof: [], movidos: [] }
+    recebe: { dist: [], longe: [], prof: [], movidos: [] },
+    impedidosNaBatida: [],
+    linhaNaBatida: []
 };
+
+// SEMFORMA=1 desliga a forma, para comparar com o estado anterior.
+if (process.env.SEMFORMA) Match.formaDaDefesaNoLivre = function () { };
 
 for (let n = 0; n < quantos; n++) {
     // Uns segundos de jogo para as equipas saírem da formação inicial.
@@ -82,6 +87,35 @@ for (let n = 0; n < quantos; n++) {
         frames++;
     }
 
+    /*
+    QUEM JA ESTA IMPEDIDO NO INSTANTE DA BATIDA.
+
+    A forma do livro junta a defesa num bloco a 9.15-34 m da bola. O mais
+    recuado desse bloco DESENHA A LINHA de fora-de-jogo — e os companheiros do
+    batedor sao colocados a parte, pelo `lugares`. Se algum deles ficar para la
+    da linha, esta impedido no momento em que a bola e jogada, e o lance nasce
+    morto.
+
+    Antes da forma, a defesa ficava espalhada e havia quase sempre alguem
+    esquecido la atras a segurar a linha em baixo — o que TAPAVA isto.
+    */
+    {
+        const attDir = bate[0].dirZ;
+        const campoD = recebe.filter(p => p.role !== 'gk' && p.model);
+        const campoA = bate.filter(p => p.role !== 'gk' && p.model && p !== Match.setPieceTaker);
+        if (campoD.length && campoA.length) {
+            // Linha: o defensor mais recuado, no referencial de ataque de quem bate.
+            const linhaZ = Math.max(...campoD.map(p => p.model.position.z * attDir));
+            const bolaZ = Match.ball.position.z * attDir;
+            // Lei 11: so esta impedido quem esta a frente da linha E da bola.
+            const impedidos = campoA.filter(p =>
+                p.model.position.z * attDir > linhaZ &&
+                p.model.position.z * attDir > bolaZ).length;
+            acc.impedidosNaBatida.push(impedidos);
+            acc.linhaNaBatida.push(linhaZ);
+        }
+    }
+
     const bola = Match.ball.position;
     for (const [nome, lista] of [['bate', bate], ['recebe', recebe]]) {
         const campo = lista.filter(p => p.role !== 'gk');
@@ -105,6 +139,14 @@ for (const nome of ['bate', 'recebe']) {
         `${med(a.prof).toFixed(1).padStart(9)} m   ` +
         `${med(a.movidos).toFixed(1).padStart(7)} / 10`);
 }
+/*
+O NUMERO DA SUSPEITA. Se a forma da defesa juntar o bloco, o mais recuado sobe,
+a linha de fora-de-jogo sobe com ele, e os companheiros do batedor — colocados
+a parte, pelo `lugares` — podem ficar do lado errado dela ANTES de a bola sair.
+*/
+console.log(`\n  ATACANTES JA IMPEDIDOS no instante da batida: ` +
+    `${med(acc.impedidosNaBatida).toFixed(2)} de 9   ` +
+    `(linha a ${med(acc.linhaNaBatida).toFixed(1)} m no referencial de quem bate)`);
 console.log('\n  Num livre a serio as duas equipas estao a menos de 40 m da bola:');
 console.log('  quem ataca a procurar a bola, quem defende entre ela e a propria baliza.');
 console.log('  -52 = linha de fundo de quem bate | 0 = meio-campo | +52 = baliza adversaria\n');
