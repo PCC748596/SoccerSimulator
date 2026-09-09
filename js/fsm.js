@@ -815,7 +815,8 @@ class PlayerFSM {
         }
         if (newState === 'BLOCKING') this.p.showActionBanner('BLOCK');
         if (newState === 'CHEST_CONTROL') this.p.showActionBanner('CHEST');
-        if (newState === 'RUN_INTO_SPACE') this.p.showActionBanner('INFILTRA 🏃');
+        // Só o texto: era o único banner com emoji, e o pedido é tirá-lo.
+        if (newState === 'RUN_INTO_SPACE') this.p.showActionBanner('INFILTRA');
 
         // A bola de cada canto começa no chão: ver o case WATCH_CORNER.
         if (newState === 'WATCH_CORNER') this.cornerBolaSubiu = false;
