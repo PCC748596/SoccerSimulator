@@ -75,8 +75,13 @@ longo mudou o fluxo o suficiente para as expor. Vale a pena o padrão:
   duas linhas. Passa a procurar só dentro do `updateGK`, que é o que ele afirma
   inspeccionar.
 
-(`tests/cruzamento_ala.test.js` também falha, e **já falhava antes desta
-sessão** — verificado contra o `ab5175f`. Fica por arrumar.)
+**A suite está toda verde: 118 de 118.** Escrevi aqui, e num commit, que o
+`tests/cruzamento_ala.test.js` falhava — e não falhava. O erro era do meu
+varrimento: procurava `X ` na saída dos testes de estilo próprio, e apanhou o
+rótulo `alaX 15` de uma tabela que esse teste imprime. Fica a regra: **a suite
+verifica-se pelo CÓDIGO DE SAÍDA**, não por procurar marcas no texto. Os 118
+ficheiros ou usam o `node:test` ou chamam `process.exit(1)`, portanto o código
+de saída é fiável em todos.
 
 #### O lote de 100 jogos, e duas caças que não deram nada
 
