@@ -76,6 +76,15 @@ de tempo. E o numero que decide onde por o travao.
 */
 const porTipo = {};
 const advertidoRepete = {};
+/*
+AS PARCELAS DA GRAVIDADE, por tipo de falta.
+
+O tecto teorico do carrinho e 0.35 (base) + 0.234 (velocidade a 11.7 m/s) +
+0.30 (angulo = pi, pelas costas) + 0.14 (marcacao 0) + 0.12 (forca 100) = 1.14,
+bem acima dos 0.95 do vermelho directo. Se nenhum lance la chega, e porque uma
+das parcelas nao percorre a sua gama — e e essa que interessa nomear.
+*/
+const parcelas = {};
 
 {
     const origFalta = Officials.marcarFalta.bind(Officials);
@@ -83,6 +92,16 @@ const advertidoRepete = {};
         const tipo = (dados && dados.tipo) || '?';
         const jaTinha = !!(infractor && infractor.temAmarelo);
         porTipo[tipo] = (porTipo[tipo] || 0) + 1;
+        if (dados) {
+            const r = parcelas[tipo] || (parcelas[tipo] = {
+                g: [], vel: [], ang: [], marc: [], forca: []
+            });
+            r.g.push(Officials.gravidadeDaFalta(dados));
+            r.vel.push(Math.max(0, dados.velocidade || 0));
+            r.ang.push(Math.abs(dados.angulo || 0));
+            r.marc.push(typeof dados.marcacao === 'number' ? dados.marcacao : 50);
+            r.forca.push(typeof dados.forca === 'number' ? dados.forca : 50);
+        }
         if (jaTinha) advertidoRepete[tipo] = (advertidoRepete[tipo] || 0) + 1;
         return origFalta(infractor, vitima, dados);
     };
@@ -131,5 +150,16 @@ console.log('\n  faltas por gesto (e quantas de quem JA tinha amarelo):');
 for (const [k, v] of Object.entries(porTipo).sort((a, b) => b[1] - a[1])) {
     console.log(`    ${k.padEnd(12)} ${String(v).padStart(4)}   ` +
         `de advertidos: ${advertidoRepete[k] || 0}`);
+}
+const med = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+const max = (a) => a.length ? Math.max(...a) : 0;
+console.log('\n  AS PARCELAS DA GRAVIDADE (media / MAXIMO observado):');
+console.log('    tipo        gravidade      velocidade      angulo (rad)     forca');
+for (const [k, r] of Object.entries(parcelas)) {
+    console.log(`    ${k.padEnd(10)} ` +
+        `${med(r.g).toFixed(2)} / ${max(r.g).toFixed(2)}   ` +
+        `${med(r.vel).toFixed(1)} / ${max(r.vel).toFixed(1)} m/s   ` +
+        `${med(r.ang).toFixed(2)} / ${max(r.ang).toFixed(2)} (pi=3.14)   ` +
+        `${med(r.forca).toFixed(0)} / ${max(r.forca).toFixed(0)}`);
 }
 console.log('');

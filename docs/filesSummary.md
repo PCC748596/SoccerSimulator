@@ -128,9 +128,33 @@ Ferramenta: `tools/headless/impedimentos_lote.js`.
 vermelho, contra os 1.5% reais.** Medido (`tools/headless/cartoes_origem.js`,
 4 sementes):
 
-- **o vermelho DIRECTO não existe, e não pode existir**: nenhuma falta chega a
-  0.85 de gravidade, quanto mais aos 0.95 do limiar. Baixar o `limiarVermelho`
-  não é a alavanca — o que estava a ser calibrado ali não tem efeito nenhum.
+- **o vermelho DIRECTO não acontece** — e escrevi primeiro que "não pode
+  acontecer", o que era falso e o utilizador travou a tempo: **não há regra
+  nenhuma a proibi-lo.** O tecto teórico do carrinho é
+  `0.35 + 0.234 + 0.30 + 0.14 + 0.12 = 1.14`, bem acima dos 0.95.
+
+  O que há são duas parcelas que nunca percorrem a sua gama. Medido, por tipo
+  de falta (média / máximo observado):
+
+        tipo       gravidade      velocidade        angulo (pi=3.14)   forca
+        carrinho   0.65 / 0.73   8.2 / 8.2 m/s    1.24 / 2.14        83 / 94
+        contacto   0.37 / 0.53   6.0 / 12.4 m/s   1.48 / 3.05        79 / 94
+        desarme    0.31 / 0.42   3.8 / 4.6 m/s    1.08 / 2.26        84 / 91
+
+  **A velocidade do carrinho é uma CONSTANTE**: média igual ao máximo, 8.2 m/s,
+  em todas as sementes — o `SlideTackleModel.velocidade` é 9.0 e chega ao
+  contacto sempre a 8.2. O comentário dos limiares raciocina com "lançado a
+  11.7 m/s", que nunca acontece: são 0.070 que nunca entram. **E o ângulo nunca
+  chega a π**: 2.14 rad no melhor caso, ou seja 0.20 dos 0.30 do peso — um
+  carrinho verdadeiramente pelas costas não existe.
+
+  Somando o observado: `0.35 + 0.164 + 0.20 + 0.11 − 0.08 ≈ 0.74`, que é o
+  máximo medido (0.73). Falta um quinto do caminho.
+
+  Consequência prática que se mantém: **baixar o `limiarVermelho` não é a
+  alavanca**, porque nada chega perto dele. Se se quiser vermelho directo, o
+  que tem de mudar é a velocidade do deslize deixar de ser um número fixo, ou
+  o ângulo do contacto poder ir mais atrás.
 - **100% dos amarelos vêm de `travouAtaque`**, e não da violência do lance.
   Logo todo o vermelho é segundo amarelo.
 - as faltas repartem-se em contacto ~48%, desarme ~28%, carrinho ~24%, e os
