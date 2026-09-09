@@ -3,9 +3,27 @@
 Mapa do código do Soccer Simulator depois da divisão do `index.html` monolítico.
 Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
-## Últimas Actualizações (Agosto 2026)
+## Últimas Actualizações (Setembro 2026)
 
-### Sessão de 9 de Setembro de 2026 — o pé no chão, e a área vazia
+### Sessão de 9 de Setembro de 2026 — o pé no chão, a área vazia, e três caças sem presa
+
+Sessão longa. O que fica dela, antes de qualquer número:
+
+**Medi três coisas com amostra a menos e quase entreguei conclusões por isso.**
+Os impedimentos, o custo do gesto do passe e a largura do médio de ala têm
+efeitos da ordem de 1 a 2 sigma na amostra que consigo correr aqui — e em dois
+desses casos a variância entre sementes é maior do que a diferença que se
+procura. Está escrito em cada sítio, com o número, em vez de arredondado para
+uma afirmação. **Quando o evento é raro (apitos, cartões), meça-se o que está a
+montante dele**, que tem milhares de amostras: foi assim que os impedimentos
+deram uma resposta e os vermelhos deram outra.
+
+**E três hipóteses minhas, com mecanismo e tudo, foram refutadas por medição
+directa** — o piso do bloco no livre, a linha de fora-de-jogo depois do livre, e
+o travão do advertido estendido ao desarme. Nenhuma foi entregue. Fica cada uma
+escrita onde estava, porque saber o que NÃO é a causa vale o mesmo que saber o
+que é.
+
 
 #### O médio de ala por dentro do seu CM — e a regra que tinha a premissa ao contrário
 
@@ -5555,7 +5573,49 @@ Spec em [docs/superpowers/specs/2026-08-24-reach-animacao-procedural-design.md](
 
 ## Problemas conhecidos
 
-Coisas medidas e por resolver, para não se voltarem a descobrir por acaso:
+Coisas medidas e por resolver, para não se voltarem a descobrir por acaso.
+
+> **ANTES DE ACREDITAR NUM ITEM DESTA LISTA, MEÇA-O OUTRA VEZ.** A 9 de
+> Setembro, cinco entradas foram desmentidas de uma vez pelo lote de 100 jogos —
+> incluindo a que estava marcada como "o furo mais antigo e de maior retorno"
+> (os pontapés de baliza a zero), que já não acontecia. Uma lista de problemas
+> envelhece tão depressa como o código.
+
+### Aberto desde 9 de Setembro de 2026
+
+- **A ÁREA ESTÁ VAZIA, e é o maior retorno do lado ofensivo.** Com a bola no
+  último terço há 0.7-0.9 atacantes dentro da grande área; no instante em que a
+  bola lá entra são 1.2-1.4 contra 2.0-2.5 defensores (real: 3-5 contra 5-7). A
+  bola entra na área 17-39 vezes por 90 e lá fica 75-130 s, com a equipa que
+  ataca a ter portador em 1-2% desse tempo. **A causa está localizada**: o slot
+  do bloco e o playing style põem o CF a 9.9 m da baliza — dentro da área — e a
+  fase 2 (`tickFinal`) tira-lhe 8.2 m e põe-no fora. A mola de coesão explica
+  1.5 dos 8.2; os outros 6.8 estão por isolar. Liga directamente ao xG por
+  remate a 56% e aos cantos a 55%.
+  Ferramentas: `area_entradas.js`, `linha_na_area.js`.
+- **Impedimentos a 152% do alvo** (4.88 contra 3.20), contra 98% no lote
+  anterior. Não consegui atribuir a subida: três mecanismos propostos e os três
+  refutados por medição directa, e a métrica a montante (jogadores com o alvo
+  além da linha, n≈10 000 por corrida) não mexeu — 9.74% contra 9.69%. Se
+  persistir, a alavanca documentada é o `RunIntoSpaceModel.riscoAlemDaLinha`
+  (4.5), que tem curva medida. Ferramenta: `impedimentos_lote.js`.
+- **Vermelhos a 265% do alvo, e TODOS são segundo amarelo.** O vermelho directo
+  é possível (tecto teórico 1.14) mas não acontece: a gravidade máxima medida é
+  0.74. E 100% dos amarelos vêm de `travouAtaque`, não da violência do lance. O
+  travão dos advertidos (`podeFazerCarrinho`) cobre só o carrinho — e os
+  advertidos reincidem em `contacto` e `desarme`, nunca em carrinho. Estendê-lo
+  ao desarme foi tentado e **mediu pior** (6 → 10 faltas de advertidos). A
+  alavanca está na CONCENTRAÇÃO dos amarelos por jogador, que não foi medida.
+  Ferramenta: `cartoes_origem.js`.
+- **Os quatro homens de ala jogam a |x| 15-16** com o slot a 19-20 e o campo a
+  ter 34 de meia-largura. Alargar o bloco é a alavanca óbvia e está **medida
+  como cara**: dois metros de largura de equipa valeram um golo por jogo (8 de
+  Setembro). Por decidir se se paga.
+- **O `xG por remate` está a 56% do alvo** com o volume de remates certo (99%).
+  Remata-se de onde vale pouco, o que é a mesma frase que a área vazia.
+
+### Aberto de antes
+
 
 - **NÃO EXISTE SEPARAÇÃO CORPO-A-CORPO ENTRE COMPANHEIROS** (o `separarAlvos`
   está apagado). Medido a 28 de Agosto: **23.7% dos frames têm dois colegas a
@@ -5566,13 +5626,13 @@ Coisas medidas e por resolver, para não se voltarem a descobrir por acaso:
   ingénua:** empurrar toda a gente para um anel à volta da bola foi tentado,
   medido e revertido — junta-os no anel (ver a sessão de 28 de Agosto). O que
   falta é repulsão ENTRE COLEGAS aplicada ao alvo, antes do clamp do campo.
-- **`pontapesBaliza` é 0 em TODOS os registos de todos os lotes**, e os
-  escanteios ficam em 0,2 por jogo (alvo 9,92). Reconfirmado a 28 de Agosto: um
-  jogo completo de 1080 s deu **zero chutões e zero cantos**. A bola não sai pela
-  linha de fundo. É o furo mais antigo por explicar e o de maior retorno: arruma
-  os cantos, os pontapés de baliza e parte dos remates em falta de uma vez. É
-  também o que obriga a forçar cantos em laboratório (`tools/headless/canto_lote.js`)
-  para se poder medir seja o que for da bola parada ofensiva.
+- ~~**`pontapesBaliza` é 0 em TODOS os registos**, e os escanteios ficam em 0,2
+  por jogo.~~ **RESOLVIDO, e o lote de 100 jogos de 9 de Setembro prova-o**:
+  `pontapesBaliza` dá 3 a 7 por equipa por jogo e os cantos 5.46 (55% do alvo,
+  9.92). A bola já sai pela linha de fundo. Fica só a METADE que falta: os
+  cantos a 55% continuam baixos, e a causa provável já não é a bola não sair —
+  é ninguém estar na área para desviar ou forçar o corte (ver a área vazia, na
+  sessão de 9 de Setembro).
 - **A CONDUÇÃO VEM TODA DO `Dominar` → `proteger`** (7 179 entradas contra
   4 727 de todos os passes juntos), e esse ramo está ACIMA de todos os de passe
   na árvore. O `ConduzirEmEspaco` tem 51 entradas em 20 jogos e o fallback
@@ -5592,20 +5652,31 @@ Coisas medidas e por resolver, para não se voltarem a descobrir por acaso:
   parada que já foi batida. Liga ao `setPieceTaker`/`setPieceTimer` que nenhuma
   saída normal para `PLAY` limpa.
 
-- **A bola passa 1,7% do tempo no terço ofensivo** (`tercoSegundos.atk`, ~18 s
-  num jogo de 1080 s). Explica os cantos, os pontapés de baliza, a bancada
-  parada e as finalizações a metade do alvo.
+- ~~**A bola passa 1,7% do tempo no terço ofensivo** (~18 s num jogo).~~
+  **DESMENTIDO pelo lote de 100 jogos**: o `tercoSegundos.atk` dá 30-40 s por
+  equipa, contra 160-200 s de posse — **23% do tempo com bola**, e não 1.7%. O
+  número antigo lia a fracção do jogo inteiro e não da posse.
 - **`RUN_INTO_SPACE` aborta em 0,41 s de média**, contra os 4,0 s de `duracao`
   do `RunIntoSpaceModel`. A corrida ao espaço arranca e desiste quase logo,
   portanto a tabelinha ainda não acontece a sério.
 - **O rótulo do lote mente:** diz minutos de relógio de jogo e são minutos de
   física. Ver a conta em "O ERRO QUE INVALIDAVA TODA A CALIBRAÇÃO".
-- **`trocasMarcacao` continua 0** em todos os registos, apesar de instrumentado.
-- **`extra_frontman` (CB) e `target_man` (CF) continuam `semEfeito: true`:**
-  activam e não deslocam nada. Já não prendem o portador (ver a guarda `comBola`
-  no `PlayerAI.tick`), mas continuam a ser estilos que não fazem o que dizem.
+- ~~**`trocasMarcacao` continua 0** em todos os registos.~~ **DESMENTIDO**: o
+  lote de 100 jogos dá 330-530 por equipa por jogo.
+- **`extra_frontman` (CB) e `target_man` (CF) deslocam zero metros**, mas o lote
+  já os marca `semEfeito: false` e `semDeslocacaoPorDesenho: true` — ou seja, o
+  relatório passou a dizer que é de propósito. Se for mesmo de propósito, está
+  arrumado; se não for, o que mudou foi a etiqueta e não o comportamento.
+- **A rotação de estilos é muito desigual**, e isso é novo no lote de 100:
+  `the_destroyer` tem 24 795 activações e `defensive_fullback` tem **2**;
+  `target_man` 74, `hole_player` 167, `fullback_finisher` 163. Metade do
+  catálogo quase não corre, portanto quase não está a ser testado.
 
-- **Metade dos passes não chega ao receptor pretendido, mesmo com o erro de execução desligado** (52.5 ± 7.9%, 10 sementes × 2 corridas). Alguma outra coisa — escolha de alvo, lead/tempo de voo, recepção acima do `easySpeed`, interceptação — domina o resultado do passe por uma ordem de grandeza. **Parte disto está identificado e tratado**: o `PassTypes.escolher` escolhia o receptor sem termo nenhum de linha de passe (ver "o passe jogado para dentro de alguém", no topo). Falta medir quanto do `pctCortado` isso explicava — o resto das hipóteses continua de pé. A medição que isolaria o erro de execução: o **desvio lateral da bola em relação à linha passador→alvo**, medido à distância do alvo, que com o erro desligado tem de dar exactamente zero.
+- **Os passes longos continuam a perder-se**, embora já não "metade de todos":
+  o lote de 100 dá 86% certos aos 0-8 m, 84% aos 8-15, **65% aos 15-25 e 47%
+  acima dos 25** — e nas duas faixas longas metade vai pelo alto, com o domínio
+  a falhar em 16% e 29%. O total é 70.3%, contra ~80% reais. (O número antigo,
+  52.5%, media outra coisa: passes que chegam ao receptor PRETENDIDO.) Alguma outra coisa — escolha de alvo, lead/tempo de voo, recepção acima do `easySpeed`, interceptação — domina o resultado do passe por uma ordem de grandeza. **Parte disto está identificado e tratado**: o `PassTypes.escolher` escolhia o receptor sem termo nenhum de linha de passe (ver "o passe jogado para dentro de alguém", no topo). Falta medir quanto do `pctCortado` isso explicava — o resto das hipóteses continua de pé. A medição que isolaria o erro de execução: o **desvio lateral da bola em relação à linha passador→alvo**, medido à distância do alvo, que com o erro desligado tem de dar exactamente zero.
 - **Lançamento rasteiro acima dos ~28 m é cortado em silêncio.** O `velocidadeRasteiraPara` é usado também nos lançamentos (`ehLancamento && !lancamentoAlto`) e o `findThroughBall` não está limitado em distância. Com o tecto de 18.5 m/s a bola fica pelos ~29.8 m e cai curta, sem cair para o ramo aéreo.
 - **RESOLVIDO a 28 de Agosto — `RUN_INTO_SPACE` aborta em 0,41 s de média.** Não
   era a corrida a desistir: duas folhas (tabelinha e overlap) pediam o estado sem
@@ -6677,6 +6748,20 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `flutuar.js [segundos] [semente]` — mede a SOLA DA BOTA no mundo (não o `model.position.y`) e diz quem está no ar, com que gesto e a que velocidade. Corre pelo caminho do BROWSER (`Sim.running = false`): pelo do lote a altura é forçada à mão e o defeito não aparece.
 - `painel.js [segundos] [semente]` — as cinco linhas com que se calibra (golos, remates, ataques, perigosos, precisão de passe) numa corrida com semente fixa, para comparar duas versões com o mesmo ruído.
 - `onde_morrem_ataques.js [segundos] [semente]` — segue as SEQUÊNCIAS de posse (não o contador): quantas passam o meio-campo, quantas chegam ao último terço, e o que matou cada uma — passe cortado, bola solta, guarda-redes, bola fora.
+
+As de 9 de Setembro. Todas levam `[segundos] [semente]` e o mulberry32 do
+`largura_golos.js`, para se comparar duas versões com o mesmo ruído:
+
+- `area_entradas.js` — a bola dentro da grande área medida **pela bola** e não pelo portador: entradas, tempo lá dentro, toques honestos (do `registarRecepcao`, que não exige `ballCarrier`) e quantos atacantes/defensores lá estão no instante da entrada. Foi ela que mostrou que o contador `toquesNaArea` está quase certo e o que falta é gente na área.
+- `linha_na_area.js` — as quatro sondas do posicionamento (`slotTarget`, `postoBase`, `tacticalTarget`, `dynamicTarget`) por posição, com a bola em três faixas de distância à baliza. Diz QUAL das fases tira a profundidade ao avançado. `FOLGA=` e `MOLA=` varrem sem tocar no config.
+- `largura_alas.js` — o mesmo para a LARGURA, nos quatro postos de ala, mais a percentagem de vezes que o homem de ala fica por dentro do central da sua linha. `MOLA=`, `MAXX=` e `SEPAR=` isolam qual das regras come a largura.
+- `livre_impedimento.js [quantos]` — monta livres indirectos e mede se as duas equipas são colocadas, a que distância da bola ficam, e quantos atacantes estão já impedidos no instante da batida.
+- `impedimentos_lote.js` — impedimentos por 90 com semente fixa, mais a linha de fora-de-jogo e a métrica a montante (alvos e corpos além da linha), que tem n≈10 000 por corrida e resolve o que a contagem de apitos não resolve.
+- `cartoes_origem.js` — de onde vêm os cartões: vermelho directo contra segundo amarelo, quantos amarelos são por travar ataque, as faltas por gesto (e quantas de quem já estava advertido), e **as parcelas da gravidade** — foi a última que mostrou que a velocidade do carrinho era uma constante.
+- `carrinho_velocidade.js` — a velocidade de aproximação no frame em que ele entra em SLIDE_TACKLE, antes de o deslize a reescrever.
+- `passes_faixas.js` — a tabela de passes por faixa de distância (a mesma do lote) com semente fixa. `DURACAOPASSE=` varre o comprimento do gesto do passe.
+- `assento_tres_relatos.js` — a sola da bota por estado do jogo, por `gkEstado`, minuto a minuto e por velocidade de rotação, mais qual das guardas do `assentarNoChao` recusou o assento. `SUAVIZACAO=` e `CORRECCAOMAX=` varrem os dois números.
+- `assento_convergencia.js` — envolve o `assentarNoChao` e mede a sola ANTES e DEPOIS dele no mesmo frame. Foi ela que deu a razão 0.65 = `1 - suavizacao` e provou que a correcção nunca acumulava.
 - `remates_contados.js [segundos] [semente]` — separa os gestos de remate dos remates a sério: com bola no pé, furados, abortados a meio, cabeçadas e bola parada, ao lado do `remates.tentados`.
 - `gk_cronologia.js [segundos] [semente]` — a cronologia da defesa: tempo de voo até à linha, quando ele reage, quando o mergulho arranca, quantos metros de lado precisava e a que distância a mão passou da bola. Foi ela que apanhou o mergulho para fora do poste.
 - `reposicao_do_gk.js [segundos] [semente]` — por posse de mão: quanto tempo segurou, como repôs (lançamento ou chutão), a que distância e para quem, com o adversário mais próximo do destinatário, e se a equipa ficou com a bola 3 s depois.
@@ -7235,7 +7320,14 @@ padrão de fluxograma pro PositionBT/PlayerBT.
 | Equipa compacta demais / esticada demais | `config.js` → `TeamShape.blockDepth*` |
 | Buraco no meio da área com a bola atrás da linha da grande área | `bt/team_bt.js` → `computeBlock`, o `minZ`; `config.js` → `BlockShape.folgaAtrasDaBola` / `.margemFundoDoBloco` |
 | Defesas e médio a subirem de mais no ataque | `config.js` → `BlockShape.restDefense` |
-| Lateral e extremo do mesmo lado embolados | `config.js` → `BlockShape.separacaoLateral` |
+| Lateral e extremo do mesmo lado embolados | `config.js` → `BlockShape.separacaoLateral` (**INERTE**: assume que o meia é mais largo que o lateral, e medido é ao contrário) |
+| Médio de ala por dentro do seu CM | `config.js` → `BlockShape.separacaoMeiaCentro`; a regra vive no FIM do `tickFinal`, sobre o `dynamicTarget` |
+| Mexer num alvo de posicionamento e nada acontecer | O `tacticalTarget` é só o ANEL DO DEBUG. O alvo que o jogador segue é o `dynamicTarget`, calculado à parte no fim do `tickFinal` |
+| Mudar a animação do passe | `config/animations.js` → `PassClip` e `ActionAnimClips.pass`; desenha-se no `case 'PASS'` do `fsm.js` |
+| Jogador a flutuar ou enterrado no relvado | `player.js` → `assentarNoChao`; `config/gait.js` → `AssentoNoChao` (a correcção é INTEIRA: o tecto é o `correccaoMax`, não uma fracção) |
+| Guarda-redes no ar | O `assentarNoChao` é chamado no fim do `updateGK`, e só o `mergulho` e o `salto_alto` lhe escapam |
+| Um carrinho lançado contar o mesmo que um dado a passo | `bt/player_bt.js` → `actSlideTackle` escreve o `p.slideVel0`; `config/defense.js` → `SlideTackleModel.impulso` |
+| Toda a gente parada no sítio errado num livre | `match_setpieces.js` → `formaDaDefesaNoLivre`; `config/player_behavior.js` → `FreeKickShape` |
 | Jogador em fora-de-jogo apesar do bloco o cortar | `bt/player_bt.js` → `cortarForaDeJogo`; `config.js` → `BlockShape.cortarForaDeJogoNoAlvo` |
 | Jogador a sair do desenho da formação | `config.js` → `BlockShape.desvioMaxDoSlot`; `p.slot` vs `p.slotAtribuido` |
 | Trocar dois jogadores da mesma posição de lugar | `bt/team_bt.js` → `otimizarSlotsPorPosicao` (escreve `slotAtribuido`) |
