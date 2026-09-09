@@ -94,6 +94,53 @@ aproxima a defesa da bola, alargar só o lateral não.
 Testes: `tests/laterais_largura.test.js` (comportamento) e o cenário novo no
 `tests/nivel2_prioridades.test.js`.
 
+#### O guarda-redes mergulhava para onde a bola ESTAVA
+
+Lote de 60 jogos (o do utilizador, 1080 s por jogo):
+
+    golos            4.89 (194% do alvo)
+    remates         25.67 (98%)          <- o volume está certo
+    xG total         1.56 (55%)
+    % no alvo       28.5%
+    faltas          26.20 (95%)          <- a Lei 12 arrumou isto
+    impedimentos     3.83 (120%)
+    cantos           5.56 (56%)
+    ataques totais  63.70 (36%)
+
+O número que manda é a contradição: **o próprio jogo estima 1.56 xG e marca
+4.89 golos.** Com 25.7 remates e 28.5% enquadrados são 7.3 à baliza por jogo, e
+entram 4.89 — **67% dos enquadrados acabam em golo, contra os ~30% reais**. Não
+é a finalização: é o guarda-redes.
+
+Rasto frame a frame (`tools/headless/gk_cronologia.js`), e a causa apareceu à
+primeira: **há DOIS ramos que disparam o mergulho.** O principal projecta a bola
+até ao plano dele. O segundo — a espalmada de curta distância (`possoEspalmar`,
+player.js) — mandava-o para `Match.ball.position.x`, **o x do INSTANTE**. E é
+esse que dispara na maioria dos remates, porque o principal exige `gkReagiu`,
+ainda falso nos primeiros frames do voo.
+
+Um lance medido: bola em x = −16.2 com vx = +27 m/s (a fechar para o meio),
+`gkAlvoX = −15.8` — **doze metros para fora do poste**. Ele mergulhava para a
+bandeirola enquanto a bola entrava pelo meio da baliza. A mão passava a 8.5 m
+da bola no instante em que ela cruzava a linha, e em 0 de 5 remates enquadrados
+chegou a menos de 60 cm dela.
+
+`pontoDeIntercepcaoGK` (utils.js) é agora a conta única — projecção até ao plano
+do guarda-redes, com a gravidade a contar para a altura — lida pelos dois ramos.
+
+Medido com sementes fixas, 900 s por corrida, o MESMO ruído nas duas versões:
+
+    semente        0      1      2      3     média
+    antes       11.17   3.65   6.12   3.65    6.15 golos/90
+    depois       3.65   3.65   3.65   1.21    3.04
+
+E o gesto: a mão acaba a **1.50 m** da bola em vez de 4.14, com 3.15 m de
+deslocamento lateral pedido em vez de 5.84 — ele deixou de ir para o lado
+errado. Teste: `tests/gk_ponto_de_intercepcao.test.js`.
+
+Fica dito o que ainda falta: 3.04 contra os 2.52 do alvo, e os ataques totais em
+36% continuam onde estavam.
+
 #### A reposição do guarda-redes: esperar até aos 8 s por uma boa opção
 
 Pedido: *"após o goleiro pegar a bola ele tem que esperar até 8 s para repor,
@@ -6019,6 +6066,7 @@ tempo de jogo — 600 s simulados, 45 min de relógio — corre em ~16 s de CPU.
 - `laterais_largura.js` — o |x| do lateral em cada camada do posicionamento (slot, posto, mola, alvo final), quantas vezes ele fica por dentro dos centrais, e quem ele marca. Foi ela que mostrou que a largura se perdia na separação lateral↔meia e não na mola de coesão.
 - `largura_golos.js [segundos] [semente]` — golos/90, largura ocupada pela equipa e |x| do lateral, com o `Math.random` substituído por um mulberry32 (UMA semente por processo, o harness não sobrevive a ser recarregado). É a ferramenta para comparar duas versões do posicionamento com exactamente o mesmo ruído.
 - `saida_caminhada.js` — depois do golo: metros andados por jogador durante o estado GOAL e quantos são colocados à mão na montagem da saída.
+- `gk_cronologia.js [segundos] [semente]` — a cronologia da defesa: tempo de voo até à linha, quando ele reage, quando o mergulho arranca, quantos metros de lado precisava e a que distância a mão passou da bola. Foi ela que apanhou o mergulho para fora do poste.
 - `reposicao_do_gk.js [segundos] [semente]` — por posse de mão: quanto tempo segurou, como repôs (lançamento ou chutão), a que distância e para quem, com o adversário mais próximo do destinatário, e se a equipa ficou com a bola 3 s depois.
 - `saida_do_guarda_redes.js [segundos] [semente]` — com a bola nas mãos dele: quantos companheiros ficam ATRÁS do guarda-redes, a que distância está a opção mais perta, e a que velocidade se mexem. Separa por estado do jogo, porque em bola parada as posições são impostas e não valem para esta leitura.
 - `peito_queda.js [segundos] [semente]` — a matada no peito: a que distância do peito a bola toca o chão, onde acaba o lance e de quem fica.
