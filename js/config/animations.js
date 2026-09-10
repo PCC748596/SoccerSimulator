@@ -33,7 +33,20 @@ const ActionAnimClips = {
     */
     gkPuntChao: { duration: 0.25, contactTime: 9 / 15 },
     // Lançamento com as mãos do guarda-redes
-    gkThrow: { duration: 0.70, contactTime: 8 / 11 },
+    /*
+    O contacto e no frame 8 de 12, e nao no 9.
+
+    Era `8 / 11`. O `amostrarClipLancamentoGR` faz `pos = norm * (n - 1)`,
+    portanto 8/11 da `pos = 8` — o INDICE 8, que e o frame 9, o
+    "Follow-through". O GoalkeeperThrowClip anota o contacto no frame 8 ("bola
+    sai da mao"), com o braco na extensao maxima; um frame depois ele ja vem a
+    descer (`bracoRx` 1.10 -> 0.60) e a bola largava de la.
+
+    O 8/11 veio do `gkPunt`, onde esta certo porque la o contacto E o keyframe
+    9. Para o frame 8 de 12 o valor e `7 / 11` — o mesmo que o `shot`, que tem
+    a mesma contagem.
+    */
+    gkThrow: { duration: 0.70, contactTime: 7 / 11 },
     // O rolamento e mais lento e o contacto e no ponto mais baixo da mao
     // (frame 7 de 10) — ver GoalkeeperUnderarmThrowClip.
     gkThrowBaixo: { duration: 0.85, contactTime: 6 / 9 },
