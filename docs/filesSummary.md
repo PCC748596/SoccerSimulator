@@ -5,6 +5,69 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 11 de Setembro de 2026 — o lote de 40 jogos, e o preço do bónus da infiltração
+
+Lote do browser, 40 jogos, contra o de 30 de 9 de Setembro:
+
+    metrica              9 Set    agora    alvo    % do alvo
+    golos                 2.39     2.84    2.52      113%
+    remates              23.45    22.72   26.11       87%
+    % no alvo            24.3%    26.1%    ~33%
+    cantos                4.34     5.30    9.92       53%
+    passes certos        68.8%    69.1%    ~80%
+    faltas               27.26    27.11   27.63       98%
+    amarelos              3.80     3.64    5.22       70%
+    vermelhos             0.13     0.18    0.08      221%
+    impedimentos          5.89     8.85    3.20      276%
+    ataques totais      130.3    133.8   176.63       76%
+    xG por remate        0.054    0.057   0.109       53%
+
+Três leituras, e a terceira deu trabalho.
+
+**Os golos ficaram em 2.84 e não nos 3.6-3.9 que o headless anunciava.** Está
+dito desde a sessão do guarda-redes que o headless corre mais quente; agora
+tem número: 3.17 headless contra 2.84 no lote, ou seja o lote é ~0.9x. É ele
+que decide.
+
+**Os cantos subiram 22%** (4.34 → 5.30), que é a montagem da cobrança do
+impedimento a pagar também aqui. Continuam nos 53% do alvo.
+
+#### E os impedimentos explodiram: 276%
+
+De 5.89 para 8.85, e a causa é minha. O `PassModel.bonusInfiltracao` passou a
+existir a sério nesta sessão (era apagado pela tabela de pares de posições) e o
+portador dá agora a bola a quem rompe em 39% das oportunidades contra 13.8%.
+Quem rompe vive na linha de fora-de-jogo.
+
+Medido, 8 sementes de 1080 s, impedimentos por 90 das duas equipas:
+
+    bonusInfiltracao   700 -> 9.36 (dp 3.09)    400 -> 6.22 (dp 1.50)    0 -> 5.70 (dp 1.32)
+
+Entre 700 e 400 são 2.6 sigma: é o bónus, sem dúvida nenhuma. E o headless
+reproduz o lote (9.36 contra 8.85), o que torna a medição utilizável.
+
+**Matar o bónus desfazia o pedido**, portanto arranjou-se do outro lado: quem
+rompe passa a temporizar a corrida. O `RunIntoSpaceModel.riscoAlemDaLinha` é a
+aposta do avançado que arranca antes do passe, e foi varrido outra vez com o
+bónus nos 700:
+
+    risco   4.5 -> 9.36    3.0 -> 6.97    2.0 -> 5.81    1.5 -> 6.06    1.0 -> 3.93
+
+Entregue a **1.0**. E a prioridade sobrevive: o infiltrado continua a ser
+escolhido em 47.6% das oportunidades e leva 37.2% dos passes executados (eram
+39% e 33% com o risco em 4.5) — ele deixa de estar impedido, não de ser
+procurado.
+
+O resto do jogo não se mexe (24 partidas headless): golos 3.17 → 3.38, remates
+28.88 → 30.75, cantos 6.58 → 6.62, xG 1.55 → 1.67.
+
+#### O que fica no topo da lista
+
+Com os impedimentos arrumados, as piores linhas do lote passam a ser os
+**cantos (53%)**, os **passes certos (69% contra ~80%)**, o **xG por remate
+(53%)** e os **vermelhos (221%)**. Os ataques totais em 76% são o pano de fundo
+de tudo isso.
+
 ### Sessão de 10 de Setembro de 2026 (10) — os últimos metros da saída de bola
 
 Relato: *"quando o goleiro pega a bola os jogadores do time tem que se

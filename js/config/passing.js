@@ -1097,11 +1097,34 @@ const RunIntoSpaceModel = {
         0.0   0.37      a corrida nunca arrisca
         1.5   0.36
         3.0   0.73
-        4.5   2.42 e 2.11   <- aqui
+        4.5   2.42 e 2.11   <- era aqui
         6.0   4.27
         9.0   4.55      volta a ser a corrida cega
+
+    E VOLTOU A SER VARRIDO a 11 de Setembro, porque o mundo à volta mudou: o
+    `PassModel.bonusInfiltracao` passou a existir a sério (era apagado pela
+    tabela de pares de posições) e o portador dá agora a bola a quem rompe em
+    39% das oportunidades em vez de 13.8%. Quem rompe vive na linha, e o lote
+    de 40 jogos do browser respondeu com **8.85 impedimentos por jogo contra
+    os 3.20 do alvo (276%)**, de 5.89 no lote anterior.
+
+    A causa mediu-se, em 8 sementes de 1080 s (impedimentos por 90, as duas
+    equipas):
+
+        bonusInfiltracao   700 -> 9.36    400 -> 6.22    0 -> 5.70
+
+    Matar o bónus desfazia o pedido ("os jogadores infiltrando não estão com
+    nenhuma prioridade"). Arranja-se do outro lado — o infiltrado passa a
+    temporizar a corrida — e com o bónus nos 700:
+
+        risco   4.5 -> 9.36    3.0 -> 6.97    2.0 -> 5.81    1.5 -> 6.06
+                1.0 -> 3.93   <- entregue
+
+    E a prioridade sobrevive: com risco 1.0 o infiltrado continua a ser
+    escolhido em 47.6% das oportunidades e leva 37.2% dos passes executados
+    (eram 39% e 33% com risco 4.5).
     */
-    riscoAlemDaLinha: 4.5,
+    riscoAlemDaLinha: 1.0,
 
     /*
     INFILTRAR É PARA A FRENTE, E MAIS NADA.
