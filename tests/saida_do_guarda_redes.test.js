@@ -76,10 +76,21 @@ equipa.forEach((p, i) => {
     p.model.position.x = -9 + i * 2;
 });
 
+/*
+UM METRO DE MARGEM NO CORPO, e o alvo sem margem nenhuma.
+
+O que o relato descreve e gente PARADA atras dele, e isso le-se no alvo: se o
+alvo esta a frente, o jogador esta a sair de la. Sem margem, o corpo apanhava
+tambem quem vai a meio da passada — medido na sessao dos estilos: um CB a
+-43.6 e um LB a -43.9 com o guarda-redes a -43.1, ou seja 0.5 e 0.8 m, com os
+alvos deles ja a -39.1 e -37.7. Sao jogadores a andar, nao jogadores presos, e
+qualquer alteracao ao posicionamento os fazia entrar e sair desta contagem.
+*/
+const MARGEM_CORPO = 1.0;
 const atras = () => {
     const gkAvanco = gk.model.position.z * gk.dirZ;
     return {
-        posicao: equipa.filter(p => p.model.position.z * p.dirZ < gkAvanco).length,
+        posicao: equipa.filter(p => p.model.position.z * p.dirZ < gkAvanco - MARGEM_CORPO).length,
         alvo: equipa.filter(p => p.dynamicTarget && p.dynamicTarget.z * p.dirZ < gkAvanco).length
     };
 };

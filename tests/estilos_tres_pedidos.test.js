@@ -58,7 +58,7 @@ const forcar = () => {
 };
 forcar();
 
-const box = { fora10: 0, alvoFora: 0, n: 0 };
+const box = { fora10: 0, alvoFora: 0, n: 0, nPossivel: 0 };
 const fox = { distArea: [], noCampoAdv: [], n: 0, activo: 0, alvo: [] };
 const dummy = { distDef: [], trilhoX: new Map(), trilhoZ: new Map() };
 
@@ -78,8 +78,18 @@ for (let i = 0; i < Math.round(420 / dt); i++) {
             if (p.playingStyle === 'box_to_box') {
                 box.n++;
                 if (Math.abs(zAtk - bolaAtk) > 10) box.fora10++;
-                if (p.dynamicTarget &&
-                    Math.abs(p.dynamicTarget.z * p.dirZ - bolaAtk) > 10.2) box.alvoFora++;
+                /*
+                So conta onde a faixa PODE ser cumprida: o corredor de area a
+                area (+-26.5) manda por cima dela, e com a bola para la desse
+                alcance ficar a mais de 10 m da linha da bola nao e o estilo a
+                falhar -- e o outro pedido, mais antigo, a ganhar.
+                */
+                const lim = PlayingStyles.box_to_box.limiteEntradaArea;
+                if (Math.abs(bolaAtk) <= lim + 10) {
+                    box.nPossivel++;
+                    if (p.dynamicTarget &&
+                        Math.abs(p.dynamicTarget.z * p.dirZ - bolaAtk) > 10.2) box.alvoFora++;
+                }
             }
             if (p.playingStyle === 'fox_in_the_box') {
                 fox.n++; fox.distArea.push(LINHA_AREA - zAtk);
@@ -127,7 +137,7 @@ test('o Box-to-Box acompanha a linha da bola: faixa de 10 m', () => {
 
     Antes desta sessao: alvo fora da faixa em 32% dos frames.
     */
-    const pctAlvo = 100 * box.alvoFora / Math.max(1, box.n);
+    const pctAlvo = 100 * box.alvoFora / Math.max(1, box.nPossivel);
     const pctCorpo = 100 * box.fora10 / Math.max(1, box.n);
     console.log(`  alvo fora da faixa de +-10 m: ${pctAlvo.toFixed(0)}%  ` +
         `(corpo: ${pctCorpo.toFixed(0)}%) de ${box.n} amostras`);

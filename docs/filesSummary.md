@@ -5,6 +5,131 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (2) — três estilos, e o som que não parava
+
+Quatro pedidos do relato. Ferramenta nova para os três primeiros:
+`tools/headless/estilos_tres.js`, que força os estilos (CM=box_to_box,
+CF1=fox_in_the_box, CF2=dummy_runner nas duas equipas) porque com a rotação
+normal cada um apanha poucas dezenas de frames.
+
+Medido antes, 3 sementes de 600 s, só nos frames com a equipa a atacar:
+
+    box_to_box      ALVO fora da faixa de +-10 m da bola   32 / 33 / 35 %
+                    desvio-padrao do dz a linha da bola    18.3 / 18.0 / 21.3 m
+    fox_in_the_box  com a bola no meio-campo adversario,
+                    distancia a entrada da area             8.7 / 10.1 / 7.5 m
+    dummy_runner    vaivem lateral do corpo por cada 3 s    8.9 / 8.2 / 5.9 m
+                    distancia ao central mais perto         7.5 / 7.2 / 7.1 m
+
+#### O Box-to-Box: a máquina existia em dois sítios e a configuração tinha desaparecido
+
+*"Está muito longe da linha da bola no eixo Z; deve acompanhar mais de perto,
+no máximo uns 10 metros para a frente (atacando) e para trás (defendendo)."*
+
+`aplicarAncoraBoxToBox` (player_bt.js) e `aplicarTectoDoEstilo`
+(playing_styles.js) já liam `PlayingStyles.box_to_box.ancoraNaBola` — e essa
+chave **não existia no ficheiro de configuração**. O `20dbce1` levou-a com o
+resto (é o mesmo commit da sessão do guarda-redes, e o mesmo padrão: o
+consumidor sobrevive, a configuração desaparece, e a regra sai à porta sem
+fazer nada). Por isso 32% dos alvos estavam a mais de 10 m da linha da bola.
+
+Entra `faixaNaBola: { frente: 10, tras: 10 }` — uma FAIXA e não um sítio: ele
+posiciona-se como sempre e só é cortado quando sai dela. **Alvo fora da faixa:
+32/33/35% → 12/10/9%**, com o desvio-padrão a cair de 18.3 para 13.3-16.8 m.
+
+Duas coisas que a medição obrigou a arrumar:
+
+- **a faixa não pode tirá-lo do corredor "de área a área".** Com a bola no
+  próprio guarda-redes ela mandava-o para 10 m da sua linha de fundo, dentro da
+  própria área, em cima de quem ia sair a jogar — apanhado por três testes
+  (`saida_a_pe`, `saida_do_guarda_redes`, `ataques_contados`). O ±26.5 do
+  `travaNaEntradaArea` passou a ser configuração (`limiteEntradaArea`) e as
+  duas regras lêem-no do mesmo sítio;
+- **e o corpo não cumpre a faixa tanto como o alvo** — 31-32% contra 9-12%.
+  Metade disso é estrutural: em ~26% dos frames de ataque a bola está para lá
+  do alcance do corredor, e aí ficar a mais de 10 m dela é o pedido antigo a
+  ganhar. O resto é o corpo a perseguir um alvo que se mexe.
+
+#### O Fox in the Box: o alvo estava certo e alguém o reescrevia
+
+*"Está a distanciar-se muito da área durante o ataque."*
+
+Duas causas, as duas medidas:
+
+- **o estilo estava apagado em 57% do ataque.** A regra "só com posse
+  estabelecida" (`bb.state !== TeamState.OFFENSIVE`) desligava-o, e é
+  precisamente na transição ofensiva que o homem da área tem de já lá estar.
+  Passa a ser excepção, com o jogo a correr;
+- **e o que ele escrevia era reescrito.** Com o estilo activo o alvo dele saía
+  a 8.9 m da entrada da área e o corpo a 13.8 m: a coesão do bloco e a marcação
+  posicional correm DEPOIS do estilo. É o mesmo defeito que a âncora do
+  Box-to-Box tinha, e a mesma solução — `aplicarChaoFoxInTheBox`, a seguir à
+  árvore, um chão de um lado só que nunca puxa ninguém para trás.
+
+E o `entradaArea` dizia 30 m quando a entrada da área é aos 36.5: seis metros e
+meio à porta. Está em 35.
+
+**Com a bola no meio-campo adversário: 8.7/10.1/7.5 m → 2.6/4.4/3.3 m da
+entrada da área.** O alvo fica a 1.3-1.5 m; o corpo chega a 2.6-7.2 m conforme
+a partida, porque vem de longe.
+
+#### O Dummy Runner: entregue pelo mecanismo, e o desfecho não se vê
+
+*"Está muito próximo dos zagueiros; deve puxar mais a marcação movimentando-se
+de um lado para o outro, para a frente e para trás, procurando os espaços
+vazios."*
+
+A corrida de arrasto era um PONTO: ele ia para lá e ficava, com o z preso à
+linha de fora-de-jogo. Agora:
+
+- oscila em x (`amplitudeLateral` 6.5 m, `periodoOscilacao` 4.5 s, fase própria
+  de cada jogador pelo `id`);
+- **varre a profundidade** entre vir ao encontro (`profundidadeMin` à frente do
+  portador, para ser jogado de pé) e ir à profundidade (rente à linha de
+  fora-de-jogo, para ser lançado), em vez de somar uma sinusóide a um ponto que
+  o corte da linha comia;
+- e escolhe o VÃO à volta desse ponto (`melhorVaoX`, a mesma máquina do Fox),
+  que é o "espaços vazios entre os jogadores adversários" do pedido.
+
+**O que isto NÃO fez, e está medido:** o alvo varre 14-19 m em x por cada 3 s,
+mas o corpo segue 7-9.5 m (era 5.9-8.9) e a distância ao central mais perto não
+mexe — 7.3 m de média antes, 7.5 depois. O tempo colado à linha de fora-de-jogo
+passou de 16/19/18% para 13/17/18% da corrida. **Ele não corre depressa que
+chegue para cumprir o vaivém que o estilo escreve**, e essa é uma pergunta
+sobre a velocidade de deslocação, não sobre o estilo. Fica entregue pelo
+mecanismo e com o número do que falta.
+
+#### E a pausa cala o som
+
+*"Ajusta para o pause para o som tb."*
+
+O `AmbienteSonoro.update` — quem faz a rampa de volume do estádio — vive dentro
+do `Match.update`, e esse não corre em pausa: o volume congelava no valor em
+que ia e o `<audio>` continuava a tocar o loop da multidão com o jogo parado.
+
+`AmbienteSonoro.setPausa()` pára o loop e o grito e retoma-os só se estavam
+mesmo a tocar (em pausa com o som desligado no painel não há nada para
+retomar); `EfeitosSonoros.pararTudo()` cala um apito ou um chute disparado no
+frame anterior. Quem chama é o `togglePause`, que é o botão.
+
+#### O custo no jogo
+
+24 partidas headless com as mesmas sementes:
+
+    por 90                golos   remates   cantos     xG
+    antes dos estilos      2.53     26.26     4.71    1.53
+    depois                 3.00     26.75     4.77    1.38
+
+Golos sobem 0.47 (1.1 sigma — não demonstrável, mas na direcção que se espera
+de ter mais gente na área), o resto não se mexe.
+
+Testes: `tests/estilos_tres_pedidos.test.js` (três, um por estilo) e
+`tests/pausa_cala_o_som.test.js` (quatro). Dois testes antigos foram ajustados
+com a razão escrita lá dentro: a janela de varrimento do
+`estilos_lado_da_jogada` (o bloco do Dummy Runner cresceu) e a margem de um
+metro no corpo do `saida_do_guarda_redes` (apanhava jogadores a meio da
+passada, 0.5 m atrás do guarda-redes, com o alvo já 5 m à frente).
+
 ### Sessão de 10 de Setembro de 2026 — o guarda-redes nunca voou
 
 Relato: *"quando o jogador dá o chute em cima e é gol eu queria que o goleiro
