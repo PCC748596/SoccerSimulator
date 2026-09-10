@@ -2697,6 +2697,45 @@ corte aconteceu que diz, como no futebol.
 Pura, com o `rnd` injectado, para a forma da distribuicao poder ser varrida em
 teste (tests/remate_bloqueado.test.js).
 */
+/*
+PARA ONDE O CORPO TEM DE RODAR NUM PASSE — ou se não tem de rodar de todo.
+
+`frente` é a linha de referência (o deslocamento, ou a frente do corpo com ele
+parado) e `alvo` a direcção do passe, ambos no plano XZ. `limiteRad` é o
+ângulo que se pode passar sem corrigir nada — ver PassModel.anguloLivreGraus.
+
+Devolve `null` quando o passe já cabe dentro do limite (não há nada a fazer) e
+a direcção que o corpo deve encarar quando não cabe: a do passe rodada de
+volta `limiteRad` PARA O LADO DE ONDE ELE VINHA, ou seja o mínimo que põe a
+linha de passe na borda do cone. Nunca vira de frente para o alvo.
+
+Pura, para a geometria se poder varrer sem montar um jogo
+(tests/passe_sem_girar.test.js).
+*/
+function direccaoDoCorpoNoPasse(frente, alvo, limiteRad) {
+    const nf = Math.hypot(frente.x, frente.z);
+    const na = Math.hypot(alvo.x, alvo.z);
+    if (nf < 1e-9 || na < 1e-9) return null;
+
+    const fx = frente.x / nf, fz = frente.z / nf;
+    const ax = alvo.x / na, az = alvo.z / na;
+
+    const cos = Math.max(-1, Math.min(1, fx * ax + fz * az));
+    const ang = Math.acos(cos);
+    if (ang <= limiteRad) return null;
+
+    /*
+    Roda-se o ALVO de volta pelo limite, e o sentido é o que aproxima da
+    frente actual. Testam-se os dois e fica o que der maior produto interno
+    com ela — sem isto, o passe exactamente nas costas (onde o produto externo
+    é zero) escolhia um lado ao acaso.
+    */
+    const c = Math.cos(limiteRad), sN = Math.sin(limiteRad);
+    const a = { x: ax * c + az * sN, z: -ax * sN + az * c };
+    const b = { x: ax * c - az * sN, z: ax * sN + az * c };
+    return (a.x * fx + a.z * fz >= b.x * fx + b.z * fz) ? a : b;
+}
+
 function desvioDeBloqueio(o) {
     const M = BlockModel;
     const rnd = (typeof o.rnd === 'function') ? o.rnd : Math.random;

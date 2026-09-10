@@ -40,6 +40,29 @@ const PassModel = {
     preferenceBonus: 8.0,       // empurrão para a função preferida da posição
 
     /*
+    ATÉ QUE ÂNGULO SE PASSA SEM RODAR O CORPO.
+
+    Pedido: "os passes até 70 graus para cada lado da linha de deslocamento
+    podem ser feitos sem que o jogador tenha que girar para a trajectória do
+    passe; além disso, o jogador terá que girar até que a linha de passe fique
+    no limite dos 70 graus".
+
+    O que havia eram duas coisas, e nenhuma era esta: o `turnForPass`
+    (initiatePass, player.js) só ligava acima dos **90** graus, e quando ligava
+    o `case 'PASS'` (fsm.js) rodava o corpo até ficar de frente PARA O ALVO —
+    zero graus. Ou seja: entre 70 e 90 passava-se torto sem corrigir nada, e
+    acima de 90 corrigia-se a mais.
+
+    Agora é um limite só, lido dos dois sítios: abaixo dele não se roda nada;
+    acima, roda-se o MÍNIMO que põe a linha de passe exactamente no limite.
+    A geometria está no `direccaoDoCorpoNoPasse` (utils.js).
+
+    A referência é a linha de DESLOCAMENTO quando ele corre (é o que o pedido
+    diz) e a frente do corpo quando está parado.
+    */
+    anguloLivreGraus: 70,
+
+    /*
     Caminho fechado à frente: com este número de adversários no corredor de
     progressão, o portador deixa de tentar passar para a frente (ou driblar)
     e joga para o LADO ou para TRÁS.

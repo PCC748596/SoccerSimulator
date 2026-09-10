@@ -1847,8 +1847,32 @@ class PlayerFSM {
             case 'PASS':
                 p.velocity.multiplyScalar(0.95);
                 if (p.passTarget && p.turnForPass) {
-                    let targetPos = p.passTargetPos || p.passTarget.model.position;
-                    _v1.set(p.model.position.x * 2 - targetPos.x, p.model.position.y, p.model.position.z * 2 - targetPos.z);
+                    /*
+                    RODA ATE AO LIMITE, e nao ate ao alvo.
+
+                    Isto punha o corpo de frente para o ponto do passe (zero
+                    graus). O pedido e outro: ate `PassModel.anguloLivreGraus`
+                    passa-se sem rodar nada, e acima disso roda-se o MINIMO que
+                    poe a linha de passe na borda do cone. A direccao ja vem
+                    calculada do `initiatePass` (`passTurnDir`), pelo
+                    `direccaoDoCorpoNoPasse` (utils.js).
+
+                    Sem `passTurnDir` — um passe montado por outro caminho —
+                    fica o comportamento antigo, virado ao alvo.
+                    */
+                    let olharPara;
+                    if (p.passTurnDir) {
+                        // _v2 e nao _v1: o _v1 e reescrito duas linhas abaixo,
+                        // e le-se a si proprio nessa conta.
+                        olharPara = _v2.set(
+                            p.model.position.x + p.passTurnDir.x,
+                            p.model.position.y,
+                            p.model.position.z + p.passTurnDir.z);
+                    } else {
+                        olharPara = p.passTargetPos || p.passTarget.model.position;
+                    }
+                    _v1.set(p.model.position.x * 2 - olharPara.x, p.model.position.y,
+                        p.model.position.z * 2 - olharPara.z);
                     _m1.lookAt(p.model.position, _v1, p.model.up);
                     _q1.setFromRotationMatrix(_m1);
                     p.model.quaternion.slerp(_q1, Math.min(1.0, 25.0 * dt));

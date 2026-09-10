@@ -5,6 +5,48 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (4) — o passe deixa de obrigar a rodar
+
+Pedido: *"ajusta para que os passes até 70 graus para cada lado da linha de
+deslocamento possam ser feitos sem que o jogador tenha que girar para a
+trajetória do passe. Além disso, o jogador terá que girar até que a linha de
+passe fique no limite dos 70 graus."*
+
+O que havia eram duas regras, e nenhuma era esta:
+
+- o `turnForPass` (initiatePass, player.js) só ligava acima dos **90** graus
+  (`dotCorrida < 0`) — entre 70 e 90 passava-se de lado sem corrigir nada;
+- e quando ligava, o `case 'PASS'` (fsm.js) fazia slerp do corpo até ficar de
+  frente **para o alvo**, ou seja zero graus — corrigia a mais.
+
+Agora é um limite só, `PassModel.anguloLivreGraus` (70), lido dos dois sítios.
+A geometria vive no `direccaoDoCorpoNoPasse` (utils.js), pura e com o ângulo
+injectado: devolve `null` quando o passe já cabe no cone e, quando não cabe, a
+direcção do passe **rodada de volta pelo limite para o lado de onde ele
+vinha** — o mínimo que põe a linha de passe na borda dos 70. Num passe
+exactamente nas costas roda 110 graus e pára lá; nunca fica de frente para o
+alvo.
+
+A referência é a linha de DESLOCAMENTO com ele em andamento (é o que o pedido
+diz) e a frente do corpo com ele parado.
+
+E medido, 6 sementes de 600 s com o mesmo conjunto:
+
+    passes certos    sem: 65.0% (dp 3.5)    com: 69.4% (dp 4.3)
+
+**+4.4 pontos, que são ~1.9 sigma: a direcção é a certa e a demonstração não
+chega.** O alvo é ~80% e o último lote deu 68.8%, portanto vai para o lado
+certo. Não atribuo o ganho com confiança — o erro do passe lê o ângulo do corpo
+no instante da DECISÃO (`cosCorpoNoPasse`), que não mudou; o que mudou é ele
+deixar de girar durante o gesto.
+
+O resto do jogo não se mexe (24 partidas, mesmas sementes): golos 2.83 → 2.83,
+remates 27.13 → 26.92, cantos 6.28 → 6.16, xG 1.51 → 1.40.
+
+Teste: `tests/passe_sem_girar.test.js` (cinco — o limite na configuração, o
+cone livre até 70 nos dois sentidos, a paragem exacta nos 70 acima disso, o
+caso das costas, e a guarda de que os dois sítios do jogo passaram a lê-lo).
+
 ### Sessão de 10 de Setembro de 2026 (3) — a cobrança do impedimento
 
 Relato, outra vez com captura de campo inteiro: *"a posição dos jogadores na

@@ -2578,16 +2578,35 @@ class FootballPlayer {
             _vFrenteCorpo.set(0, 0, 1).applyQuaternion(this.model.quaternion);
             this.cosCorpoNoPasse = (_vFrenteCorpo.x * dx + _vFrenteCorpo.z * dz) / normDir;
             
-            // Determinar se o passe excede 90 graus da direcção de corrida
+            /*
+            ATÉ AO LIMITE PASSA-SE SEM RODAR — ver PassModel.anguloLivreGraus.
+
+            Era `dotCorrida < 0`, ou seja 90 graus, e acima disso o `case
+            'PASS'` rodava o corpo até ficar de frente PARA O ALVO. Agora o
+            limite é um só (70 graus, do pedido) e a rotação pára nele: a
+            direcção que o corpo deve encarar é calculada aqui, uma vez, e o
+            gesto só a persegue.
+
+            A referência é a linha de DESLOCAMENTO com ele em andamento, e a
+            frente do corpo com ele parado.
+            */
+            const limiteRad = ((typeof PassModel !== 'undefined' &&
+                typeof PassModel.anguloLivreGraus === 'number')
+                ? PassModel.anguloLivreGraus : 70) * Math.PI / 180;
+
             const speed = this.velocity.length();
-            if (speed > 0.1) {
-                const dotCorrida = (this.velocity.x * dx + this.velocity.z * dz) / (speed * normDir);
-                // dot < 0 significa mais de 90 graus
-                this.turnForPass = (dotCorrida < 0);
-            } else {
-                // Se estiver quase parado, usa a frente do corpo
-                this.turnForPass = (this.cosCorpoNoPasse < 0);
-            }
+            const frente = (speed > 0.1)
+                ? { x: this.velocity.x / speed, z: this.velocity.z / speed }
+                : { x: _vFrenteCorpo.x, z: _vFrenteCorpo.z };
+
+            const novaFrente = (typeof direccaoDoCorpoNoPasse === 'function')
+                ? direccaoDoCorpoNoPasse(frente, { x: dx / normDir, z: dz / normDir }, limiteRad)
+                : null;
+
+            this.turnForPass = !!novaFrente;
+            this.passTurnDir = novaFrente
+                ? new THREE.Vector3(novaFrente.x, 0, novaFrente.z)
+                : null;
         }
 
         if (typeof Match !== 'undefined') {
