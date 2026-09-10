@@ -813,6 +813,54 @@ const FreeKickShape = {
     margemDaPropriaBaliza: 8.0
 };
 
+/*
+=============================================================================
+A MONTAGEM DA COBRANÇA DO IMPEDIMENTO
+=============================================================================
+Um livre por fora-de-jogo não é uma falta perto da baliza: não há barreira que
+faça sentido, e o que ele é na prática é um RECOMEÇO — as duas equipas voltam
+à forma antes de a bola andar outra vez.
+
+O que havia media assim (`tools/headless/livre_impedimento.js` e um lote de 12
+impedimentos reais): em três deles as DUAS equipas ficavam a 52-56 m da bola,
+que é a captura do relato ("uns de um lado do campo e os outros do outro").
+A razão é de construção: do lado de quem bate só o batedor era colocado — os
+outros nove ficavam onde a jogada os tinha deixado — e a `formaDaDefesaNoLivre`
+arruma a outra equipa a 9.15-34 m da bola *na direcção da baliza que ela
+defende*, que num fora-de-jogo está no outro extremo do campo.
+
+Os números são o pedido, à letra, num 4-4-2:
+
+    "primeira linha de 4, com os 2 laterais a 5 metros à frente da grande área"
+        a grande área acaba aos 16.5 da linha de fundo -> 21.5
+    "segunda linha de 4, com os 2 meias laterais a 15 metros da linha de defesa"
+    "terceira linha de 2, 5 metros depois da linha de meio-campo"
+    "time adversário marcando a partir da linha de meio-campo"
+
+As linhas saem do `role` da formação (def/mid/atk), portanto isto não é um
+4-4-2 escrito à mão: numa formação com três centrais ou três avançados as
+mesmas três profundidades continuam a valer.
+=============================================================================
+*/
+const OffsideRestartShape = {
+    // Metros da PRÓPRIA linha de fundo, para a linha mais recuada.
+    linhaDefesa: 21.5,
+    // E as outras duas, cada uma medida da anterior.
+    espacoParaOsMedios: 15.0,
+    // Esta é medida do meio-campo, já no campo adversário.
+    avancadosAlemDoMeio: 5.0,
+
+    /*
+    QUEM MARCA fica do meio-campo para trás, no próprio campo: é o "a partir da
+    linha de meio-campo" do pedido. `blocoAdversario` é a profundidade desse
+    bloco — o mais recuado dele fica a esta distância do meio-campo.
+    */
+    blocoAdversario: 30.0,
+
+    // Quanto do x do posto se mantém. 1.0 = a largura da formação, tal e qual.
+    largura: 1.0
+};
+
 const ThrowInModel = {
     alcanceMin: 9.0,
 

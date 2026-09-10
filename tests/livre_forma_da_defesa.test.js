@@ -17,6 +17,17 @@ Medido em 6 livres (`tools/headless/livre_impedimento.js`):
     que recebe, antes        1.0 / 10              39.0 m
     que recebe, depois       9.8 / 10              24.7 m
 
+**O CENÁRIO DEIXOU DE SER UM FORA-DE-JOGO** (10 de Setembro): a cobrança do
+impedimento passou a ter montagem própria — as duas equipas voltam à forma, sem
+barreira, e quem marca recua para a própria metade (ver
+`Match.formaDoLivreDeImpedimento` e `tests/impedimento_montagem.test.js`). Com
+a bandeira `faltaIndirecta` de pé este teste media essa outra montagem e
+falhava por bons motivos: quem marca fica mesmo a mais de 53 m da bola num
+fora-de-jogo fundo, e barreira não há nenhuma.
+
+O que este teste guarda continua a valer para o LIVRE DE FALTA, que é a maioria
+deles: a equipa que defende é colocada, e não fica onde a jogada a deixou.
+
 Corre com: node tests/livre_forma_da_defesa.test.js
 */
 const test = require('node:test');
@@ -33,8 +44,9 @@ Sim.running = true;
 const dt = 1 / 60;
 
 /*
-Monta um livre indirecto (fora-de-jogo) com a bola no meio-campo defensivo de
-quem bate, que é onde um fora-de-jogo se marca, e devolve o que interessa medir.
+Monta um livre de FALTA com a bola no meio-campo defensivo de quem bate — a
+distância a que a barreira ainda é um homem só, que é o caso em que o defeito
+aparecia.
 */
 const montarLivre = (equipaQueBate) => {
     for (let i = 0; i < 300; i++) Match.update(dt);
@@ -49,7 +61,7 @@ const montarLivre = (equipaQueBate) => {
     const antes = new Map();
     for (const p of bate.concat(recebe)) antes.set(p, p.model.position.clone());
 
-    Match.faltaIndirecta = true;
+    Match.faltaIndirecta = false;   // livre de falta: ver o cabeçalho
     Match.setupSetPiece('FREE_KICK', equipaQueBate);
 
     const bola = Match.ball.position;

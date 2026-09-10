@@ -473,6 +473,12 @@ Object.assign(Match, {
 
             const distGolFK = Math.hypot(bolaFK.x - golFK.x, bolaFK.z - golFK.z);
             let nBarreira = F.barreiraMax || 4;
+            /*
+            NUM FORA-DE-JOGO NÃO HÁ BARREIRA. O livre é indirecto e quase
+            sempre longe da baliza: o que se monta é um recomeço, e quem o
+            monta é a `formaDoLivreDeImpedimento` lá em baixo.
+            */
+            if (indirecta) nBarreira = 0;
             if (distGolFK > (F.barreira1MaxDist !== undefined ? F.barreira1MaxDist : 30.0)) {
                 nBarreira = 1;
             } else if (distGolFK > (F.barreira2MaxDist !== undefined ? F.barreira2MaxDist : 26.0)) {
@@ -520,7 +526,7 @@ Object.assign(Match, {
             });
 
             // E os que NÃO ficaram na barreira, que eram a metade sem dono.
-            this.formaDaDefesaNoLivre(defendingPlayers, bolaFK, dirFK);
+            if (!indirecta) this.formaDaDefesaNoLivre(defendingPlayers, bolaFK, dirFK);
 
             /*
             POSICIONAMENTO DO GOLEIRO NA FALTA:
@@ -765,6 +771,18 @@ Object.assign(Match, {
                     if (p.jostleAncora) p.jostleAncora.z = limiteZ;
                 }
             });
+
+            /*
+            A COBRANÇA DO IMPEDIMENTO É A ÚLTIMA A FALAR.
+
+            Tem de correr depois do `lugaresDaFalta` (que coloca os
+            companheiros do batedor por sector), do afastamento dos 9.15 m e do
+            corte pela linha de fora-de-jogo — senão qualquer um deles reescreve
+            o recomeço por cima. Apanhado com a montagem a sair certa para quem
+            marca e errada para quem bate: a chamada estava lá em cima, ao lado
+            da `formaDaDefesaNoLivre`, e os `lugares` passavam-lhe por cima.
+            */
+            if (indirecta) this.formaDoLivreDeImpedimento(team, takerFK);
 
             this.faltaPendente = true;
             this.faltaAtraso = ESPERA_APOS_REPOSICAO;
@@ -1257,6 +1275,78 @@ Object.assign(Match, {
             lookAtBola(p.model, bolaFK);
             p.fsm.changeState('SET_PIECE_WAIT');
         });
+    },
+
+    /*
+    A MONTAGEM DA COBRANÇA DO IMPEDIMENTO — as DUAS equipas.
+
+    Ver OffsideRestartShape (config/player_behavior.js) para os números e para
+    a medição que os motivou: em três de doze impedimentos reais as duas
+    equipas ficavam a 52-56 m da bola, uma em cada metade do campo.
+
+    Quem bate volta à forma no próprio campo, em três profundidades; quem marca
+    recua para a própria metade. O batedor fica onde já o puseram — ao lado da
+    bola — e o guarda-redes também não é tocado.
+
+    As linhas saem do `role` da formação, não de um 4-4-2 escrito à mão.
+    */
+    formaDoLivreDeImpedimento: function (team, taker) {
+        const S = (typeof OffsideRestartShape !== 'undefined') ? OffsideRestartShape : {
+            linhaDefesa: 21.5, espacoParaOsMedios: 15.0, avancadosAlemDoMeio: 5.0,
+            blocoAdversario: 30.0, largura: 1.0
+        };
+        const bate = (team === 'TeamA') ? this.players : this.opponents;
+        const marca = (team === 'TeamA') ? this.opponents : this.players;
+
+        const refBate = bate.find(p => p.role !== 'gk' && p.model);
+        if (!refBate) return;
+        const attDir = refBate.dirZ;
+
+        const colocar = (p, xAtk, zAtk, dir) => {
+            p.hasBall = false;
+            p.velocity.set(0, 0, 0);
+            p.model.position.set(
+                THREE.MathUtils.clamp(xAtk, -CAMPO_LARG / 2 + 1, CAMPO_LARG / 2 - 1),
+                ALTURA_BASE_Y,
+                THREE.MathUtils.clamp(zAtk * dir, -LINHA_FUNDO + 1, LINHA_FUNDO - 1));
+            if (p.dynamicTarget) p.dynamicTarget.copy(p.model.position);
+            lookAtBola(p.model, this.ball.position);
+            p.fsm.changeState('SET_PIECE_WAIT');
+        };
+
+        /*
+        QUEM BATE: três profundidades, medidas no referencial de ataque dele.
+        `linhaDefesa` conta da própria linha de fundo (por isso o −LINHA_FUNDO);
+        os avançados contam do meio-campo, já do outro lado.
+        */
+        const zDefesa = -LINHA_FUNDO + S.linhaDefesa;
+        const zMedios = zDefesa + S.espacoParaOsMedios;
+        const zAvancados = S.avancadosAlemDoMeio;
+        const porRole = { def: zDefesa, mid: zMedios, atk: zAvancados };
+
+        for (const p of bate) {
+            if (!p.model || p.role === 'gk' || p === taker) continue;
+            const z = (porRole[p.role] !== undefined) ? porRole[p.role] : zMedios;
+            colocar(p, p.baseTarget.x * S.largura, z, attDir);
+        }
+
+        /*
+        QUEM MARCA: do meio-campo para trás, na própria metade — "marcando a
+        partir da linha de meio-campo". Mantém a ordem em profundidade da
+        formação dele, para os avançados ficarem à frente dos centrais.
+        */
+        const campoM = marca.filter(p => p && p.role !== 'gk' && p.model);
+        if (!campoM.length) return;
+        const zs = campoM.map(p => p.baseTarget.z * p.dirZ);
+        const zMin = Math.min(...zs), zMax = Math.max(...zs);
+        const span = (zMax - zMin) || 1;
+
+        for (const p of campoM) {
+            // v = 0 no mais recuado da formação, 1 no mais adiantado.
+            const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;
+            const zAtkDeles = -S.blocoAdversario * (1 - v);
+            colocar(p, p.baseTarget.x * S.largura, zAtkDeles, p.dirZ);
+        }
     },
 
     formaDoTiroDeMeta: function (team, mover) {

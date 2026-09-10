@@ -5,6 +5,74 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (3) — a cobrança do impedimento
+
+Relato, outra vez com captura de campo inteiro: *"a posição dos jogadores na
+cobrança dos impedimentos não está boa. Uns de um lado do campo e os outros do
+outro lado. Isso não faz nenhum sentido."* E desta vez com o desenho pedido, à
+letra.
+
+#### Reproduzido, e a razão é de construção
+
+O `livre_impedimento.js` dizia que estava tudo bem — 24-29 m de média para as
+duas equipas — porque monta o lance à mão, sempre no mesmo sítio. Instrumentando
+**impedimentos a sério** num jogo de 40 min (12 casos), o defeito aparece:
+
+    bola z -42.5   as duas equipas a 52.2 e 53.8 m da bola
+    bola z  46.4   54.1 e 56.2 m
+    bola z -41.8   52.2 e 53.7 m
+
+Nos fora-de-jogo FUNDOS ninguém está perto da bola. E a razão está no código:
+
+- do lado de quem BATE só o batedor era colocado com o desenho do livre; os
+  outros nove levavam o `lugaresDaFalta`, que é um desenho de ATAQUE a uma
+  baliza — e num fora-de-jogo quem bate acabou de defender;
+- e a `formaDaDefesaNoLivre` arruma a outra equipa a 9.15-34 m da bola **na
+  direcção da baliza que ela defende**, que num fora-de-jogo fica no outro
+  extremo do campo.
+
+#### O desenho pedido, e é ele que está escrito
+
+    primeira linha de 4   os dois laterais 5 m a frente da grande area   -> 21.5 m da propria linha de fundo
+    segunda linha de 4    15 m a frente da linha de defesa               -> +15
+    terceira linha de 2   5 m depois da linha de meio-campo              -> +5
+    adversario            marcando a partir da linha de meio-campo       -> bloco de 30 m na propria metade
+
+`Match.formaDoLivreDeImpedimento` coloca as DUAS equipas, e os números vivem no
+`OffsideRestartShape` (config/player_behavior.js). As linhas saem do `role` da
+formação (def/mid/atk) e não de um 4-4-2 escrito à mão: com três centrais ou
+três avançados as mesmas três profundidades continuam a valer. Num fora-de-jogo
+não se monta barreira — o livre é indirecto e quase sempre longe da baliza.
+
+**E tem de ser a última a falar.** Escrita ao lado da `formaDaDefesaNoLivre`
+saía certa para quem marca e errada para quem bate: o `lugaresDaFalta`, o
+afastamento dos 9.15 m e o corte pela linha de fora-de-jogo correm depois e
+passavam-lhe por cima. Apanhado pelo teste, que media a defesa a 16.3 m da
+linha de fundo e os médios 65 m à frente dela em vez dos 15.
+
+Depois, nos mesmos impedimentos reais: quem bate a 17-31 m da bola (é a
+formação espalhada pela própria metade) e quem marca a 41-65 m — que é o que
+"a partir da linha de meio-campo" quer dizer com a bola marcada lá atrás.
+
+#### O que isto fez ao jogo, e é a melhor notícia da sessão
+
+24 partidas headless com as mesmas sementes:
+
+    por 90       golos   remates   cantos     xG
+    antes         3.00     26.75     4.77    1.38
+    depois        2.83     27.13     6.28    1.51
+
+**Os cantos sobem 1.51, que são 2.2 sigma** — o primeiro movimento demonstrável
+desta linha em três sessões a persegui-la, e veio de um sítio que não era o que
+eu andava a caçar. Golos e remates não se mexem. Impedimentos, medidos à parte
+em 4 sementes: 6.4 → 6.9 por 90, com as sementes a variar entre 3.6 e 9.1 —
+nada que se possa afirmar.
+
+Testes: `tests/impedimento_montagem.test.js` (quatro). O
+`livre_forma_da_defesa.test.js` montava o cenário dele com a bandeira do
+fora-de-jogo e passou a montar um livre de FALTA, que é o que ele sempre quis
+medir — a razão está escrita no cabeçalho dele.
+
 ### Sessão de 10 de Setembro de 2026 (2) — três estilos, e o som que não parava
 
 Quatro pedidos do relato. Ferramenta nova para os três primeiros:
