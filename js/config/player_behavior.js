@@ -851,11 +851,22 @@ const OffsideRestartShape = {
     avancadosAlemDoMeio: 5.0,
 
     /*
-    QUEM MARCA fica do meio-campo para trás, no próprio campo: é o "a partir da
-    linha de meio-campo" do pedido. `blocoAdversario` é a profundidade desse
-    bloco — o mais recuado dele fica a esta distância do meio-campo.
+    QUEM MARCA. Era "do meio-campo para trás", à letra do primeiro pedido, e a
+    resposta a ver o resultado foi *"na cobrança do impedimento o time
+    adversário pode avançar um pouco mais. Tá muito recuado."*
+
+    `avancoAlemDoMeio` é quanto a linha da frente dele passa do meio-campo para
+    o lado de quem bate; `blocoAdversario` é a profundidade do bloco, medida
+    dessa linha para trás. Com 8 e 26, o bloco vai de +8 a −18 no referencial
+    de ataque dele — a marcar já dentro do campo do adversário, e não à espera
+    na própria metade.
+
+    Os 9.15 m da Lei 13 continuam garantidos: quem calhar mais perto do que
+    isso é empurrado para fora no fim da montagem (ver
+    `formaDoLivreDeImpedimento`), que é a última a correr.
     */
-    blocoAdversario: 30.0,
+    avancoAlemDoMeio: 8.0,
+    blocoAdversario: 26.0,
 
     // Quanto do x do posto se mantém. 1.0 = a largura da formação, tal e qual.
     largura: 1.0

@@ -63,6 +63,34 @@ const PassModel = {
     anguloLivreGraus: 70,
 
     /*
+    QUANTO VALE UM COMPANHEIRO EM CORRIDA DE INFILTRACAO na escolha do passe.
+
+    O numero (400) ja existia dentro do `findPassTarget`, com o comentario
+    "bonus MASSIVO", e nao valia nada: era somado ao mesmo `priorityBonus` que
+    a tabela de pares de posicoes logo a seguir ATRIBUI (`priorityBonus = 40`),
+    e essa tabela apanha a maioria dos pares. Medido antes
+    (`tools/headless/passe_para_quem_infiltra.js`, 600 s): havia um infiltrado
+    ao alcance em 75.8% das escolhas e ele era o escolhido em 13.8% delas —
+    com dois ou tres em corrida entre dez companheiros, isso e nao ter
+    prioridade nenhuma.
+
+    Fica aqui, e chega a nota por um caminho proprio, para nao voltar a ser
+    apagado por quem mexer na tabela.
+
+    Varrido depois de arranjado, em 2 sementes de 600 s:
+
+        bonus   infiltrado escolhido   passes que lhe saem mesmo
+          400        25%                     32%
+          700        42-44%                  33%
+         1000        56-61%                  28-36%
+
+    Os passes que lhe saem MESMO saturam num terco: entre a escolha e o
+    contacto ele deixa muitas vezes de estar em corrida. Acima dos 700 sobe a
+    intencao e nao sobe a entrega, portanto fica nos 700.
+    */
+    bonusInfiltracao: 700,
+
+    /*
     Caminho fechado à frente: com este número de adversários no corredor de
     progressão, o portador deixa de tentar passar para a frente (ou driblar)
     e joga para o LADO ou para TRÁS.

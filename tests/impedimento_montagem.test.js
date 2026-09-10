@@ -110,9 +110,17 @@ test('a equipa adversaria marca a partir do meio-campo, e nao do outro extremo',
     console.log(`  adversario entre ${maisRecuado.toFixed(1)} e ${maisAdiantado.toFixed(1)} m ` +
         `no eixo de ataque dele (0 = meio-campo)`);
 
-    assert.ok(maisAdiantado <= 2.0,
+    /*
+    "Pode avancar um pouco mais. Ta muito recuado" -- segunda passagem do
+    relato. A linha da frente deles passa `avancoAlemDoMeio` para dentro do
+    campo de quem bate, e o bloco tem `blocoAdversario` de profundidade a
+    contar dai.
+    */
+    assert.ok(maisAdiantado <= S.avancoAlemDoMeio + 2.0,
         `o adversario tem gente a ${maisAdiantado.toFixed(1)} m dentro do campo de quem bate`);
-    assert.ok(maisRecuado > -(S.blocoAdversario + 6),
+    assert.ok(maisAdiantado >= S.avancoAlemDoMeio - 2.0,
+        `o adversario parou a ${maisAdiantado.toFixed(1)} m: continua recuado`);
+    assert.ok(maisRecuado > S.avancoAlemDoMeio - (S.blocoAdversario + 6),
         `o adversario recuou ate ${maisRecuado.toFixed(1)} m: foi para cima da propria baliza`);
 });
 

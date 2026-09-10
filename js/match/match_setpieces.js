@@ -1341,11 +1341,37 @@ Object.assign(Match, {
         const zMin = Math.min(...zs), zMax = Math.max(...zs);
         const span = (zMax - zMin) || 1;
 
+        const frenteDeles = (S.avancoAlemDoMeio || 0);
         for (const p of campoM) {
             // v = 0 no mais recuado da formação, 1 no mais adiantado.
             const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;
-            const zAtkDeles = -S.blocoAdversario * (1 - v);
+            const zAtkDeles = frenteDeles - S.blocoAdversario * (1 - v);
             colocar(p, p.baseTarget.x * S.largura, zAtkDeles, p.dirZ);
+        }
+
+        /*
+        OS 9.15 m, DEPOIS DE TUDO. Esta montagem é a última a correr, portanto
+        o afastamento que o ramo do livre faz mais acima já passou — e com o
+        bloco a avançar para lá do meio-campo há fora-de-jogos perto da linha
+        média em que alguém cairia dentro da distância regulamentar.
+        */
+        const minDist = (typeof FreeKickModel !== 'undefined' && FreeKickModel.afastaAdversarios)
+            ? FreeKickModel.afastaAdversarios : 9.15;
+        const bola = this.ball.position;
+        for (const p of campoM) {
+            const dx = p.model.position.x - bola.x;
+            const dz = p.model.position.z - bola.z;
+            const d = Math.hypot(dx, dz);
+            if (d >= minDist) continue;
+            // Em cima da bola não há direcção: empurra-se para a própria baliza.
+            const ux = (d > 0.001) ? dx / d : 0;
+            const uz = (d > 0.001) ? dz / d : -p.dirZ;
+            p.model.position.x = THREE.MathUtils.clamp(
+                bola.x + ux * minDist, -(CAMPO_LARG / 2 - 1), CAMPO_LARG / 2 - 1);
+            p.model.position.z = THREE.MathUtils.clamp(
+                bola.z + uz * minDist, -(LINHA_FUNDO - 1), LINHA_FUNDO - 1);
+            if (p.dynamicTarget) p.dynamicTarget.copy(p.model.position);
+            lookAtBola(p.model, bola);
         }
     },
 

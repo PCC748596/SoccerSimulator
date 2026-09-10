@@ -2211,9 +2211,21 @@ class FootballPlayer {
 
             // Bónus de prioridade de passes (Triangulações)
             let priorityBonus = 0;
-            // Bónus MASSIVO para jogadores a infiltrar (desmarcação / corridas)
+            /*
+            QUEM INFILTRA TEM PRIORIDADE — e vive num acumulador PRÓPRIO.
+
+            Estava aqui um `priorityBonus += 400` com o comentário "bónus
+            MASSIVO", e a tabela de pares de posições logo abaixo ATRIBUI
+            (`priorityBonus = 40`) em vez de somar: qualquer par que calhe nela
+            — e é a maioria — apagava os 400. Medido, o infiltrado era escolhido
+            em 13.8% das vezes em que havia um ao alcance, que é o mesmo que
+            não ter prioridade. Ver PassModel.bonusInfiltracao.
+            */
+            let bonusInfiltracao = 0;
             if (opt.fsm && opt.fsm.currentState === 'RUN_INTO_SPACE') {
-                priorityBonus += 400; 
+                bonusInfiltracao = (typeof PassModel !== 'undefined' &&
+                    typeof PassModel.bonusInfiltracao === 'number')
+                    ? PassModel.bonusInfiltracao : 400;
             }
             const pRole = this.pos;
             const oRole = opt.pos;
@@ -2242,7 +2254,7 @@ class FootballPlayer {
             } else if (pRole === 'LW') {
                 if (['LM', 'CM', 'AM', 'CF', 'ST'].includes(oRole)) priorityBonus = 40;
             }
-            score += priorityBonus;
+            score += priorityBonus + bonusInfiltracao;
 
             // Grid espacial (camada PASSE)
             if (typeof SpatialGrid !== 'undefined' && SpatialGrid.cells) {

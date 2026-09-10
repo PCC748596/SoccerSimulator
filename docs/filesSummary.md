@@ -5,6 +5,78 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (5) — o bónus que era apagado na linha seguinte
+
+Relato: *"o que eu tô notando é que os jogadores infiltrando não estão com
+nenhuma prioridade para receber o passe. Verifica."* Estava lá, com todas as
+letras, e não valia nada:
+
+    let priorityBonus = 0;
+    // Bónus MASSIVO para jogadores a infiltrar (desmarcação / corridas)
+    if (opt.fsm && opt.fsm.currentState === 'RUN_INTO_SPACE') {
+        priorityBonus += 400;
+    }
+    ...
+    } else if (pRole === 'CM') {
+        if (['AM', 'CF'].includes(oRole)) priorityBonus = 40;   // <- ATRIBUIÇÃO
+
+A tabela de pares de posições que vem a seguir **atribui** em vez de somar, e
+apaga os 400 sempre que o par calha nela — que é a maioria dos passes.
+
+Ferramenta nova, `tools/headless/passe_para_quem_infiltra.js`, que mede a coisa
+como ela se vê: quantas escolhas de alvo tinham um companheiro em
+`RUN_INTO_SPACE` ao alcance, e em quantas dessas ele foi o escolhido.
+
+    havia um infiltrado ao alcance   75.8% das escolhas
+    e era o escolhido em             13.8% delas
+
+Com dois ou três em corrida entre dez companheiros, 13.8% é não ter prioridade
+nenhuma. O bónus passou a viver num acumulador próprio
+(`PassModel.bonusInfiltracao`) que chega à nota por um caminho que a tabela não
+toca, e foi varrido:
+
+    bonus   infiltrado escolhido   passes que lhe saem MESMO
+      400        25%                     32%
+      700        42-44%                  33%
+     1000        56-61%                  28-36%
+
+Os passes que lhe saem mesmo saturam num terço — entre a escolha e o contacto
+ele deixa muitas vezes de estar em corrida — portanto acima dos 700 sobe a
+intenção e não sobe a entrega. Ficou nos **700**: escolhido em 39% das
+oportunidades contra os 13.8% de antes.
+
+**E custa passes certos:** 69.4% → 66.2% em 6 sementes (1.2 sigma, não
+demonstrável). É o que se espera de passar mais para o espaço — a bola vai para
+onde o colega VAI estar, e essas erram-se mais.
+
+#### E o bloco adversário no impedimento sobe
+
+Segunda parte do relato: *"na cobrança do impedimento o time adversário pode
+avançar um pouco mais. Tá muito recuado."* O `OffsideRestartShape` ganhou
+`avancoAlemDoMeio` (8 m): a linha da frente deles passa a entrar no campo de
+quem bate, e o bloco encolheu de 30 para 26 m de profundidade. Vai de +8 a −18
+no referencial de ataque deles, contra os 0 a −30 de antes.
+
+Com isso a montagem passou a poder pôr alguém dentro dos 9.15 m (o
+afastamento do ramo do livre corre ANTES dela, que é a última a falar), e por
+isso ela reaplica a Lei 13 no fim.
+
+#### O jogo, depois das duas
+
+24 partidas headless com as mesmas sementes:
+
+    por 90       golos   remates   cantos     xG
+    antes         2.83     26.92     6.16    1.40
+    depois        3.21     29.00     5.52    1.59
+
+Remates +2.1 (1.5 sigma) e xG +0.19, que é a direcção que se espera de dar a
+bola a quem rompe; golos e cantos dentro do ruído.
+
+Testes: `tests/passe_para_infiltracao.test.js` (três, um deles a guardar que o
+bónus não volta a ser somado ao acumulador que a tabela reescreve) e o
+`impedimento_montagem.test.js`, que passou a exigir a linha da frente
+adversária lá à frente em vez de a proibir.
+
 ### Sessão de 10 de Setembro de 2026 (4) — o passe deixa de obrigar a rodar
 
 Pedido: *"ajusta para que os passes até 70 graus para cada lado da linha de
