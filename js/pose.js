@@ -624,8 +624,14 @@ function amostrarClipLateral(norm) {
     };
 }
 
-function amostrarClipLancamentoGR(norm) {
-    const fr = GoalkeeperThrowClip.frames;
+/*
+`clip` escolhe o gesto: por cima (GoalkeeperThrowClip) ou por baixo, o
+rolamento (GoalkeeperUnderarmThrowClip). Os dois têm os mesmos canais, por isso
+a pose é a mesma — o que muda é o desenho. Omissão: o de cima, que era o único
+que existia.
+*/
+function amostrarClipLancamentoGR(norm, clip) {
+    const fr = (clip && clip.frames) ? clip.frames : GoalkeeperThrowClip.frames;
     const n = fr.length;
     const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
     const i = Math.min(n - 2, Math.floor(pos));

@@ -547,6 +547,15 @@ Se nem com o tecto ha solucao, rola: uma bola no chao a 30 m e feia, uma bola
 a 4 m de altura e impossivel de dominar.
 */
 const GkThrowModel = {
+    /*
+    QUAL DOS DOIS GESTOS. Pedido, com fotografias: o lancamento por cima e
+    "para alvos a mais de 30 metros"; abaixo disso e o rolamento, com a mao a
+    passar rente ao chao (ver GoalkeeperUnderarmThrowClip em
+    config/animations.js). Ate aqui havia um gesto so — o de cima — e a bola
+    rolada era largada no alto e teletransportada para o relvado.
+    */
+    distanciaPorCima: 30.0,
+
     rasteiraMax: 18.0,    // ate aqui vai sempre pelo chao
     vChegada: 7.5,        // m/s de chegada da bola rolada
     /*

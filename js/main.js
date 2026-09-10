@@ -629,8 +629,16 @@ function lerParametrosDoLote() {
         if (!isFinite(v)) return omissao;
         return Math.max(min, Math.min(max, v));
     };
-    const jogos = limitar(elJogos, 2, 1, 100);
-    const minutos = limitar(elMin, 25, 1, 90);
+    /*
+    Omissões: 30 jogos de 18 minutos simulados. É o lote que se usa para
+    comparar com os alvos do relatório — 18 min simulados são ~90 minutos de
+    relógio de jogo (`MatchDuration.timeScale`), ou seja uma partida inteira, e
+    30 jogos dão erro-padrão bastante para as linhas que se medem. Estes
+    valores estão também no `value=` das caixas (index.html); aqui são a rede
+    para o caso de o campo vir vazio ou com lixo.
+    */
+    const jogos = limitar(elJogos, 30, 1, 100);
+    const minutos = limitar(elMin, 18, 1, 90);
     return { jogos, minutos, duracaoSeg: minutos * 60 };
 }
 

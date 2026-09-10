@@ -5012,9 +5012,35 @@ class FootballPlayer {
                     if (bolaNaArea) {
                         let distToBall = gkCorpo.position.distanceTo(Match.ball.position);
                         let carrier = Match.ballCarrier;
-                        let looseBallInBox = (!carrier && Match.ballVel.lengthSq() < 150);
 
-                        if (looseBallInBox || (distToBall < 3.2 && !carrier)) {
+                        /*
+                        A BOLA ENDERECADA A UM COMPANHEIRO NAO ESTA SOLTA.
+
+                        Relato: "o goleiro sai jogando com um zagueiro dentro da
+                        area e sai correndo atras dele para pegar a bola que
+                        acabou de passar." Um passe EM VOO nao tem
+                        `ballCarrier` — ele fica null no instante em que a bola
+                        sai do pe —, portanto a bola que o proprio guarda-redes
+                        acabou de jogar contava como "solta na area" e ele ia
+                        atras dela a 6 m/s, e agachava-se para a apanhar.
+
+                        E a mesma armadilha que o `escolherChaser` (team_bt.js)
+                        ja tinha resolvida para os jogadores de campo: "sem isto
+                        o PASSADOR corria atras da sua propria bola". Aqui e
+                        pior, porque ele nao passa pela eleicao de chaser — o
+                        ramo dele decide sozinho.
+
+                        Um recuo PARA ele continua a valer: nesse caso o
+                        destinatario e ele proprio.
+                        */
+                        const enderecadaAOutro = !!(Match.intendedReceiver &&
+                            Match.intendedReceiver.team === this.team &&
+                            Match.intendedReceiver !== this);
+                        let looseBallInBox = (!carrier && !enderecadaAOutro &&
+                            Match.ballVel.lengthSq() < 150);
+
+                        if (looseBallInBox ||
+                            (distToBall < 3.2 && !carrier && !enderecadaAOutro)) {
                             alvoGkX = Match.ball.position.x;
                             alvoGkZ = Match.ball.position.z;
                             speedLerp = 6.0;
@@ -5853,7 +5879,20 @@ class FootballPlayer {
                     this.gkEstado = 'lancando';
                     this.gkTempoMergulho = 0;
                     this.gkKickNorm = 0;
-                    this.gkKickAction = new ActionState('gkThrow', {
+                    /*
+                    POR CIMA OU POR BAIXO — ver GkThrowModel.distanciaPorCima.
+                    Pedido, com fotografias dos dois gestos: o rolamento para
+                    perto, o lançamento por cima "para alvos a mais de 30
+                    metros". Havia um gesto só, o de cima, e a bola rolada era
+                    largada no alto e teletransportada para o relvado.
+                    */
+                    const dLanc = this.model.position.distanceTo(alvoLancamento.model.position);
+                    const limPorCima = (typeof GkThrowModel !== 'undefined' &&
+                        typeof GkThrowModel.distanciaPorCima === 'number')
+                        ? GkThrowModel.distanciaPorCima : 30.0;
+                    this.gkLancaPorCima = (dLanc > limPorCima);
+                    this.gkKickAction = new ActionState(
+                        this.gkLancaPorCima ? 'gkThrow' : 'gkThrowBaixo', {
                         onContact: () => {
                             this.releaseFromHands(alvoLancamento);
                         }
@@ -5889,7 +5928,11 @@ class FootballPlayer {
             this.gkKickNorm = normK;
 
             if (isThrow) {
-                const K = amostrarClipLancamentoGR(normK);
+                const clipLanc = this.gkLancaPorCima
+                    ? GoalkeeperThrowClip
+                    : (typeof GoalkeeperUnderarmThrowClip !== 'undefined'
+                        ? GoalkeeperUnderarmThrowClip : GoalkeeperThrowClip);
+                const K = amostrarClipLancamentoGR(normK, clipLanc);
                 aplicarPoseLancamentoGR(gkRig, K);
                 gkCorpo.position.y = ALTURA_BASE_Y + K.altura;
 
@@ -5898,7 +5941,7 @@ class FootballPlayer {
                 contacto a velocidade já foi escrita e a bola voa livre.
                 */
                 if (this.gkKickAction && !this.gkKickAction.executed) {
-                    this.colarBolaAMao(GoalkeeperThrowClip.bracoLancamento);
+                    this.colarBolaAMao(clipLanc.bracoLancamento);
                 }
             } else if (isGroundKick) {
                 // TIRO DE META / BOLA PARADA DO CHÃO (12 frames com pivô no pé de apoio)

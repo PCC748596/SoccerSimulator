@@ -34,6 +34,9 @@ const ActionAnimClips = {
     gkPuntChao: { duration: 0.25, contactTime: 9 / 15 },
     // Lançamento com as mãos do guarda-redes
     gkThrow: { duration: 0.70, contactTime: 8 / 11 },
+    // O rolamento e mais lento e o contacto e no ponto mais baixo da mao
+    // (frame 7 de 10) — ver GoalkeeperUnderarmThrowClip.
+    gkThrowBaixo: { duration: 0.85, contactTime: 6 / 9 },
     // Arremesso lateral (ver ThrowInClip): a bola sai no frame 6 de 10.
     throwIn: { duration: 0.90, contactTime: 5 / 9 },
     // Remate (ver ShotClip). Contacto no frame 8 de 12 (t = 7/11 ≈ 0.64),
@@ -561,6 +564,57 @@ const GoalkeeperThrowClip = {
         { chest: 0.05, coxaL: 0.05, joelhoL: 0.12, coxaR: 0.05, joelhoR: 0.12, bracoLx: -0.20, bracoLz: 0.15, bracoRx: -0.25, bracoRz: -0.05, cotoveloL: -0.70, cotoveloR: -1.00, altura: 0.00 }
     ]
 };
+
+/*
+=============================================================================
+LANÇAMENTO COM A MÃO POR BAIXO — o rolamento
+=============================================================================
+Relato, com fotografias: *"quando o goleiro vai lançar a bola com a mão, a bola
+fica nas costas dele e quando chega perto do corpo é teletransportada para o
+lado do pé"*, e a seguir *"lançamento de mão por cima, para alvos a mais de 30
+metros"*.
+
+Havia UM gesto só, o de cima (`GoalkeeperThrowClip`): o braço vai atrás, sobe
+por cima da cabeça e larga a bola no alto. Para a bola ROLADA — que é o que ele
+faz na maioria das entregas curtas — o código largava-a lá em cima e depois
+punha `Match.ball.position.y = BallPhysics.raio` (fsm.js): a bola saltava de
+1.1 m para o relvado num frame, ao lado do pé. Era isso que se via.
+
+Este é o gesto que a fotografia mostra: o corpo desce, o braço passa RENTE ao
+chão e a bola é largada ao lado do pé, já no relvado. Com ele, a linha do
+`raio` deixa de ser um teletransporte e passa a ser o que sempre devia ter
+sido — a bola está mesmo lá.
+
+O contacto é no frame 7 de 10 (ver ActionAnimClips.gkThrowBaixo), que é o ponto
+mais baixo da mão.
+=============================================================================
+*/
+const GoalkeeperUnderarmThrowClip = {
+    bracoLancamento: 'r',
+    frames: [
+        // 1  Espera, bola nas duas mãos à frente do peito
+        { chest: 0.05, coxaL: 0.05, joelhoL: 0.12, coxaR: 0.05, joelhoR: 0.12, bracoLx: -0.35, bracoLz: 0.35, bracoRx: -0.35, bracoRz: -0.30, cotoveloL: -0.90, cotoveloR: -0.90, altura: 0.00 },
+        // 2  Passa a bola para a mão de lançamento e começa a agachar
+        { chest: 0.12, coxaL: 0.10, joelhoL: 0.25, coxaR: 0.10, joelhoR: 0.25, bracoLx: -0.30, bracoLz: 0.30, bracoRx: -0.55, bracoRz: -0.20, cotoveloL: -0.70, cotoveloR: -0.60, altura: -0.04 },
+        // 3  Braço recua, RENTE AO CORPO — nunca por cima do ombro
+        { chest: 0.20, coxaL: 0.18, joelhoL: 0.40, coxaR: 0.20, joelhoR: 0.40, bracoLx: -0.20, bracoLz: 0.25, bracoRx: -0.95, bracoRz: -0.10, cotoveloL: -0.55, cotoveloR: -0.25, altura: -0.10 },
+        // 4  Armação: braço atrás e em baixo, perna da frente a avançar
+        { chest: 0.28, coxaL: -0.20, joelhoL: 0.45, coxaR: 0.45, joelhoR: 0.50, bracoLx: -0.10, bracoLz: 0.20, bracoRx: -1.15, bracoRz: -0.05, cotoveloL: -0.45, cotoveloR: -0.10, altura: -0.16 },
+        // 5  Passada larga, corpo desce, braço começa a vir
+        { chest: 0.38, coxaL: -0.55, joelhoL: 0.35, coxaR: 0.70, joelhoR: 0.60, bracoLx: 0.05, bracoLz: 0.18, bracoRx: -0.80, bracoRz: 0.00, cotoveloL: -0.40, cotoveloR: -0.05, altura: -0.24 },
+        // 6  Quase no chão, braço a passar pela vertical do corpo
+        { chest: 0.48, coxaL: -0.80, joelhoL: 0.30, coxaR: 0.85, joelhoR: 0.70, bracoLx: 0.15, bracoLz: 0.15, bracoRx: -0.35, bracoRz: 0.02, cotoveloL: -0.35, cotoveloR: 0.00, altura: -0.32 },
+        // 7  CONTACTO — mão no relvado, ao lado do pé da frente
+        { chest: 0.55, coxaL: -0.95, joelhoL: 0.28, coxaR: 0.90, joelhoR: 0.75, bracoLx: 0.20, bracoLz: 0.12, bracoRx: -0.05, bracoRz: 0.03, cotoveloL: -0.30, cotoveloR: 0.00, altura: -0.36 },
+        // 8  Follow-through: a mão continua para a frente, rente
+        { chest: 0.50, coxaL: -0.85, joelhoL: 0.30, coxaR: 0.75, joelhoR: 0.65, bracoLx: 0.25, bracoLz: 0.12, bracoRx: 0.35, bracoRz: 0.05, cotoveloL: -0.35, cotoveloR: -0.10, altura: -0.30 },
+        // 9  Começa a levantar
+        { chest: 0.30, coxaL: -0.45, joelhoL: 0.25, coxaR: 0.40, joelhoR: 0.40, bracoLx: 0.15, bracoLz: 0.15, bracoRx: 0.20, bracoRz: 0.05, cotoveloL: -0.50, cotoveloR: -0.45, altura: -0.16 },
+        // 10 De pé, postura de jogo
+        { chest: 0.05, coxaL: 0.05, joelhoL: 0.12, coxaR: 0.05, joelhoR: 0.12, bracoLx: -0.20, bracoLz: 0.15, bracoRx: -0.25, bracoRz: -0.05, cotoveloL: -0.70, cotoveloR: -1.00, altura: 0.00 }
+    ]
+};
+
 
 /*
 =============================================================================

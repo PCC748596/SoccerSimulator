@@ -5,6 +5,69 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 11 de Setembro de 2026 (2) — o lote a 30/18, e dois relatos do guarda-redes
+
+#### O lote passa a nascer em 30 jogos de 18 minutos
+
+Pedido directo. As caixas do painel nasciam em 2 jogos de 25 min simulados;
+passam a 30 e 18. Dezoito minutos simulados são ~90 de relógio de jogo (o
+`MatchDuration.timeScale` corre a 5x), ou seja uma partida inteira — que é o
+que os alvos do relatório assumem — e 30 jogos dão erro-padrão bastante para as
+linhas que se medem. Os números estão no `value=` das caixas (index.html) e na
+rede do `lerParametrosDoLote` (main.js), para o campo vazio.
+
+#### O guarda-redes corria atrás do passe que ele próprio dava
+
+Relato: *"o goleiro, várias vezes, sai jogando com um zagueiro dentro da área e
+sai correndo atrás dele para pegar a bola que acabou de passar."*
+
+No ramo dele:
+
+    let looseBallInBox = (!carrier && Match.ballVel.lengthSq() < 150);
+    if (looseBallInBox || (distToBall < 3.2 && !carrier)) {
+        alvoGkX = ball.x; ... speedLerp = 6.0;
+        if (distToBall < 1.2) this.gkEstado = 'apanhar';
+    }
+
+Um passe EM VOO não tem `ballCarrier` — fica null no instante em que a bola sai
+do pé. Logo a bola que ele acabou de jogar para um central **dentro da área**
+contava como solta, e ele ia atrás dela a 6 m/s e agachava-se para a apanhar.
+
+É a mesma armadilha que o `escolherChaser` (team_bt.js) já tinha resolvida para
+os jogadores de campo — *"sem isto o PASSADOR corria atrás da sua própria
+bola"* — e aqui era pior, porque o guarda-redes não passa pela eleição de
+chaser: o ramo dele decide sozinho. A bola endereçada a um companheiro deixa de
+contar como solta; um recuo PARA ele continua a contar, que aí o destinatário é
+ele.
+
+Teste: `tests/gk_nao_persegue_o_proprio_passe.test.js`. Mede o ALVO dele e não
+a deslocação: acompanhar o ângulo da bola é trabalho dele e não é o defeito.
+
+#### O lançamento com a mão tinha um gesto só, e a bola saltava para o relvado
+
+Relato, com fotografias dos dois gestos: *"quando o goleiro vai lançar a bola
+com a mão, a bola fica nas costas dele e quando chega perto do corpo é
+teletransportada para o lado do pé"*, e *"lançamento de mão por cima, para
+alvos a mais de 30 metros"*.
+
+Havia **um** gesto: o `GoalkeeperThrowClip`, por cima — o braço vai atrás (é a
+"bola nas costas"), sobe por cima da cabeça e larga no alto. Só que a maioria
+das entregas é ROLADA, e para essas o `executePassGameplay` fazia
+`Match.ball.position.y = BallPhysics.raio`: a bola saltava de 1.1 m para o
+relvado num frame, ao lado do pé.
+
+Entra o `GoalkeeperUnderarmThrowClip` — dez frames, o corpo desce 0.36 m, o
+braço passa rente ao corpo e a mão chega ao relvado no frame do contacto — e a
+escolha é por distância, `GkThrowModel.distanciaPorCima` (30 m), à letra do
+pedido. Com a mão no chão, aquela linha do `raio` deixa de ser um
+teletransporte e passa a ser o que sempre devia ter sido.
+
+Teste: `tests/gk_lancamento_mao.test.js`. **O que ele NÃO prova:** o salto
+frame a frame sai 0.00 no headless porque o rig não é animado lá — a mão não se
+mexe e a bola também não. O que fica medido é a geometria do clip no instante
+do contacto (braço a −0.05 rad contra 0.60 do gesto por cima, corpo 0.36 m mais
+baixo) e a altura da largada, 0.11 m.
+
 ### Sessão de 11 de Setembro de 2026 — o lote de 40 jogos, e o preço do bónus da infiltração
 
 Lote do browser, 40 jogos, contra o de 30 de 9 de Setembro:
