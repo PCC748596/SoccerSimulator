@@ -3811,6 +3811,14 @@ function aplicarAncoraBoxToBox(p, bb) {
     if (!bb || !p || p.role === 'gk') return;
     if (p.playingStyle !== 'box_to_box' || p.playingStyleDesligado) return;
     if (typeof Config !== 'undefined' && Config.usePlayingStyles === false) return;
+    /*
+    SÓ COM O JOGO A CORRER. Com o jogo parado quem coloca os jogadores é o
+    lance, e esta faixa passava-lhe por cima: apanhado no tiro de meta, com
+    dois médios presos no ±26.5 do corredor enquanto o resto da equipa já
+    estava nas linhas que a forma do lance tinha escrito. É a mesma guarda que
+    o `aplicarChaoFoxInTheBox` leva, e pela mesma razão.
+    */
+    if (typeof Match !== 'undefined' && Match.state !== 'PLAY') return;
     if (typeof Tatics === 'undefined' || typeof PlayingStyles === 'undefined') return;
 
     const faixa = PlayingStyles.box_to_box && PlayingStyles.box_to_box.faixaNaBola;

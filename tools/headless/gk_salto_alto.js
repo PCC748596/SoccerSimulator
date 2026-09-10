@@ -32,6 +32,7 @@ if (typeof Sim === 'undefined') global.Sim = {};
 Sim.running = true;
 
 const D = GoalkeeperDive;
+const _maoW = new THREE.Vector3();
 const mergulhos = [];
 let activo = null;
 
@@ -79,6 +80,18 @@ for (let i = 0; i < Math.round(segundos / dt); i++) {
         const y = m.p.model.position.y;
         if (y > m.yMax) m.yMax = y;
         if (m.p.dive.fase === 'chao') m.deslizou = true;
+        // POR QUANTO E QUE ELE FALHA: a menor distancia da mao a bola durante
+        // o mergulho, e se chegou a tocar-lhe.
+        if (Match.state === 'PLAY' && Match.ballVel.lengthSq() > 1) {
+            for (const nome of ['lHand', 'rHand']) {
+                const mao = m.p.rig && m.p.rig[nome];
+                if (!mao) continue;
+                mao.getWorldPosition(_maoW);
+                const d = _maoW.distanceTo(Match.ball.position);
+                if (d < (m.maoMin === undefined ? Infinity : m.maoMin)) m.maoMin = d;
+            }
+        }
+        if (m.p.dive.tocou) m.tocou = true;
         // Quem lhe rouba o estado a meio do voo, e em que estado de jogo.
         if (!m.roubado && m.p.gkEstado !== 'mergulho') {
             m.roubado = `${Match.state}/${m.p.gkEstado}`;
@@ -123,6 +136,14 @@ console.log(`  congelados a meio do voo: ${congelados.length} de ${comLancamento
 console.log(`semente ${semente}  |  ${mergulhos.length} mergulhos, ${comLancamento.length} chegaram a saltar`);
 for (const t of ['alto', 'meio', 'baixo']) {
     console.log(`  ${t.padEnd(6)}` + por(comLancamento.filter(m => m.tipo === t)));
+}
+{
+    const comMao = mergulhos.filter(m => m.maoMin !== undefined);
+    const med2 = a => a.length ? (a.reduce((s, v) => s + v, 0) / a.length) : NaN;
+    const falhados = comMao.filter(m => !m.tocou);
+    console.log(`  mao mais perto da bola no mergulho: media ${med2(comMao.map(m => m.maoMin)).toFixed(2)} m` +
+        `  |  tocaram ${comMao.filter(m => m.tocou).length} de ${comMao.length}` +
+        `  |  nos falhados faltavam ${med2(falhados.map(m => m.maoMin)).toFixed(2)} m`);
 }
 console.log(`  tecto vySubidaMax = ${D.vySubidaMax} m/s, vooMax = ${D.vooMax} s`);
 

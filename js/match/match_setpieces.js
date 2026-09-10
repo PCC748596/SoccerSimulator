@@ -1375,52 +1375,77 @@ Object.assign(Match, {
         }
     },
 
+    /*
+    A FORMA DO TIRO DE META — três linhas de cada lado, e não uma escada.
+
+    Ver GoalKickShape (config/player_behavior.js) para os números e para a
+    medição que os motivou. `mover` distingue as duas chamadas: a do
+    `setupSetPiece` manda toda a gente andar; a do `updateGoalKickWait`, que
+    corre por frame enquanto o lance espera, só mexe em quem ainda vai a
+    caminho — senão reescrevia o estado de quem já chegou.
+    */
     formaDoTiroDeMeta: function (team, mover) {
         const S = (typeof GoalKickShape !== 'undefined') ? GoalKickShape : {
-            bateDe: -34, bateAte: 2, recebeDe: -28, recebeAte: 18
+            linhaDefesa: 19.0, espacoParaOsMedios: 16.0, avancadosAlemDoMeio: 0.0,
+            frenteDoBloco: 38.0, blocoAdversario: 26.0
         };
         const bate = (team === 'TeamA') ? this.players : this.opponents;
         const recebe = (team === 'TeamA') ? this.opponents : this.players;
         const attDir = (team === 'TeamA') ? 1 : -1;
         const linhaZ = -attDir * LINHA_FUNDO;      // linha de fundo de quem bate
 
-        const distribuir = (lista, deAtk, ateAtk) => {
-            const campo = lista.filter(p => p.role !== 'gk');
-            if (!campo.length) return;
-            const zs = campo.map(p => p.baseTarget.z * p.dirZ);
-            const zMin = Math.min(...zs), zMax = Math.max(...zs);
-            const span = (zMax - zMin) || 1;
-            campo.forEach(p => {
-                if (!mover && p.fsm.currentState !== 'MOVE_TO_POS') return;
-                p.hasBall = false;
-                const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;   // 0 = o mais recuado
-                const novoAtk = deAtk + (ateAtk - deAtk) * v;
-                p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, novoAtk * p.dirZ);
+        const escrever = (p, zAtkDeQuemBate) => {
+            if (!mover && p.fsm.currentState !== 'MOVE_TO_POS') return;
+            p.hasBall = false;
+            p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, zAtkDeQuemBate * attDir);
 
-                // Ninguém com o alvo dentro da grande área de quem bate.
-                if (p.team !== team && Area.contem(p.dynamicTarget.x, p.dynamicTarget.z, linhaZ)) {
-                    p.dynamicTarget.z = linhaZ + attDir * (Area.profundidade + 1.0);
-                }
+            // Lei 16: ninguém do adversário dentro da grande área de quem bate.
+            if (p.team !== team && Area.contem(p.dynamicTarget.x, p.dynamicTarget.z, linhaZ)) {
+                p.dynamicTarget.z = linhaZ + attDir * (Area.profundidade + 1.0);
+            }
 
-                p.speedMult = 4.0;
-                if (mover) p.fsm.changeState('MOVE_TO_POS');
-                else if (p.model.position.distanceTo(p.dynamicTarget) < 1.5) {
-                    p.fsm.changeState('SET_PIECE_WAIT');
-                }
-            });
+            p.speedMult = 4.0;
+            if (mover) p.fsm.changeState('MOVE_TO_POS');
+            else if (p.model.position.distanceTo(p.dynamicTarget) < 1.5) {
+                p.fsm.changeState('SET_PIECE_WAIT');
+            }
         };
 
         /*
-        Quem BATE fica um pouco antes do meio-campo: os defesas à saída da área
-        (para receber curto) e os avançados na linha do meio-campo. Quem RECEBE
-        sobe: o homem mais adiantado a espreitar a saída curta à entrada da
-        área, e a linha de trás uns metros atrás do meio-campo, que é onde a
-        bola longa vai cair.
+        QUEM BATE: as três linhas, medidas da própria linha de fundo. Os
+        defesas à saída da área (é onde se recebe curto), os médios à frente
+        deles, os avançados na linha do meio-campo.
         */
-        distribuir(bate, S.bateDe, S.bateAte);
-        // Sinal trocado: o que para quem bate é -28 (a pressionar a área dele)
-        // é, para quem recebe, +28 no referencial DELE.
-        distribuir(recebe, -S.recebeAte, -S.recebeDe);
+        const zDefesa = -LINHA_FUNDO + S.linhaDefesa;
+        const porRole = {
+            def: zDefesa,
+            mid: zDefesa + S.espacoParaOsMedios,
+            atk: S.avancadosAlemDoMeio
+        };
+        for (const p of bate) {
+            if (p.role === 'gk' || !p.model) continue;
+            const z = (porRole[p.role] !== undefined) ? porRole[p.role] : porRole.mid;
+            escrever(p, z);
+        }
+
+        /*
+        QUEM RECEBE: bloco com linha da frente própria, também medida da linha
+        de fundo de quem bate. Mantém a ordem em profundidade da formação dele
+        — os avançados à frente, a defesa atrás.
+        */
+        const campoR = recebe.filter(p => p.role !== 'gk' && p.model);
+        if (campoR.length) {
+            const zs = campoR.map(p => p.baseTarget.z * p.dirZ);
+            const zMin = Math.min(...zs), zMax = Math.max(...zs);
+            const span = (zMax - zMin) || 1;
+            const frente = -LINHA_FUNDO + S.frenteDoBloco;
+            for (const p of campoR) {
+                // v = 1 no mais adiantado da formação dele, que é quem fica na
+                // linha da frente do bloco.
+                const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;
+                escrever(p, frente + S.blocoAdversario * (1 - v));
+            }
+        }
     },
 
     updateGoalKickWait: function (dt) {

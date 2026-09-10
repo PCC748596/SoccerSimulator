@@ -5448,14 +5448,22 @@ class FootballPlayer {
             }
 
             const jaEntrouM = (Match.state !== 'PLAY');
-            if (!jaEntrouM && distMaoM < 1.3 && Match.ballVel.lengthSq() > 0) {
+            /*
+            O ALCANCE E O DA MAO, e nao 1.3 m dela — ver
+            GkCatchModel.alcanceContacto. Com 1.3 ele fechava as maos numa bola
+            que ia passar a mais de um metro delas.
+            */
+            const alcanceMao = (typeof GkCatchModel !== 'undefined' &&
+                typeof GkCatchModel.alcanceContacto === 'number')
+                ? GkCatchModel.alcanceContacto : 0.55;
+            if (!jaEntrouM && distMaoM < alcanceMao && Match.ballVel.lengthSq() > 0) {
                 /*
                 Bola ao alcance do corpo, de pé. A decisão sai do
                 `resolverDefesaGK` (utils.js), a mesma dos outros três tipos —
                 aqui estava `0.55 + (GK-50)/100`, sem saber a que velocidade a
                 bola vinha nem quão esticado ele estava.
                 */
-                this.resolverDefesaComMaos('maos', distMaoM / 1.3);
+                this.resolverDefesaComMaos('maos', distMaoM / alcanceMao);
             }
 
             /*
@@ -5589,11 +5597,35 @@ class FootballPlayer {
 
             if (k >= 1) {
                 /*
+                E A BOLA TEM DE ESTAR MESMO AO ALCANCE DA MAO.
+
+                O gesto de agachar acaba e ele agarrava fosse a bola onde
+                fosse: eram estas as duas ultimas capturas a mais de um metro
+                da luva depois de o resto estar arranjado (1.19 m a pior). Se
+                ela ja se afastou, ele levanta-se e volta a decidir — que e o
+                que um guarda-redes faz.
+
+                Ver GkCatchModel.alcanceContacto. A folga extra e do gesto: com
+                ele agachado as maos vao ao chao, mais longe do centro do
+                modelo do que quando esta de pe.
+                */
+                const alcanceApanhar = ((typeof GkCatchModel !== 'undefined' &&
+                    typeof GkCatchModel.alcanceContacto === 'number')
+                    ? GkCatchModel.alcanceContacto : 0.55) + 0.25;
+                let dMaoApanhar = Infinity;
+                for (const nome of ['lHand', 'rHand']) {
+                    const mao = gkRig && gkRig[nome];
+                    if (!mao) continue;
+                    mao.getWorldPosition(_p_v3);
+                    dMaoApanhar = Math.min(dMaoApanhar, _p_v3.distanceTo(Match.ball.position));
+                }
+                /*
                 Num recuo com o pe o grabBall recusa. Sem esta saida ele ficava
                 aqui a tentar agarrar frame apos frame, com a bola parada a
                 seus pes — um encrave.
                 */
-                if (!this.grabBall()) this.gkEstado = 'idle';
+                if (dMaoApanhar > alcanceApanhar) this.gkEstado = 'idle';
+                else if (!this.grabBall()) this.gkEstado = 'idle';
             }
         } else if (this.gkEstado === 'segurando') {
             // Bola já agarrada: segura junto ao peito enquanto as equipas se

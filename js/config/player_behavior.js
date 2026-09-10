@@ -762,11 +762,48 @@ mantém-se a ordem em profundidade e o x, só se re-escala a profundidade.
                         uns metros atrás do meio-campo, que é onde a bola
                         longa vai cair
 */
+/*
+=============================================================================
+O TIRO DE META — as linhas, e a distância a que o outro marca
+=============================================================================
+Relato, com captura: *"a posição dos jogadores no tiro de meta não está boa.
+Sem linhas definidas do time batedor. Marcação muito alta do time adversário."*
+
+Isto eram quatro números (`bateDe: -34, bateAte: 2, recebeDe: -28,
+recebeAte: 18`) e uma distribuição CONTÍNUA: cada jogador ia parar a um ponto
+proporcional à ordem do posto dele na formação, entre os dois extremos. Dez
+pontos diferentes ao longo de 36 metros não são linhas nenhumas. Medido
+(`tools/headless/tiro_de_meta.js`, 8 lances):
+
+    equipa que bate     média -11.0 m, de -28.4 a +9.5   (0 = meio-campo)
+    equipa que recebe   média  +5.0 m, o mais recuado a -16.5
+
+E o mais adiantado de quem recebe saía do `recebeDe: -28`, ou seja **25 m da
+linha de fundo de quem bate**: a marcar em cima da área.
+
+Agora é o mesmo desenho da cobrança do impedimento — três linhas pelo `role`
+da formação (def/mid/atk), com as profundidades em metros da PRÓPRIA linha de
+fundo — e quem recebe tem uma linha da frente própria, medida da mesma origem.
+=============================================================================
+*/
 const GoalKickShape = {
-    bateDe: -34.0,
-    bateAte: 2.0,
-    recebeDe: -28.0,
-    recebeAte: 18.0
+    // Quem bate, em metros da própria linha de fundo. A grande área acaba aos
+    // 16.5: os defesas ficam à saída dela, que é onde se recebe curto.
+    linhaDefesa: 19.0,
+    espacoParaOsMedios: 16.0,   // -> 35 m da linha, 18 antes do meio-campo
+    avancadosAlemDoMeio: 0.0,   // na linha do meio-campo, onde a bola longa cai
+
+    /*
+    E A LINHA DA FRENTE DE QUEM RECEBE, na mesma origem: metros da linha de
+    fundo de quem bate. Eram 25 (o `recebeDe: -28`), colada à área; passa a 38,
+    que são 15 m antes do meio-campo. Continua a ser uma equipa a marcar a
+    saída de bola — só não em cima da área.
+
+    A Lei 16 (ninguém dentro da grande área até a bola estar em jogo) continua
+    a ser garantida à parte, e é ela que manda em último lugar.
+    */
+    frenteDoBloco: 38.0,
+    blocoAdversario: 26.0       // profundidade do bloco, dessa linha para trás
 };
 
 /*

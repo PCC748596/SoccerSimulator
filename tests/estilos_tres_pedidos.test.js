@@ -67,6 +67,13 @@ for (let i = 0; i < Math.round(420 / dt); i++) {
     if (i % 60 === 0) forcar();
     if (i % 6) continue;
 
+    /*
+    SO COM O JOGO A CORRER. As correccoes de estilo que correm depois da arvore
+    (`aplicarAncoraBoxToBox`, `aplicarChaoFoxInTheBox`) saem a porta com a bola
+    parada -- quem coloca os jogadores nesses lances e a montagem do lance, e
+    ela e que manda. Contar esses frames media outra coisa.
+    */
+    if (Match.state !== 'PLAY') continue;
     for (const [eq, lista, outra] of [['TeamA', Match.players, Match.opponents],
                                       ['TeamB', Match.opponents, Match.players]]) {
         const bb = (typeof TeamAI !== 'undefined') ? TeamAI.get(eq) : null;

@@ -485,7 +485,28 @@ Object.assign(Match, {
                 d = gk.model.position.distanceTo(this.ball.position);
             }
             
+            /*
+            E AGORA A MÃO. O `d` acima é do CENTRO DO MODELO à trajectória da
+            bola, e servia de teste de captura: com 1.3 m, o guarda-redes
+            agarrava parado bolas que lhe passavam a mais de um metro das
+            luvas — 17 de 17 agarradas assim, medido. Fica como pré-filtro
+            barato (é ele que evita ler as mãos em todos os frames) e quem
+            decide é a distância à MÃO, como no mergulho.
+            */
             if (d > 1.3) continue;
+            {
+                const alcance = (typeof GkCatchModel !== 'undefined' &&
+                    typeof GkCatchModel.alcanceContacto === 'number')
+                    ? GkCatchModel.alcanceContacto : 0.55;
+                let dMao = Infinity;
+                for (const nome of ['lHand', 'rHand']) {
+                    const mao = gk.rig && gk.rig[nome];
+                    if (!mao) continue;
+                    mao.getWorldPosition(_v2);
+                    dMao = Math.min(dMao, _v2.distanceTo(_v3.lengthSq() ? _v3 : this.ball.position));
+                }
+                if (dMao > alcance) continue;
+            }
             const distZFromGoal = (this.ball.position.z - gk.ownGoalZ) * gk.dirZ;
             const dentroArea = Math.abs(this.ball.position.x) < Area.meiaLargura &&
                 distZFromGoal < Area.profundidade &&

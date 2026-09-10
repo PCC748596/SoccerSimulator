@@ -68,7 +68,14 @@ const GoalkeeperPose = {
     quase toda a defesa virava mergulho lateral — daí o guarda-redes aparecer
     sempre deitado/torcido de lado mesmo em bolas à altura do peito.
     */
-    mergulhoLateralMin: 2.0,
+    /*
+    2.0 -> 1.0: entre o alcance do braço (~0.9 m) e os 2 m não havia gesto
+    nenhum, e era essa faixa que o teletransporte tapava — ver
+    GkCatchModel.alcanceContacto. Uma bola que lhe passa a mais de um metro do
+    corpo exige que ele se ATIRE, e se ela vier baixa é o mergulho rasteiro
+    (`gkTipoMergulho = 'baixo'`) que o relato pede.
+    */
+    mergulhoLateralMin: 1.0,
     // Duração (s) do estado 'maos' antes de voltar ao idle.
     maosDur: 1.0,
 
@@ -351,6 +358,24 @@ Valores no referencial de ataque.
 */
 
 const GoalkeeperDive = {
+    /*
+    TEMPO DE REACÇÃO A UM REMATE, em segundos, antes de o gesto sequer começar.
+
+    Estava escrito à mão no `fsm.js` (`0.45 - ((gk-50)/50) * 0.35`): 0.45 s
+    para um guarda-redes médio. Somado ao `tempoLer` + `tempoImpulso` (0.17 s
+    de agachar e estender), ele só larga o chão aos 0.62 s — e um remate de
+    16 m a 25 m/s chega em 0.64. Ou seja: partia quando a bola já lá estava, e
+    era por isso que o mergulho só tocava a bola em **2 de 17** tentativas
+    (medido, tools/headless/gk_salto_alto.js). O que tapava isso era a
+    apanhada mágica a 1.3 m do corpo, que o relato veio denunciar.
+
+    0.28 de base e 0.18 de amplitude: 0.10 s a GK 100, 0.28 a GK 50, 0.46 a
+    GK 0. Com o gesto por cima dá 0.27 a 0.63 s, que é o tempo de reacção de
+    um guarda-redes a sério.
+    */
+    reaccaoBase: 0.28,
+    reaccaoPorSkill: 0.18,
+
     tempoLer: 0.05,        // reacção: transferência de peso antes de sair
     tempoImpulso: 0.12,    // agachar e estender as pernas
     tempoChao: 0.35,       // deslizar no relvado depois de aterrar
@@ -677,6 +702,25 @@ const GkCatchModel = {
     // Extensão do braço (0 ao peito, 1 no limite) e altura acima do peito.
     custoExtensao: 0.40,
     custoAltura: 0.10,
+
+    /*
+    ATÉ QUE DISTÂNCIA DA MÃO É QUE A BOLA SE APANHA.
+
+    Relato, com três capturas: "o goleiro está a pegar a bola sem pular nela; a
+    quase 2 metros de distância a bola é teletransportada para as mãos". Medido
+    (`tools/headless/gk_agarra_de_longe.js`, 15 min): **17 de 17** bolas
+    agarradas com a bola a mais de 1 m da mão, média 1.43 m e máximo 2.03 — e
+    em 11 delas ele estava em `idle`, parado, sem gesto nenhum.
+
+    A causa eram dois `1.3` escritos à mão: o `resolveBallContact`
+    (match_physics.js) media do CENTRO DO MODELO, e o estado 'maos'
+    (player.js) media da mão mas com o mesmo 1.3, que é o dobro do que um
+    braço alcança.
+
+    0.55 = `raioMao` (0.42, o mesmo do mergulho) + o raio da bola. É o contacto
+    a sério: a luva na bola.
+    */
+    alcanceContacto: 0.95,
 
     // Nunca é certo nem impossível.
     minAgarra: 0.05,

@@ -5,6 +5,137 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (7) — a bola teletransportada para as luvas
+
+Relato, com três capturas de uma defesa rasteira: *"o goleiro está 'pegando' a
+bola sem pular nela. A quase 2 metros de distância a bola é teletransportada
+para as mãos do goleiro. O goleiro deveria pular em baixo e segurar a bola
+(GK_Low)."*
+
+Medido (`tools/headless/gk_agarra_de_longe.js`, 15 min de jogo):
+
+    17 bolas agarradas
+    distancia da bola ao CORPO   media 1.49 m, maximo 2.30
+    distancia da bola a MAO      media 1.43 m, maximo 2.03
+    agarradas a mais de 1 m da mao: 17 de 17
+    estado em que agarrou: idle 11, maos 5, apanhar 1
+
+**Em 11 das 17 ele estava parado**, sem gesto nenhum. Três causas, todas o
+mesmo número escrito à mão:
+
+- o `resolveBallContact` (match_physics.js) agarrava quando a trajectória da
+  bola passava a menos de **1.3 m do CORPO** — do centro do modelo, não das
+  mãos;
+- o estado 'maos' (player.js) media da mão, mas com o mesmo 1.3 m, que é o
+  dobro do que um braço alcança;
+- e o 'apanhar' agarrava no fim do gesto de agachar fosse a bola onde fosse.
+
+Passa a haver um número só, `GkCatchModel.alcanceContacto`, e é a distância da
+MÃO — como no mergulho, que já usava `raioMao`. E o `mergulhoLateralMin` desceu
+de 2.0 para 1.0: entre o alcance do braço e os 2 m não havia gesto nenhum, e
+era essa faixa que o teletransporte tapava. Agora uma bola que lhe passa a mais
+de um metro exige que ele se atire — e se vier baixa é o mergulho rasteiro que
+o relato pede (11 dos 21 mergulhos de uma partida).
+
+Depois: 20 agarradas, média a **0.86 m** da mão e a pior a 1.25 (eram 1.43 e
+2.03), nenhuma "de longe".
+
+#### E o que isto destapou: o mergulho quase nunca chega à bola
+
+A apanhada mágica estava a segurar a defesa toda. Sem ela, 24 partidas com as
+mesmas sementes:
+
+    por 90       golos   remates   cantos     xG
+    antes         2.79     28.98     6.11    1.57
+    depois        5.05     32.58     6.19    2.03
+
+**+2.26 golos, 4.4 sigma** — demonstrável, e é uma regressão. As defesas caem
+de 25 para 11 por partida. Varrido o alcance:
+
+    alcanceContacto   golos (12 sementes)
+        0.55               4.66
+        0.75               4.76
+        0.95               3.64      <- entregue
+
+Fica em **0.95** — ainda é um braço com luva, e não os 2 m do relato.
+
+E a razão de fundo está medida: **o mergulho tocava a bola em 2 de 17
+tentativas**. Uma parte é do tempo de reacção, que estava escrito à mão no
+fsm.js: `0.45 - ((gk-50)/50)*0.35`, ou seja 0.45 s a GK 50, mais os 0.17 s de
+agachar e estender — e um remate de 16 m a 25 m/s chega em 0.64 s. Ele largava
+o chão quando a bola já lá estava. Passou a ser configuração
+(`GoalkeeperDive.reaccaoBase` 0.28, `reaccaoPorSkill` 0.18: 0.10 s a GK 100,
+0.28 a GK 50), o que aproxima o mergulho da bola — de 4.4-5.2 m para 3.2-4.6 m
+de aproximação mínima — mas **não move os golos** (3.64 → 3.90 em 12 sementes,
+dentro do ruído). Entregue pelo mecanismo, e o que falta é a mira do mergulho,
+que fica com número para a próxima.
+
+Os golos ficam nos ~3.6-3.9 por 90 contra os 2.79 de antes, e isso é o preço de
+ter tirado um defeito que compensava outro.
+
+Testes: `tests/gk_agarra_com_a_mao.test.js` (três). O
+`estilos_tres_pedidos.test.js` passou a contar só frames com o jogo a correr —
+as correcções de estilo que correm depois da árvore saem à porta com a bola
+parada, de propósito, desde a sessão do tiro de meta.
+
+### Sessão de 10 de Setembro de 2026 (6) — o tiro de meta ganha linhas
+
+Relato, com captura: *"a posição dos jogadores no tiro de meta não está boa.
+Sem linhas definidas do time batedor. Marcação muito alta do time
+adversário."*
+
+O `formaDoTiroDeMeta` eram quatro números (`bateDe: -34, bateAte: 2,
+recebeDe: -28, recebeAte: 18`) e uma distribuição **contínua**: cada jogador ia
+parar a um ponto proporcional à ordem do posto dele na formação, entre os dois
+extremos. Dez pontos ao longo de 36 metros não são linhas nenhumas. Medido
+(`tools/headless/tiro_de_meta.js`, 8 lances):
+
+    equipa que bate     média -11.0 m, de -28.4 a +9.5   (0 = meio-campo)
+    equipa que recebe   o mais adiantado a 25.0 m da linha de fundo de quem bate
+
+Os 25 m saem do `recebeDe: -28` — a marcar em cima da área, que é a segunda
+metade do relato.
+
+Passa a ser o mesmo desenho da cobrança do impedimento: três linhas pelo `role`
+(def/mid/atk), com as profundidades em metros da própria linha de fundo, e uma
+linha da frente própria para quem recebe, na mesma origem.
+
+    quem bate    defesas 19 m (a saida da area, que acaba aos 16.5)
+                 medios  +16 -> 35 m da linha
+                 avancados na linha do meio-campo
+    quem recebe  linha da frente a 38 m (eram 25), bloco de 26 m para tras
+
+A Lei 16 — ninguém do adversário dentro da grande área — continua garantida à
+parte e manda em último lugar.
+
+Depois: quem bate com o mais recuado a -31.6 e o mais adiantado a +3.0, em três
+degraus; quem recebe com o mais adiantado a -13.0 em vez de -16.5.
+
+#### E um defeito que só apareceu por causa disto
+
+Dois médios ficavam presos a 26.5 m da própria linha de fundo enquanto o resto
+da equipa já estava nas linhas do lance — e 26.5 é o `limiteEntradaArea` do
+**Box-to-Box**. O `aplicarAncoraBoxToBox` (player_bt.js) corria com o jogo
+parado e reescrevia por cima do que a montagem do lance tinha escrito.
+
+Levou a mesma guarda que o `aplicarChaoFoxInTheBox` já tinha — só com
+`Match.state === 'PLAY'` — e vale para todos os lances de bola parada, não só
+para o tiro de meta.
+
+#### O jogo
+
+24 partidas headless com as mesmas sementes:
+
+    por 90       golos   remates   cantos     xG
+    antes         3.21     29.00     5.52    1.59
+    depois        2.79     28.98     6.11    1.57
+
+Golos −0.42 e cantos +0.59, ambos ~1 sigma; remates e xG parados.
+
+Teste: `tests/tiro_de_meta_linhas.test.js` (três — as três linhas de quem bate,
+com a exigência de que cada uma seja mesmo uma linha; a distância da marcação;
+e a Lei 16).
+
 ### Sessão de 10 de Setembro de 2026 (5) — o bónus que era apagado na linha seguinte
 
 Relato: *"o que eu tô notando é que os jogadores infiltrando não estão com
