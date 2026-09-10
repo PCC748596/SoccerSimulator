@@ -5,6 +5,42 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 11 de Setembro de 2026 (3) — o guarda-redes lê o remate sem erro nenhum
+
+Pergunta: *"a impressão que eu tenho é que o goleiro está pulando quase que
+instantaneamente no movimento do chute. Ou seja, ele já sabe a direção do chute
+antes do chute. É isso mesmo?"*
+
+Não antes — mas no instante seguinte, e sem margem de erro. Cronologia de um
+remate, frame a frame, com o atraso de reacção deste guarda-redes em 0.17 s:
+
+    t=0.02  reagiu=n  alvoX=-3.16  corpoX=0.21   v=0.0     <- ja sabe o canto
+    t=0.15  reagiu=n  alvoX=-1.77  corpoX=-0.02  v=11.1    <- ja vai a 11 m/s
+    t=0.18  reagiu=S  ...
+    t=0.22  reagiu=S  estado=mergulho
+
+Duas causas, e nenhuma é o mergulho ser cedo (esse já foi arrumado a 10 de
+Setembro — ele atira-se com 0.38 s por chegar):
+
+**1. A leitura é exacta e instantânea.** No primeiro frame depois de a bola sair
+do pé o `alvoX` dele já é o ponto de intercepção certo. O
+`pontoDeIntercepcaoGK` (utils.js) é `x = bolaX + velX·t`: geometria pura, sem
+erro nenhum. Um guarda-redes a sério lê a trajectória ao longo de uns 200 ms.
+O `gk-jump-system.md` descreve o erro que devia existir — *"dispersão gaussiana
+no plano XY, cujo raio é inversamente proporcional ao atributo GK"* — e ele
+nunca foi implementado.
+
+**2. E o atraso de reacção só trava metade dos caminhos.** Há dois ramos que
+mexem o guarda-redes num remate: o principal exige `gkReagiu`, e o
+`possoEspalmar` **não** — é ele que o põe a 11.1 m/s aos 0.15 s com o `reagiu`
+ainda falso. O atraso existe e está a ser contornado por um dos dois lados.
+
+**Não entregue, de propósito.** A correcção — erro de leitura que encolhe à
+medida que a bola se aproxima, e o `possoEspalmar` a respeitar o `gkReagiu` —
+deixa o guarda-redes PIOR, e os golos do lote estão em 113% do alvo. É uma
+decisão de balanço e fica para quem a quiser tomar; o diagnóstico está aqui com
+a cronologia que o mostra.
+
 ### Sessão de 11 de Setembro de 2026 (2) — o lote a 30/18, e dois relatos do guarda-redes
 
 #### O lote passa a nascer em 30 jogos de 18 minutos
