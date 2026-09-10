@@ -320,13 +320,29 @@ function avaliarEstilo(p, bb, dt) {
     // Se não estiver no estado ofensivo (posse estabelecida), desliga os estilos de movimentação
     // Exceção: estilos puramente defensivos ou que sempre ficam ativos na defesa
     if (typeof TeamState !== 'undefined' && bb.state !== TeamState.OFFENSIVE) {
-        if (p.playingStyle !== 'anchor_man' && 
-            p.playingStyle !== 'defensive_fullback' && 
-            p.playingStyle !== 'the_destroyer' &&
-            p.playingStyle !== 'orchestrator' &&
-            p.playingStyle !== 'build_up') {
-            quer = false;
-        }
+        /*
+        O FOX IN THE BOX É A EXCEPÇÃO OFENSIVA desta lista.
+
+        Relato: "está a distanciar-se muito da área durante o ataque". Medido
+        (tools/headless/estilos_tres.js, 600 s): o estilo estava activo em 43%
+        dos frames de ataque, e nesses ele ficava a 6.3 m da entrada da área —
+        nos outros 57% estava a 24 m. Ou seja o defeito não era a colocação,
+        era o estilo estar apagado mais de metade do ataque: a posse ainda não
+        está "estabelecida" (`OFFENSIVE`) numa transição ofensiva, e é
+        exactamente aí que o homem da área tem de já lá estar.
+
+        A colocação dele continua a exigir `bb.isAttacking` (ver `dentroArea`
+        no aplicarEstiloPosicional), portanto isto não o deixa na área com a
+        equipa a defender.
+        */
+        const excepcao = (p.playingStyle === 'anchor_man' ||
+            p.playingStyle === 'defensive_fullback' ||
+            p.playingStyle === 'the_destroyer' ||
+            p.playingStyle === 'orchestrator' ||
+            p.playingStyle === 'build_up' ||
+            (p.playingStyle === 'fox_in_the_box' && bb.isAttacking &&
+                typeof Match !== 'undefined' && Match.state === 'PLAY'));
+        if (!excepcao) quer = false;
     }
 
     const antes = !!p.styleAtivo;
@@ -737,6 +753,22 @@ function aplicarEstiloPosicional(p, bb, targetX, targetZ) {
             const espalhamentoExtra = p.slot ? (p.slot.u - 0.5) * 6.0 : ((p.id % 3) - 1) * 3.0;
             targetX += espalhamentoExtra;
 
+            /*
+            O VAIVÉM. Ver PlayingStyleTuning.dummyRunner: a corrida era um
+            PONTO — ele ia para lá e ficava, e um central não sai do lugar por
+            causa disso. Agora o alvo oscila de um lado para o outro e em
+            profundidade, que é o que arrasta o marcador.
+
+            A fase é própria de cada jogador (pelo `id`) para dois Dummy
+            Runners não dançarem em espelho, e a profundidade corre a 0.6 da
+            frequência do lateral: vaivém largo com afundamentos ocasionais,
+            e não um ziguezague.
+            */
+            const tempoDummy = (typeof Match !== 'undefined' && Match.tempoDeJogo) || 0;
+            const periodo = D.periodoOscilacao || 3.4;
+            const fase = (tempoDummy / periodo) * Math.PI * 2 + ((p.id || 0) % 7) * 0.9;
+            targetX += Math.sin(fase) * (D.amplitudeLateral || 0);
+
             // O tecto de afastamento, depois do espalhamento: é a distância à
             // jogada que decide se ainda há passe para ele.
             const foraX = targetX - carrierX;
@@ -744,16 +776,57 @@ function aplicarEstiloPosicional(p, bb, targetX, targetZ) {
                 targetX = carrierX + Math.sign(foraX) * D.distanciaMax;
             }
 
-            // Desloca-se em Z à frente da jogada/portador (profundidade de ataque)
-            const zAtkMin = (carrierZ * p.dirZ) + (D.profundidadeMin || 6.0);
-            let zAtk = Math.max(targetZ * p.dirZ, zAtkMin);
+            /*
+            A PROFUNDIDADE VARRE O CORREDOR — e não fica sentada na última
+            linha.
 
-            // Respeita a linha de impedimento para arrastar a defesa sem ficar impedido
+            Era `max(alvo, portador + 6)` cortado pela linha de fora-de-jogo, e
+            o corte ganhava quase sempre: ele vivia colado ao último defensor,
+            que é o "está muito próximo dos zagueiros" do relato. E um homem
+            parado ali não arrasta ninguém nem dá opção de passe.
+
+            Agora oscila entre os dois extremos do que um avançado faz: VIR AO
+            ENCONTRO (`profundidadeMin` à frente do portador, para ser jogado
+            de pé) e IR À PROFUNDIDADE (rente à linha de fora-de-jogo, para ser
+            lançado). O `cos` corre mais devagar do que o vaivém lateral, e por
+            isso o que se vê é um a puxar e outro a romper, não um tremor.
+            */
+            const zPerto = (carrierZ * p.dirZ) + (D.profundidadeMin || 6.0);
+            let zLonge = Math.max(zPerto, targetZ * p.dirZ);
+            if (bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
+                zLonge = Math.max(zPerto, bb.offsideLimitDir - 0.8);
+            }
+            const varrer = 0.5 + 0.5 * Math.cos(fase * 0.6);   // 0 perto, 1 longe
+            let zAtk = zPerto + (zLonge - zPerto) * varrer;
+
+            // A linha de fora-de-jogo continua a ser um limite duro.
             if (bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
                 zAtk = Math.min(zAtk, bb.offsideLimitDir - 0.8);
             }
 
             targetZ = zAtk * p.dirZ;
+
+            /*
+            E O VÃO, EM VEZ DE UM X QUALQUER. A outra metade do relato:
+            "procurando os espaços vazios entre os jogadores adversários... o
+            zagueiro vai atrás dele e abre espaço para outros atacantes".
+
+            O vaivém diz para ONDE ele vai; isto escolhe, à volta desse ponto,
+            a faixa mais livre — a mesma máquina que o Fox in the Box usa para
+            achar o vão entre centrais (`melhorVaoX`). Em cima de um adversário
+            não há espaço para receber, e um marcador que já está colado não
+            precisa de correr atrás de ninguém.
+
+            Corre depois do Z porque o vão mede-se no plano: um x é bom ou mau
+            consoante a profundidade a que ele vai estar.
+            */
+            const sep = D.separacaoDoCentral || 0;
+            if (sep > 0) {
+                const limiteX = CAMPO_LARG / 2 - 3.0;
+                const candidatos = [-sep * 1.6, -sep, 0, sep, sep * 1.6]
+                    .map(dx => THREE.MathUtils.clamp(targetX + dx, -limiteX, limiteX));
+                targetX = melhorVaoX(p, bb, targetZ, candidatos);
+            }
 
             // Limites do campo
             targetX = THREE.MathUtils.clamp(targetX, -(CAMPO_LARG / 2 - 3.0), (CAMPO_LARG / 2 - 3.0));
@@ -873,11 +946,21 @@ function aplicarTectoDoEstilo(p, targetZ, bb) {
     if (bb && typeof Tatics !== 'undefined' && p && p.playingStyle === 'box_to_box' &&
         !p.playingStyleDesligado &&
         !(typeof Config !== 'undefined' && Config.usePlayingStyles === false)) {
-        const cfg = PlayingStyles.box_to_box && PlayingStyles.box_to_box.ancoraNaBola;
-        const offset = cfg ? cfg[Tatics.estilo] : undefined;
-        if (typeof offset === 'number') {
+        const faixa = PlayingStyles.box_to_box && PlayingStyles.box_to_box.faixaNaBola;
+        if (faixa) {
             const bolaDir = (typeof bb.bolaZSuave === 'number' ? bb.bolaZSuave : (bb.ballZ || 0)) * bb.dir;
-            targetZ = (bolaDir + offset) * p.dirZ;
+            const zAtk = targetZ * p.dirZ;
+            const limFaixa = PlayingStyles.box_to_box.limiteEntradaArea;
+            let tecto = bolaDir + (faixa.frente ?? 10);
+            let chao = bolaDir - (faixa.tras ?? 10);
+            if (typeof limFaixa === 'number') {
+                tecto = Math.max(-limFaixa, Math.min(limFaixa, tecto));
+                chao = Math.max(-limFaixa, Math.min(limFaixa, chao));
+                // Ver a nota em aplicarAncoraBoxToBox (player_bt.js).
+                if (chao > tecto) { chao = -limFaixa; tecto = limFaixa; }
+            }
+            if (zAtk > tecto) targetZ = tecto * p.dirZ;
+            else if (zAtk < chao) targetZ = chao * p.dirZ;
         }
     }
 
@@ -885,8 +968,9 @@ function aplicarTectoDoEstilo(p, targetZ, bb) {
 
     if (est && est.travaNaEntradaArea) {
         // Linha da grande área: CAMPO_COMP / 2 (53) - 16.5 = 36.5.
-        // 10 metros antes disso: 26.5.
-        const lim = 26.5; 
+        // 10 metros antes disso: 26.5. Vem da configuração para a faixa da
+        // linha da bola (`faixaNaBola`) e este tecto não divergirem.
+        const lim = (PlayingStyles.box_to_box && PlayingStyles.box_to_box.limiteEntradaArea) || 26.5;
         if (zAtaque > lim) return lim * p.dirZ;
         if (zAtaque < -lim) return -lim * p.dirZ;
     }

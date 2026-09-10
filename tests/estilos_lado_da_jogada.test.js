@@ -109,7 +109,9 @@ test('o Dummy Runner corre para o lado da jogada, e a distância tem tecto', () 
         'distanciaMax fora do alcance de um passe');
 
     const ini = srcEstilos.indexOf('est.atraiDefesa && p._dummyAtivo');
-    const corpo = srcEstilos.slice(ini, ini + 3000);
+    // 3000 -> 7000: o bloco cresceu com o vaivem do Dummy Runner (a oscilacao
+    // e a escolha do vao) e o `D.distanciaMax` caiu para fora da janela.
+    const corpo = srcEstilos.slice(ini, ini + 7000);
     assert.ok(corpo.includes('ladoJogada'),
         'o Dummy Runner voltou a correr para o lado do posto dele');
     assert.ok(!/targetX = ladoEst \* 15\.0/.test(corpo),

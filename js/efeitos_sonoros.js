@@ -78,6 +78,18 @@ const EfeitosSonoros = {
     },
 
     /*
+    CALA TUDO O QUE ESTÁ NO AR. Um apito ou um chute disparado no frame antes
+    da pausa continuava a tocar até ao fim com o jogo já parado.
+    */
+    pararTudo() {
+        for (const nome of Object.keys(this._sons)) {
+            for (const a of this._sons[nome].vozes) {
+                try { a.pause(); a.currentTime = 0; } catch (e) { /* sem dados */ }
+            }
+        }
+    },
+
+    /*
     Ligado só quando o ambiente está ligado: um botão, um som. Ver o cabeçalho.
     */
     get ligado() {

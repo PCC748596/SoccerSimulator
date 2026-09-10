@@ -83,7 +83,8 @@ const AmbienteSonoro = {
     },
 
     tentarTocar() {
-        if (!this._audio || !this._ligado || this._tentouTocar && !this._audio.paused) return;
+        if (!this._audio || !this._ligado || this._pausado) return;
+        if (this._tentouTocar && !this._audio.paused) return;
         const p = this._audio.play();
         if (p && p.catch) {
             // Recusado pela política de autoplay: não é erro, fica à espera da
@@ -150,6 +151,29 @@ const AmbienteSonoro = {
         const pr = this._grito.play();
         // Recusado pela politica de autoplay: nao e erro (ver tentarTocar).
         if (pr && pr.catch) pr.catch(() => { });
+    },
+
+    /*
+    PAUSA — o jogo pára e o estádio tem de parar com ele.
+
+    O `update` vive dentro do `Match.update`, que não corre em pausa: a rampa
+    de volume congelava mas o elemento <audio> continuava a tocar o loop do
+    estádio no volume em que ia. Pausar o jogo e continuar a ouvir a multidão é
+    o defeito.
+
+    Guarda-se se ele estava mesmo a tocar, para o retomar só nesse caso — em
+    pausa com o som desligado no painel não há nada para retomar.
+    */
+    setPausa(on) {
+        this._pausado = !!on;
+        if (!this._audio) return;
+        if (on) {
+            this._tocavaAntesDaPausa = !this._audio.paused;
+            this._audio.pause();
+            if (this._grito) this._grito.pause();
+        } else if (this._ligado && this._tocavaAntesDaPausa) {
+            this.tentarTocar();
+        }
     },
 
     setLigado(on) {

@@ -356,11 +356,36 @@ const GoalkeeperDive = {
     tempoChao: 0.35,       // deslizar no relvado depois de aterrar
     tempoLevantar: 0.75,   // pôr-se de pé
 
-    vooMin: 0.28,          // duração mínima/máxima do voo (s)
-    vooMax: 0.62,
+    /*
+    DURACAO DO VOO. Deixou de ser adivinhada: sai da propria parabola
+    (`tVoo = 2*v0y/g`, subir e voltar a descer), e estes dois sao os limites
+    dela. O `vooMax` de 0.62 s so dava para 0.47 m de salto — menos do que um
+    guarda-redes salta de pe parado — e por isso esta em 0.85.
+    */
+    vooMin: 0.28,
+    vooMax: 0.85,
     velLateral: 6.0,       // velocidade lateral base do salto (m/s)
     velLateralSkill: 4.0,  // ± conforme a skill de GK
-    vySubidaMax: 4.5,      // velocidade vertical máxima do impulso (m/s)
+
+    /*
+    IMPULSAO VERTICAL. 4.2 m/s sao 0.90 m de subida do centro de massa: um
+    salto de elite, e o tecto humano do gesto. Com os 4.5 antigos a conta do
+    `lancar` pedia 10.26 m/s numa bola ao angulo (5.4 m de salto) e o clamp
+    comia a diferenca em silencio — mas isso nem se via, porque o voo acabava
+    ao primeiro frame (ver `GkDive.update`).
+
+    O minimo existe para o mergulho rasteiro TAMBEM sair do chao: um
+    guarda-redes que se atira a uma bola rasteira levanta os pes, so nao sobe.
+    */
+    vySubidaMax: 4.2,
+    vySubidaMin: 1.5,
+
+    /*
+    Quanto a mao chega ACIMA do ombro com o braco esticado. E o simetrico do
+    `alcanceBraco` (que so contava na horizontal): sem ele o solver mandava o
+    OMBRO a altura da bola, e pedia um salto que nao existe.
+    */
+    alcanceVertical: 0.70,
 
     /*
     Quanto a mão chega além do corpo — o corpo não precisa de percorrer a

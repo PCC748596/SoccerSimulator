@@ -3799,13 +3799,13 @@ const PlayerAI = {
         estragar a jogada.
         */
         aplicarAncoraBoxToBox(player, bbEquipa);
+        aplicarChaoFoxInTheBox(player, bbEquipa);
     }
 };
 
 /*
-Ver a nota no fim do PlayerAI.tick. Vive à parte por ser o único sítio onde o
-nível 3 é corrigido de fora da árvore — se isto crescer para outros estilos, é
-aqui que se vê.
+Ver a nota no fim do PlayerAI.tick. Vivem à parte por ser o único sítio onde o
+nível 3 é corrigido de fora da árvore.
 */
 function aplicarAncoraBoxToBox(p, bb) {
     if (!bb || !p || p.role === 'gk') return;
@@ -3813,22 +3813,91 @@ function aplicarAncoraBoxToBox(p, bb) {
     if (typeof Config !== 'undefined' && Config.usePlayingStyles === false) return;
     if (typeof Tatics === 'undefined' || typeof PlayingStyles === 'undefined') return;
 
-    const cfg = PlayingStyles.box_to_box && PlayingStyles.box_to_box.ancoraNaBola;
-    const offset = cfg ? cfg[Tatics.estilo] : undefined;
-    if (typeof offset !== 'number') return;
+    const faixa = PlayingStyles.box_to_box && PlayingStyles.box_to_box.faixaNaBola;
+    if (!faixa) return;
 
     const comTarefaDeBola = p.hasBall ||
         (bb.chaser === p) || (bb.intercetor === p) ||
         (typeof Match !== 'undefined' && Match.intendedReceiver === p);
     if (comTarefaDeBola) return;
 
-    const bolaDir = (typeof bb.bolaZSuave === 'number' ? bb.bolaZSuave : (bb.ballZ || 0)) * bb.dir;
-    const linhaDir = bolaDir + offset;
-    const alvoDir = p.dynamicTarget.z * p.dirZ;
+    /*
+    A FAIXA À VOLTA DA LINHA DA BOLA. Ver PlayingStyles.box_to_box.faixaNaBola:
+    ele posiciona-se como sempre e só é cortado quando sai dela — no máximo
+    `frente` metros à frente da bola, `tras` atrás.
 
-    if (offset >= 0) {
-        if (alvoDir < linhaDir) p.dynamicTarget.z = linhaDir * p.dirZ;
-    } else if (alvoDir > linhaDir) {
-        p.dynamicTarget.z = linhaDir * p.dirZ;
+    A referência é a `bolaZSuave` (a posição da bola já filtrada, a mesma que
+    move o bloco) e não a bola crua: com a bola crua, um passe longo atirava o
+    médio de um lado para o outro a cada voo.
+    */
+    const bolaDir = (typeof bb.bolaZSuave === 'number' ? bb.bolaZSuave : (bb.ballZ || 0)) * bb.dir;
+    const alvoDir = p.dynamicTarget.z * p.dirZ;
+    let tecto = bolaDir + (faixa.frente ?? 10);
+    let chao = bolaDir - (faixa.tras ?? 10);
+
+    /*
+    E a faixa não o tira do corredor de área a área — ver
+    PlayingStyles.box_to_box.limiteEntradaArea. Sem isto, com a bola no próprio
+    guarda-redes ela mandava-o para dentro da própria área.
+    */
+    const lim = PlayingStyles.box_to_box.limiteEntradaArea;
+    if (typeof lim === 'number') {
+        tecto = Math.max(-lim, Math.min(lim, tecto));
+        chao = Math.max(-lim, Math.min(lim, chao));
+        /*
+        Com a bola para lá do corredor — o caso do próprio guarda-redes a sair
+        a jogar — a faixa não tem onde caber. Aí só vale o corredor: ele fica
+        onde estava, cortado à entrada da área. Colapsá-la para a borda
+        atirava-o para DENTRO da própria área, em cima do guarda-redes.
+        */
+        if (chao > tecto) { chao = -lim; tecto = lim; }
+    }
+
+    if (alvoDir > tecto) p.dynamicTarget.z = tecto * p.dirZ;
+    else if (alvoDir < chao) p.dynamicTarget.z = chao * p.dirZ;
+}
+
+/*
+O HOMEM DA ÁREA NÃO É PUXADO PARA FORA DELA.
+
+Relato: "o CF Fox in the Box está a distanciar-se muito da área durante o
+ataque". O estilo já pedia o sítio certo — `dentroArea` no
+aplicarEstiloPosicional põe-no à frente da bola e nunca aquém da entrada da
+área — mas medido (`tools/headless/estilos_tres.js`, 600 s) com o estilo
+activo o ALVO dele saía a 8.9 m da entrada da área e o corpo a 13.8 m. Ou
+seja: o que o estilo escreve é reescrito a seguir, pela coesão do bloco e pela
+marcação posicional, exactamente como acontecia com a âncora do Box-to-Box.
+
+Por isso o chão é aqui, depois de a árvore falar, e é um chão de um lado só:
+nunca puxa ninguém para trás, só impede que o tirem da área. FORA da regra
+quem tem tarefa com a bola — a mesma lista do `aplicarAncoraBoxToBox`.
+*/
+function aplicarChaoFoxInTheBox(p, bb) {
+    if (!bb || !p || p.role === 'gk') return;
+    if (p.playingStyle !== 'fox_in_the_box' || p.playingStyleDesligado) return;
+    if (!p.styleAtivo || !bb.isAttacking) return;
+    /*
+    SÓ COM O JOGO A CORRER. Com o jogo parado — festejo de golo, bola parada —
+    quem coloca os jogadores é outra coisa, e deixá-lo agarrado à área fazia-o
+    dar um salto de 34 m no frame da reposição (apanhado pelo `saida_a_pe`).
+    */
+    if (typeof Match !== 'undefined' && Match.state !== 'PLAY') return;
+    if (typeof Config !== 'undefined' && Config.usePlayingStyles === false) return;
+    if (typeof PlayingStyleTuning === 'undefined') return;
+
+    const comTarefaDeBola = p.hasBall ||
+        (bb.chaser === p) || (bb.intercetor === p) ||
+        (typeof Match !== 'undefined' && Match.intendedReceiver === p);
+    if (comTarefaDeBola) return;
+
+    const F = PlayingStyleTuning.foxInTheBox;
+    if (!F) return;
+
+    const bolaAvanco = (typeof bb.bolaZSuave === 'number' ? bb.bolaZSuave : (bb.ballZ || 0)) * bb.dir;
+    const zDesejado = Math.max(F.entradaArea,
+        Math.min(F.avancoMax, bolaAvanco + F.esperaAtras));
+
+    if (p.dynamicTarget.z * p.dirZ < zDesejado) {
+        p.dynamicTarget.z = zDesejado * p.dirZ;
     }
 }

@@ -940,8 +940,19 @@ segundos antes de a poder repetir.
 */
 const PlayingStyleTuning = {
     foxInTheBox: {
-        entradaArea: 30.0,   // nunca espera mais atrás do que isto
-        esperaAtras: 8.0,    // metros à frente da bola, enquanto ela não chega
+        /*
+        A ENTRADA DA ÁREA É AOS 36.5 (53 - 16.5), e este número dizia 30 —
+        seis metros e meio FORA dela. "Nunca espera mais atrás do que isto"
+        estava a deixá-lo à porta.
+
+        Medido (tools/headless/estilos_tres.js, 600 s): mediana a 24.1 m da
+        entrada da área durante o ataque, e só 16% dos frames lá dentro. A
+        maior parte disso é o estilo estar apagado (activo em 43% do ataque —
+        ver o gatilho e a regra do TeamState em playing_styles.js); o resto é
+        este chão.
+        */
+        entradaArea: 35.0,   // nunca espera mais atrás do que isto
+        esperaAtras: 10.0,   // metros à frente da bola, enquanto ela não chega
         avancoMax: 46.0,     // e nunca além disto (linha de fundo aos 53)
 
         /*
@@ -991,7 +1002,34 @@ const PlayingStyleTuning = {
         */
         lateralDoPortador: 9.0,
         distanciaMax: 22.0,
-        profundidadeMin: 6.0
+        profundidadeMin: 6.0,
+
+        /*
+        O VAIVÉM — pedido explícito: "deve puxar mais a marcação do zagueiro
+        movimentando-se de um lado para o outro, para a frente e para trás,
+        para dar opção de ser lançado e procurando os espaços vazios entre os
+        jogadores adversários. Isso vai fazer com que o zagueiro vá atrás dele
+        e abra espaço para outros atacantes".
+
+        A corrida era um PONTO: ele ia para lá e ficava. Medido
+        (tools/headless/estilos_tres.js): 5.8 m de deslocação lateral por cada
+        3 segundos — um marcador não sai do sítio por causa disso.
+
+        Agora o alvo oscila. `periodo` é o tempo de um ciclo completo; a fase
+        é própria de cada jogador (pelo id) para dois Dummy Runners não
+        dançarem em espelho. A profundidade oscila mais devagar do que o
+        lateral — vai-e-vem largo com afundamentos ocasionais, e não um
+        ziguezague nervoso.
+
+        `separacaoDoCentral` é o outro metade do relato ("está muito próximo
+        dos zagueiros"): quando o vaivém o deixa em cima de um central,
+        empurra-se para o lado até esta distância. Colado a ele não há espaço
+        nenhum para receber, e o central não precisa de o seguir.
+        */
+        periodoOscilacao: 4.5,
+        amplitudeLateral: 6.5,
+        amplitudeProfundidade: 5.0,
+        separacaoDoCentral: 4.5
     }
 };
 
@@ -1094,6 +1132,42 @@ limitado por `MarkingModel.distanciaMinimaEstilo`.
     box_to_box: {
         nome: 'Box-to-Box', posicoes: ['AM', 'LM', 'RM', 'CM', 'DM'],
         amplitudeZ: 1.5, avancoComBola: 5, pressao: 1.2,
+
+        /*
+        A LINHA DA BOLA É A ÂNCORA DELE — pedido explícito: "deve acompanhar a
+        jogada mais perto da linha do homem com a bola no eixo Z; se adiantar,
+        no máximo uns 10 metros para a frente (atacando) e para trás
+        (defendendo) da linha da bola".
+
+        `faixaNaBola` é uma FAIXA, e não um sítio: ele posiciona-se como
+        sempre e só é cortado quando sai dela. Medido antes disto
+        (tools/headless/estilos_tres.js, 600 s): **38% dos frames de ataque a
+        mais de 10 m da linha da bola**, com desvio-padrão de 18.3 m.
+
+        A máquina que aplica isto já existia em dois sítios
+        (`aplicarAncoraBoxToBox` no player_bt.js e `aplicarTectoDoEstilo` no
+        playing_styles.js) mas a configuração que a acende tinha desaparecido
+        do ficheiro — o `20dbce1` levou-a — e por isso ambas saíam à porta sem
+        fazer nada.
+
+        O tecto da entrada da área (`travaNaEntradaArea`) continua a mandar por
+        cima disto: com a bola dentro da área adversária ele fica na entrada, a
+        mais de 10 m dela, que é o que "de área a área" quer dizer.
+        */
+        faixaNaBola: { frente: 10.0, tras: 10.0 },
+
+        /*
+        E A FAIXA NUNCA O TIRA DO CORREDOR "DE ÁREA A ÁREA". Com a bola no
+        próprio guarda-redes a faixa mandava-o para 10 m da própria linha de
+        fundo — dentro da sua área, em cima do guarda-redes que ia sair a jogar.
+        Três testes apanharam isso (`saida_a_pe`, `saida_do_guarda_redes`,
+        que contam os corpos entre o guarda-redes e a baliza).
+
+        É o mesmo número do `travaNaEntradaArea`, aqui em cima para as duas
+        regras o lerem do mesmo sítio: a entrada da área é aos 36.5 (53−16.5),
+        e 26.5 são os 10 m antes dela.
+        */
+        limiteEntradaArea: 26.5,
         travaNaEntradaArea: true, // "da entrada de uma área até a entrada da outra" — não passa da entrada
         // Cobre o campo todo: a defender recua e acompanha, sem se sentar.
         defensivo: { recuo: 3, pressao: 1.2 }

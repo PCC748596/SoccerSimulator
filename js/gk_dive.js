@@ -106,19 +106,38 @@ const GkDive = {
         // Se o braço sozinho já lá chega, quase não é preciso deslocar corpo.
         if (Math.sign(distCorpo) !== Math.sign(dx)) distCorpo = 0;
 
-        const velMax = D.velLateral + ((skill - 50) / 50) * D.velLateralSkill;
-        d.tVoo = Math.min(D.vooMax, Math.max(D.vooMin, Math.abs(distCorpo) / velMax));
-        d.v0x = distCorpo / d.tVoo;
+        const g = BallPhysics.gravidade;
 
         /*
-        Componente vertical: resolve-se para o OMBRO estar à altura da bola
-        no instante do contacto (`fracContacto` do voo), não no fim.
+        VERTICAL PRIMEIRO, e é ela que dá o tempo de voo.
+
+        Antes resolvia-se para o OMBRO estar à altura da bola a `fracContacto`
+        do voo, com o tempo de voo já fixado pela distância lateral. Duas
+        coisas erradas: o braço só contava na horizontal — o ombro tinha de ir
+        ele próprio aos 2.2 m de uma bola ao ângulo, e o solver pedia 10.26 m/s
+        de impulsão, que são 5.4 m de salto — e o tempo de voo não tinha nada
+        que ver com a parábola que o corpo ia mesmo descrever.
+
+        Agora pede-se o que um salto pede: que a MÃO chegue à altura da bola no
+        ápice. O que ficar por cima disso é bola que ele não alcança — e é
+        assim que se vê um guarda-redes a saltar para o ângulo e a não lá
+        chegar, em vez de deslizar por baixo dela.
         */
-        const g = BallPhysics.gravidade;
-        const tc = d.tVoo * D.fracContacto;
-        const hAlvo = Math.max(0, d.alvoY - D.ombroY * 0.5);
-        d.v0y = Math.min(D.vySubidaMax, Math.max(0,
-            (hAlvo - corpo.position.y + 0.5 * g * tc * tc) / tc));
+        const subidaPedida = d.alvoY - (D.ombroY * 0.5 + D.alcanceVertical) - corpo.position.y;
+        d.v0y = Math.max(D.vySubidaMin,
+            Math.min(D.vySubidaMax, Math.sqrt(2 * g * Math.max(0, subidaPedida))));
+
+        // Subir e voltar a descer: o voo dura o que a parábola durar.
+        d.tVoo = Math.min(D.vooMax, Math.max(D.vooMin, 2 * d.v0y / g));
+
+        /*
+        E o lateral reparte-se por esse tempo — não o contrário. A velocidade
+        de deslocação mantém o tecto que a skill de GK dá: se a bola estiver
+        longe de mais para o tempo que ele fica no ar, não lá chega, que é o
+        que deve acontecer.
+        */
+        const velMax = D.velLateral + ((skill - 50) / 50) * D.velLateralSkill;
+        d.v0x = Math.max(-velMax, Math.min(velMax, distCorpo / d.tVoo));
 
         d.x0 = corpo.position.x;
         d.y0 = corpo.position.y;
@@ -163,13 +182,29 @@ const GkDive = {
                 const g = BallPhysics.gravidade;
                 const t = d.t;
                 corpo.position.x = d.x0 + d.v0x * t;
-                corpo.position.y = d.y0 + d.v0y * t - 0.5 * g * t * t;
 
                 // Tombo: do 18% já feito no impulso até ao ângulo cheio,
                 // com smoothstep para não haver ressalto na velocidade.
                 const k = Math.min(1, t / d.tVoo);
                 const s = k * k * (3 - 2 * k);
                 d.ang = d.angMax * (0.18 + 0.82 * s);
+
+                /*
+                ALTURA = a base do modelo MAIS a parábola.
+
+                A origem do modelo está a `ALTURA_BASE_Y` com ele de pé e a
+                `alturaDeitado` com ele deitado — 45 cm ACIMA. Escrever aqui só
+                a parábola punha o corpo abaixo da altura de aterragem logo no
+                primeiro frame, e a guarda lá em baixo mandava-o para 'chao': o
+                voo durava um frame, sempre, em todos os mergulhos do jogo. Era
+                isto que se via como "salta por baixo da bola e desliza".
+
+                A base acompanha o tombo (quanto mais deitado, mais alta) e o
+                salto soma-se-lhe. Aterra quando a parábola volta a zero.
+                */
+                const salto = d.v0y * t - 0.5 * g * t * t;
+                const base = ALTURA_BASE_Y + (D.alturaDeitado - ALTURA_BASE_Y) * s;
+                corpo.position.y = base + Math.max(0, salto);
 
                 this.poseVoo(rig, d);
                 this.mirarBola(p, rig);
@@ -178,7 +213,8 @@ const GkDive = {
                 this.poseBracosVoo(rig, d, k);
                 this.torcerTronco(rig, d, 'voo');
 
-                if (corpo.position.y <= D.alturaDeitado) {
+                // A parábola fechou-se: o corpo chegou ao relvado.
+                if (salto <= 0 && t > 0) {
                     corpo.position.y = D.alturaDeitado;
                     d.fase = 'chao';
                     d.t = 0;

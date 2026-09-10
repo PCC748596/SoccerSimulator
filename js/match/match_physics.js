@@ -199,17 +199,7 @@ Object.assign(Match, {
 
                     this.gkHoldingBall.TeamA = false;
                     this.gkHoldingBall.TeamB = false;
-                    [this.players[0], this.opponents[0]].forEach(gk => {
-                        if (gk) {
-                            gk.gkEstado = 'idle';
-                            gk.gkTempoMergulho = 0;
-                            gk.gkDirMergulho = 0;
-                            gk.gkTipoMergulho = 'baixo';
-                            gk.gkReagiu = false;
-                            gk.gkDelayReacao = 0;
-                            gk.dive = null;
-                        }
-                    });
+                    this.arrumarGuardaRedesNoGolo();
 
                     // Logo após o golo, os jogadores não ficam parados: dirigem-se imediatamente
                     // para o meio-campo/posições de recomeço enquanto a câmara foca a bola na baliza
@@ -383,6 +373,37 @@ Object.assign(Match, {
                 this.resetPlay();
             }
         }
+    },
+
+    /*
+    ARRUMAR OS GUARDA-REDES NO INSTANTE DO GOLO — menos o que ainda está no ar.
+
+    Isto apagava o mergulho (`gk.dive = null`) para os dois, e o caso em que
+    isso se vê é precisamente o do relato: um remate ao ângulo que ENTRA. O
+    guarda-redes salta para a bola, ela passa a linha, e no mesmo frame o
+    mergulho desaparecia — em vez de ele acabar a parábola, cair e levantar-se.
+
+    Já tinha sido arranjado uma vez (commit 5c4a9b9, "Prevent abrupt diving
+    state reset after goals") e o 20dbce1 reverteu-o com o resto do salto. Fica
+    num método com nome e com teste (tests/gk_salto_voa.test.js) para não voltar
+    a cair sem se dar por isso.
+
+    Quem está a meio do voo não é tocado: o `GkDive.update` põe-no em 'idle'
+    sozinho quando ele se levanta, e o `defender()` já não morde porque exige
+    `Match.state === 'PLAY'`.
+    */
+    arrumarGuardaRedesNoGolo: function () {
+        [this.players[0], this.opponents[0]].forEach(gk => {
+            if (!gk) return;
+            if (gk.gkEstado === 'mergulho' && gk.dive) return;
+            gk.gkEstado = 'idle';
+            gk.gkTempoMergulho = 0;
+            gk.gkDirMergulho = 0;
+            gk.gkTipoMergulho = 'baixo';
+            gk.gkReagiu = false;
+            gk.gkDelayReacao = 0;
+            gk.dive = null;
+        });
     },
 
     /*

@@ -4660,6 +4660,28 @@ class FootballPlayer {
         let gkCorpo = this.model; let gkRig = this.rig;
         let limitGKX = (LARGURA_BALIZA / 2) - 0.5;
 
+        /*
+        QUEM SAI DO MERGULHO SEM O ACABAR FICA PENDURADO NO AR.
+
+        O mergulho só é actualizado no ramo `gkEstado === 'mergulho'`. Quando
+        outra coisa lhe rouba o estado a meio do voo — o tiro de meta é o
+        principal, põe-no em `tiro_meta_espera` no instante em que a bola sai —
+        o `dive` fica de pé, ninguém o avança, e o corpo fica na altura em que
+        ia. Medido (`tools/headless/gk_salto_alto.js`, 3 sementes): **11 de 38
+        mergulhos ficavam assim**, um deles 52 s no ar.
+
+        Aqui não se decide nada: só se arruma o que ficou. Quem quiser mesmo
+        interromper um mergulho continua a poder, e o guarda-redes cai de pé
+        em vez de flutuar.
+        */
+        if (this.gkEstado !== 'mergulho' && this.dive) {
+            const qFacing = this.dive.qFacing;
+            this.dive = null;
+            gkCorpo.position.y = ALTURA_BASE_Y;
+            if (qFacing) gkCorpo.quaternion.copy(qFacing);
+            this.resetBonesToDefault();
+        }
+
         let prevX = gkCorpo.position.x;
         let prevZ = gkCorpo.position.z;
 

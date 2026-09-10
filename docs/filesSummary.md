@@ -5,6 +5,102 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 — o guarda-redes nunca voou
+
+Relato: *"quando o jogador dá o chute em cima e é gol eu queria que o goleiro
+pulasse na direção da bola mas não tocasse na bola. O goleiro está pulando em
+baixo, deslizando para o lado da bola mas por baixo. Já tinha mandado a
+sequência de frames do pulo do goleiro no alto. Mas não está aparecendo."*
+
+Tinha razão nas duas metades, e a segunda explica a primeira: **o salto foi
+entregue a 31 de Agosto (commit `5c4a9b9`) e o `20dbce1` de 1 de Setembro
+reverteu-o** — um "refactor: update goalkeeper logic and team state" que
+reescreveu ficheiros inteiros e levou com ele a fase `passos`, o `vySubidaMax`
+de 7.5, o `vooMax` de 0.85 e a guarda que impedia o golo de apagar o mergulho.
+Não é que não aparecesse: tinha sido apagado.
+
+#### O voo durava um frame — em todos os mergulhos do jogo
+
+A cronologia de um mergulho alto (`tools/headless/gk_salto_alto.js`, a
+ferramenta nova):
+
+    ler:-0.03  ler:-0.03  impulso:-0.03 x8  voo:-0.03  chao:0.42  chao:0.42 ...
+
+A condição de aterragem era `corpo.position.y <= D.alturaDeitado`, e
+`alturaDeitado` (0.42) é a altura da origem do modelo com ele **deitado**. De
+pé a origem está a `ALTURA_BASE_Y = -0.03`, ou seja **45 cm ABAIXO do valor que
+fecha o voo**. Nenhum salto sobe 45 cm num frame, portanto a condição dava
+verdadeira à primeira passagem e a fase saltava logo para `chao` — que escreve
+`y = 0.42` e desliza. O que se via não era um salto baixo: era o corpo a
+teleportar-se para a pose deitada. E era isso que fazia os mergulhos rasteiros
+acusarem "subida" de 0.44 m no instrumento — não subiam, apareciam a 0.42.
+
+Agora a altura é `base(tombo) + parábola`: a base acompanha o ângulo do tombo
+(de -0.03 de pé até 0.42 deitado) e o salto soma-se-lhe. Aterra quando a
+parábola volta a zero.
+
+#### E o solver pedia um salto de 5.4 metros
+
+Segunda causa, a jusante da primeira. O `lancar` resolvia para o **OMBRO**
+estar à altura da bola, com o braço a contar só na horizontal
+(`alcanceBraco`). Numa bola ao ângulo pedia 10.26 m/s de impulsão — 5.4 m de
+salto — e o `Math.min(vySubidaMax, ...)` comia a diferença em silêncio:
+
+    tipo    n   alvoY   v0y dada   v0y pedida   no tecto
+    alto    9   2.24      4.50       10.26        100%
+    meio    1   1.22      4.44        4.44          0%
+    baixo  10   0.66      1.37        1.37          0%
+
+Passou a pedir o que um salto pede: que a **MÃO** chegue à altura da bola no
+ápice (`alcanceVertical`, 0.70 m acima do ombro). E o tempo de voo deixou de
+ser adivinhado pela distância lateral — sai da própria parábola,
+`tVoo = 2·v0y/g`, com o lateral a repartir-se por esse tempo e não o
+contrário. `vySubidaMax` ficou em **4.2 m/s (0.90 m de subida, um salto de
+elite)** e o `vooMax` em 0.85 s, que é o que 4.2 m/s demoram a subir e a
+descer.
+
+Depois, em jogo:
+
+    tipo    n   alvoY   v0y    no tecto   voo     subida   falta para a bola
+    alto    6   2.32    4.10      83%    0.83s    1.14 m       0.57 m
+
+**É exactamente o pedido:** ele salta a sério, na direcção da bola, e numa bola
+ao ângulo não lá chega — em vez de deslizar por baixo dela.
+
+#### Duas coisas que a medição encontrou pelo caminho
+
+**O golo apagava o mergulho a meio.** No frame do golo o `match_physics`
+arrumava os dois guarda-redes com `gkEstado = 'idle'` e `dive = null`, e o caso
+em que isso se vê é precisamente o do relato — um remate ao ângulo que ENTRA.
+Já tinha sido arranjado no `5c4a9b9` e revertido no `20dbce1`. Fica agora num
+método com nome, `Match.arrumarGuardaRedesNoGolo()`, que não toca em quem está
+no ar, e com teste.
+
+**E 11 de 38 mergulhos ficavam pendurados no ar.** O mergulho só é actualizado
+no ramo `gkEstado === 'mergulho'`; quando outra coisa lhe rouba o estado a meio
+do voo o `dive` fica de pé, ninguém o avança e o corpo fica à altura em que ia.
+O ladrão, medido: o **tiro de meta**, que o põe em `tiro_meta_espera` no
+instante em que a bola sai (`GOAL_KICK/tiro_meta_espera` em 9 dos 11). O pior
+ficou 52 s no ar. O `updateGK` passa a arrumar o que ficou — cai de pé em vez
+de flutuar — e são 0 em 29.
+
+#### O que isto custou ao jogo
+
+24 partidas headless com as mesmas sementes, antes e depois:
+
+    por 90                   golos   remates   cantos     xG
+    antes do salto            2.36     26.79     5.51    1.45
+    depois                    2.53     26.26     4.71    1.53
+
+Golos, remates e xG não se mexem. Os cantos descem 0.80, que é **1.2 sigma** —
+não é demonstrável, mas foi na mesma direcção nas duas medições que fiz depois
+da alteração (4.84 e 4.71) e fica escrito para o próximo lote confirmar ou
+desmentir.
+
+Testes: `tests/gk_salto_voa.test.js` (quatro — o voo dura, a altura é uma
+parábola e não um degrau, o rasteiro continua rasteiro, e o golo não apaga o
+mergulho). Ferramenta: `tools/headless/gk_salto_alto.js`.
+
 ### Sessão de 9 de Setembro de 2026 — o pé no chão, a área vazia, e três caças sem presa
 
 Sessão longa. O que fica dela, antes de qualquer número:

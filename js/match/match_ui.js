@@ -50,6 +50,17 @@ Object.assign(Match, {
 
     togglePause: function () {
         window.isPaused = !window.isPaused;
+        /*
+        O SOM PÁRA COM O JOGO. O `AmbienteSonoro.update` corre dentro do
+        `Match.update`, que não corre em pausa — o loop do estádio ficava a
+        tocar sozinho, no volume em que ia.
+        */
+        if (typeof AmbienteSonoro !== 'undefined' && AmbienteSonoro.setPausa) {
+            AmbienteSonoro.setPausa(window.isPaused);
+        }
+        if (window.isPaused && typeof EfeitosSonoros !== 'undefined' && EfeitosSonoros.pararTudo) {
+            EfeitosSonoros.pararTudo();
+        }
         const btn = document.getElementById('btn-pause');
         if (btn) btn.textContent = window.isPaused ? 'Continue' : 'Pause';
         if (typeof TouchControls !== 'undefined' && TouchControls.updateButtonsState) {
