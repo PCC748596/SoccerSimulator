@@ -209,6 +209,10 @@ class FootballPlayer {
         this.gkTiroAlvo = null;    // ponto de arranque do tiro de meta
         this.gkReagiu = false;
         this.gkDelayReacao = 0;
+        // Ruído da leitura da trajectória, sorteado uma vez por remate (ver alvoLidoGK).
+        this._gkErroU = 0;
+        this._gkErroV = 0;
+        this._gkChutadoAnt = false;
 
         // Sprite para mostrar o PlayerNumber, PlayerBT e PlayerPOS acima da cabeça
         this.labelCanvas = document.createElement('canvas');
@@ -3915,6 +3919,33 @@ class FootballPlayer {
         return tempoAteChegar <= tGesto;
     }
 
+    /*
+    ONDE ELE JULGA QUE A BOLA VAI PASSAR — a leitura, com o erro dela.
+
+    O `pontoDeIntercepcaoGK` (utils.js) é geometria pura e por isso acertava o
+    canto no PRIMEIRO frame depois de a bola sair do pé, com zero de erro:
+
+        t=0.02  reagiu=n  alvoX=-3.16  corpoX=0.21   v=0.0   <- ja sabe o canto
+
+    O `erroLeituraGK` põe-lhe por cima a dispersão que o `gk-jump-system.md`
+    sempre descreveu e nunca existiu, com o raio a encolher à medida que a bola
+    se aproxima. Vive aqui, num sítio só, pela mesma razão que o
+    `horaDeMergulhar`: são DOIS os ramos que miram (o principal e o
+    `possoEspalmar`), e pôr a regra num deles apenas foi exactamente o defeito
+    que já se mediu antes.
+
+    Devolve null quando a bola não vai a lado nenhum (vz ~ 0).
+    */
+    alvoLidoGK(gkZ) {
+        const ponto = pontoDeIntercepcaoGK(
+            Match.ball.position.x, Match.ball.position.y, Match.ball.position.z,
+            Match.ballVel.x, Match.ballVel.y, Match.ballVel.z,
+            gkZ, BallPhysics.gravidade);
+        if (!ponto) return null;
+        const e = erroLeituraGK(ponto.t, this.skillFor('GK'), this._gkErroU, this._gkErroV);
+        return { t: ponto.t, x: ponto.x + e.dx, y: ponto.y + e.dy };
+    }
+
     aguardarPassada() {
         if (this.velocity.lengthSq() > 2.0 && !this.emJanelaDeToque()) {
             const dt = (typeof Match !== 'undefined') ? Match.delta : 0.016;
@@ -4806,6 +4837,19 @@ class FootballPlayer {
         let areaMaxZ = (this.team === 'TeamA') ? -meioComp + prof : meioComp;
         gkCorpo.position.z = Math.max(areaMinZ, Math.min(areaMaxZ, gkCorpo.position.z));
 
+        /*
+        O RUÍDO DA LEITURA SORTEIA-SE UMA VEZ, no primeiro frame do remate.
+
+        Se fosse por frame, a média dava outra vez o ponto exacto e ele só
+        tremia à volta dele. Ver alvoLidoGK e erroLeituraGK (utils.js).
+        */
+        if (window.bolaChutada && !this._gkChutadoAnt) {
+            const ruido = parNormal(Math.random(), Math.random());
+            this._gkErroU = ruido.u;
+            this._gkErroV = ruido.v;
+        }
+        this._gkChutadoAnt = !!window.bolaChutada;
+
         if (window.bolaChutada && !this.gkReagiu) {
             this.gkDelayReacao -= dt;
             if (this.gkDelayReacao <= 0) {
@@ -4864,11 +4908,8 @@ class FootballPlayer {
                         interX = this.penaltyDiveX;
                         interY = this.penaltyDiveY;
                     } else {
-                        // A mesma conta do outro ramo — ver pontoDeIntercepcaoGK (utils.js).
-                        const alvoInt = pontoDeIntercepcaoGK(
-                            Match.ball.position.x, Match.ball.position.y, Match.ball.position.z,
-                            Match.ballVel.x, Match.ballVel.y, Match.ballVel.z,
-                            gkCorpo.position.z, BallPhysics.gravidade);
+                        // A mesma leitura do outro ramo — ver alvoLidoGK.
+                        const alvoInt = this.alvoLidoGK(gkCorpo.position.z);
                         interX = alvoInt ? alvoInt.x : Match.ball.position.x;
                         interY = alvoInt ? alvoInt.y : Match.ball.position.y;
                     }
@@ -5056,7 +5097,16 @@ class FootballPlayer {
                             }
                         } else {
                             let tempoAteMim = Match.ballVel.lengthSq() > 0 ? (gkCorpo.position.distanceTo(Match.ball.position) / Match.ballVel.length()) : 999;
-                            let possoEspalmar = (tempoAteMim < 0.6 && window.bolaChutada);
+                            /*
+                            E ELE SÓ ESPALMA DEPOIS DE TER REAGIDO.
+
+                            Faltava aqui o `gkReagiu`, e era por aqui que o
+                            atraso de reacção estava a ser contornado: medido,
+                            um guarda-redes com 0.17 s de atraso já ia a
+                            11.1 m/s aos 0.15 s do remate, com o `reagiu` ainda
+                            falso. O ramo principal sempre o exigiu; este não.
+                            */
+                            let possoEspalmar = (tempoAteMim < 0.6 && window.bolaChutada && this.gkReagiu);
 
                             if (possoEspalmar) {
                                 /*
@@ -5071,13 +5121,10 @@ class FootballPlayer {
                                 principal exige `gkReagiu`, que ainda é falso
                                 nos primeiros frames do voo).
 
-                                Agora usa a mesma projecção do outro ramo:
-                                pontoDeIntercepcaoGK (utils.js).
+                                Agora usa a mesma leitura do outro ramo:
+                                alvoLidoGK, com o erro de leitura incluído.
                                 */
-                                const alvoEsp = pontoDeIntercepcaoGK(
-                                    Match.ball.position.x, Match.ball.position.y, Match.ball.position.z,
-                                    Match.ballVel.x, Match.ballVel.y, Match.ballVel.z,
-                                    gkCorpo.position.z, BallPhysics.gravidade);
+                                const alvoEsp = this.alvoLidoGK(gkCorpo.position.z);
                                 const espX = alvoEsp ? THREE.MathUtils.clamp(alvoEsp.x, -limitGKX, limitGKX)
                                     : Match.ball.position.x;
                                 const espY = alvoEsp ? Math.max(0, Math.min(ALTURA_BALIZA, alvoEsp.y))

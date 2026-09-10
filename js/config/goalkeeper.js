@@ -395,6 +395,32 @@ const GoalkeeperDive = {
     */
     margemAntecipacao: 0.08,
 
+    /*
+    O ERRO DE LEITURA DA TRAJECTORIA.
+
+    O `pontoDeIntercepcaoGK` e geometria pura — `x = bolaX + velX*t` — e por
+    isso o guarda-redes acertava o canto no PRIMEIRO frame depois de a bola
+    sair do pe, com zero de erro. Medido na cronologia de um remate (o atraso
+    de reaccao deste era 0.17 s):
+
+        t=0.02  reagiu=n  alvoX=-3.16  corpoX=0.21   v=0.0
+        t=0.15  reagiu=n  alvoX=-1.77  corpoX=-0.02  v=11.1
+
+    O `gk-jump-system.md` sempre descreveu o erro que devia existir —
+    "dispersao aleatoria Gaussiana no plano XY, cujo raio e inversamente
+    proporcional ao atributo GK" — e ele nunca tinha sido implementado.
+
+    O raio ENCOLHE a medida que a bola se aproxima: a leitura melhora com o
+    tempo de observacao, e no momento do contacto ja nao ha erro nenhum. O que
+    conta e o raio no instante em que o mergulho arranca (o `GkDive.iniciar`
+    congela o alvo), e ai faltam tipicamente 0.3-0.5 s.
+    */
+    erroRaioBase: 1.10,    // metros de dispersao a `erroTempoCheio` de distancia, com GK 50
+    erroRaioSkill: 0.85,   // ± conforme a skill de GK (GK 100 -> 0.25 m; GK 0 -> 1.95 m)
+    erroTempoCheio: 0.55,  // s de tempo restante a partir do qual o erro esta saturado
+    erroFraccaoY: 0.6,     // a altura le-se melhor do que o lado
+
+
     tempoLer: 0.05,        // reacção: transferência de peso antes de sair
     tempoImpulso: 0.12,    // agachar e estender as pernas
     tempoChao: 0.35,       // deslizar no relvado depois de aterrar

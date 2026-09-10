@@ -63,7 +63,12 @@ console.log('');
 console.log('2 — os DOIS ramos do mergulho usam a mesma conta');
 {
     const srcPlayer = ler('js/player.js');
-    const usos = (srcPlayer.match(/pontoDeIntercepcaoGK\(/g) || []).length;
+    /*
+    A projecção passou a viver num sítio só — `alvoLidoGK`, que junta o
+    `pontoDeIntercepcaoGK` ao erro de leitura. O que este teste guarda é que os
+    DOIS ramos a usam.
+    */
+    const usos = (srcPlayer.match(/this\.alvoLidoGK\(/g) || []).length;
     if (usos < 2) {
         erro(`só ${usos} ramo(s) usam a projecção — o outro voltou a mergulhar para onde a bola está`);
     } else ok(`os ${usos} ramos usam a projecção`);

@@ -3235,6 +3235,54 @@ function pontoDeIntercepcaoGK(bolaX, bolaY, bolaZ, velX, velY, velZ, gkZ, gravid
 }
 
 /*
+O ERRO DE LEITURA DO GUARDA-REDES — a dispersão que faltava.
+
+O `pontoDeIntercepcaoGK` acima devolve o ponto EXACTO, e é isso que punha o
+`gkAlvoX` certo no primeiro frame depois de a bola sair do pé. O
+`gk-jump-system.md` sempre pediu o contrário — *"dispersão aleatória Gaussiana
+no plano XY, cujo raio é inversamente proporcional ao atributo GK"* — e nunca
+tinha sido implementada.
+
+Duas propriedades, e as duas importam:
+
+1. **O raio encolhe com o tempo que falta.** A `t` de `erroTempoCheio` ou mais
+   está saturado; a `t = 0` é zero. É a leitura a melhorar enquanto a bola
+   voa. O que conta na prática é o raio no instante em que o mergulho arranca
+   — o `GkDive.iniciar` congela o alvo — e aí faltam 0.3-0.5 s.
+2. **O ruído é sorteado UMA VEZ por remate**, não por frame. Se fosse por
+   frame, a média dava o ponto exacto outra vez e o guarda-redes tremia à
+   volta dele em vez de ler mal.
+
+Por isso `u` e `v` (duas normais padrão) entram de fora: quem chama guarda-as
+no lance. A altura erra menos do que o lado (`erroFraccaoY`).
+
+Pura: sem Match, sem THREE, sem Math.random.
+*/
+function erroLeituraGK(t, skillGK, u, v, cfg) {
+    const c = cfg || (typeof GoalkeeperDive !== 'undefined' ? GoalkeeperDive : null);
+    if (!c || typeof c.erroRaioBase !== 'number') return { dx: 0, dy: 0, raio: 0 };
+    const tCheio = c.erroTempoCheio || 0.55;
+    const fracT = Math.max(0, Math.min(1, (t || 0) / Math.max(0.001, tCheio)));
+    const raio = Math.max(0, c.erroRaioBase - ((skillGK - 50) / 50) * c.erroRaioSkill) * fracT;
+    return {
+        raio: raio,
+        dx: raio * (u || 0),
+        dy: raio * (v || 0) * (typeof c.erroFraccaoY === 'number' ? c.erroFraccaoY : 0.6)
+    };
+}
+
+/*
+Duas normais padrão de um par uniforme (Box-Muller). Existe aqui para o ruído
+do `erroLeituraGK` poder ser sorteado uma vez por remate e ficar guardado.
+*/
+function parNormal(r1, r2) {
+    const a = Math.max(1e-9, r1);
+    const raio = Math.sqrt(-2 * Math.log(a));
+    const ang = 2 * Math.PI * r2;
+    return { u: raio * Math.cos(ang), v: raio * Math.sin(ang) };
+}
+
+/*
 Alvo de varrida. Ao contrário de gkAnchor(), vai NA DIRECÇÃO da bola: é a
 situação em que o guarda-redes sai mesmo, porque não há defensor entre o
 atacante e a baliza. sweepOut trava quão longe.
@@ -4244,6 +4292,6 @@ if (typeof window !== 'undefined') {
         tiroDaFaltaDirecta, tiroTensoDaFaltaDirecta, lugaresDoApoioNaFaltaDirecta,
         passaEntreAdversarios,
         maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR,
-        pontoDeIntercepcaoGK, pontoDisputado
+        pontoDeIntercepcaoGK, pontoDisputado, erroLeituraGK, parNormal
     });
 }

@@ -42,7 +42,15 @@ Sim.running = true;
 const saltos = [];
 const origIniciar = GkDive.iniciar.bind(GkDive);
 GkDive.iniciar = function (p, alvoX, alvoY, tipo, dirX) {
-    if (Math.abs(Match.ballVel.z) > 0.5) {
+    /*
+    So conta a bola que VEM A CAMINHO. Medido um mergulho a marcar 1.43 s com a
+    bola em z = -53.3 contra o guarda-redes em -52.0, a AFASTAR-SE a 0.93 m/s:
+    ja tinha passado a linha, e o `|z| / |vz|` ali nao e tempo de chegada
+    nenhum, e uma divisao por uma velocidade de fuga. Um mergulho a uma bola
+    solta atras dele nao e o defeito que este teste guarda.
+    */
+    const aproxima = (Match.ball.position.z - p.model.position.z) * Math.sign(Match.ballVel.z) < 0;
+    if (Math.abs(Match.ballVel.z) > 0.5 && aproxima) {
         saltos.push({
             t: Math.abs(p.model.position.z - Match.ball.position.z) / Math.abs(Match.ballVel.z),
             d: p.model.position.distanceTo(Match.ball.position)
