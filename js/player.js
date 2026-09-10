@@ -3890,6 +3890,31 @@ class FootballPlayer {
     Usado no Behavior Tree para adiar passes, remates e cruzamentos por uns frames
     até a perna estar na posição certa (ou abortar a espera se demorar demais).
     */
+    /*
+    JA E HORA DE ME ATIRAR?
+
+    O tempo que o gesto precisa: agachar e estender (`tempoLer` +
+    `tempoImpulso`) mais o voo ate a mao la chegar (`fracContacto` do voo), com
+    o voo a sair da distancia lateral a cobrir — a mesma conta do
+    `GkDive.lancar`. Mais `margemAntecipacao` de folga.
+
+    Pedido: "nao pode pular no exato instante do chute; pular so quando a bola
+    estiver ao alcance do pulo". Vive aqui, num sitio so, porque ha DOIS ramos
+    que disparam mergulhos (o principal e o `possoEspalmar`) e ter a regra num
+    deles apenas foi exactamente o defeito medido: o outro arrancava cedo e o
+    `GkDive.iniciar` congelava o alvo errado para o mergulho inteiro.
+    */
+    horaDeMergulhar(lateral, tempoAteChegar) {
+        const D = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
+        if (!D) return true;
+        const velMax = D.velLateral + ((this.skillFor('GK') - 50) / 50) * D.velLateralSkill;
+        const percurso = Math.max(0, Math.abs(lateral) - D.alcanceBraco);
+        const tVoo = Math.min(D.vooMax, Math.max(D.vooMin, percurso / Math.max(0.1, velMax)));
+        const tGesto = D.tempoLer + D.tempoImpulso + D.fracContacto * tVoo
+            + (D.margemAntecipacao || 0);
+        return tempoAteChegar <= tGesto;
+    }
+
     aguardarPassada() {
         if (this.velocity.lengthSq() > 2.0 && !this.emJanelaDeToque()) {
             const dt = (typeof Match !== 'undefined') ? Match.delta : 0.016;
@@ -4692,6 +4717,28 @@ class FootballPlayer {
         let limitGKX = (LARGURA_BALIZA / 2) - 0.5;
 
         /*
+        O MERGULHO GUIADO DA FALTA NÃO PODE SOBREVIVER AO LANCE.
+
+        `isPenaltyDive` faz o guarda-redes ignorar a bola e atirar-se para o
+        `penaltyDiveX` que o plano da falta lhe escreveu. Isso é o que se quer
+        DURANTE o lance — a falta tem desfecho sorteado, e lê-la a sério fazia
+        o guarda-redes defender tudo. Mas a limpeza estava dentro do ramo
+        `else if (Match.state === 'PLAY')`, que só corre quando ele NÃO está a
+        reagir a uma bola que vem na direcção dele: bastava o lance seguinte
+        chegar-lhe com a flag de pé para ele mergulhar para o lado escrito na
+        falta anterior.
+
+        Medido (`tools/headless/gk_salto_alto.js`): em **5 de 6** remates que
+        cruzavam o plano dele dentro da moldura, `isPenaltyDive` estava a true e
+        o `penaltyDiveX` era exactamente a mira errada — a projecção da bola
+        dizia +2.78 e ele atirava-se para −3.16. Era isto o "o mergulho quase
+        nunca chega à bola".
+
+        A condição é a mesma; o que muda é correr SEMPRE, e não só naquele ramo.
+        */
+        if (Match.state === 'PLAY' && !Match.faltaDirectaPlano) this.isPenaltyDive = false;
+
+        /*
         QUEM SAI DO MERGULHO SEM O ACABAR FICA PENDURADO NO AR.
 
         O mergulho só é actualizado no ramo `gkEstado === 'mergulho'`. Quando
@@ -4847,14 +4894,7 @@ class FootballPlayer {
                     `GkDive.lancar`. Enquanto faltar mais do que isso, ele fica
                     DE PE: o `gkAlvoX` acima ja o desloca para o lado.
                     */
-                    const Dv = GoalkeeperDive;
-                    const velMaxDive = Dv.velLateral + ((gkSkill - 50) / 50) * Dv.velLateralSkill;
-                    const percursoDive = Math.max(0, Math.abs(lateral) - Dv.alcanceBraco);
-                    const tVooDive = Math.min(Dv.vooMax,
-                        Math.max(Dv.vooMin, percursoDive / Math.max(0.1, velMaxDive)));
-                    const tGesto = Dv.tempoLer + Dv.tempoImpulso + Dv.fracContacto * tVooDive
-                        + (Dv.margemAntecipacao || 0);
-                    const naHora = (tempoAteGolo <= tGesto);
+                    const naHora = this.horaDeMergulhar(lateral, tempoAteGolo);
 
                     if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
                         this.gkEstado = 'maos';
@@ -4874,16 +4914,6 @@ class FootballPlayer {
                 }
                 speedLerp = 3.0 + ((gkSkill - 50) / 50) * 6.0;
             } else if (Match.state === 'PLAY') {
-                /*
-                O MERGULHO GUIADO SOBREVIVE À FALTA. O `Match.state` passa a
-                'PLAY' no instante do contacto e o guarda-redes ainda nem
-                reagiu — o atraso é dele. Apagar aqui o `isPenaltyDive` punha-o
-                a ler a trajectória REAL da bola: media-se e defendia tudo, e o
-                desfecho sorteado deixava de valer alguma coisa. Enquanto
-                houver lance de falta a decorrer (`faltaDirectaPlano`), a flag
-                fica de pé.
-                */
-                if (!Match.faltaDirectaPlano) this.isPenaltyDive = false;
                 let isAttacking = (Match.possessionTeam === this.team);
                 let bolaNaArea = Area.contem(Match.ball.position.x, Match.ball.position.z, this.ownGoalZ);
                 
@@ -5029,8 +5059,23 @@ class FootballPlayer {
                                 const lateralEsp = espX - gkCorpo.position.x;
                                 this.gkTempoMergulho = 0;
                                 this.gkAlvoX = espX;
+                                this.gkAlvoY = espY;
+                                /*
+                                A MESMA HORA DO OUTRO RAMO. Este disparava assim
+                                que `tempoAteMim < 0.6`, e como o `GkDive.iniciar`
+                                congela o alvo, uma leitura feita cedo — com a
+                                bola ainda a mover-se de lado — ficava para o
+                                mergulho inteiro. Medido: em 8 de 10 remates que
+                                cruzavam o plano dele dentro da moldura, a mira
+                                estava no lado ERRADO, com 4.5 a 6.1 m de erro.
+                                */
+                                const alvoEspT = alvoEsp ? alvoEsp.t : tempoAteMim;
                                 if (Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
                                     this.gkEstado = 'maos';
+                                } else if (!this.horaDeMergulhar(lateralEsp, alvoEspT)) {
+                                    // Ainda ha tempo: acompanha de pe, pelo gkAlvoX.
+                                    alvoGkX = espX;
+                                    speedLerp = 6.0;
                                 } else {
                                     this.gkEstado = 'mergulho';
                                     this.dive = null;
@@ -5448,29 +5493,30 @@ class FootballPlayer {
                 Math.abs((gkCorpo.position.x - espalhoM) - Match.ball.position.x)
             );
             
-            // CCD: raycasting contínuo para a mão
-            let distMaoM;
-            const maoX = gkCorpo.position.x + ((Match.ball.position.x > gkCorpo.position.x) ? espalhoM : -espalhoM);
-            const maoZ = gkCorpo.position.z;
-            
-            if (Match.prevBallPos) {
-                const P1 = Match.prevBallPos;
-                const P2 = Match.ball.position;
-                const bx = P2.x - P1.x;
-                const by = P2.y - P1.y;
-                const bz = P2.z - P1.z;
-                const lenSq = bx * bx + by * by + bz * bz;
-                let t = 0;
-                if (lenSq > 0.000001) {
-                    const dot = (maoX - P1.x) * bx + (maoYm - P1.y) * by + (maoZ - P1.z) * bz;
-                    t = Math.max(0, Math.min(1, dot / lenSq));
-                }
-                const projX = P1.x + t * bx;
-                const projY = P1.y + t * by;
-                const projZ = P1.z + t * bz;
-                distMaoM = Math.hypot(maoX - projX, maoYm - projY, maoZ - projZ);
-            } else {
-                distMaoM = Math.hypot(dxMaoM, maoYm - Match.ball.position.y, gkCorpo.position.z - Match.ball.position.z);
+            /*
+            A MAO A SERIO, lida do rig.
+
+            Aqui estava uma projeccao analitica do ombro (`maoX`, `maoYm`) mais
+            um CCD contra a trajectoria do frame. As duas coisas afastavam o
+            teste do que se VE: a projeccao ignora o cotovelo e a rotacao do
+            corpo, e o ponto da varredura fica ate 45 cm do sitio onde a bola e
+            desenhada. Ficava uma captura por partida com a bola a 1.4 m da
+            luva — o resto do relato, em pequeno.
+
+            E a mesma leitura que o mergulho faz (`GkDive.defender`) e que o
+            `resolveBallContact` passou a fazer: `getWorldPosition` das duas
+            maos, contra a posicao ACTUAL da bola.
+            */
+            let distMaoM = Infinity;
+            for (const nome of ['lHand', 'rHand']) {
+                const mao = gkRig && gkRig[nome];
+                if (!mao) continue;
+                mao.getWorldPosition(_p_v3);
+                distMaoM = Math.min(distMaoM, _p_v3.distanceTo(Match.ball.position));
+            }
+            if (distMaoM === Infinity) {
+                distMaoM = Math.hypot(dxMaoM, maoYm - Match.ball.position.y,
+                    gkCorpo.position.z - Match.ball.position.z);
             }
 
             const jaEntrouM = (Match.state !== 'PLAY');

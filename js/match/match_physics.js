@@ -503,7 +503,16 @@ Object.assign(Match, {
                     const mao = gk.rig && gk.rig[nome];
                     if (!mao) continue;
                     mao.getWorldPosition(_v2);
-                    dMao = Math.min(dMao, _v2.distanceTo(_v3.lengthSq() ? _v3 : this.ball.position));
+                    /*
+                    A POSICAO ACTUAL DA BOLA, e nao o ponto da varredura.
+
+                    O `_v3` e o ponto mais proximo da trajectoria do frame, e
+                    num remate a 27 m/s ele fica ate 45 cm do sitio onde a bola
+                    e DESENHADA. Medir por ali deixava passar capturas que, no
+                    ecra, sao a bola a saltar para a mao — e o que se ve e o
+                    relato.
+                    */
+                    dMao = Math.min(dMao, _v2.distanceTo(this.ball.position));
                 }
                 if (dMao > alcance) continue;
             }

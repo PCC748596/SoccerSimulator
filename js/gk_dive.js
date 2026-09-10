@@ -89,6 +89,29 @@ const GkDive = {
     },
 
     /*
+    O ALVO CONTINUA A SER LIDO ATE ELE LARGAR O CHAO.
+
+    O `iniciar` congelava `alvoX`/`alvoY` no frame da decisao, e o gesto tem
+    0.17 s de agachar e estender antes de sair — tempo em que a bola pode ter
+    sido desviada, ou em que a leitura de onde ela vai passar melhora muito. Um
+    guarda-redes ajusta-se ate ao ultimo passo, e era isto que faltava: medido,
+    a mira ficava presa a uma projeccao feita cedo e em 8 de 10 casos estava no
+    lado errado.
+
+    A fonte e o `gkAlvoX`/`gkAlvoY` que o `updateGK` reescreve todos os frames.
+    Depois de sair do chao nao se mexe: a parabola ja esta lancada.
+    */
+    actualizarAlvo(p, d) {
+        // So quando e o jogo a alimentar o mergulho: um mergulho montado a mao
+        // (testes, cenarios) traz o alvo no `iniciar` e nao tem `gkAlvoX` vivo.
+        if (p.gkEstado !== 'mergulho') return;
+        if (typeof p.gkAlvoX === 'number') d.alvoX = p.gkAlvoX;
+        if (typeof p.gkAlvoY === 'number') d.alvoY = p.gkAlvoY;
+        const lado = Math.sign(d.alvoX - p.model.position.x);
+        if (lado !== 0) d.dirX = lado;
+    },
+
+    /*
     Calcula o salto no instante em que as pernas largam o chão.
 
     O corpo não tem de percorrer a distância toda até à bola: o braço estende
@@ -169,6 +192,7 @@ const GkDive = {
             case 'ler':
                 // Agacha e carrega o peso na perna do lado do mergulho.
                 this.poseCarregar(rig, Math.min(1, d.t / D.tempoLer) * 0.4);
+                this.actualizarAlvo(p, d);
                 if (d.t >= D.tempoLer) { d.fase = 'impulso'; d.t = 0; }
                 break;
 
@@ -182,6 +206,7 @@ const GkDive = {
                 // E os braços atrás, com o tronco já a torcer para o lado.
                 this.poseBracosImpulso(rig, d, k);
                 this.torcerTronco(rig, d, 'impulso', k);
+                this.actualizarAlvo(p, d);
                 // O corpo já começa a tombar antes de sair do chão.
                 d.ang = d.angMax * 0.18 * k;
                 if (d.t >= D.tempoImpulso) { d.fase = 'voo'; this.lancar(p); }

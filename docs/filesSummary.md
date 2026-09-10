@@ -5,6 +5,83 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (9) — a mira do mergulho, e um diagnóstico meu que estava errado
+
+Continuação da anterior, com "sim" para atacar a mira. Três defeitos
+encontrados e arranjados — e **o diagnóstico que os motivou estava errado**, o
+que se diz primeiro porque foi ele que pediu esta sessão.
+
+#### A medição que me enganou
+
+Na sessão anterior escrevi: "o mergulho toca a bola em 2 de 17 tentativas, com
+a mão a 1.7-4.1 m". Instrumentado o instante do salto, a razão apareceu: em
+**5 de 6** desses casos o `isPenaltyDive` estava a true. É a bandeira do lance
+de FALTA com desfecho sorteado, e nesses mergulhos ele atira-se **de propósito**
+para o lado que o remate não usa (ver o plano em player.js) — a medição estava
+a somar mergulhos encenados com mergulhos a sério.
+
+Separados, e só em jogo corrido, a mão fica a **0.6 a 2.5 m** da bola no
+instante em que ela cruza o plano dele. Continua a ser muito, mas não é o
+desastre que eu tinha reportado.
+
+#### Os três defeitos, esses, eram reais
+
+**1. O segundo gatilho não tinha a regra do momento.** Há dois sítios que
+disparam mergulhos: o principal (`bolaVindoPraMim && gkReagiu`) e o
+`possoEspalmar`, que arranca com `tempoAteMim < 0.6` — e a guarda de tempo da
+sessão anterior só tinha entrado no primeiro. A conta passou a ser um método,
+`Player.horaDeMergulhar`, lido pelos dois.
+
+**2. O mergulho congelava o alvo no frame da decisão.** O `GkDive.iniciar`
+guarda `alvoX`/`alvoY` e o gesto tem 0.17 s de agachar e estender antes de
+sair do chão — tempo em que a leitura melhora muito, ou em que a bola é
+desviada. Agora o `actualizarAlvo` relê o `gkAlvoX`/`gkAlvoY` (que o `updateGK`
+reescreve todos os frames) enquanto ele **ainda não largou o chão**; depois
+disso a parábola está lançada e não se mexe.
+
+**3. A bandeira do lance guiado sobrevivia ao lance.** O `isPenaltyDive` só era
+apagado dentro do ramo `else if (Match.state === 'PLAY')`, que não corre quando
+ele está a reagir a uma bola que vem na direcção dele. Passou a correr sempre,
+com a mesma condição (`!Match.faltaDirectaPlano`).
+
+E, a par disso, **a mão passou a ser lida do rig em todo o lado**: o estado
+'maos' projectava a mão a partir do ângulo do ombro (ignorando cotovelo e
+rotação) e media contra o ponto da varredura do frame, que a 27 m/s fica a 45 cm
+de onde a bola é DESENHADA. Ficava uma captura por partida com a bola a 1.4 m
+da luva. Agora é `getWorldPosition` das duas mãos contra a posição actual da
+bola, como no mergulho.
+
+    agarradas: media 0.78 m da mao, pior 0.94 (eram 0.87 e 1.47)
+
+#### E os golos não desceram
+
+24 partidas com as mesmas sementes:
+
+    por 90                      golos   remates   cantos     xG
+    antes do relato do GK        2.79     28.98     6.11    1.57
+    salto no momento             3.26     29.73     6.96    1.56
+    + alvo vivo e 2o gatilho     3.34     30.58     5.19    1.62
+    + a mao lida do rig          3.64     30.63     5.65    1.75
+
+Nada do que fiz ao guarda-redes moveu os golos, e a aritmética diz porquê:
+**golos por remate estão em 10.9%**, que é o número de um jogo a sério. Os
+golos são altos porque os REMATES são 30.6 contra os 26.11 do alvo — não
+porque o guarda-redes falhe.
+
+Testei também a suspeita óbvia, que era minha: o `bonusInfiltracao` (700) a
+criar chances de mais. Em 12 sementes deu 4.41 contra 3.04 e pareceu a
+resposta; **nas 24 dá 3.64 contra 3.64** — era ruído de amostra, e fica escrito
+para não voltar a parecer uma pista.
+
+O que sobra para descer os golos é a produção de remates e a qualidade da
+chance, não o guarda-redes. E o lote da interface corre mais frio do que este
+headless (2.39 golos quando o headless dizia ~3), portanto é ele que decide.
+
+Testes: `tests/gk_salta_no_momento.test.js` e `gk_agarra_com_a_mao.test.js`
+apertaram-se sozinhos com estas correcções; o `gk_salto_voa.test.js` obrigou a
+que o `actualizarAlvo` só corra com o jogo a alimentar o mergulho — um mergulho
+montado à mão traz o alvo no `iniciar`.
+
 ### Sessão de 10 de Setembro de 2026 (8) — o guarda-redes deixa de se atirar cedo
 
 Resposta ao custo da sessão anterior (golos 2.79 → 5.05 depois de tirar a

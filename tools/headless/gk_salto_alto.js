@@ -49,7 +49,11 @@ GkDive.iniciar = function (p, alvoX, alvoY, tipo, dirX) {
         tChegada = Math.abs(p.model.position.z - Match.ball.position.z) / Math.abs(Match.ballVel.z);
         distBola = p.model.position.distanceTo(Match.ball.position);
     }
+    // A LEITURA CRUA no instante do salto: onde a bola estava e para onde ia.
+    const _bx = Match.ball.position.x, _bvx = Match.ballVel.x;
+    const _bz = Match.ball.position.z, _bvz = Match.ballVel.z;
     activo = { p: p, tipo: tipo, alvoY: alvoY, alvoX: alvoX, tChegada: tChegada, distBola: distBola,
+        bx: _bx, bvx: _bvx, bz: _bz, bvz: _bvz, pen: !!p.isPenaltyDive, penX: p.penaltyDiveX,
         yMax: p.model.position.y, y0: p.model.position.y,
         v0y: null, tecto: false, deslizou: false, diveRef: null };
     mergulhos.push(activo);
@@ -121,6 +125,25 @@ for (let i = 0; i < Math.round(segundos / dt); i++) {
                     dm = Math.min(dm, _maoW.distanceTo(Match.ball.position));
                 }
                 m.maoNoPlano = dm;
+                // DECOMPOSICAO do erro: mira (x), altura (y) e o corpo fora do
+                // plano (z). Sem isto so se sabe que falha, nao por onde.
+                let maoRef = null, melhor = Infinity;
+                for (const nome of ['lHand', 'rHand']) {
+                    const mao = m.p.rig && m.p.rig[nome];
+                    if (!mao) continue;
+                    mao.getWorldPosition(_maoW);
+                    const dd = _maoW.distanceTo(Match.ball.position);
+                    if (dd < melhor) { melhor = dd; maoRef = _maoW.clone(); }
+                }
+                if (maoRef) {
+                    m.erroX = Math.abs(maoRef.x - Match.ball.position.x);
+                    m.erroY = Math.abs(maoRef.y - Match.ball.position.y);
+                    m.erroZ = Math.abs(maoRef.z - Match.ball.position.z);
+                    m.corpoX = m.p.model.position.x;
+                    m.miraX = m.alvoX;
+                    m.erroMira = Math.abs(m.alvoX - Match.ball.position.x);
+                    m.faseNoPlano = m.p.dive.fase;
+                }
                 m.dentroDaBaliza = Math.abs(m.xNoPlano) < LARGURA_BALIZA / 2 &&
                     m.yNoPlano < ALTURA_BALIZA;
             }
@@ -172,8 +195,30 @@ for (const t of ['alto', 'meio', 'baixo']) {
     console.log(`  ${t.padEnd(6)}` + por(comLancamento.filter(m => m.tipo === t)));
 }
 {
-    const noAlvo = mergulhos.filter(m => m.cruzou && m.dentroDaBaliza && m.maoNoPlano !== undefined);
+    /*
+    SO JOGO CORRIDO. Os mergulhos com `isPenaltyDive` sao os do lance de falta
+    com desfecho sorteado, e nesses ele atira-se de PROPOSITO para o lado que o
+    remate nao usa (ver o plano em player.js). Misturar os dois media o
+    contrario do que se procura.
+    */
+    const noAlvo = mergulhos.filter(m => m.cruzou && m.dentroDaBaliza &&
+        m.maoNoPlano !== undefined && !m.pen);
+    const guiados = mergulhos.filter(m => m.cruzou && m.dentroDaBaliza && m.pen).length;
+    if (guiados) console.log(`  (mais ${guiados} mergulhos guiados pelo plano da falta, fora da conta)`);
     const med4 = a => a.length ? (a.reduce((s, v) => s + v, 0) / a.length) : NaN;
+    if (noAlvo.length) {
+        console.log('  no instante em que a bola cruza o plano (so os que cruzam dentro da moldura):');
+        for (const m of noAlvo) {
+            console.log(`    tipo ${String(m.tipo).padEnd(6)} fase ${String(m.faseNoPlano).padEnd(8)}` +
+                ` bola x ${m.xNoPlano.toFixed(2)} y ${m.yNoPlano.toFixed(2)}` +
+                ` | mira x ${(m.miraX === undefined ? NaN : m.miraX).toFixed(2)} (erro ${(m.erroMira || 0).toFixed(2)})` +
+                ` | corpo x ${(m.corpoX || 0).toFixed(2)}` +
+                ` | mao dx ${(m.erroX || 0).toFixed(2)}` +
+                ` || ao saltar: bola x ${m.bx.toFixed(2)} vx ${m.bvx.toFixed(1)} z ${m.bz.toFixed(1)} vz ${m.bvz.toFixed(1)}` +
+                ` -> previa ${(m.bx + m.bvx * (m.tChegada || 0)).toFixed(2)}` +
+                ` | isPenaltyDive ${m.pen} (penX ${m.penX === undefined ? '-' : Number(m.penX).toFixed(2)})`);
+        }
+    }
     console.log(`  remates que cruzaram o plano DENTRO da moldura: ${noAlvo.length}` +
         (noAlvo.length ? `  |  mao a ${med4(noAlvo.map(m => m.maoNoPlano)).toFixed(2)} m da bola nesse instante` +
             `  |  tocou em ${noAlvo.filter(m => m.tocou).length}` : ''));
