@@ -137,6 +137,16 @@ const GkDive = {
         que deve acontecer.
         */
         const velMax = D.velLateral + ((skill - 50) / 50) * D.velLateralSkill;
+        /*
+        MEDIDO E NAO ENTREGUE: por o `v0x` a cobrir a distancia ate ao INSTANTE
+        DO CONTACTO (`distCorpo / (tVoo * fracContacto)`) em vez de ate ao fim
+        do voo parece mais correcto — a mao devia estar no sitio quando o
+        contacto e avaliado — mas medido em 12 sementes deu 4.07 golos por 90
+        contra 3.72, e nao mexeu na distancia da mao a bola no instante em que
+        ela cruza o plano dele (4.1 m contra 4.0). Fica escrito para nao se
+        voltar a tentar as cegas: o que falha no mergulho nao e a velocidade
+        lateral, e a MIRA.
+        */
         d.v0x = Math.max(-velMax, Math.min(velMax, distCorpo / d.tVoo));
 
         d.x0 = corpo.position.x;

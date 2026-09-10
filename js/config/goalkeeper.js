@@ -376,6 +376,25 @@ const GoalkeeperDive = {
     reaccaoBase: 0.28,
     reaccaoPorSkill: 0.18,
 
+    /*
+    QUANDO E QUE ELE SE ATIRA. Pedido: "não pode pular no exacto instante do
+    chute; ele pode até se movimentar um pouco para os lados, mas pular só
+    quando a bola estiver ao alcance do pulo com os braços esticados. Seja
+    para fazer a defesa ou não."
+
+    Medido antes (tools/headless/gk_salto_alto.js): no instante em que largava
+    o chão faltavam à bola 0.55-0.90 s e ela estava a 13-16 m dele. O gesto
+    inteiro até a mão lá chegar são `tempoLer + tempoImpulso` (0.17 s) mais
+    `fracContacto` do voo — 0.3 a 0.6 s. Ele caía, deslizava, e a bola chegava
+    depois: é o "a bola nem passa pela defesa e o goleiro já está caído".
+
+    Agora o gatilho é o tempo do PRÓPRIO GESTO: atira-se quando o que falta à
+    bola cabe no que ele demora a lá chegar, e nem um frame antes. Esta margem
+    é a folga — o erro de leitura da trajectória, e o que evita que ele parta
+    exactamente em cima da hora e chegue atrasado.
+    */
+    margemAntecipacao: 0.08,
+
     tempoLer: 0.05,        // reacção: transferência de peso antes de sair
     tempoImpulso: 0.12,    // agachar e estender as pernas
     tempoChao: 0.35,       // deslizar no relvado depois de aterrar

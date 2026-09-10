@@ -4836,8 +4836,34 @@ class FootballPlayer {
                     const lateral = interX - gkCorpo.position.x;
                     this.gkTempoMergulho = 0;
                     this.gkAlvoX = interX;
+
+                    /*
+                    E SO SE ATIRA QUANDO A BOLA JA VEM AO ALCANCE DO SALTO.
+
+                    Ver GoalkeeperDive.margemAntecipacao. O tempo que o gesto
+                    precisa e o de agachar e estender mais o voo ate a mao la
+                    chegar; o voo, esse, sai da distancia lateral que ele tem
+                    de cobrir, descontado o braco — a mesma conta do
+                    `GkDive.lancar`. Enquanto faltar mais do que isso, ele fica
+                    DE PE: o `gkAlvoX` acima ja o desloca para o lado.
+                    */
+                    const Dv = GoalkeeperDive;
+                    const velMaxDive = Dv.velLateral + ((gkSkill - 50) / 50) * Dv.velLateralSkill;
+                    const percursoDive = Math.max(0, Math.abs(lateral) - Dv.alcanceBraco);
+                    const tVooDive = Math.min(Dv.vooMax,
+                        Math.max(Dv.vooMin, percursoDive / Math.max(0.1, velMaxDive)));
+                    const tGesto = Dv.tempoLer + Dv.tempoImpulso + Dv.fracContacto * tVooDive
+                        + (Dv.margemAntecipacao || 0);
+                    const naHora = (tempoAteGolo <= tGesto);
+
                     if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
                         this.gkEstado = 'maos';
+                    } else if (!naHora) {
+                        /*
+                        Ainda ha tempo: acompanha de pe. Nao se escreve estado
+                        nenhum — o ramo 'idle' continua a corre-lo e a leva-lo
+                        para o `gkAlvoX`.
+                        */
                     } else {
                         this.gkEstado = 'mergulho';
                         this.dive = null;   // arranca um mergulho novo (GkDive)

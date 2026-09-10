@@ -39,7 +39,17 @@ let activo = null;
 const origIniciar = GkDive.iniciar.bind(GkDive);
 GkDive.iniciar = function (p, alvoX, alvoY, tipo, dirX) {
     const r = origIniciar(p, alvoX, alvoY, tipo, dirX);
-    activo = { p: p, tipo: tipo, alvoY: alvoY, alvoX: alvoX,
+    /*
+    QUANTO TEMPO FALTA A BOLA PARA CHEGAR, no instante em que ele salta. E a
+    pergunta do relato: "as vezes a bola nem passa pela defesa e o goleiro ja
+    esta caido".
+    */
+    let tChegada = null, distBola = null;
+    if (Match.ball && Math.abs(Match.ballVel.z) > 0.5) {
+        tChegada = Math.abs(p.model.position.z - Match.ball.position.z) / Math.abs(Match.ballVel.z);
+        distBola = p.model.position.distanceTo(Match.ball.position);
+    }
+    activo = { p: p, tipo: tipo, alvoY: alvoY, alvoX: alvoX, tChegada: tChegada, distBola: distBola,
         yMax: p.model.position.y, y0: p.model.position.y,
         v0y: null, tecto: false, deslizou: false, diveRef: null };
     mergulhos.push(activo);
@@ -92,6 +102,30 @@ for (let i = 0; i < Math.round(segundos / dt); i++) {
             }
         }
         if (m.p.dive.tocou) m.tocou = true;
+        /*
+        O INSTANTE QUE INTERESSA: quando a bola cruza o plano z do guarda-redes.
+        A media sobre o mergulho inteiro e enganadora — leva os remates que vao
+        para fora, onde ninguem tinha nada a fazer.
+        */
+        if (m.cruzou === undefined) {
+            const dz = (Match.ball.position.z - m.p.model.position.z) * m.p.dirZ;
+            if (m.dzAnterior !== undefined && m.dzAnterior > 0 && dz <= 0) {
+                m.cruzou = true;
+                m.xNoPlano = Match.ball.position.x;
+                m.yNoPlano = Match.ball.position.y;
+                let dm = Infinity;
+                for (const nome of ['lHand', 'rHand']) {
+                    const mao = m.p.rig && m.p.rig[nome];
+                    if (!mao) continue;
+                    mao.getWorldPosition(_maoW);
+                    dm = Math.min(dm, _maoW.distanceTo(Match.ball.position));
+                }
+                m.maoNoPlano = dm;
+                m.dentroDaBaliza = Math.abs(m.xNoPlano) < LARGURA_BALIZA / 2 &&
+                    m.yNoPlano < ALTURA_BALIZA;
+            }
+            m.dzAnterior = dz;
+        }
         // Quem lhe rouba o estado a meio do voo, e em que estado de jogo.
         if (!m.roubado && m.p.gkEstado !== 'mergulho') {
             m.roubado = `${Match.state}/${m.p.gkEstado}`;
@@ -138,12 +172,27 @@ for (const t of ['alto', 'meio', 'baixo']) {
     console.log(`  ${t.padEnd(6)}` + por(comLancamento.filter(m => m.tipo === t)));
 }
 {
+    const noAlvo = mergulhos.filter(m => m.cruzou && m.dentroDaBaliza && m.maoNoPlano !== undefined);
+    const med4 = a => a.length ? (a.reduce((s, v) => s + v, 0) / a.length) : NaN;
+    console.log(`  remates que cruzaram o plano DENTRO da moldura: ${noAlvo.length}` +
+        (noAlvo.length ? `  |  mao a ${med4(noAlvo.map(m => m.maoNoPlano)).toFixed(2)} m da bola nesse instante` +
+            `  |  tocou em ${noAlvo.filter(m => m.tocou).length}` : ''));
+}
+{
     const comMao = mergulhos.filter(m => m.maoMin !== undefined);
     const med2 = a => a.length ? (a.reduce((s, v) => s + v, 0) / a.length) : NaN;
     const falhados = comMao.filter(m => !m.tocou);
     console.log(`  mao mais perto da bola no mergulho: media ${med2(comMao.map(m => m.maoMin)).toFixed(2)} m` +
         `  |  tocaram ${comMao.filter(m => m.tocou).length} de ${comMao.length}` +
         `  |  nos falhados faltavam ${med2(falhados.map(m => m.maoMin)).toFixed(2)} m`);
+}
+{
+    const t = mergulhos.filter(m => m.tChegada !== null && m.tChegada !== undefined);
+    const med3 = a => a.length ? (a.reduce((s, v) => s + v, 0) / a.length) : NaN;
+    const mediana3 = a => { const o = a.slice().sort((x, y) => x - y); return o.length ? o[Math.floor(o.length / 2)] : NaN; };
+    console.log(`  ao saltar, faltavam a bola ${med3(t.map(m => m.tChegada)).toFixed(2)} s ` +
+        `(mediana ${mediana3(t.map(m => m.tChegada)).toFixed(2)}) e ela estava a ` +
+        `${med3(t.map(m => m.distBola)).toFixed(1)} m dele`);
 }
 console.log(`  tecto vySubidaMax = ${D.vySubidaMax} m/s, vooMax = ${D.vooMax} s`);
 

@@ -5,6 +5,56 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (8) — o guarda-redes deixa de se atirar cedo
+
+Resposta ao custo da sessão anterior (golos 2.79 → 5.05 depois de tirar a
+apanhada mágica): *"tem que diminuir os gols. 3.6-3.9 é muito. Tem lances que o
+goleiro pula na hora do chute; às vezes a bola nem passa pela defesa e o goleiro
+já está caído. Ele tem que pular quando a bola está mais perto dele... pode até
+se movimentar um pouco para os lados, mas pular só quando a bola estiver ao
+alcance do pulo com os braços esticados. Seja para fazer a defesa ou não."*
+
+O diagnóstico do relato estava certo, e mede-se: **no instante em que ele
+largava o chão faltavam à bola 0.55-0.90 s e ela estava a 13-16 m dele**. O
+gesto inteiro até a mão lá chegar são 0.17 s (agachar e estender) mais
+`fracContacto` do voo — 0.3 a 0.6 s. Ele caía, deslizava, e a bola chegava
+depois.
+
+O gatilho passou a ser o tempo do PRÓPRIO GESTO: o voo que ele precisa sai da
+distância lateral a cobrir (a mesma conta do `GkDive.lancar`), e só se atira
+quando o que falta à bola cabe nisso, mais `GoalkeeperDive.margemAntecipacao`
+(0.08 s de folga). Enquanto faltar mais, ele fica **de pé** — o `gkAlvoX` já o
+levava para o lado, e agora é isso que se vê.
+
+    ao saltar, faltavam a bola   0.60 s (mediana 0.53, pior 0.96)  ->  0.38 s (mediana 0.39, pior 0.65)
+    mergulhos por partida        21  ->  32
+
+E os golos, 24 partidas com as mesmas sementes:
+
+    por 90                       golos   remates   cantos     xG
+    antes do relato do GK         2.79     28.98     6.11    1.57
+    so a mao (a regressao)        5.05     32.58     6.19    2.03
+    com o salto no momento        3.26     29.73     6.96    1.56
+
+**5.05 → 3.26.** Fica 0.47 acima do ponto de partida (1 sigma, não
+demonstrável) e o xG voltou ao sítio.
+
+#### O que sobra, com número: a MIRA do mergulho
+
+Medido no instante em que a bola cruza o plano z do guarda-redes, e só nos
+remates que cruzam DENTRO da moldura: a mão dele fica a **1.7-4.1 m da bola**,
+e toca em **0 de 8** dessas oportunidades. Não é a velocidade lateral:
+experimentei pôr o `v0x` a cobrir a distância até ao instante do contacto
+(`distCorpo / (tVoo * fracContacto)`) em vez de até ao fim do voo — mais
+correcto no papel — e deu 4.07 golos por 90 contra 3.72 em 12 sementes, sem
+mexer na distância da mão (4.1 contra 4.0 m). Está escrito no `gk_dive.js`
+para não se voltar a tentar às cegas.
+
+O que falha é a mira, e é a próxima alavanca desta linha.
+
+Teste: `tests/gk_salta_no_momento.test.js` (dois — a margem na configuração, e
+o tecto do tempo de antecipação medido em 30 min de jogo).
+
 ### Sessão de 10 de Setembro de 2026 (7) — a bola teletransportada para as luvas
 
 Relato, com três capturas de uma defesa rasteira: *"o goleiro está 'pegando' a
