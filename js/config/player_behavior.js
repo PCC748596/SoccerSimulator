@@ -1218,6 +1218,25 @@ const RepositionPace = {
     bonusSaidaDeBola: 1.25,
 
     /*
+    E UM PISO, porque a pressa multiplicativa nao chega ao fim do percurso.
+
+    Relato, segunda passagem: "quando o goleiro pega a bola os jogadores tem
+    que se posicionar mais rapido... tem jogadores andando em campo." A marca
+    da pressa chega a toda a gente (medido: 100% das leituras), mas o ritmo sai
+    da DISTANCIA ao alvo, e abaixo dos 2 m o escalao e o de andar — 1.73 m/s,
+    ou 2.16 com o bonus. Medido em 74 min: 25% das leituras abaixo de 3 m/s, e
+    94% desses ja estavam a menos de 5 m do proprio alvo. Quem estava longe
+    corria (5.71 m/s de media): os que se veem a andar sao os que estao a
+    acabar de se oferecer.
+
+    O piso vale enquanto ele segura a bola e enquanto ainda faltar mais do que
+    `pisoSaidaDeBolaDist` — chegado ao sitio, anda-se, senao ele oscila em cima
+    do alvo.
+    */
+    pisoSaidaDeBola: 4.6,
+    pisoSaidaDeBolaDist: 1.2,
+
+    /*
     RECUAR É UMA RAJADA TAMBÉM — o contrário do contra-ataque, e faltava.
 
     Relato: "a defesa está recuando muito devagar e está se embolando com o

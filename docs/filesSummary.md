@@ -5,6 +5,57 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 10 de Setembro de 2026 (10) — os últimos metros da saída de bola
+
+Relato: *"quando o goleiro pega a bola os jogadores do time tem que se
+posicionar mais rápido para dar opção de passes. Tem jogadores andando em
+campo."*
+
+A pressa já existia — `RepositionPace.bonusSaidaDeBola` (1.25x) — e a marca
+chega a toda a gente: medido, **100%** das leituras com a bola nas mãos dele
+têm `saidaDeBolaPressa`. O que faltava era o FIM do percurso.
+
+O ritmo sai da DISTÂNCIA ao alvo (`RepositionPace.escaloes`), e abaixo dos 2 m
+o escalão é o de andar: 1.73 m/s, ou 2.16 com o bónus. Medido em 74 min
+(`tools/headless/saida_do_guarda_redes.js`, com duas leituras novas):
+
+    velocidade media dos companheiros        4.35 m/s
+    abaixo de 3 m/s                          25% das leituras
+    e desses, a mais de 5 m do proprio alvo   6%
+    quem esta a mais de 5 m do alvo anda a   5.71 m/s
+
+Quem está longe já corre. **Quem se vê a andar é quem está a acabar de se
+oferecer** — e é justamente esse o jogador que tem de estar no sítio depressa.
+
+Entra um PISO, e não outro multiplicador: `pisoSaidaDeBola` (4.6 m/s) enquanto
+ele segura a bola e enquanto ainda faltar mais do que `pisoSaidaDeBolaDist`
+(1.2 m). Chegado ao sítio anda-se — sem esse corte ele oscilaria em cima do
+alvo.
+
+Medido só sobre quem ainda tem caminho a fazer, que é o que a regra governa:
+
+    velocidade media    4.85  ->  5.35 m/s
+    abaixo de 3 m/s     16%   ->  6%
+
+Os 6% que sobram são arranques: quem estava parado leva uns frames a chegar à
+velocidade de cruzeiro.
+
+E o jogo, 24 partidas com as mesmas sementes:
+
+    por 90       golos   remates   cantos     xG
+    antes         3.64     30.63     5.65    1.75
+    depois        3.17     28.88     6.58    1.55
+
+Golos −0.47 e remates −1.75 (0.9 sigma, não demonstrável) — mas na direcção
+certa e pelo mecanismo certo: com a equipa a oferecer-se depressa, a saída de
+bola do guarda-redes acaba mais vezes em posse e menos vezes numa bola atirada
+para a frente que volta logo em remate. Os remates aproximam-se dos 26.11 do
+alvo, que é a linha que a sessão anterior identificou como a que manda nos
+golos.
+
+Teste: `tests/saida_de_bola_ritmo.test.js` (dois — o piso na configuração e a
+medição em 40 min de jogo, contando só quem ainda tem caminho).
+
 ### Sessão de 10 de Setembro de 2026 (9) — a mira do mergulho, e um diagnóstico meu que estava errado
 
 Continuação da anterior, com "sim" para atacar a mira. Três defeitos

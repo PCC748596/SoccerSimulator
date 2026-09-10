@@ -35,6 +35,7 @@ Sim.running = true;
 let amostras = 0, atras = 0, parados = 0, episodios = 0;
 const maisPerto = [], atrasPorFrame = [], velMedia = [], alvoAtras = [], tactAtras = [];
 const estados = {}; const porEstado = {};
+const faixas = { n: 0, lentos: 0, lentosLonge: 0, longe: 0, pressa: 0, distLentos: [], vLonge: [] };
 let segurava = { TeamA: false, TeamB: false };
 
 for (let i = 0; i < Math.round(segundos / dt); i++) {
@@ -67,6 +68,21 @@ for (let i = 0; i < Math.round(segundos / dt); i++) {
             const v = p.velocity ? p.velocity.length() : 0;
             vSoma += v;
             if (v < 0.5) parados++;
+            /*
+            A LEITURA QUE FALTAVA: quem esta LENTO e a que distancia esta do
+            proprio alvo. "Tem jogadores andando em campo" pode ser gente ja
+            posicionada (escalao do andar, < 2 m do alvo) ou gente longe do
+            sitio a passear — e a resposta e outra em cada caso.
+            */
+            const dAlvo = p.dynamicTarget ? p.model.position.distanceTo(p.dynamicTarget) : 0;
+            faixas.n++;
+            if (v < 3.0) {
+                faixas.lentos++;
+                if (dAlvo > 5.0) faixas.lentosLonge++;
+                faixas.distLentos.push(dAlvo);
+            }
+            if (dAlvo > 5.0) { faixas.longe++; faixas.vLonge.push(v); }
+            faixas.pressa += (p.saidaDeBolaPressa ? 1 : 0);
         }
         porEstado[Match.state].n++;
         porEstado[Match.state].atras += nAtras;
@@ -88,3 +104,8 @@ console.log('atras por estado do jogo:', Object.entries(porEstado).map(([k, v]) 
 console.log('estados:', Object.entries(estados).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>`${k} ${v}`).join('  '));
 console.log(`companheiro mais perto dele:        ${med(maisPerto)} m`);
 console.log(`velocidade media dos companheiros:  ${med(velMedia)} m/s | parados (<0.5 m/s): ${(100 * parados / Math.max(1, amostras * 10)).toFixed(0)}%`);
+console.log(`abaixo de 3 m/s: ${(100 * faixas.lentos / Math.max(1, faixas.n)).toFixed(0)}% das leituras` +
+    `, e desses ${(100 * faixas.lentosLonge / Math.max(1, faixas.lentos)).toFixed(0)}% estavam a mais de 5 m do proprio alvo`);
+console.log(`quem esta a mais de 5 m do alvo anda a ${med(faixas.vLonge)} m/s` +
+    `  (${(100 * faixas.longe / Math.max(1, faixas.n)).toFixed(0)}% das leituras)`);
+console.log(`com a marca da pressa: ${(100 * faixas.pressa / Math.max(1, faixas.n)).toFixed(0)}% das leituras`);

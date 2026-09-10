@@ -2334,6 +2334,16 @@ function actHoldPosition(ctx) {
         */
         if (p.saidaDeBolaPressa && RepositionPace.bonusSaidaDeBola) {
             p.speedMult *= RepositionPace.bonusSaidaDeBola;
+            /*
+            E O PISO, que e o que se ve. O bonus multiplica o escalao, e o
+            escalao dos ultimos dois metros e o de ANDAR: 1.73 m/s, 2.16 com o
+            bonus. Enquanto faltar caminho, os ultimos metros fazem-se a trote.
+            Ver RepositionPace.pisoSaidaDeBola.
+            */
+            if (RepositionPace.pisoSaidaDeBola &&
+                dist > (RepositionPace.pisoSaidaDeBolaDist || 1.2)) {
+                p.speedMult = Math.max(p.speedMult, RepositionPace.pisoSaidaDeBola);
+            }
         }
 
         /*
