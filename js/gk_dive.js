@@ -41,6 +41,13 @@ const GkDive = {
     _eixoQueda: new THREE.Vector3(),
 
     /*
+    Ossos que podem ser o ponto mais baixo com ele deitado. Nao sao so as
+    botas: caido de lado, quem toca primeiro e a mao, o ombro ou a anca.
+    */
+    _ossosDeitado: ['pelvis', 'chest', 'neck', 'lArm', 'rArm', 'lHand', 'rHand',
+        'lLeg', 'rLeg', 'lKnee', 'rKnee', 'lFoot', 'rFoot'],
+
+    /*
     Arranca o mergulho.
 
         alvoX, alvoY   onde a bola vai passar (já previsto por quem chama)
@@ -266,10 +273,12 @@ const GkDive = {
 
                 // A parábola fechou-se: o corpo chegou ao relvado.
                 if (salto <= 0 && t > 0) {
+                    // Ponto de partida; o assento a seguir e que manda.
                     corpo.position.y = D.alturaDeitado;
                     d.fase = 'chao';
                     d.t = 0;
                     d.vSlide = d.v0x;
+                    d.assentar = true;
                 }
                 break;
             }
@@ -280,8 +289,9 @@ const GkDive = {
                 if (Math.abs(d.vSlide) <= Math.abs(trav)) d.vSlide = 0;
                 else d.vSlide -= trav;
                 corpo.position.x += d.vSlide * dt;
-                corpo.position.y = D.alturaDeitado;
+                corpo.position.y = (typeof d.yDeitado === 'number') ? d.yDeitado : D.alturaDeitado;
                 d.ang = d.angMax;
+                d.assentar = true;
 
                 this.poseChao(rig, d);
                 /*
@@ -306,7 +316,9 @@ const GkDive = {
                 const k = Math.min(1, d.t / D.tempoLevantar);
                 const s = k * k * (3 - 2 * k);
                 d.ang = d.angMax * (1 - s);
-                corpo.position.y = D.alturaDeitado + (ALTURA_BASE_Y - D.alturaDeitado) * s;
+                // Sobe a partir de onde ficou DEITADO, nao da constante.
+                const yBase = (typeof d.yDeitado === 'number') ? d.yDeitado : D.alturaDeitado;
+                corpo.position.y = yBase + (ALTURA_BASE_Y - yBase) * s;
                 this.poseLevantar(rig, s);
 
                 if (d.t >= D.tempoLevantar) {
@@ -342,6 +354,15 @@ const GkDive = {
         this._qTilt.setFromAxisAngle(eixo, d.ang);
         corpo.quaternion.copy(d.qFacing).multiply(this._qTilt);
 
+        /*
+        E SO AGORA SE ASSENTA: o assento mede ossos no MUNDO, portanto tem de
+        vir depois de a rotacao do frame estar escrita. Ver assentarDeitado.
+        */
+        if (d.assentar) {
+            d.yDeitado = this.assentarDeitado(corpo, rig);
+            d.assentar = false;
+        }
+
         // Bola agarrada acompanha a mão durante o resto do mergulho.
         if (d.agarrou && rig.rHand) {
             rig[d.maoAgarrou || 'rHand'].getWorldPosition(this._v);
@@ -350,6 +371,29 @@ const GkDive = {
         }
 
         return true;
+    },
+
+    /*
+    DESCE O CORPO ATE ELE TOCAR MESMO O RELVADO.
+
+    Ver GoalkeeperDive.folgaDeitado para o porque de isto existir e para os
+    numeros que o motivaram. Devolve o y final, que o 'levantar' usa como ponto
+    de partida — senao ele subia a partir de uma altura que ja nao e a dele.
+    */
+    assentarDeitado(corpo, rig) {
+        const D = GoalkeeperDive;
+        if (!rig) return corpo.position.y;
+        let minY = Infinity;
+        for (let i = 0; i < this._ossosDeitado.length; i++) {
+            const o = rig[this._ossosDeitado[i]];
+            if (!o) continue;
+            o.getWorldPosition(this._v);
+            if (this._v.y < minY) minY = this._v.y;
+        }
+        if (!isFinite(minY)) return corpo.position.y;
+        const folga = (typeof D.folgaDeitado === 'number') ? D.folgaDeitado : 0.10;
+        corpo.position.y += (folga - minY);
+        return corpo.position.y;
     },
 
     /*

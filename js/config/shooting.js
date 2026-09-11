@@ -591,6 +591,25 @@ const FreeKickModel = {
     corredorLivre: 5.0,        // meia-largura do corredor bola->baliza, em metros
 
     /*
+    E NINGUEM FICA EM CIMA DA BOLA.
+
+    Relato: *"na cobranca da falta, por vezes, fica um jogador quase em cima da
+    posicao da cobranca, atrapalhando um pouco"*.
+
+    Medido em 105 cobrancas: o jogador mais perto da bola (tirando o batedor)
+    esta em media a 7.7-8.0 m, mas **1 em 105** fica a menos de 2 m — foi um LB
+    da propria equipa a 1.44 m. E raro, e e exactamente o "por vezes".
+
+    O `corredorLivre` ja empurra quem esta no caminho bola->baliza, mas so
+    quando a decisao e REMATE e so de lado. Quem calha a um metro da bola num
+    passe curto nao era empurrado por ninguem. Este raio e radial e vale sempre.
+
+    2.5 m: o batedor recua `recuoBatedor` para bater e precisa do arco do gesto
+    livre; mais do que isto comecava a desarrumar a montagem toda.
+    */
+    folgaDaBola: 2.5,
+
+    /*
     =========================================================================
     GENTE NA ÁREA À ESPERA DO CRUZAMENTO
     =========================================================================

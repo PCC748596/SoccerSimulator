@@ -614,9 +614,33 @@ Object.assign(Match, {
                 };
             };
 
+            /*
+            E NINGUEM FICA EM CIMA DA BOLA — ver FreeKickModel.folgaDaBola.
+
+            O `foraDoCorredor` acima so mexe em quem esta no caminho
+            bola->baliza, e so quando a decisao e remate. Quem calha a um metro
+            da bola num passe curto nao era empurrado por ninguem: medido, 1 em
+            105 cobrancas tinha um companheiro a 1.44 m. Este empurrao e
+            RADIAL, para fora da bola, e mantem a direccao em que ele estava.
+            */
+            const folgaDaBolaFK = (typeof F.folgaDaBola === 'number') ? F.folgaDaBola : 0;
+            const foraDaBola = (x, z) => {
+                if (folgaDaBolaFK <= 0) return { x: x, z: z };
+                const rx = x - bolaFK.x, rz = z - bolaFK.z;
+                const d = Math.hypot(rx, rz);
+                if (d >= folgaDaBolaFK) return { x: x, z: z };
+                // Em cima da bola nao ha direccao: afasta-o para tras do batedor.
+                if (d < 0.001) {
+                    return { x: bolaFK.x - dirFK.x * folgaDaBolaFK, z: bolaFK.z - dirFK.z * folgaDaBolaFK };
+                }
+                const k = folgaDaBolaFK / d;
+                return { x: bolaFK.x + rx * k, z: bolaFK.z + rz * k };
+            };
+
             lugares.forEach(l => {
                 const p = l.p;
-                const ajustado = foraDoCorredor(l.x, l.z);
+                const noCorredor = foraDoCorredor(l.x, l.z);
+                const ajustado = foraDaBola(noCorredor.x, noCorredor.z);
                 l.x = THREE.MathUtils.clamp(ajustado.x, -(CAMPO_LARG / 2 - 2), CAMPO_LARG / 2 - 2);
                 l.z = THREE.MathUtils.clamp(ajustado.z, -(CAMPO_COMP / 2 - 2), CAMPO_COMP / 2 - 2);
                 p.model.position.set(l.x, ALTURA_BASE_Y, l.z);

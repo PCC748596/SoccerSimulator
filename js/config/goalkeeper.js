@@ -575,6 +575,31 @@ const GoalkeeperDive = {
     */
     raioIKNoChao: 2.2,
 
+    /*
+    DEITADO, O CORPO TEM DE TOCAR O RELVADO.
+
+    Relato: *"depois do pulo, o goleiro tem que continuar o movimento ate o
+    corpo tocar o chao, para depois levantar"*.
+
+    O `alturaDeitado` e um valor FIXO para a origem do modelo, e a origem esta
+    nos pes (`ALTURA_BASE_Y` e -0.03). Como o angulo do tombo muda muito com o
+    tipo de mergulho, uma altura so nao pode servir os tres — medido, o ponto
+    mais baixo do corpo no instante em que ele "aterra":
+
+        baixo   +0.32 m   flutua 32 cm acima do relvado
+        meio    -0.07 m
+        alto    -0.51 m   meio metro enterrado
+
+    O `baixo` e exactamente o relato: acaba o mergulho no ar e levanta-se de la.
+
+    Agora o `alturaDeitado` e so o ponto de partida e o corpo assenta a serio:
+    mede-se o osso mais baixo e desce-se o modelo ate ele ficar a
+    `folgaDeitado` do chao. A folga existe porque o que se mede sao CENTROS de
+    junta, nao a superficie — um braco deitado tem o centro do pulso uns 10 cm
+    acima da relva.
+    */
+    folgaDeitado: 0.10,
+
     alturaDeitado: 0.42,   // y da origem do modelo com ele deitado de lado
     atritoChao: 3.5,       // desaceleração do deslize no relvado (m/s²)
 
