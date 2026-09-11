@@ -500,6 +500,40 @@ const GoalkeeperDive = {
     que e onde estao as defesas que faltavam.
     */
     alcanceBraco: 0.92,
+    /*
+    ELE CAI DE FRENTE, E NAO SO DE LADO.
+
+    Relato: *"o goleiro, depois do pulo, esta caindo de lado ate uns 45 graus
+    com o solo... ele deveria cair de frente para baixo e colocando os bracos
+    para ajudar a aparar a batida no chao"*.
+
+    O tombo era uma rotacao a volta do eixo FRONTAL do modelo e mais nada —
+    puro rolamento lateral, sem nenhuma componente de cair para a frente. Nao
+    se arranja somando um `rotation.x`: o mergulho ANTIGO fazia isso, compunha
+    os dois em Euler, e o cabecalho do gk_dive.js guarda o resultado — *"deixava
+    o boneco virado/torcido"*.
+
+    A regra "um eixo, um angulo" fica de pe; o que muda e QUAL e o eixo. Em vez
+    do +Z local usa-se `(pesoQuedaFrente, 0, -lado)` normalizado: um eixo so,
+    inclinado, que mistura o tombo lateral com o picar para a frente na
+    proporcao que este numero manda.
+
+    0.55 da ~29 graus da queda para a frente e o resto de lado. A 0 volta ao
+    rolamento puro de antes; a 1 cairia a 45 graus entre os dois.
+    */
+    pesoQuedaFrente: 0.55,
+
+    /*
+    Raio, em metros, dentro do qual os bracos continuam a ir a bola por IK
+    depois de ele estar no chao. Fora dele os dois bracos passam a amparar a
+    queda (ver poseBracosChao) — que e o pedido, e e o que um guarda-redes faz
+    mal percebe que nao chega la.
+
+    Nao se pode simplesmente cortar o IK no chao: e o `mirarBola` que corre o
+    teste da defesa (`defender`), e sem ele o deslize deixava de defender.
+    */
+    raioIKNoChao: 2.2,
+
     alturaDeitado: 0.42,   // y da origem do modelo com ele deitado de lado
     atritoChao: 3.5,       // desaceleração do deslize no relvado (m/s²)
 

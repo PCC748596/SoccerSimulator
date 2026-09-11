@@ -37,6 +37,8 @@ const GkDive = {
     _cima: new THREE.Vector3(0, 1, 0),
     _eixoZ: new THREE.Vector3(0, 0, 1),
     _qTilt: new THREE.Quaternion(),
+    // Eixo da queda, montado uma vez por mergulho no `iniciar`.
+    _eixoQueda: new THREE.Vector3(),
 
     /*
     Arranca o mergulho.
@@ -86,6 +88,20 @@ const GkDive = {
         */
         this._v.set(1, 0, 0).applyQuaternion(p.dive.qFacing);
         p.dive.ladoLocal = Math.sign(this._v.x * p.dive.dirX) || 1;
+
+        /*
+        O EIXO DA QUEDA — um eixo so, mas inclinado para ele cair de FRENTE.
+
+        Rodar a volta do +Z local tomba-o de lado e mais nada. Uma componente
+        em +X local pica-o para a frente (rodar +X leva a frente, que e o +Z,
+        para baixo). O eixo e a soma dos dois, normalizado: continua a ser uma
+        rotacao de um eixo so — o que muda e a direccao para onde ele cai.
+
+        Ver GoalkeeperDive.pesoQuedaFrente para o porque do numero.
+        */
+        const pesoFrente = (typeof GoalkeeperDive.pesoQuedaFrente === 'number')
+            ? GoalkeeperDive.pesoQuedaFrente : 0;
+        p.dive.eixoQueda = new THREE.Vector3(pesoFrente, 0, -p.dive.ladoLocal).normalize();
     },
 
     /*
@@ -268,7 +284,17 @@ const GkDive = {
                 d.ang = d.angMax;
 
                 this.poseChao(rig, d);
-                if (!d.agarrou) this.mirarBola(p, rig);
+                /*
+                NO CHAO OS BRACOS AMPARAM A QUEDA — menos enquanto a bola ainda
+                esta ao alcance.
+
+                O `mirarBola` nao se pode cortar sem mais: e ele que corre o
+                teste da defesa (`defender`). Fica enquanto ela esta dentro do
+                `raioIKNoChao`; passado isso os dois bracos vao a frente, que e
+                o pedido e e o que ele faz mal percebe que nao chega la.
+                */
+                d.bolaPerto = this.bolaAoAlcance(p);
+                if (!d.agarrou && d.bolaPerto) this.mirarBola(p, rig);
                 this.poseBracosChao(rig, d);
                 this.torcerTronco(rig, d, 'chao');
 
@@ -302,8 +328,13 @@ const GkDive = {
             }
         }
 
-        // --- A rotação. Um eixo, um ângulo, sempre. --------------------
-        this._qTilt.setFromAxisAngle(this._eixoZ, -d.ladoLocal * d.ang);
+        /*
+        --- A rotação. Um eixo, um ângulo, sempre. --------------------
+        O eixo ja traz o lado do mergulho no sinal do Z e o picar para a frente
+        no X (ver `eixoQueda` no `iniciar`), portanto o angulo entra limpo.
+        */
+        const eixo = d.eixoQueda || this._eixoQueda.set(0, 0, -d.ladoLocal);
+        this._qTilt.setFromAxisAngle(eixo, d.ang);
         corpo.quaternion.copy(d.qFacing).multiply(this._qTilt);
 
         // Bola agarrada acompanha a mão durante o resto do mergulho.
@@ -612,7 +643,24 @@ const GkDive = {
         if (B.cotoveloTraseiro) B.cotoveloTraseiro.rotation.x = lerpTo(B.cotoveloTraseiro.rotation.x, P.cotovelo, w);
     },
 
-    // Chão: aterrado de lado, os dois braços à frente.
+    /*
+    A bola ainda esta ao alcance de quem ja esta no chao? Ver raioIKNoChao.
+    */
+    bolaAoAlcance(p) {
+        if (typeof Match === 'undefined' || !Match.ball) return false;
+        const R = (typeof GoalkeeperDive.raioIKNoChao === 'number')
+            ? GoalkeeperDive.raioIKNoChao : 2.2;
+        return p.model.position.distanceTo(Match.ball.position) <= R;
+    },
+
+    /*
+    Chão: os dois braços à frente, a amparar a batida.
+
+    O líder só saía do IK quando ele tinha AGARRADO a bola; nos outros casos
+    ficava a apontar para onde ela estivesse, mesmo já longe — e era isso que
+    dava o guarda-redes caído com o braço atrás das costas em vez de o pôr à
+    frente para travar a queda.
+    */
     poseBracosChao(rig, d) {
         const S = GoalkeeperDive.sequenciaBracos;
         const P = S && S.chao;
@@ -622,10 +670,11 @@ const GkDive = {
         B.traseiro.rotation.x = lerpTo(B.traseiro.rotation.x, P.traseiroX, w);
         B.traseiro.rotation.z = lerpTo(B.traseiro.rotation.z, -B.sinal * P.traseiroZ, w);
         if (B.cotoveloTraseiro) B.cotoveloTraseiro.rotation.x = lerpTo(B.cotoveloTraseiro.rotation.x, P.cotovelo, w);
-        // Com a bola já agarrada o líder também sai do IK: recolhe-a.
-        if (d.agarrou) {
+        // O líder sai do IK com a bola agarrada OU com ela já fora de alcance.
+        if (d.agarrou || !d.bolaPerto) {
             B.lider.rotation.x = lerpTo(B.lider.rotation.x, P.liderX, w);
             B.lider.rotation.z = lerpTo(B.lider.rotation.z, B.sinal * P.liderZ, w);
+            if (B.cotoveloLider) B.cotoveloLider.rotation.x = lerpTo(B.cotoveloLider.rotation.x, P.cotovelo, w);
         }
     },
 

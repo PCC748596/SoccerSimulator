@@ -770,8 +770,26 @@ const OffsideModel = {
     O atacante corrigia-se depressa demais para chegar a ser apanhado — e e no
     tempo em que ele NAO sabe que esta em fora-de-jogo que o passe lhe chega.
     */
-    reaccaoLenta: 9.0,     // tacticknow 50 (ou abaixo)
-    reaccaoRapida: 0.6,    // tacticknow 100
+    /*
+    9.0 / 0.6 -> 6.5 / 0.4, pedido: "diminui um pouco o tempo de percepcao dos
+    jogadores quanto aos impedimentos".
+
+    E o caminho inverso do que esta escrito acima, e com razao: aquilo subiu
+    quando os impedimentos estavam a 6% do alvo, e agora estao a 173% (5.54
+    por jogo contra 3.20) e a subir em cada lote — 152%, 160%, 173%. Quanto
+    mais tempo ele passa sem dar por si em fora-de-jogo, mais tempo tem para
+    o passe lhe chegar la.
+
+    Com tacticknow 85, que e o destes planteis, sao 3.12 s a passar para
+    2.23 s (-29%).
+
+    A RESSALVA, que ja custou uma calibracao: quem manda na FREQUENCIA e o
+    `RunIntoSpaceModel.riscoAlemDaLinha` — quanto a corrida aposta alem da
+    linha. Este numero decide ha quanto tempo ele la esta, nao com que
+    frequencia la vai.
+    */
+    reaccaoLenta: 6.5,     // tacticknow 50 (ou abaixo)
+    reaccaoRapida: 0.4,    // tacticknow 100
 
     // Interpola entre os 50 e os 100, com tecto abaixo de 50.
     _fraccao: function (tacticknow) {

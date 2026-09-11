@@ -160,12 +160,31 @@ console.log(LF + '5 — no chão os braços vão à frente');
         erro('com a bola agarrada o líder também sai do IK e recolhe');
     } else ok('aterra a escorregar com os braços à frente');
 
-    // Sem a bola agarrada o líder fica no IK — pode ainda haver defesa a fazer.
+    /*
+    SEM A BOLA AGARRADA DEPENDE DE ELA AINDA ESTAR AO ALCANCE.
+
+    A regra era só "sem agarrar, o líder fica no IK — pode ainda haver defesa a
+    fazer", e isso é verdade enquanto ela lá está. Com a bola já longe, o braço
+    ficava a apontar-lhe de qualquer maneira: o guarda-redes caído com o braço
+    atrás das costas em vez de o pôr à frente para travar a queda. Relato: *"ele
+    deveria cair de frente para baixo e colocando os braços para ajudar a aparar
+    a batida no chão"*.
+
+    Quem mede a distância é o `bolaAoAlcance` (GoalkeeperDive.raioIKNoChao), e
+    quem a escreve no `d` é o case 'chao'.
+    */
     const rig2 = rigFalso();
-    repetir(() => GkDive.poseBracosChao(rig2, { ladoLocal: -1, agarrou: false }));
+    repetir(() => GkDive.poseBracosChao(rig2, { ladoLocal: -1, agarrou: false, bolaPerto: true }));
     if (rig2.lArm.rotation.x !== 0) {
-        erro('sem a bola agarrada o líder não pode sair do IK');
-    } else ok('sem a bola na mão, o líder continua a procurá-la');
+        erro('com a bola ao alcance o líder não pode sair do IK');
+    } else ok('bola ainda ao alcance: o líder continua a procurá-la');
+
+    const rig3 = rigFalso();
+    repetir(() => GkDive.poseBracosChao(rig3, { ladoLocal: -1, agarrou: false, bolaPerto: false }));
+    const B3 = GkDive.bracos(rig3, { ladoLocal: -1 });
+    if (Math.abs(B3.lider.rotation.x - S.chao.liderX) > 0.05) {
+        erro('com a bola longe os DOIS braços têm de ir à frente amparar a queda');
+    } else ok('bola fora de alcance: os dois braços amparam a queda');
 }
 
 console.log(LF + '6 — quem se levanta desfaz a torção');

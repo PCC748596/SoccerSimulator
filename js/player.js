@@ -3501,10 +3501,31 @@ class FootballPlayer {
         animateBones por cima devolvia braços e pernas ao ciclo de passada no
         mesmo frame. O ramo `speed >= 0.1` do animateBones faz `set` directo
         nas pernas, portanto não bastava excluí-los do bloco neutro.
+
+        E O PASSE FALTAVA NESTA LISTA — relato: *"não estou vendo a animação de
+        passe durante os passes"*.
+
+        O `PassClip` foi acrescentado depois desta lista e ninguém o juntou a
+        ela. O `case 'PASS'` da FSM desenhava o clip, e três linhas depois o
+        ramo `speed >= 0.1` deste mesmo frame reescrevia as duas pernas com o
+        ciclo de passada — por `set`, não por lerp, portanto sem deixar rasto.
+        O gesto existia e nunca chegava ao ecrã.
+
+        O REMATE escapava por acaso, não por desenho: o `baterFalta` põe a
+        velocidade a zero à entrada (ver a nota "VELOCIDADE A ZERO À ENTRADA DO
+        GESTO"), e com `speed < 0.1` nenhum dos dois ramos lhe toca nas pernas.
+        Um passe é quase sempre dado em movimento, e por isso caía sempre no
+        ramo da passada.
+
+        A condição pede o `actionState` pela mesma razão dos outros dois — sem
+        gesto a correr não há pose de clip para proteger — e o `passeComClip`
+        porque o CRUZAMENTO não tem clip próprio e continua a precisar da
+        passada desenhada por baixo.
         */
         if ((this.role === 'gk' && Match.state !== 'CORNER_KICK') ||
             this.fsm.currentState === 'LATERAL' ||
             (this.fsm.currentState === 'SHOOT' && this.actionState) ||
+            (this.fsm.currentState === 'PASS' && this.actionState && this.passeComClip) ||
             (this.fsm.currentState === 'BALL_CONTROL_RIGHT' && this.actionState)) {
         } else {
             if (!headless) {
