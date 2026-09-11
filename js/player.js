@@ -5194,7 +5194,35 @@ class FootballPlayer {
                             11.1 m/s aos 0.15 s do remate, com o `reagiu` ainda
                             falso. O ramo principal sempre o exigiu; este não.
                             */
-                            let possoEspalmar = (tempoAteMim < 0.6 && window.bolaChutada && this.gkReagiu);
+                            /*
+                            O ATRASO DE REACCAO TRAVA-LHE O MERGULHO, NAO OS PES.
+
+                            Tinha posto aqui o `gkReagiu` a decidir se este ramo
+                            corria de todo, e estava errado — medido em 30 jogos
+                            por variante, tres sementes cada:
+
+                                variante                        golos   conversao
+                                erro + gate no ramo inteiro      3.17      51.7%
+                                erro, sem gate nenhum            2.63      37.3%
+                                sem erro, sem gate               2.87      41.1%
+                                alvo                             2.52       ~32%
+
+                            Com o ramo inteiro travado o guarda-redes nao ficava
+                            parado a espera: caia na ancora de repouso e RECUAVA
+                            para o meio da baliza enquanto o remate viajava. Meio
+                            golo por jogo, e catorze pontos de conversao.
+
+                            Agora o ramo corre sempre e o `gkReagiu` so trava o
+                            GESTO: antes de reagir ele acompanha de pe pelo
+                            `gkAlvoX`, que e o que um guarda-redes faz mesmo, e
+                            nao se atira. As duas ultimas linhas da tabela dizem
+                            a outra coisa que isto fixa: com o gate fora, o erro
+                            de leitura nao custa golos nenhuns.
+                            */
+                            const exigeReaccao = (typeof GoalkeeperDive === 'undefined' ||
+                                GoalkeeperDive.espalmarExigeReaccao !== false);
+                            const podeAtirarSe = (!exigeReaccao || this.gkReagiu);
+                            let possoEspalmar = (tempoAteMim < 0.6 && window.bolaChutada);
 
                             if (possoEspalmar) {
                                 /*
@@ -5231,10 +5259,11 @@ class FootballPlayer {
                                 estava no lado ERRADO, com 4.5 a 6.1 m de erro.
                                 */
                                 const alvoEspT = alvoEsp ? alvoEsp.t : tempoAteMim;
-                                if (Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
+                                if (podeAtirarSe && Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
                                     this.gkEstado = 'maos';
-                                } else if (!this.horaDeMergulhar(lateralEsp, alvoEspT)) {
-                                    // Ainda ha tempo: acompanha de pe, pelo gkAlvoX.
+                                } else if (!podeAtirarSe || !this.horaDeMergulhar(lateralEsp, alvoEspT)) {
+                                    // Ainda nao reagiu, ou ainda ha tempo: acompanha
+                                    // de pe, pelo gkAlvoX. Ver a nota do possoEspalmar.
                                     alvoGkX = espX;
                                     speedLerp = 6.0;
                                 } else {

@@ -436,6 +436,20 @@ const GoalkeeperDive = {
     o canto no primeiro frame depois do remate — desaparece na mesma, porque
     o que conta e o raio no instante em que o mergulho arranca.
     */
+    /*
+    O RAMO DA ESPALMADA EXIGE O `gkReagiu`? — um interruptor, para se medir.
+
+    Era esta a segunda metade da correccao do atraso de reaccao: o ramo
+    principal do mergulho sempre exigiu o `gkReagiu`, e o `possoEspalmar` nao.
+    Medido, um guarda-redes com 0.17 s de atraso ja ia a 11.1 m/s aos 0.15 s do
+    remate com o `reagiu` ainda falso.
+
+    Existe como interruptor porque a suspeita e que seja ELE, e nao o erro de
+    leitura, o que fez a conversao de remate enquadrado saltar de 41% para
+    51-54%: cortar o raio do erro para menos de metade nao mexeu no numero.
+    */
+    espalmarExigeReaccao: true,
+
     erroRaioBase: 0.45,    // metros de dispersao a `erroTempoCheio` de distancia, com GK 50
     erroRaioSkill: 0.35,   // ± conforme a skill de GK (GK 100 -> 0.10 m; GK 0 -> 0.80 m)
     erroTempoCheio: 0.55,  // s de tempo restante a partir do qual o erro esta saturado
