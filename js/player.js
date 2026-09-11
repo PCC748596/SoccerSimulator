@@ -5736,12 +5736,42 @@ class FootballPlayer {
             const dxM = Match.ball.position.x - gkCorpo.position.x;
             const alcanceM = 0.9;
 
-            // Elevação pela altura da bola, abertura pelo afastamento lateral.
-            let elevM = Math.atan2(dyM, 0.8) * 1.2;
+            /*
+            OS BRAÇOS VÃO À FRENTE, E O SINAL DO RIG É NEGATIVO.
+
+            Relato: *"quando a bola vai na direção do goleiro os braços dele
+            ficam para trás e não para frente na hora da defesa"*.
+
+            Medido no próprio rig, com a mão lida por `getWorldPosition` e o
+            modelo virado para +Z:
+
+                lArm.rotation.x = -1.00  ->  mão 0.50 m À FRENTE, 0.32 abaixo
+                lArm.rotation.x =  0.00  ->  mão a prumo, 0.59 abaixo
+                lArm.rotation.x = +1.57  ->  mão 0.59 m ATRÁS, à altura do ombro
+
+            Ou seja: **x negativo é para a frente**. A fórmula era
+            `atan2(dy, 0.8) * 1.2`, sem offset nenhum e com o sinal ao
+            contrário — bola à altura do ombro dava 0 (braços a prumo, colados
+            ao corpo) e bola ACIMA do ombro dava x positivo, que é os braços
+            atrás das costas. É o relato, e acontece justamente na bola que vem
+            ao peito e à cabeça.
+
+            A conta certa: `-PI/2` põe o braço à frente na horizontal, e a
+            elevação da bola soma-se a partir daí — `-PI/2 - atan2(dy, ...)`.
+            Confere com a tabela: bola 0.5 m abaixo do ombro dá -1.01, que a
+            medição diz ser 0.50 m à frente e 0.32 abaixo.
+
+            E NÃO PASSA PELO `clampOmbro`: os limites do JointLimits estão na
+            convenção oposta à do rig (`shoulder.x` de 0 a 180°), e aplicá-los
+            aqui travava x em 0 — exactamente a pose colada ao corpo de que se
+            queixa. O limite fica explícito, na convenção de quem o usa.
+            */
+            const eM = Math.atan2(dyM, 0.8);
+            let elevM = -Math.PI / 2 - eM;
+            // -2.6 é o braço bem acima da cabeça; -0.2 é quase a prumo.
+            elevM = Math.max(-2.6, Math.min(-0.2, elevM));
             let abreM = 0.20 + Math.min(1.3, Math.abs(dxM) * 0.65);
-            const clM = (typeof JointLimits !== 'undefined')
-                ? JointLimits.clampOmbro(elevM, 0, abreM)
-                : { x: elevM, z: abreM };
+            const clM = { x: elevM, z: abreM };
 
             gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, clM.x, 0.4);
             gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, clM.x, 0.4);
@@ -5845,7 +5875,15 @@ class FootballPlayer {
                 */
                 const dxBolaSalto = Match.ball.position.x - gkCorpo.position.x;
                 const alvoZSalto = JointLimits.clamp('shoulder', 'z', 2.8 + THREE.MathUtils.clamp(dxBolaSalto * 0.05, -0.3, 0.3));
-                const alvoXSalto = JointLimits.clamp('shoulder', 'x', -0.5);
+                /*
+                O `x` NAO passa pelo JointLimits, pela mesma razao do estado
+                'maos': `shoulder.x` esta documentado como 0..180 ("elevacao
+                frontal") mas no rig o que leva a mao a frente e o x NEGATIVO —
+                medido, x=-1.0 poe a mao 0.50 m a frente e x=+1.57 poe-a 0.59 m
+                atras. Clampar por ali levava este -0.5 a zero, ou seja tirava
+                justamente a inclinacao para a frente que o comentario pede.
+                */
+                const alvoXSalto = -0.5;
                 gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, alvoZSalto, 0.3);
                 gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -alvoZSalto, 0.3);
                 gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, alvoXSalto, 0.3);

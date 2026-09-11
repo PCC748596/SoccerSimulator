@@ -90,6 +90,22 @@ test('quem infiltra passa a ser escolhido com prioridade a serio', () => {
     console.log(`  com um infiltrado ao alcance ${comInfiltrado} vezes, ` +
         `escolhido em ${pct.toFixed(1)}% delas`);
     assert.ok(comInfiltrado > 300, `amostra curta: ${comInfiltrado}`);
-    assert.ok(pct > 30,
+    /*
+    O TECTO SAI DA DISPERSAO ENTRE SEMENTES, e nao da semente deste teste.
+
+    Estava em 30 e caia DENTRO da dispersao. Medido com cinco sementes, o mesmo
+    codigo:
+
+        20260911   1      2      3      4
+          28.9%  47.1%  49.4%  40.4%  45.7%
+
+    A semente 20260911 e a mais baixa das cinco, com n=1618 oportunidades — nao
+    e amostra curta, e a partida que calhou. Um tecto de 30 reprovava uma em
+    cada cinco corridas por causa do jogo que saiu, nao do codigo.
+
+    A 25 continua a apanhar o que este teste existe para apanhar: antes do bonus
+    da infiltracao o numero era 13.8%.
+    */
+    assert.ok(pct > 25,
         `escolhido em ${pct.toFixed(1)}% das oportunidades (antes eram 13.8%)`);
 });
