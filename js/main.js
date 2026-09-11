@@ -709,8 +709,12 @@ function runFastSim() {
 /*
 HUD com o portador da bola (esquerda) e o adversário mais próximo dele
 (direita) — troca de lado sozinho conforme quem tem a bola muda de equipa.
-Stamina mostrada é a fixa de data/player_skills.js (skills.stamina), não
-tem desgaste ao longo do jogo — é "no início do jogo" como pedido.
+
+A barra mostra o DEPÓSITO de agora (`p.energia`, ver StaminaModel), e já não
+a `skills.stamina` fixa do início do jogo: com o cansaço a existir, mostrar o
+atributo era mostrar o que ele aguenta em vez do que lhe resta. A `stamina`
+continua a contar — é ela que manda no ritmo a que o depósito desce — e
+aparece no título da barra.
 */
 function preencherHudJogador(elId, p) {
     const el = document.getElementById(elId);
@@ -726,14 +730,16 @@ function preencherHudJogador(elId, p) {
     depende de quantos segmentos estão cheios: 5 = green, 4 = yellow,
     3 = orange, 2 ou 1 = red.
     */
-    const acesos = Math.ceil(THREE.MathUtils.clamp(p.skills.stamina, 0, 100) / 20);
+    const deposito = (typeof p.energia === 'number') ? p.energia : 1;
+    const acesos = Math.ceil(THREE.MathUtils.clamp(deposito * 100, 0, 100) / 20);
     const corPorAcesos = { 5: 'on-green', 4: 'on-yellow', 3: 'on-orange', 2: 'on-red', 1: 'on-red', 0: 'on-red' };
     const corStamina = corPorAcesos[acesos];
     const segs = el.querySelectorAll('.hud-jog-stamina-bar .seg');
     segs.forEach((seg, i) => {
         seg.className = 'seg' + (i < acesos ? ' ' + corStamina : '');
     });
-    el.querySelector('.hud-jog-stamina-bar').title = 'Stamina ' + p.skills.stamina;
+    el.querySelector('.hud-jog-stamina-bar').title =
+        'Depósito ' + Math.round(deposito * 100) + '% (stamina ' + p.skills.stamina + ')';
 
     el.classList.remove('oculto');
 }

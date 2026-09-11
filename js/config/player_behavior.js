@@ -1265,3 +1265,66 @@ const RepositionPace = {
         return base * f;
     }
 };
+
+/*
+=============================================================================
+STAMINA — o cansaco, que ate aqui era so um numero no HUD
+=============================================================================
+A `stamina` e a `fitness` vinham de `data/player_skills.js` desde sempre e
+NINGUEM as lia: o unico sitio do codigo que lhes tocava era o HUD
+(`main.js`, a barra de cinco segmentos). Um atributo que se mostra e nao faz
+nada e pior do que nao existir — le-se como se estivesse a contar.
+
+O MODELO, em tres pecas:
+
+1. GASTA-SE COM O QUADRADO DA VELOCIDADE. O custo metabolico da corrida nao e
+   linear: andar quase nao pesa, sprintar pesa muito. `expoente` manda nisso e
+   `vRef` e a corrida contra a qual o custo se mede.
+2. RECUPERA-SE EM BAIXO DE `limiarDescanso`, que e a parte do jogo que se
+   passa a andar ou parado. A `fitness` entra aqui: quem esta em forma
+   recupera mais depressa entre esforcos.
+3. CUSTA VELOCIDADE E CUSTA SKILL. `quedaVelocidade` e quanto a velocidade
+   maxima cai com o deposito vazio; `quedaSkill` sao os pontos de atributo
+   que se perdem (so nos campos fisicos e tecnicos — ver CAMPOS_CANSAVEIS em
+   player.js). Um jogador cansado nao fica so mais lento: erra mais.
+
+O RELOGIO E O DO JOGO, nao o real. O `update` do jogador corre em segundos
+reais e o `MatchDuration.timeScale` comprime 90 minutos de relogio em ~18 de
+movimento; se o gasto corresse no relogio real, mexer no `GAME_SPEED` mudava o
+cansaco sem ninguem pedir. Aqui multiplica-se por `timeScale`, portanto um
+jogo sao sempre 5400 segundos de desgaste.
+
+MEDIDO com estes valores, um jogo de 90 minutos (1188 s a GAME_SPEED 0.99):
+
+    25% do jogo   deposito medio 0.911   min 0.804   no chao 0/22
+    50% do jogo                  0.837       0.654             0/22
+    75% do jogo                  0.785       0.509             0/22
+    fim                          0.729       0.503             0/22
+
+O `max` fica em 1.000 o jogo todo, e esta certo: e o guarda-redes, que quase
+nao corre. O `min` e quem corre por todos — e, pelo que ja se mediu noutra
+frente, o CM, que faz 47% das disputas do jogo.
+
+COMO CALIBRAR: o lote (`Sim.run`) traz `energiaFinal` por equipa em cada jogo.
+O que NAO pode acontecer e alguem encostar ao `minimo` — dali para a frente o
+deposito e uma constante e o modelo deixa de ter efeito. Se o `no chao` sair
+de zero, sobe-se a `recuperaPorSegundo` antes de mexer no `custoPorSegundo`:
+o que falha nesse caso e a recuperacao entre esforcos, nao o custo deles.
+=============================================================================
+*/
+const StaminaModel = {
+    ligada: true,
+
+    vRef: 6.5,                  // m/s: a corrida contra a qual o custo se mede
+    expoente: 2.0,              // custo ~ (v/vRef)^expoente
+    custoPorSegundo: 0.00042,    // fraccao de deposito por segundo de JOGO a vRef, com stamina 50
+    sensibilidadeStamina: 0.5,  // stamina 100 gasta metade; stamina 0, metade a mais
+
+    limiarDescanso: 2.0,        // m/s abaixo do qual recupera
+    recuperaPorSegundo: 0.00016,
+    sensibilidadeFitness: 0.5,
+
+    minimo: 0.50,               // chao do deposito: ninguem anda a metade do passo
+    quedaVelocidade: 0.15,      // -15% de velocidade maxima com o deposito vazio
+    quedaSkill: 8               // pontos de atributo perdidos com o deposito vazio
+};

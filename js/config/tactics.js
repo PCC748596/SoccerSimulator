@@ -22,7 +22,21 @@ de 1080 s dá 90 minutos; a 1.035 seriam 4.35 e o mesmo lote daria ~78. A conta
 docs/filesSummary.md), e leituras feitas a ritmos diferentes não se comparam
 sem a refazer.
 */
-const GAME_SPEED = 0.9;
+/*
+RITMO +10% (pedido): 0.9 -> 0.99.
+
+Fica escrito o que ja se mediu, porque isto ja subiu uma vez e voltou: a 1.035
+o jogo trocava de dono a cada 2.7 passes — o relato "meio sem objetivo, os
+times ficam trocando bola". Nessa altura o ritmo subiu JUNTO com o +30% do
+`RepositionPace`; agora sobe sozinho e fica a 0.99, abaixo do 1.035 que deu
+mau. Se o relato do baralhar voltar, e aqui que se desfaz.
+
+E O RELOGIO ANDA AO CONTRARIO: `timeScale` e `4.5 / GAME_SPEED`, logo acelerar
+o jogo DESACELERA o relogio. De 5.00 passa a 4.55 s de relogio por segundo
+real, e um lote de 1080 s deixa de dar 90 minutos: passa a dar ~82. Para um
+lote de 90 minutos a duracao passa a ser 90*60 / 4.55 = 1188 s.
+*/
+const GAME_SPEED = 0.99;
 
 /*
 Pausa (segundos reais) entre o fim de uma reposição e o recomeço do jogo:

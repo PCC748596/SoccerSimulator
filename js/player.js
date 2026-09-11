@@ -6,6 +6,17 @@ const _p_v3b = new THREE.Vector3();
 const _p_q = new THREE.Quaternion();
 const _p_v4 = new THREE.Vector3();
 
+/*
+Os atributos que o cansaco desconta (ver skillFor). Fora da lista: `stamina` e
+`fitness`, que sao a CAUSA e nao o efeito — descontar nelas fazia bola de neve
+—, o `tacticknow`, que e leitura de jogo, e o `gk`, que o guarda-redes ja paga
+pelo `speed` e pelo `strength` no gesto do mergulho.
+*/
+const CAMPOS_CANSAVEIS = {
+    tec: true, marking: true, speed: true, strength: true,
+    pass: true, intercept: true
+};
+
 class FootballPlayer {
     constructor(id, color1, color2, team) {
         this.id = id; this.team = team; this.role = 'def';
@@ -105,6 +116,11 @@ class FootballPlayer {
         this.offsideTempoEmPosicao = 0;
         this.passInertiaTimer = 0;
         this.passInertiaZDir = null;
+        /*
+        O DEPOSITO, de 1 (inteiro) ao `StaminaModel.minimo`. Ver
+        actualizarEnergia e StaminaModel (config/player_behavior.js).
+        */
+        this.energia = 1;
         // Saída de bola sorteada para esta posse (ver decidirSaidaGK).
         this.gkSaida = null;
         // Colega escolhido para o lançamento com as mãos (estado 'lancando').
@@ -267,12 +283,74 @@ class FootballPlayer {
     — normaliza aqui pra chamar com 'TEC', 'tec' ou qualquer caixa e não
     depender de quem chama acertar a grafia exacta.
     */
-    skillFor(campo) {
-        if (this.skills) {
-            const v = this.skills[String(campo).toLowerCase()];
-            if (typeof v === 'number') return v;
+    /*
+    O CANSACO GASTA-SE E RECUPERA-SE. Ver StaminaModel
+    (config/player_behavior.js) para o modelo e para como se calibra.
+
+    `dt` e o do frame, em segundos REAIS; aqui converte-se para segundos de
+    JOGO com o `timeScale`, senao mexer no GAME_SPEED mudava o cansaco sem
+    ninguem pedir.
+    */
+    actualizarEnergia(dt) {
+        const S = (typeof StaminaModel !== 'undefined') ? StaminaModel : null;
+        if (!S || !S.ligada) { this.energia = 1; return; }
+
+        const escala = (typeof MatchDuration !== 'undefined' && MatchDuration.timeScale)
+            ? MatchDuration.timeScale : 1;
+        const dtJogo = dt * escala;
+
+        const v = this.velocity ? Math.hypot(this.velocity.x, this.velocity.z) : 0;
+
+        if (v > S.limiarDescanso) {
+            // stamina alta gasta menos. 50 e a media e nao mexe.
+            const resistencia = 1 - ((this.skillFor('STAMINA') - 50) / 50) * S.sensibilidadeStamina;
+            const esforco = Math.pow(Math.max(0, v) / Math.max(0.1, S.vRef), S.expoente);
+            this.energia -= S.custoPorSegundo * esforco * Math.max(0.1, resistencia) * dtJogo;
+        } else {
+            const forma = 1 + ((this.skillFor('FITNESS') - 50) / 50) * S.sensibilidadeFitness;
+            this.energia += S.recuperaPorSegundo * Math.max(0.1, forma) * dtJogo;
         }
-        return this.getSkill();
+
+        this.energia = Math.max(S.minimo, Math.min(1, this.energia));
+    }
+
+    /*
+    Quanto da velocidade maxima lhe resta. 1 com o deposito cheio.
+    Multiplica o `maxSpeed` no steerArrive, que e o unico sitio por onde toda
+    a gente passa — o `speedMult` e escrito em vinte folhas da arvore.
+    */
+    factorCansaco() {
+        const S = (typeof StaminaModel !== 'undefined') ? StaminaModel : null;
+        if (!S || !S.ligada) return 1;
+        return 1 - S.quedaVelocidade * (1 - this.energia);
+    }
+
+    /*
+    Skill individual (data/player_skills.js) por campo — gk/tec/marking/
+    speed/strength/pass/intercept. Sem skills carregados, cai no generico.
+    As chaves em p.skills sao MINUSCULAS (gerado por tools/gen_player_skills.js)
+    — normaliza aqui pra chamar com 'TEC', 'tec' ou qualquer caixa e nao
+    depender de quem chama acertar a grafia exacta.
+
+    E O CANSACO DESCONTA-SE AQUI, nos campos fisicos e tecnicos: um jogador
+    no fim do jogo nao fica so mais lento, erra mais. Fora da lista ficam a
+    `stamina` e a `fitness` (sao a causa, nao o efeito — descontar nelas era
+    uma bola de neve) e o `tacticknow`, que e leitura de jogo e nao pernas.
+    */
+    skillFor(campo) {
+        const chave = String(campo).toLowerCase();
+        let base = null;
+        if (this.skills) {
+            const v = this.skills[chave];
+            if (typeof v === 'number') base = v;
+        }
+        if (base === null) base = this.getSkill();
+
+        const S = (typeof StaminaModel !== 'undefined') ? StaminaModel : null;
+        if (S && S.ligada && S.quedaSkill && CAMPOS_CANSAVEIS[chave]) {
+            base = Math.max(1, base - S.quedaSkill * (1 - this.energia));
+        }
+        return base;
     }
 
     /*
@@ -3222,6 +3300,9 @@ class FootballPlayer {
             if (this.devolverPara.timer <= 0) this.devolverPara = null;
         }
         if (this.passInertiaTimer > 0) this.passInertiaTimer = Math.max(0, this.passInertiaTimer - dt);
+        // O deposito, antes de qualquer decisao: as folhas da arvore ja leem
+        // skillFor() neste frame. Ver StaminaModel.
+        this.actualizarEnergia(dt);
         // Arrefecimento da corrida ao espaco (ver RunIntoSpaceModel). Corre
         // aqui e nao na FSM: a FSM so mexe no estado corrente, e o
         // arrefecimento tem de correr JUSTAMENTE quando ele ja nao esta a
@@ -3738,6 +3819,13 @@ class FootballPlayer {
     }
 
     steerArrive(target, maxSpeed, brakingDist = 2.0) {
+        /*
+        O CANSACO ENTRA AQUI, e num sitio so: o `speedMult` que chega como
+        `maxSpeed` e escrito em vinte folhas da arvore, e descontar em cada
+        uma delas era garantir esquecer metade. Ver factorCansaco.
+        */
+        maxSpeed *= this.factorCansaco();
+
         let desired = _p_v1.subVectors(target, this.model.position);
         desired.y = 0; let d = desired.length();
 

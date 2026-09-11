@@ -621,6 +621,197 @@ function vigiarEncrave(v, jogo, tempoDeJogo, dt) {
         `no jogo ${jogo}, aos ${reg.aosSegundos}s.`, reg);
 }
 
+/*
+=============================================================================
+EQUIPAS DE MEDIAS DIFERENTES — 60x70, 70x80, 65x85
+=============================================================================
+Ate aqui o lote corria sempre 80 contra 80: as duas equipas com a mesma
+media em `TeamSkills`, e por isso nada no relatorio dizia se a skill vale
+alguma coisa. Um simulador em que o 85 nao ganha ao 65 esta partido, e nunca
+foi medido.
+
+`opts.medias` e a lista de confrontos a girar pelo lote. Aceita os dois
+formatos, que e como eles se escrevem:
+
+    Sim.run({ jogos: 24, medias: [[60, 70], [70, 80], [65, 85]] })
+    Sim.run({ jogos: 24, medias: ['60x70', '70x80', '65x85'] })
+
+A media aplica-se aos QUATRO campos (def, mid, ata, gk): e a media da equipa,
+nao um perfil.
+
+E TROCA DE LADO a meio. Cada par corre metade dos jogos com o mais forte em
+TeamA e metade com ele em TeamB — senao qualquer vies de lado (quem comeca
+com a bola, a orientacao do campo) entrava na conta como se fosse skill.
+=============================================================================
+*/
+function normalizarMedias(medias) {
+    if (!medias || !medias.length) return null;
+    const pares = [];
+    for (const m of medias) {
+        let a, b;
+        if (typeof m === 'string') {
+            const partes = m.split(/[xX×,\s]+/).filter(Boolean).map(Number);
+            a = partes[0]; b = partes[1];
+        } else if (Array.isArray(m)) {
+            a = Number(m[0]); b = Number(m[1]);
+        } else if (m && typeof m === 'object') {
+            a = Number(m.a); b = Number(m.b);
+        }
+        if (!isFinite(a) || !isFinite(b)) {
+            console.warn('Sim: confronto ignorado, nao percebi as medias:', m);
+            continue;
+        }
+        pares.push([a, b]);
+    }
+    return pares.length ? pares : null;
+}
+
+/*
+A MEDIA MEXE NAS SKILLS INDIVIDUAIS, e nao so no TeamSkills.
+
+O `TeamSkills` do painel e FALLBACK: o `player.skillFor()` le primeiro as
+skills individuais de `data/player_skills.js` e so cai no generico quando o
+jogador nao as tem. Escrever 65 no painel e deixar os onze com os valores de
+sempre nao fazia equipa nenhuma pior — fazia um lote que parecia estar a testar
+e nao estava.
+
+O deslocamento e ADITIVO sobre o ancora do gerador. O
+`tools/gen_player_skills.js` monta cada atributo como `base + desvio do posto +
+ruido`, com `base = 80`; portanto "media 65" e exactamente `base` a 65, ou seja
+somar -15 a tudo. Assim o perfil do jogador mantem-se — o RB continua a ser o
+melhor marcador do plantel, o CF o mais rapido — e so o nivel desce.
+
+Parte SEMPRE dos valores originais (`originais`), nunca dos do jogo anterior:
+a somar sobre o que ja la estava, um lote de 24 jogos acabava com equipas a
+zero.
+*/
+const MEDIA_BASE_SKILLS = 80;
+const CAMPOS_DA_MEDIA = ['fitness', 'stamina', 'gk', 'tec', 'marking', 'speed',
+    'strength', 'pass', 'intercept', 'tacticknow'];
+
+/*
+O DEPOSITO ENCHE-SE ENTRE JOGOS, e mede-se no fim de cada um.
+
+Sem o encher, o jogo 2 do lote comecava com as pernas do fim do jogo 1 e ao
+decimo estava toda a gente no `StaminaModel.minimo` — um lote de calibracao a
+medir um cansaco que nao e o de um jogo. E sem o medir nao ha por onde afinar
+o modelo: e o `energiaFinal` de cada ficha que diz se o deposito acabou onde
+devia (0.65-0.70) ou encostado ao chao.
+*/
+function reporEnergias() {
+    for (const lista of [Match.players, Match.opponents]) {
+        for (const p of lista) { if (p) p.energia = 1; }
+    }
+}
+
+function mediaDeEnergia(lista) {
+    let soma = 0, n = 0;
+    for (const p of lista) {
+        if (!p || typeof p.energia !== 'number') continue;
+        soma += p.energia; n++;
+    }
+    return n ? Number((soma / n).toFixed(3)) : null;
+}
+
+function listaDaEquipa(equipa) {
+    return (equipa === 'TeamA') ? Match.players : Match.opponents;
+}
+
+// Cópia das skills de cada jogador, para repor no fim do lote.
+function guardarSkillsDaEquipa(equipa) {
+    return listaDaEquipa(equipa).map(p => (p && p.skills) ? Object.assign({}, p.skills) : null);
+}
+
+function reporSkillsDaEquipa(equipa, guardadas) {
+    const lista = listaDaEquipa(equipa);
+    for (let i = 0; i < lista.length; i++) {
+        if (lista[i] && guardadas[i]) lista[i].skills = guardadas[i];
+    }
+}
+
+function aplicarMediaNaEquipa(equipa, media, originais) {
+    TeamSkills[equipa].def = media;
+    TeamSkills[equipa].mid = media;
+    TeamSkills[equipa].ata = media;
+    TeamSkills[equipa].gk = media;
+
+    const delta = media - MEDIA_BASE_SKILLS;
+    const lista = listaDaEquipa(equipa);
+    let soma = 0, n = 0;
+    for (let i = 0; i < lista.length; i++) {
+        const p = lista[i], orig = originais[i];
+        if (!p || !orig) continue;
+        // Objecto novo: o `originais` e a copia rasa do arranque e nao pode
+        // ser escrito por cima.
+        const novas = Object.assign({}, orig);
+        for (const campo of CAMPOS_DA_MEDIA) {
+            if (typeof orig[campo] !== 'number') continue;
+            novas[campo] = Math.max(1, Math.min(99, Math.round(orig[campo] + delta)));
+            soma += novas[campo]; n++;
+        }
+        p.skills = novas;
+    }
+    // A media EFECTIVA, depois do clamp: e ela que vale, nao a pedida.
+    return n ? (soma / n) : media;
+}
+
+/*
+O CONFRONTO, do lado do MAIS FORTE — e nao do TeamA.
+
+Com a troca de lado, somar por equipa nao diz nada: metade dos jogos tem o 85
+de um lado e metade do outro. O que se quer saber e o que a diferenca de media
+compra, portanto tudo se conta como "forte" contra "fraco".
+*/
+function resumirConfrontos(resultados) {
+    const porPar = {};
+    for (const r of resultados) {
+        if (!r.medias) continue;
+        const mA = r.medias.TeamA, mB = r.medias.TeamB;
+        const forteEhA = mA >= mB;
+        const forte = forteEhA ? r.TeamA : r.TeamB;
+        const fraco = forteEhA ? r.TeamB : r.TeamA;
+        const mForte = Math.max(mA, mB), mFraco = Math.min(mA, mB);
+        const chave = mFraco + ' x ' + mForte;
+        const e = porPar[chave] || (porPar[chave] = {
+            confronto: chave, media: mFraco + ' vs ' + mForte, jogos: 0,
+            gForte: 0, gFraco: 0, remForte: 0, remFraco: 0,
+            alvoForte: 0, alvoFraco: 0, xgForte: 0, xgFraco: 0,
+            vitForte: 0, empates: 0, vitFraco: 0
+        });
+        e.jogos++;
+        e.gForte += forte.golos; e.gFraco += fraco.golos;
+        e.remForte += forte.remates; e.remFraco += fraco.remates;
+        e.alvoForte += forte.rematesNoAlvo; e.alvoFraco += fraco.rematesNoAlvo;
+        e.xgForte += forte.xg; e.xgFraco += fraco.xg;
+        if (forte.golos > fraco.golos) e.vitForte++;
+        else if (forte.golos < fraco.golos) e.vitFraco++;
+        else e.empates++;
+    }
+    const linhas = [];
+    for (const chave in porPar) {
+        const e = porPar[chave];
+        const n = Math.max(1, e.jogos);
+        linhas.push({
+            confronto: e.media,
+            jogos: e.jogos,
+            golosForte: Number((e.gForte / n).toFixed(2)),
+            golosFraco: Number((e.gFraco / n).toFixed(2)),
+            saldoForte: Number(((e.gForte - e.gFraco) / n).toFixed(2)),
+            pctVitoriaForte: Number((100 * e.vitForte / n).toFixed(1)),
+            pctEmpate: Number((100 * e.empates / n).toFixed(1)),
+            pctVitoriaFraco: Number((100 * e.vitFraco / n).toFixed(1)),
+            rematesForte: Number((e.remForte / n).toFixed(1)),
+            rematesFraco: Number((e.remFraco / n).toFixed(1)),
+            pctNoAlvoForte: Number((100 * e.alvoForte / Math.max(1, e.remForte)).toFixed(1)),
+            pctNoAlvoFraco: Number((100 * e.alvoFraco / Math.max(1, e.remFraco)).toFixed(1)),
+            xgForte: Number((e.xgForte / n).toFixed(2)),
+            xgFraco: Number((e.xgFraco / n).toFixed(2))
+        });
+    }
+    linhas.sort((a, b) => b.saldoForte - a.saldoForte);
+    return linhas;
+}
+
 const Sim = {
     running: false,
     resultados: [],
@@ -646,6 +837,12 @@ const Sim = {
     opts.amostragem  1 = mede tudo em todos os frames (o de sempre); N = mede
                       o heatmap e os desvios 1 vez em cada N. `rapido` põe-no
                       a 6 (10 Hz a dt=1/60). Explícito ganha ao `rapido`.
+    opts.medias      confrontos de médias a girar pelo lote, com troca de
+                      lado a meio — `[[60,70],[70,80],[65,85]]` ou
+                      `['60x70','70x80','65x85']`. Sem isto o lote corre com
+                      o que o painel tem nas duas equipas (80 contra 80), e
+                      nada no relatório diz se a skill vale alguma coisa.
+                      Ver normalizarMedias e resumirConfrontos.
 
     O QUE **NÃO** É AMOSTRÁVEL, e porquê: `registarPermanencia` e
     `registarEstilos` fazem detecção de FLANCO — o primeiro abre e fecha
@@ -685,6 +882,23 @@ const Sim = {
 
         const calibrarEstilos = opts.calibrarEstilos !== false;
         const rotacionarFormacoes = calibrarEstilos && opts.rotacionarFormacoes !== false;
+
+        /*
+        As médias do lote. Guarda-se o que o painel tinha para repor no fim:
+        um lote não deve deixar as equipas com a skill do último confronto.
+        */
+        const paresDeMedias = normalizarMedias(opts.medias);
+        const skillsOriginais = paresDeMedias
+            ? {
+                painel: { TeamA: Object.assign({}, TeamSkills.TeamA), TeamB: Object.assign({}, TeamSkills.TeamB) },
+                TeamA: guardarSkillsDaEquipa('TeamA'),
+                TeamB: guardarSkillsDaEquipa('TeamB')
+            }
+            : null;
+        if (paresDeMedias) {
+            console.log('Sim: confrontos deste lote (com troca de lado a meio):',
+                paresDeMedias.map(p => p[0] + 'x' + p[1]).join(', '));
+        }
 
         this.running = true;
         this.resultados = [];
@@ -735,6 +949,31 @@ const Sim = {
                 aplicarCoberturaNoJogo(planoCobertura, forma, fixoOriginais);
                 Match.assignFormations();
             }
+
+            /*
+            AS MÉDIAS DESTE JOGO, antes do resetPlay — o `assignFormations` e
+            o arranque já leem TeamSkills.
+
+            `viragem` é a troca de lado: passada a lista toda de confrontos
+            uma vez, a volta seguinte corre-os com o forte na outra equipa.
+            */
+            let mediasDoJogo = null;
+            if (paresDeMedias) {
+                const par = paresDeMedias[jogo % paresDeMedias.length];
+                const viragem = Math.floor(jogo / paresDeMedias.length) % 2 === 1;
+                const mA = viragem ? par[1] : par[0];
+                const mB = viragem ? par[0] : par[1];
+                const efA = aplicarMediaNaEquipa('TeamA', mA, skillsOriginais.TeamA);
+                const efB = aplicarMediaNaEquipa('TeamB', mB, skillsOriginais.TeamB);
+                mediasDoJogo = {
+                    TeamA: mA, TeamB: mB,
+                    // Depois do clamp em [1, 99]: numa media muito baixa a
+                    // efectiva sobe acima da pedida, e e ela que vale.
+                    efectivaA: Number(efA.toFixed(1)), efectivaB: Number(efB.toFixed(1))
+                };
+            }
+
+            reporEnergias();
 
             Match.resetPlay();
             MatchStats.reset();
@@ -842,6 +1081,15 @@ const Sim = {
             // estatisticas todas e nao dizia quem ganhou.
             this.resultados.push({
                 jogo: jogo + 1, placar: resumo.placar,
+                // Sem isto o relatório tinha as fichas e não dizia QUEM as fez:
+                // com a troca de lado, TeamA não é sempre o mesmo nível.
+                medias: mediasDoJogo,
+                // O deposito medio no apito final, por equipa. Ver StaminaModel:
+                // e este numero que diz se o cansaco esta calibrado.
+                energiaFinal: {
+                    TeamA: mediaDeEnergia(Match.players),
+                    TeamB: mediaDeEnergia(Match.opponents)
+                },
                 TeamA: resumo.TeamA, TeamB: resumo.TeamB
             });
             console.log(`Sim: jogo ${jogo + 1}/${nJogos} concluído.`, resumo);
@@ -891,6 +1139,19 @@ const Sim = {
             console.table(relatorioPasses);
         }
 
+        if (skillsOriginais) {
+            TeamSkills.TeamA = skillsOriginais.painel.TeamA;
+            TeamSkills.TeamB = skillsOriginais.painel.TeamB;
+            reporSkillsDaEquipa('TeamA', skillsOriginais.TeamA);
+            reporSkillsDaEquipa('TeamB', skillsOriginais.TeamB);
+        }
+
+        const relatorioConfrontos = paresDeMedias ? resumirConfrontos(this.resultados) : null;
+        if (relatorioConfrontos && relatorioConfrontos.length) {
+            console.log('Sim: confrontos por diferença de média (tudo do lado do MAIS FORTE)');
+            console.table(relatorioConfrontos);
+        }
+
         const relatorioMedia = montarMediaPorJogo(this._porJogo);
         if (relatorioMedia && relatorioMedia.length) {
             console.log('Sim: media por jogo contra os alvos (as duas equipas somadas)');
@@ -928,7 +1189,8 @@ const Sim = {
             */
             parametros: {
                 jogos: nJogos, duracaoSeg, dt, calibrarEstilos, rotacionarFormacoes,
-                rapido, amostragem, passosPorLote
+                rapido, amostragem, passosPorLote,
+                medias: paresDeMedias
             },
             duracaoRealSeg: Number(duracaoReal),
             /*
@@ -937,6 +1199,16 @@ const Sim = {
             futebol. Ver montarMediaPorJogo.
             */
             mediaPorJogo: relatorioMedia,
+            /*
+            O que a diferença de média compra, por confronto. Null quando o
+            lote correu com as duas equipas iguais (o caso de sempre) — e aí
+            a `mediaPorJogo` já diz tudo.
+
+            ATENÇÃO à leitura: com `medias`, a `mediaPorJogo` mistura os
+            confrontos todos, portanto compara-se contra os alvos com a
+            ressalva de que metade das equipas não é de 80.
+            */
+            confrontos: relatorioConfrontos,
             resultados: this.resultados,
             heatmap: this.heatmap,
             estilos: relatorioEstilos,
