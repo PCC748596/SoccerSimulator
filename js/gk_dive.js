@@ -320,6 +320,11 @@ const GkDive = {
                     levantava-se instantaneamente com a bola na mão.
                     */
                     p.gkEstado = d.agarrou ? 'segurando' : 'idle';
+                    /*
+                    Levanta-se, mas ainda nao corre: ver
+                    GoalkeeperDive.recuperacao. Quem a gasta e o updateGK.
+                    */
+                    p.gkRecuperacao = (typeof D.recuperacao === 'number') ? D.recuperacao : 0;
                     p.gkTempoMergulho = 0;
                     p.dive = null;
                     return false;

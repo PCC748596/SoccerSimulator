@@ -58,6 +58,28 @@ const GoalkeeperPose = {
     `1 + agilidadeSkill` vezes mais depressa do que a 50, a 0 sai
     `1 - agilidadeSkill` vezes.
     */
+    /*
+    O TECTO, QUE NAO EXISTIA.
+
+    Relato: *"a bola passa pelo goleiro em uma velocidade elevada e o goleiro
+    consegue ir atras da bola numa velocidade maior que a bola e alcancar a
+    bola"*.
+
+    A `agilidade` multiplica o `speedLerp` de cada situacao e mais nada o
+    travava. A conta, com o GK 85 destes planteis: o ramo de reaccao ao remate
+    da `3.0 + ((85-50)/50)*6.0 = 7.2` m/s, vezes `1.5 * (1 + 0.7*0.25) = 1.76`,
+    da **12.7 m/s**. Usain Bolt faz 12.4. Medido em 900 s de jogo, o maximo
+    real do guarda-redes foi 17.0 m/s contra 8.4 de p99 dos jogadores de campo.
+
+    Agora ha um tecto, aplicado DEPOIS da agilidade: e ela que continua a
+    mandar em quem arranca mais depressa, mas nenhum guarda-redes corre mais do
+    que isto. 7.6 m/s a GK 50 e 8.4 a GK 100 poem-no ao nivel dos avancados
+    (p99 medido 8.4), que e onde um guarda-redes pertence — rapido, nao
+    sobre-humano.
+    */
+    velMaxCorrida: 7.6,        // m/s a GK 50
+    velMaxCorridaSkill: 0.8,   // + isto a GK 100, - isto a GK 0
+
     agilidade: 1.5,
     agilidadeSkill: 0.25,
 
@@ -460,6 +482,25 @@ const GoalkeeperDive = {
     tempoImpulso: 0.12,    // agachar e estender as pernas
     tempoChao: 0.35,       // deslizar no relvado depois de aterrar
     tempoLevantar: 0.75,   // pôr-se de pé
+
+    /*
+    E DEPOIS DE SE PÔR DE PÉ AINDA NÃO ARRANCA.
+
+    Relato: *"o goleiro quando cai levanta praticamente instantaneamente e sai
+    atrás da bola. Isso não existe no futebol"*. Medido: do fim do mergulho até
+    voltar a andar a mais de 3 m/s, **0.44 s de média e 0.02 s no melhor caso**.
+    Ou seja, punha-se de pé e no frame seguinte já ia a correr.
+
+    `recuperacao` são os segundos em que ele ainda está a recompor-se, e
+    `recuperacaoVel` é a fracção da velocidade com que arranca — sobe até 1 ao
+    longo da janela. Com 0.40, no instante em que se levanta anda a 40% e só
+    passado um segundo corre como sempre.
+
+    Não mexi no `tempoChao` nem no `tempoLevantar`: esses são o gesto, e
+    alongá-los tirava-o do jogo em vez de o pôr a recompor-se a andar.
+    */
+    recuperacao: 1.0,
+    recuperacaoVel: 0.40,
 
     /*
     DURACAO DO VOO. Deixou de ser adivinhada: sai da propria parabola

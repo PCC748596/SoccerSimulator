@@ -225,6 +225,9 @@ class FootballPlayer {
         this.gkTiroAlvo = null;    // ponto de arranque do tiro de meta
         this.gkReagiu = false;
         this.gkDelayReacao = 0;
+        // Segundos que lhe faltam para estar recomposto depois de um mergulho
+        // (ver GoalkeeperDive.recuperacao).
+        this.gkRecuperacao = 0;
         // Ruído da leitura da trajectória, sorteado uma vez por remate (ver alvoLidoGK).
         this._gkErroU = 0;
         this._gkErroV = 0;
@@ -5372,6 +5375,39 @@ class FootballPlayer {
                 ? GoalkeeperPose.agilidadeSkill : 0;
             speedLerp *= G_AG * (1 + ((gkSkill - 50) / 50) * G_AGS);
 
+            /*
+            AINDA A RECOMPOR-SE DO MERGULHO: arranca devagar.
+
+            Ver GoalkeeperDive.recuperacao. Medido antes disto, do fim do
+            mergulho ate voltar a andar a mais de 3 m/s: 0.44 s de media e
+            0.02 s no melhor caso — punha-se de pe e no frame seguinte ia a
+            correr atras da bola.
+            */
+            if (this.gkRecuperacao > 0) {
+                this.gkRecuperacao = Math.max(0, this.gkRecuperacao - dt);
+                const D = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
+                const total = (D && D.recuperacao) ? D.recuperacao : 1;
+                const minimo = (D && typeof D.recuperacaoVel === 'number') ? D.recuperacaoVel : 1;
+                // 1 no fim da janela, `recuperacaoVel` no instante em que se levanta.
+                const k = 1 - Math.max(0, Math.min(1, this.gkRecuperacao / Math.max(0.001, total)));
+                speedLerp *= minimo + (1 - minimo) * k;
+            }
+
+            /*
+            E UM TECTO HUMANO POR CIMA DE TUDO.
+
+            Sem ele o ramo de reaccao ao remate chegava a 12.7 m/s com a
+            agilidade aplicada, e medido em jogo o maximo real do guarda-redes
+            era 17.0 m/s contra 8.4 de p99 dos jogadores de campo — era isto que
+            o punha a correr atras de uma bola que ja lhe tinha passado e a
+            apanha-la. Ver GoalkeeperPose.velMaxCorrida.
+            */
+            if (typeof GoalkeeperPose.velMaxCorrida === 'number') {
+                const tecto = GoalkeeperPose.velMaxCorrida +
+                    ((gkSkill - 50) / 50) * (GoalkeeperPose.velMaxCorridaSkill || 0);
+                speedLerp = Math.min(speedLerp, Math.max(1.0, tecto));
+            }
+
             const dxGk = alvoGkX - gkCorpo.position.x;
             const dzGk = alvoGkZ - gkCorpo.position.z;
             const distGk = Math.hypot(dxGk, dzGk);
@@ -5657,9 +5693,31 @@ class FootballPlayer {
             const gkSkillM = this.skillFor('GK');
             const Pm = GoalkeeperPose.espera;
 
-            // Um passo curto para o lado da bola — não é deslocação, é ajuste.
+            /*
+            Um passo curto para o lado da bola — não é deslocação, é ajuste.
+
+            E COM LIMITE DE VELOCIDADE, como o ramo de reposicionamento.
+
+            Era `lerpTo(x, alvo, 0.12)` — lerp exponencial puro, o mesmo que já
+            tinha sido corrigido no ramo 'idle' com a nota "Passo limitado a
+            speedLerp m/s". Aqui ficou. A 60 fps, 12% do que falta por frame com
+            o alvo a 3 m dá 0.36 m NUM FRAME, ou seja 21.6 m/s — e foi
+            exactamente isso que se mediu: 22.75 m/s de máximo, no estado
+            'maos'. Relato: *"o goleiro consegue ir atrás da bola numa
+            velocidade maior que a bola e alcançar a bola"*.
+
+            O tecto é o mesmo do outro ramo (GoalkeeperPose.velMaxCorrida), que
+            é o que garante que os dois não divergem outra vez.
+            */
             if (typeof this.gkAlvoX === 'number') {
-                gkCorpo.position.x = lerpTo(gkCorpo.position.x, this.gkAlvoX, 0.12);
+                const alvoM = lerpTo(gkCorpo.position.x, this.gkAlvoX, 0.12);
+                const passoM = alvoM - gkCorpo.position.x;
+                const tectoM = ((typeof GoalkeeperPose.velMaxCorrida === 'number')
+                    ? GoalkeeperPose.velMaxCorrida +
+                      ((gkSkillM - 50) / 50) * (GoalkeeperPose.velMaxCorridaSkill || 0)
+                    : 8.0) * dt;
+                gkCorpo.position.x += (Math.abs(passoM) > tectoM)
+                    ? Math.sign(passoM) * tectoM : passoM;
             }
 
             gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + Pm.altura, 0.25);
