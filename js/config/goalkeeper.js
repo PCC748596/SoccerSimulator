@@ -415,8 +415,29 @@ const GoalkeeperDive = {
     conta e o raio no instante em que o mergulho arranca (o `GkDive.iniciar`
     congela o alvo), e ai faltam tipicamente 0.3-0.5 s.
     */
-    erroRaioBase: 1.10,    // metros de dispersao a `erroTempoCheio` de distancia, com GK 50
-    erroRaioSkill: 0.85,   // ± conforme a skill de GK (GK 100 -> 0.25 m; GK 0 -> 1.95 m)
+    /*
+    O RAIO, CORTADO A MENOS DE METADE depois do lote de 50 jogos.
+
+    Entrou a 1.10 / 0.85 com a medicao do headless a dizer que nao custava
+    golos. Custava, e o lote do browser mostrou onde o headless nao tinha
+    amostra para ver:
+
+        metrica                lote 100 (antes)   lote 50 (com 1.10)   alvo
+        golos                       2.67                3.25           2.52
+        golos por enquadrado         41%                 51%           ~32%
+        xG total                    ~1.57               1.29           2.84
+
+    Golos +0.58 por jogo, e o remate enquadrado a entrar em metade das vezes.
+    Pior: 3.25 golos contra 1.29 de xG — o jogo marca duas vezes e meia o que
+    as proprias chances valem, quando antes desta sessao o racio era 1.7.
+
+    1.10 m era erro de leitura grande de mais para um profissional numa
+    baliza de 7.32 m de largura. A 0.45 o artefacto que isto corrige — saber
+    o canto no primeiro frame depois do remate — desaparece na mesma, porque
+    o que conta e o raio no instante em que o mergulho arranca.
+    */
+    erroRaioBase: 0.45,    // metros de dispersao a `erroTempoCheio` de distancia, com GK 50
+    erroRaioSkill: 0.35,   // ± conforme a skill de GK (GK 100 -> 0.10 m; GK 0 -> 0.80 m)
     erroTempoCheio: 0.55,  // s de tempo restante a partir do qual o erro esta saturado
     erroFraccaoY: 0.6,     // a altura le-se melhor do que o lado
 
