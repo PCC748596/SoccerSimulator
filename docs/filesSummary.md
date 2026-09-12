@@ -8863,3 +8863,158 @@ PENDÊNCIAS jogo a jogo — golos, remates e faltas por 90 fora de banda, posse
 desequilibrada, jogo parado tempo a mais, alguém fora do campo, posições não
 numéricas, alas fechadas, matadas no peito a menos. É o teste que apanha o que
 um teste unitário não vê.
+
+### Sessão de 12 de Setembro de 2026 — laboratório do duelo, estilos derivados, auditoria de FPS
+
+#### "Cara a cara": um botão para ver o duelo
+
+Pedido: um botão que ponha o atacante a 25 m do centro da baliza, a 45 graus,
+a correr para ela, para se ver a reacção dele e a do guarda-redes.
+
+`Match.triggerCaraACara` (match_setpieces.js). Não é uma bola parada — o jogo
+fica em PLAY e ninguém apita: é uma MONTAGEM. O lado ALTERNA a cada clique,
+porque o ângulo de remate e o lado do mergulho mudam com ele e um botão que
+fizesse sempre o mesmo lado escondia metade do que há para ver. Todos os
+outros saem para o meio-campo de trás, menos os dois guarda-redes, e longe o
+suficiente para o `ShootingModel.frenteAFrente` (tecto de 30 m) ainda ler o
+lance como um frente-a-frente.
+
+Medido em 20 lances: **19 remates, 5 golos, 14 defesas ou remates fora**.
+
+#### E o laboratório apanhou logo o defeito do "toca para trás"
+
+Relato anterior: *"tem jogador dentro da área, de frente para o gol, tocando
+pra trás ao invés de chutar. Inacreditável."*
+
+O rasto da árvore no primeiro frame do lance:
+
+```
+tenhoABola > precisaPassarAosDefesas > passarAosDefesas > PasseSaidaDeBola
+```
+
+É a SAÍDA DE BOLA, com o avançado a 25 m da baliza adversária. A bandeira
+`Match.kickoffPendingPassToDef` não tinha prazo nem lugar: ficava de pé desde
+o pontapé de saída até alguém tocar para trás, e se a bola chegasse antes
+disso a um avançado — uma intercepção logo a seguir à saída — este ramo, que
+está ACIMA do `Dominar`, ganhava. Passou a exigir campo próprio
+(`avanco > 0` falha) e a não disparar em zona de remate. Depois: conduz de
+25 m até 11.2 m e remata — golo a 4.6 s.
+
+#### Os playing styles do ficheiro de dados: 91 de 3 124
+
+Relato: *"acho que o parse do players.json não está retornando corretamente os
+Playing Styles"*. O parse está certo; o ficheiro é que quase não os tem. O
+campo `playingStyle` **existe em 91 dos 3 124 registos** — não vem vazio nos
+outros, não vem (todos os outros 77 campos existem em todos os registos).
+
+Sem mais nada, 97% dos jogadores caíam no `EstiloPorOmissao` da POSIÇÃO: todos
+os laterais direitos do país iguais, e o crossing, o finishing e o vision que
+o ficheiro traz sem consequência nenhuma. Agora o estilo é DERIVADO dos
+atributos (`EstiloDerivado` em js/config/skill_map.js): cada posição tem as
+suas candidaturas do catálogo `PlayingStyles` e ganha aquela em que o jogador
+se destaca **em relação aos outros da mesma posição**.
+
+A primeira versão comparava as notas em bruto e saiu torta — 322
+`the_destroyer` contra 18 `build_up` nos centrais, porque neste ficheiro os
+centrais desarmam melhor do que passam. Com a comparação por z-score dentro da
+posição: 179/170/157. Resultado: 91 dos dados, 2 988 derivados, 0 sem estilo,
+os 21 estilos do catálogo em uso.
+
+#### A escala dos planteis mede-se nos TITULARES
+
+A normalização (ver a sessão anterior) media a população inteira, e quem joga
+não é a média do plantel: é o melhor onze de 40 a 60 jogadores. Medido, o onze
+saía a 86.9 contra os 82 dos genéricos. Passou a medir-se nos titulares, com a
+escolha do onze partilhada por um só sítio (`escolherOnzeDaFormacao`, em
+skill_map.js) entre o jogo, o conversor e o teste — antes eram três cópias.
+
+#### O que o lote apanhou, e o que não é dos planteis
+
+Dois defeitos reais, encontrados por correr 60 jogos e não por ler código:
+
+- **Referências a jogadores antigos sobreviviam à troca de equipas.** Um jogo
+  acabou em GOAL, o `saidaPlano` guardou o batedor desse jogo, e o `resetPlay`
+  do jogo seguinte reutilizou-o: o jogo inteiro passou com a bola no meio-campo
+  agarrada a um boneco que já não estava na cena — **zero passes em 18
+  minutos**. O `esquecerJogadoresAntigos` varre o `Match` inteiro em vez de
+  listar campos à mão, que é o que fica desactualizado no dia em que alguém
+  acrescentar mais um.
+- **A cena crescia 88 objectos por jogo**: os anéis do debug e a linha do alvo
+  são filhos da CENA e não do modelo, logo não saíam com o `model`.
+
+E o veredicto sobre os golos a mais (4.7 por 90 contra 2.52 reais): **não são
+dos planteis nem das alterações desta sessão**. O lote de controlo com equipas
+GENÉRICAS (`LOTE_GENERICAS=1`) deu 4.74, contra 4.58 com planteis reais — a
+mesma coisa. E o A/B do piso de largura mostra que ele MELHOROU a realidade:
+
+```
+                  golos/90   remates/90   |x| alas
+WideAnchor on        3.90        32.3       19.0
+WideAnchor off       5.03        40.8       16.0
+```
+
+O que resta é anterior, e estava escondido pela ferramenta de referência: o
+`painel.js` mede 900 s e extrapola, e em jogos completos de 90 minutos o motor
+dá ~5.7 golos — com o primeiro sexto do jogo a dar ZERO e os últimos a dar
+quatro. Fica identificado, não corrigido: mexer nisso é mexer nos modelos de
+remate e de guarda-redes.
+
+#### Auditoria de FPS: não é a lógica
+
+Relato: *"quando chega a 40 minutos de jogo, cai de 60 para 40 FPS"*.
+
+Medido primeiro sem ecrã (`tools/headless/perf_deriva.js`, 63 minutos de
+jogo): **o tempo de CPU por frame é plano** (2.7 -> 2.0 ms), a cena fica nos
+mesmos 1975 objectos, e nenhuma colecção do `Match`/`MatchStats`/`Officials`
+cresce sem limite. Não é o jogo a pensar.
+
+Duas coisas ficaram no lugar para fechar a auditoria onde ela acontece:
+
+- `auditarPerformance` (main.js) escreve na consola, a cada 30 s, os
+  contadores do renderer — chamadas de desenho, geometrias, **texturas
+  vivas** —, os objectos da cena, o heap de JS e os PASSOS POR FRAME. Um deles
+  a subir diz onde está a fuga; todos planos diz que não é o cliente.
+- **Os passos por frame são a explicação do PATAMAR.** O passo de simulação tem
+  tecto (1.5 frames de 60 Hz) mas o tempo a consumir é o do frame real: a 60
+  fps cabe um passo e, no instante em que o frame passa de ~25 ms, passam a ser
+  DOIS — um tick de lógica inteiro acrescentado ao frame que já estava lento.
+  É isso que faz a queda ler-se como um patamar nos 40 fps em vez de uma
+  descida suave, e é por isso que o número aparece no log.
+
+Corrigida pelo caminho uma fuga de textura a sério: o `updateShirt` trocava o
+`map` do disco táctico sem libertar o anterior.
+
+#### Equipas por omissão
+
+Grêmio-RS e Internacional-RS, por NOME e não por id (`equipaNomeOmissaoA/B` em
+match_setup.js): os ids vêm do ficheiro de origem e o `data/squads.js` é
+regerado sempre que esses dados mudem — um id à mão ficaria a apontar para
+outra equipa qualquer sem ninguém dar por isso.
+
+#### O guarda-redes atrás do próprio passe (a falha que estava na suíte)
+
+A suíte tinha uma falha de pé, `gk_nao_persegue_o_proprio_passe`. Confirmado
+por worktree no commit de início da sessão: já falhava antes (20 frames), mas
+tinha piorado para 78. O bisect aponta o commit do piso de largura — não por
+causa do guarda-redes, mas porque o arranjo dos 300 frames de aquecimento do
+teste mudou e quem ficava perto da bola passou a ser outro.
+
+O defeito a sério estava noutro sítio: o ramo do guarda-redes que o manda
+atrás de qualquer bola sem portador a menos de 10 m **não tinha a guarda que o
+ramo da "bola solta na área" já tinha**. Um passe em voo não tem
+`ballCarrier`, e o `recuoParaGR` é recalculado por frame contra o ponto do
+último toque, portanto a bola que o próprio guarda-redes acabou de jogar para
+um central dentro da área entrava ali como bola solta com as mãos proibidas.
+
+```
+                       andou      chegou a    alvo na bola
+antes                  11.22 m     0.61 m      78 frames
+com a guarda            5.66 m     4.34 m       0 frames
+```
+
+A Lei 12 fica intacta: quem decide as mãos é o `maosProibidasNoRecuo`, e um
+recuo PARA ele continua a valer porque aí o destinatário é ele próprio.
+
+O teste passou a contar só ENQUANTO O PASSE ESTÁ VIVO. Os frames que sobravam
+eram depois de o passe acabar, com a bola solta a 7.5 m — ir buscá-la ali é o
+trabalho dele, e contá-los media o guarda-redes a fazer o que deve.

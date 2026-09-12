@@ -160,6 +160,13 @@ if (process.env.LOTE_WORKER) {
 
         const A = MatchStats.TeamA, B = MatchStats.TeamB;
         jogo.min = Match.tempoDeJogo / 60;
+        /*
+        A FICHA COMPLETA, pela conta do próprio jogo: `MatchStats.porJogo`
+        normaliza para 90 minutos e é a mesma função que alimenta o painel
+        "Estatísticas" do ecrã. Repetir a extrapolação aqui era arriscar dois
+        números diferentes para a mesma coisa.
+        */
+        jogo.ficha = MatchStats.porJogo(Match.tempoDeJogo);
         jogo.stats = {
             golos: A.remates.golos + B.remates.golos,
             remates: A.remates.tentados + B.remates.tentados,
@@ -216,6 +223,53 @@ for (const lista of porTrabalhador) {
     filho.on('exit', () => { if (--vivos === 0) relatorio(); });
 }
 
+/*
+OS ALVOS DO FUTEBOL A SÉRIO — os mesmos do painel do ecrã
+(`ALVOS_ESTATISTICA` em js/main.js). Repetidos aqui e não importados porque o
+`main.js` não corre fora do browser; se algum mudar lá, muda aqui.
+
+`provisorio` são os cartões: não há alvo acordado, e ficam à vista sem
+contarem para nada.
+*/
+const ALVOS = [
+    { campo: 'pctPassesCertos', rotulo: '% passes certos', alvo: null, casas: 1 },
+    { campo: 'golos', rotulo: 'golos', alvo: 2.52, casas: 2 },
+    { campo: 'remates', rotulo: 'finalizações', alvo: 26.11, casas: 2 },
+    { campo: 'pctRematesNoAlvo', rotulo: '% no alvo', alvo: null, casas: 1 },
+    { campo: 'cantos', rotulo: 'cantos', alvo: 9.92, casas: 2 },
+    { campo: 'amarelos', rotulo: 'amarelos', alvo: 5.22, casas: 2, provisorio: true },
+    { campo: 'vermelhos', rotulo: 'vermelhos', alvo: 0.08, casas: 2, provisorio: true },
+    { campo: 'faltas', rotulo: 'faltas', alvo: 27.63, casas: 2 },
+    { campo: 'impedimentos', rotulo: 'impedimentos', alvo: 3.20, casas: 2 },
+    { campo: 'ataquesPerigosos', rotulo: 'ataques perigosos', alvo: 77.84, casas: 1 },
+    { campo: 'ataquesTotais', rotulo: 'ataques totais', alvo: 176.63, casas: 1 },
+    { campo: 'xg', rotulo: 'xG total', alvo: 2.84, casas: 2 },
+    { campo: 'xgPorRemate', rotulo: 'xG por remate', alvo: 0.109, casas: 3 }
+];
+
+/*
+A tabela das percentagens: medido, alvo, e quanto isso é do alvo. A coluna do
+sinal é a mesma regra do painel do ecrã (desvio RELATIVO: 15% ok, 40%
+aproximado, mais do que isso fora) — dois golos a mais é um desastre, duas
+faltas a mais não é nada.
+*/
+function tabelaDePercentagens(fichas) {
+    const linhas = [];
+    for (const m of ALVOS) {
+        const vals = fichas.map(f => f[m.campo]).filter(v => typeof v === 'number' && isFinite(v));
+        if (!vals.length) { linhas.push({ m: m, medido: null }); continue; }
+        const medido = vals.reduce((a, b) => a + b, 0) / vals.length;
+        const pct = (m.alvo) ? 100 * medido / m.alvo : null;
+        let sinal = '';
+        if (pct !== null && !m.provisorio) {
+            const desvio = Math.abs(medido - m.alvo) / m.alvo;
+            sinal = (desvio <= 0.15) ? 'ok' : (desvio <= 0.40 ? '~' : 'X');
+        }
+        linhas.push({ m: m, medido: medido, pct: pct, sinal: sinal, n: vals.length });
+    }
+    return linhas;
+}
+
 function relatorio() {
     if (!resultados.length) {
         console.log('Nenhum jogo correu.');
@@ -266,14 +320,27 @@ function relatorio() {
     const seg = ((Date.now() - inicio) / 1000).toFixed(0);
 
     console.log(`\n=== ${n} jogos de ${MINUTOS} min (${seg}s de relógio) ===`);
-    console.log(`golos/90         ${m(soma.golos)}   (real 2.52)`);
-    console.log(`remates/90       ${m(soma.remates)}  (real 26.11)`);
-    console.log(`faltas/90        ${m(soma.faltas)}  (real 27.63)`);
-    console.log(`impedimentos/90  ${m(soma.impedimentos)}  (real 3.2)`);
-    console.log(`passes certos    ${passT ? (100 * passC / passT).toFixed(0) : '-'}%`);
-    console.log(`matadas no peito ${m(soma.peitos)} por jogo`);
-    console.log(`|x| dos alas     ${m(soma.largura)} m`);
-    console.log(`tempo parado     ${m(soma.parado)}%`);
+    console.log('por 90 minutos, média dos jogos:');
+    console.log('');
+    console.log('                          medido       alvo   % do alvo');
+    for (const l of tabelaDePercentagens(resultados.map(r => r.ficha).filter(Boolean))) {
+        const rot = l.m.rotulo.padEnd(22);
+        if (l.medido === null || l.medido === undefined) {
+            console.log('  ' + rot + '       —');
+            continue;
+        }
+        const medido = l.medido.toFixed(l.m.casas).padStart(8);
+        const alvo = (l.m.alvo === null) ? '—'.padStart(10) : l.m.alvo.toFixed(l.m.casas).padStart(10);
+        const pct = (l.pct === null || l.pct === undefined) ? '—'.padStart(10) : (l.pct.toFixed(0) + '%').padStart(10);
+        const nota = l.m.provisorio ? '   (sem alvo acordado)'
+            : (l.sinal === 'ok' ? '   ok' : (l.sinal === '~' ? '   ~' : (l.sinal === 'X' ? '   <-- fora' : '')));
+        console.log('  ' + rot + medido + alvo + pct + nota);
+    }
+    console.log('');
+    console.log('fora da ficha (não há alvo de futebol real para comparar):');
+    console.log(`  matadas no peito      ${m(soma.peitos)} por jogo`);
+    console.log(`  |x| dos alas          ${m(soma.largura)} m`);
+    console.log(`  tempo parado          ${m(soma.parado)}%`);
 
     if (!pendencias.length) {
         console.log('\nPENDÊNCIAS: nenhuma.');

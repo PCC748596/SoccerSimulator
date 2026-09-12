@@ -77,8 +77,17 @@ for (let i = 0; i < 90; i++) {
     const dAntes = posInicial.distanceTo(Match.ball.position);
     if (dAgora < dAntes - 0.5) andouParaABola++;
     if (dAgora < distMin) distMin = dAgora;
-    // O alvo dele E a bola? Isso e persegui-la; acompanhar o angulo nao e.
-    if (gk.dynamicTarget && gk.dynamicTarget.distanceTo(Match.ball.position) < 1.5) alvoNaBola++;
+    /*
+    O alvo dele E a bola? Isso e persegui-la; acompanhar o angulo nao e.
+
+    So conta ENQUANTO O PASSE ESTA VIVO, que e o que o relato descreve. Depois
+    de o passe acabar — o central toca-lhe e a bola fica solta na area — ir
+    buscar uma bola solta e o trabalho dele, e contar esses frames media outra
+    coisa: media o guarda-redes a fazer o que deve.
+    */
+    const passeVivo = (Match.intendedReceiver === central && !Match.ballCarrier);
+    if (passeVivo && gk.dynamicTarget &&
+        gk.dynamicTarget.distanceTo(Match.ball.position) < 1.5) alvoNaBola++;
 }
 
 test('nao entra em apanhar por causa do proprio passe', () => {
@@ -94,7 +103,7 @@ test('nem faz da bola o alvo dele', () => {
     */
     const andou = posInicial.distanceTo(gk.model.position);
     console.log(`  andou ${andou.toFixed(2)} m em 1.5 s | chegou a ${distMin.toFixed(2)} m da bola | ` +
-        `alvo em cima da bola em ${alvoNaBola} de 90 frames`);
+        `alvo em cima da bola em ${alvoNaBola} frames com o passe vivo`);
     assert.strictEqual(alvoNaBola, 0,
         `o alvo do guarda-redes foi a propria bola em ${alvoNaBola} frames`);
     assert.ok(distMin > 2.0,

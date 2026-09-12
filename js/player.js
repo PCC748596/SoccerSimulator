@@ -4674,6 +4674,10 @@ class FootballPlayer {
             dtCtx.fillText(num, 0, 0);
             dtCtx.restore();
             
+            // A anterior morre aqui: substituir o `map` sem libertar deixa a
+            // textura viva na GPU (ver a auditoria em main.js, que conta as
+            // texturas vivas por isto mesmo).
+            if (this.discoTatico.material.map) this.discoTatico.material.map.dispose();
             let dtTex = new THREE.CanvasTexture(dtCanvas);
             this.discoTatico.material.map = dtTex;
             this.discoTatico.material.needsUpdate = true;
@@ -5092,7 +5096,28 @@ class FootballPlayer {
                     ? maosProibidasNoRecuo(Match.recuoParaGR, this.team)
                     : false;
 
-                if (semDono && (mansinha || maosProibidas) && distBolaAgora < 10.0) {
+                /*
+                A BOLA ENDERECADA A UM COMPANHEIRO NAO E DELE — a mesma guarda
+                que o ramo da "bola solta na area" (mais abaixo) já tinha, e
+                que FALTAVA aqui. Um passe em voo não tem `ballCarrier`, e o
+                `recuoParaGR` é recalculado por frame contra o ponto do último
+                toque: a bola que o guarda-redes acabou de jogar para um
+                central dentro da área entrava aqui como bola solta com as mãos
+                proibidas, e ele saía atrás dela.
+
+                Medido com tests/gk_nao_persegue_o_proprio_passe.test.js: ele
+                andava 11.2 m em 1.5 s e chegava a 0.61 m da bola que ele
+                próprio tinha jogado.
+
+                Um recuo PARA ele continua a valer — nesse caso o destinatário
+                é ele, e a Lei 12 (mãos proibidas) não se toca: quem a decide é
+                o `maosProibidasNoRecuo`, que fica como está.
+                */
+                const paraOutro = !!(Match.intendedReceiver &&
+                    Match.intendedReceiver.team === this.team &&
+                    Match.intendedReceiver !== this);
+
+                if (semDono && !paraOutro && (mansinha || maosProibidas) && distBolaAgora < 10.0) {
                     /*
                     A BOLA ESTÁ FORA DA ÁREA?
 

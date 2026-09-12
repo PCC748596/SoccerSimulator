@@ -875,6 +875,18 @@ function animate(time) {
                 Match.update(passo);
                 restante -= passo;
             }
+            /*
+            QUANTOS PASSOS ESTE FRAME PEDIU — contado para a auditoria de
+            performance, e não por gosto de contar.
+
+            O passo tem tecto (`PASSO_MAX`, 1.5 frames de 60 Hz) mas o tempo a
+            consumir é o do frame REAL: a 60 fps cabe um passo, e no instante
+            em que o frame passa de ~25 ms passam a ser DOIS. Isso acrescenta
+            um tick de lógica inteiro ao frame que já estava lento, o que o
+            mantém lento — e é por isso que a queda se lê como um PATAMAR nos
+            40 fps e não como uma descida suave. Ver auditarPerformance.
+            */
+            window._perfPassos = (window._perfPassos || 0) + guarda;
         }
     }
 
@@ -922,6 +934,78 @@ function animate(time) {
         window.MatchReplay.recordFrame();
     }
     rendererCore.render(scene, cameraCore);
+
+    auditarPerformance(time);
+}
+
+/*
+=============================================================================
+AUDITORIA DE PERFORMANCE — o que cresce ao longo do jogo
+=============================================================================
+Relato: "quando chega a 40 minutos de jogo aproximadamente, cai de 60 para
+40 FPS".
+
+Uma queda que aparece com o TEMPO, e não com o que está no ecrã, é
+acumulação. Medido primeiro do lado da LÓGICA, sem ecrã
+(`tools/headless/perf_deriva.js`, 63 minutos de jogo): o tempo de CPU por
+frame ficou PLANO (2.7 -> 2.0 ms), a cena ficou nos mesmos 1975 objectos e
+nenhuma colecção do `Match`/`MatchStats`/`Officials` cresceu sem limite.
+Portanto não é o jogo a pensar: é o desenho, ou algo que só existe no browser.
+
+Daqui em diante a medição tem de ser feita ONDE ELA ACONTECE, e é isso que
+esta função faz: a cada `PERF_INTERVALO` segundos escreve na consola os
+contadores do renderer — chamadas de desenho, geometrias e TEXTURAS vivas —,
+os objectos da cena e, no Chrome, o heap de JS. Um deles a subir a cada
+linha diz onde está a fuga:
+
+    textures a subir    -> textura criada e não libertada (ver as
+                           CanvasTexture do updateShirt e dos painéis)
+    geometries a subir  -> geometria criada por evento e não libertada
+    calls a subir       -> objectos a mais na cena a serem desenhados
+    heap a subir e o resto plano -> pressão de GC (alocação por frame)
+    tudo plano          -> não é o cliente: é térmico, ou a tab em segundo
+                           plano, ou o próprio browser a estrangular
+
+Fica LIGADO por omissão enquanto o relato estiver aberto: é uma linha de
+consola a cada 30 s, e sem ela a auditoria depende de alguém se lembrar de
+ligar uma bandeira antes de jogar. `window.auditarPerf = false` cala.
+=============================================================================
+*/
+const PERF_INTERVALO = 30;
+
+function auditarPerformance(time) {
+    if (window.auditarPerf === false) return;
+    if (!rendererCore || !rendererCore.info) return;
+
+    if (!window._perfProx) {
+        window._perfProx = time + PERF_INTERVALO * 1000;
+        window._perfFrames = 0;
+        window._perfT0 = time;
+        return;
+    }
+    window._perfFrames++;
+    if (time < window._perfProx) return;
+
+    const fps = window._perfFrames * 1000 / (time - window._perfT0);
+    const passosPorFrame = (window._perfPassos || 0) / Math.max(1, window._perfFrames);
+    window._perfProx = time + PERF_INTERVALO * 1000;
+    window._perfFrames = 0;
+    window._perfPassos = 0;
+    window._perfT0 = time;
+
+    let objectos = 0;
+    scene.traverse(() => { objectos++; });
+
+    const r = rendererCore.info;
+    const heap = (performance && performance.memory)
+        ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : '-';
+    const minJogo = (Match.tempoDeJogo / 60).toFixed(1);
+
+    console.log(`[perf] ${minJogo}' de jogo | ${fps.toFixed(0)} fps | ` +
+        `passos/frame ${passosPorFrame.toFixed(2)} | ` +
+        `calls ${r.render.calls} | tris ${r.render.triangles} | ` +
+        `geometrias ${r.memory.geometries} | texturas ${r.memory.textures} | ` +
+        `objectos ${objectos} | heap ${heap}`);
 }
 
 /*
@@ -1022,6 +1106,23 @@ function preencherSelectoresDeEquipa() {
         }
     }
     bloco.style.display = '';
+}
+
+/*
+Põe os selectores no que está em campo. Corre depois do `Match.init`, que é
+quem resolve as equipas por omissão.
+*/
+function sincronizarSelectoresDeEquipa() {
+    const par = [['t-equipa-A', 'equipaIdA'], ['t-equipa-B', 'equipaIdB']];
+    for (const [elId, campo] of par) {
+        const sel = document.getElementById(elId);
+        if (!sel) continue;
+        const id = Match[campo];
+        const valor = (id === null || id === undefined) ? '' : String(id);
+        // Só se a opção existir: um id sem equipa na lista deixaria o
+        // selector em branco a dizer o que não é.
+        if ([...sel.options].some(o => o.value === valor)) sel.value = valor;
+    }
 }
 
 /*
@@ -1164,7 +1265,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof Minimap !== 'undefined') Minimap.init();
         if (typeof Officials !== 'undefined') Officials.init(scene);
         Tatics.updateSkills();
+        // Os selectores a mostrar as equipas que estão MESMO em campo (ver
+        // Match.equipasPorOmissao): sem isto diziam "genérica" com o Grêmio
+        // e o Internacional a jogar.
+        sincronizarSelectoresDeEquipa();
         popularPainelJogadores();
+        actualizarNomesNoPlacar();
         requestAnimationFrame(animate);
     } catch (err) {
         console.error("Erro crítico de inicialização:", err);

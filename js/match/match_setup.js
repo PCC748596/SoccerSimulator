@@ -152,6 +152,7 @@ Object.assign(Match, {
 
         this.showOffsideLines = false;
 
+        this.equipasPorOmissao();
         this.createTeams();
         this.resetPlay();
         this.setupKeyboardListeners();
@@ -803,8 +804,33 @@ Object.assign(Match, {
     `data/squads.js` (ver tools/gen_squads.js); sem eles — ou sem o ficheiro
     carregado — o jogo continua com os 22 de sempre do `player_skills.js`.
     */
+    /*
+    AS EQUIPAS POR OMISSÃO, por NOME e não por id: os ids vêm do ficheiro de
+    origem e o `data/squads.js` é regerado sempre que esses dados mudarem —
+    um id escrito à mão aqui ficaria a apontar para outra equipa qualquer, ou
+    para nenhuma, sem ninguém dar por isso. O nome resolve-se no arranque
+    (ver `equipasPorOmissao`), e se não existir fica-se com as genéricas.
+    */
+    equipaNomeOmissaoA: 'Grêmio-RS',
+    equipaNomeOmissaoB: 'Internacional-RS',
+
     equipaIdA: null,
     equipaIdB: null,
+
+    /*
+    Resolve os nomes por omissão em ids, uma vez, antes do `createTeams`.
+    Chamado pelo `init`; quem quiser outras equipas mexe nos selectores do
+    painel ou chama o `trocarEquipas` directamente.
+    */
+    equipasPorOmissao: function () {
+        if (typeof SquadsData === 'undefined' || !SquadsData.equipas) return;
+        const idDe = (nome) => {
+            const e = SquadsData.equipas.find(x => x.nome === nome);
+            return e ? e.id : null;
+        };
+        if (this.equipaIdA === null) this.equipaIdA = idDe(this.equipaNomeOmissaoA);
+        if (this.equipaIdB === null) this.equipaIdB = idDe(this.equipaNomeOmissaoB);
+    },
 
     equipaDoPlantel: function (id) {
         if (typeof SquadsData === 'undefined' || !SquadsData.equipas) return null;
