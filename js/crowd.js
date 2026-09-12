@@ -184,6 +184,20 @@ const CrowdModel = {
     fraccaoSaltoSempre: 0.10,
 
     /*
+    OS ULTRAS DA CLAQUE QUE SOFREU O GOLO.
+
+    Relato: "as duas torcidas estao vibrando na hora do gol". A festa por
+    claque ja era separada (`uFesta` e um vec2), mas os ultras acima saltam
+    SEMPRE e nos dois lados — e no golo, com a bancada de quem sofreu sentada,
+    os unicos que se mexem la sao eles. Em cima do grito do golo, le-se como a
+    bancada adversaria a festejar o golo que levou.
+
+    Enquanto o estado for GOAL, a fatia que salta do lado de quem sofreu passa
+    a ser esta. Fora do golo, os dois lados usam `fraccaoSaltoSempre`.
+    */
+    fraccaoSaltoLuto: 0.0,
+
+    /*
     GATILHO DO ATAQUE. A claque levanta-se quando a equipa tem a posse e a bola
     entrou no terço ofensivo dela. `tercoZ` é a fronteira desse terço: o campo
     tem 106 m, portanto o terço final começa a 106/6 do meio-campo.
@@ -502,7 +516,10 @@ const Crowd = {
             uBobDePe: { value: CrowdModel.bobDePe },
             uSalto: { value: CrowdModel.salto },
             uRitmoSalto: { value: CrowdModel.ritmoSalto },
-            uFracSalto: { value: CrowdModel.fraccaoSaltoSempre },
+            uFracSalto: {
+                value: new THREE.Vector2(CrowdModel.fraccaoSaltoSempre,
+                    CrowdModel.fraccaoSaltoSempre)
+            },
             uFracAnt: { value: new THREE.Vector2(0, 0) },
             uFracNova: { value: new THREE.Vector2(0, 0) },
             uTempoTroca: { value: new THREE.Vector2(-99, -99) },
@@ -554,7 +571,7 @@ uniform float uRitmoIdle;
 uniform float uBobDePe;
 uniform float uSalto;
 uniform float uRitmoSalto;
-uniform float uFracSalto;
+uniform vec2 uFracSalto;
 uniform vec2 uFracAnt;
 uniform vec2 uFracNova;
 uniform vec2 uTempoTroca;
@@ -582,7 +599,8 @@ void crowdPesos(out float dePe, out float w1, out float w2,
     // fract para nao serem os mesmos que se levantam primeiro: senao ficavam
     // amontoados numa zona so. Estao de pe por definicao: nao se salta
     // sentado.
-    float ultra = step(fract(aAdepto.x * 7.3), uFracSalto);
+    float fSalto = claqueA ? uFracSalto.x : uFracSalto.y;
+    float ultra = step(fract(aAdepto.x * 7.3), fSalto);
     dePe = max(dePe, ultra);
     festa = max(festa, ultra);
 
@@ -808,10 +826,15 @@ void crowdPesos(out float dePe, out float w1, out float w2,
     /*
     Muda a fracção de uma claque que está de pé.
     */
-    setFraccao(claque, fraccao, festa) {
+    setFraccao(claque, fraccao, festa, fracSalto) {
         if (!this._uniforms) return;
         const i = (claque === 'A') ? 'x' : 'y';
         const u = this._uniforms;
+
+        // A fatia de ultras desta claque (ver CrowdModel.fraccaoSaltoLuto):
+        // no golo, quem sofreu nao tem ninguem a saltar.
+        u.uFracSalto.value[i] = (typeof fracSalto === 'number')
+            ? fracSalto : CrowdModel.fraccaoSaltoSempre;
 
         if (this._frac[claque] !== fraccao) {
             u.uFracAnt.value[i] = (this._frac[claque] < 0) ? fraccao : this._frac[claque];
@@ -839,11 +862,24 @@ void crowdPesos(out float dePe, out float w1, out float w2,
             estado: Match.state,
             posse: Match.possessionTeam,
             bolaZ: Match.ball.position.z,
-            equipaQueMarcou: Match.lastTouchedTeam,
+            /*
+            QUEM MARCOU, e nao quem tocou por ultimo: num autogolo as duas
+            coisas sao equipas diferentes e era a bancada errada a festejar.
+            O `golMarcadoPor` e escrito pelo creditarGolo (match_physics.js),
+            que ja tinha esta regra escrita para o placar.
+            */
+            equipaQueMarcou: Match.golMarcadoPor || Match.lastTouchedTeam,
             dt: dt
         });
-        this.setFraccao('A', r.A, r.festa === 'A');
-        this.setFraccao('B', r.B, r.festa === 'B');
+
+        // No golo, os ultras de quem sofreu tambem param — senao a bancada
+        // derrotada continua a saltar ao lado da que festeja.
+        const luto = r.festa ? (r.festa === 'A' ? 'B' : 'A') : null;
+        const salto = (claque) => (luto === claque)
+            ? CrowdModel.fraccaoSaltoLuto : CrowdModel.fraccaoSaltoSempre;
+
+        this.setFraccao('A', r.A, r.festa === 'A', salto('A'));
+        this.setFraccao('B', r.B, r.festa === 'B', salto('B'));
     },
 
     setVisivel(on) {

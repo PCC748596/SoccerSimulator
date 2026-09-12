@@ -1479,6 +1479,35 @@ function calcularPontoDoSlot(slot, pos, role, fbStyle, bb, linhaActual, fecharPo
 
     xTarget = THREE.MathUtils.clamp(xTarget, bloco.x0 + empurraX, bloco.x1 + empurraX);
 
+    /*
+    O PISO DE LARGURA DOS HOMENS DE ALA — ver WideAnchor em tactics.js, com a
+    medição que o motivou.
+
+    Vem DEPOIS do clamp ao rectângulo de propósito: o rectângulo tem o centro
+    em cima da bola, e é ele que empurra o lateral do lado oposto para o eixo.
+    Um piso em metros ao eixo do CAMPO é a única coisa que o tira de lá.
+
+    Só para FORA e só no lado do próprio jogador: quem já está mais aberto
+    fica onde está, e ninguém atravessa o eixo por causa disto.
+    */
+    if (isLateral && typeof WideAnchor !== 'undefined') {
+        /*
+        O LADO SAI DO `u` DA FORMAÇÃO, não da letra da posição. Medido: em
+        metade dos laterais o `LB` joga em x POSITIVO — a formação é espelhada
+        por equipa e a letra não diz de que lado do campo ele está. Ler a letra
+        empurrava metade deles para a banda contrária, ou seja para o meio.
+        */
+        const meuLado = Math.sign(uBase - 0.5) || Math.sign(xTarget) || 1;
+        const W = (pos === 'LM' || pos === 'RM' || pos === 'LW' || pos === 'RW')
+            ? WideAnchor.ala : WideAnchor.lateral;
+        const piso = bb.isAttacking ? W.comBola : W.semBola;
+
+        // `meuLado * xTarget` é a abertura dele no próprio lado: negativa se
+        // tiver atravessado o eixo, e aí o piso repõe-no no lado certo.
+        const abertura = Math.max(meuLado * xTarget, piso);
+        xTarget = meuLado * Math.min(abertura, CAMPO_LARG / 2 - 1.5);
+    }
+
     return {
         x: xTarget,
         z: zTarget
@@ -3067,6 +3096,47 @@ const PosicionamentoAI = {
             if (meuGK && meuGK.model) {
                 const piso = meuGK.model.position.z * p.dirZ + SaidaDeBolaShape.margemAFrente;
                 if (p.dynamicTarget.z * p.dirZ < piso) p.dynamicTarget.z = piso * p.dirZ;
+            }
+        }
+
+        /*
+        O PISO DE LARGURA DOS HOMENS DE ALA, OUTRA VEZ — e é aqui que ele
+        conta. Ver WideAnchor em tactics.js.
+
+        Posto no slot (nível 1) não chega: medido em 45 min, com a bola numa
+        ala, o slot do lateral do lado oposto sai a 18.1 m do eixo e o alvo que
+        ele segue chega a 13.1 — cinco metros comidos pelo nível 2. O maior
+        pedaço é a separação do par lateral/meia, que deixa o lateral abdicar
+        de `separacaoLateral` (6 m) do slot dele; a mola de coesão e o pêndulo
+        tiram o resto. Cada uma é defensável sozinha e somam-se todas no mesmo
+        sentido — para dentro.
+
+        Depois do alisamento, pela mesma razão que a transição defensiva e o
+        piso da saída de bola se repetem aqui: o lerp arrasta o alvo do frame
+        anterior, já encolhido, durante mais de um segundo.
+
+        Cede a quem tem tarefa de bola — chaser, intercetor, bloqueador vão
+        onde têm de ir — e não se aplica a defender no próprio terço, onde
+        fechar o corredor interior é o que se pede a um lateral.
+        */
+        if (typeof WideAnchor !== 'undefined' && p.model && bb &&
+            bb.chaser !== p && bb.intercetor !== p && bb.bloqueador !== p) {
+            const W = (p.pos === 'LM' || p.pos === 'RM' || p.pos === 'LW' || p.pos === 'RW')
+                ? WideAnchor.ala
+                : ((p.pos === 'LB' || p.pos === 'RB' || p.pos === 'LWB' || p.pos === 'RWB')
+                    ? WideAnchor.lateral : null);
+            const bolaAvancoW = (typeof Match !== 'undefined' && Match.ball)
+                ? Match.ball.position.z * p.dirZ : 0;
+            const aDefenderNoNossoTerco = !bb.isAttacking && bolaAvancoW < -CAMPO_COMP / 6;
+
+            if (W && !aDefenderNoNossoTerco) {
+                // O lado é o do POSTO dele, e não a letra da posição: a
+                // formação é espelhada por equipa (ver a nota no nível 1).
+                const meuLadoW = Math.sign(p.slotTarget ? p.slotTarget.x : p.baseTarget.x)
+                    || Math.sign(p.dynamicTarget.x) || 1;
+                const piso = bb.isAttacking ? W.comBola : W.semBola;
+                const abertura = Math.max(meuLadoW * p.dynamicTarget.x, piso);
+                p.dynamicTarget.x = meuLadoW * Math.min(abertura, CAMPO_LARG / 2 - 1.5);
             }
         }
 

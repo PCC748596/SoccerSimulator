@@ -426,6 +426,13 @@ Object.assign(Match, {
         const marcou = (sofreu === 'TeamA') ? 'TeamB' : 'TeamA';
         const proprioGolo = (this.lastTouchedTeam === sofreu);
 
+        /*
+        GUARDADO PARA QUEM PRECISE DELE DEPOIS — a bancada, por exemplo, que
+        seguia o `lastTouchedTeam` e por isso festejava do lado errado num
+        autogolo (ver Crowd.update em crowd.js).
+        */
+        this.golMarcadoPor = marcou;
+
         if (typeof MatchStats !== 'undefined' && MatchStats[marcou]) {
             MatchStats[marcou].remates.golos++;
             if (MatchStats.registarGoloSofrido) MatchStats.registarGoloSofrido(sofreu);

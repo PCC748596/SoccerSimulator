@@ -854,6 +854,44 @@ const LineShape = {
 };
 
 /*
+=============================================================================
+O PISO DE LARGURA DOS HOMENS DE ALA — em metros ao eixo, e não em fracção
+=============================================================================
+Relato, repetido: "o lateral e o meia da lateral oposta da jogada estão muito
+no meio, estão se confundindo com os CM e CBs".
+
+A causa está medida e escrita no `fecho` aqui em cima: o `xTarget` de toda a
+gente sai do RECTÂNGULO do bloco (`bloco.x0 + u * largura`, ver
+calcularPontoDoSlot), e o centro desse rectângulo acompanha a bola em X 1:1.
+Com a bola numa ala, o lado contrário fica comprimido contra o eixo — e o
+clamp final ao rectângulo remata o serviço. Medido em 45 min, o |x| REAL:
+
+                    mesmo lado da bola   lado oposto
+    lateral (LB)            20.2             10.5
+    lateral (RB)            21.0             11.6
+    médio ala (LM)          19.4              9.5
+    médio ala (RM)          20.3             10.2
+    central (CB)             8.6              4.4
+    médio centro (CM)        9.8              3.3
+
+Do lado oposto o lateral está a 10 m do eixo, a um metro e meio do médio
+centro — é exactamente o relato. Mexer no `fecho` já foi tentado e dá dois
+metros (ver a nota lá); atenuar a basculação foi tentado e MEDIU PIOR.
+
+O que falta não é afinar a largura do bloco: é tirar os homens de ala de
+dentro dele. Estes são um PISO em metros ao eixo do CAMPO, aplicado depois do
+bloco e do corredor, só para fora e só no lado do próprio jogador — quem quer
+subir mais pela linha sobe, e ninguém é puxado para dentro por causa disto.
+
+Sem bola o piso é menor: é a diferença entre segurar a largura para a inversão
+de jogo e fechar o corredor interior quando se defende.
+*/
+const WideAnchor = {
+    lateral: { comBola: 20.0, semBola: 17.0 },   // LB/RB/LWB/RWB
+    ala: { comBola: 23.0, semBola: 19.0 }        // LM/RM/LW/RW
+};
+
+/*
 Ajuste fino por POSIÇÃO ESPECÍFICA, por cima do LineShape (que só
 diferencia por linha: def/mid/atk). A diferença de profundidade entre
 lateral e central já vem da formação (o LineShape passou a deslocar em vez
