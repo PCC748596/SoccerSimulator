@@ -886,7 +886,27 @@ const GkCatchModel = {
         três metros dele (36%). A proximidade não previa nada, que é a
         assinatura de um teste de colisão a falhar e não de um mergulho curto.
         */
-        corpo: 0.94,
+        /*
+        0.94 -> 0.55, pela segunda metade do pedido: "esses chutes têm que ser
+        DEFESAS DO GOLEIRO PARA FORA".
+
+        Com 0.94 quase toda a bola ao corpo era AGARRADA, e uma bola agarrada
+        não é uma defesa para fora — mata o lance. Medido no lote: ao subir o
+        alcance do corpo os golos caíram de 138% para 128% do alvo, mas os
+        cantos caíram com eles (79% -> 75%), porque as defesas que apareceram
+        foram todas capturas.
+
+        A 0.55 a maior parte das bolas ao corpo passa a ser ESPALMADA, e com o
+        `espalmarForaMargem` em 3.6 m a espalmada de um remate central sai
+        pela linha de fundo — defesa para canto, que é o que o pedido descreve
+        e é também a fonte natural dos escanteios que faltam (75% do alvo).
+
+        Agarrar continua a ser o caso mais provável de uma bola mansa: o
+        `custoVel` do `resolverDefesaGK` desce a probabilidade com a
+        velocidade, portanto é o remate FORTE ao corpo que passa a ser
+        espalmado, e o toque fraco continua a ficar nas mãos.
+        */
+        corpo: 0.55,
         salto: 0.80,      // no ar, cruzamento ou bola alta
         mergulho: 0.68    // esticado, o mais difícil de segurar
     },
@@ -896,8 +916,16 @@ const GkCatchModel = {
     da bola (0.11). Menor do que o alcance da mão de propósito — a mão
     estica-se, o tronco não.
 
-    Varrido (9 sementes, 45 min cada) e o número quase não manda no resultado:
-    0.20 dá 14% de conversão nos remates à baliza, 0.26 dá 17% e 0.32 dá 19%.
+    0.32 -> 0.45 quando a ambição da mira desceu 10%
+    (`ShotModel.mira.fraccaoCanto`): esses remates passaram a ir mais ao CORPO
+    dele, e o pedido era que acabassem em DEFESA. Com 0.32 o lote mediu-os a
+    entrar — os golos subiram de 129% para 138% do alvo — portanto a barreira
+    tinha de crescer com eles. 0.45 é o tronco com os braços encostados, que
+    é a postura de quem espera um remate ao corpo.
+
+    Varrido antes (9 sementes, 45 min cada) e o número quase não mandava no
+    resultado: 0.20 dava 14% de conversão nos remates à baliza, 0.26 dava 17%
+    e 0.32 dava 19%.
     A razão é que QUALQUER contacto salva — dos três desfechos do
     `resolverDefesaGK` só o `roca` deixa a bola seguir, e com o `base.corpo`
     alto quase nunca sai. Fica no valor físico, que é o defensável, e o que
@@ -905,7 +933,7 @@ const GkCatchModel = {
     que no jogo cai a 1.5-1.8 m do centro da baliza (o meio, onde ele está) em
     vez de junto aos postes.
     */
-    alcanceCorpo: 0.32,
+    alcanceCorpo: 0.45,
     /*
     Altura do corpo que conta, dos pés para cima. Acima disto a bola passa-lhe
     por cima da cabeça e é o salto que trata dela (ver o ramo do `salto`).
@@ -986,6 +1014,21 @@ const GkCatchModel = {
     disputavel. Um guarda-redes de tecnica media tira a bola do perigo bem
     mais vezes do que isso, e e essa a diferenca entre um rebote e uma defesa.
     */
-    qualidadeBase: 0.62,
+    /*
+    0.62 -> 0.80, a fechar o pedido "defesas do goleiro PARA FORA".
+
+    O `destinoDaEspalmada` (utils.js) reparte as espalmadas por esta
+    qualidade: `canto` quando pode sair, `lateral` quando não, e `meio` — o
+    rebote curto à frente da baliza — no que sobra. Medido no lote, ao passar
+    as bolas ao corpo de capturas para espalmadas (ver base.corpo) os cantos
+    saltaram de 75% para 89% do alvo, e os golos subiram de 128% para 144%:
+    as espalmadas que NÃO saíam viravam rebote e eram marcadas.
+
+    A 0.80 quatro em cada cinco vão para fora ou para a lateral em vez de
+    ficarem no miolo. É o que o pedido diz — e é também o que um guarda-redes
+    faz com uma bola que lhe bate no corpo: atira-a para longe, não a deixa
+    cair aos pés de quem remata.
+    */
+    qualidadeBase: 0.80,
     qualidadePorTEC: 0.45
 };

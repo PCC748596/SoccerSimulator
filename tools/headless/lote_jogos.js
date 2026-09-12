@@ -84,8 +84,17 @@ if (process.env.LOTE_WORKER) {
         ? SquadsData.equipas : [];
 
     for (const i of indices) {
-        // Semente por jogo: dois jogos do lote nunca são o mesmo jogo.
-        Math.random = mulberry32(1000 + i * 977);
+        /*
+        Semente por jogo: dois jogos do lote nunca são o mesmo jogo.
+
+        `LOTE_SEMENTE` desloca o conjunto inteiro. Serve para medir o RUÍDO do
+        próprio lote: correr a mesma configuração com outro conjunto de
+        sementes diz quanto é que um número se mexe sem nada ter mudado — sem
+        isso, uma diferença de 0.3 golos entre dois lotes não se sabe se é
+        efeito ou acaso.
+        */
+        const base = Number(process.env.LOTE_SEMENTE || 1000);
+        Math.random = mulberry32(base + i * 977);
 
         // Equipas reais, um par diferente por jogo. Sem planteis carregados,
         // corre com as genéricas de sempre — o lote continua a valer.

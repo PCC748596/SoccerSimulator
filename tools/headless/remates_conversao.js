@@ -33,6 +33,21 @@ que é a mesma de onde saem os alvos do painel):
     16-22 m                       ~5%
     22 m+                         ~2-3%
 
+AVISO — ESTE INSTRUMENTO SUBCONTA, e os números ABSOLUTOS dele não valem.
+
+Medido contra o lote (`lote_jogos.js`, que usa a ficha do próprio jogo): aqui
+saem **17.6 remates por 90** contra os 34.6 que a ficha conta. Metade dos
+remates não passa por este gancho — o `xgDoRemate` é chamado no
+`executeShotGameplay` e há remates que acabam antes (bloqueados à saída do pé,
+faltas com desfecho próprio, penáltis) — e o desfecho de cada um é fechado por
+uma janela de 12 s que dois remates seguidos partilham, ficando o primeiro sem
+golo atribuído.
+
+O que ele serve, e serviu: comparar FAIXAS entre si e o MESMO número antes e
+depois de uma alteração. Foi assim que apanhou o defeito do teste de colisão do
+guarda-redes (a proximidade não prevê o desfecho) e a mudança que a correcção
+produziu. Para saber quanto vale a conversão em absoluto, a resposta é o lote.
+
 Uso: node tools/headless/remates_conversao.js [minutos] [semente]
 */
 const minutos = Number(process.argv[2] || 30);
