@@ -207,6 +207,9 @@ const GkDive = {
     update(p, dt, corpo, rig) {
         const D = GoalkeeperDive;
         const d = p.dive;
+        // O `defender` corre fundo na cadeia e precisa de saber quanto a bola
+        // andou neste frame; passa por aqui em vez de por cinco assinaturas.
+        this._dtFrame = dt;
         if (!d) return false;
 
         d.t += dt;
@@ -430,18 +433,40 @@ const GkDive = {
     está mesmo depois do IK.
     */
     defender(p, rig) {
+        // O dt do frame, posto pelo `update` — e o que diz quanto a bola andou.
+        const dt = this._dtFrame;
         const D = GoalkeeperDive;
         const d = p.dive;
         if (d.tocou) return;
         if (Match.state !== 'PLAY') return;
         if (Match.ballVel.lengthSq() <= 0.0001) return;
 
+        /*
+        E A BOLA MEDE-SE NO TRAJECTO DO FRAME, nao na posicao final.
+
+        Era `mao.distanceTo(bola.position)`. A 25 m/s a bola anda 0.42 m entre
+        frames e o raio de contacto sao 0.53 m: com os bracos colados ao corpo
+        a mao estava em cima da linha dela e nao se notava, mas com os bracos a
+        FRENTE (a pose correcta) a bola passa-lhes por cima sem nunca estar
+        perto em frame nenhum. Medido no lote: a conversao de remate enquadrado
+        subiu de 44.3% para 57.1% quando a pose foi corrigida.
+
+        Ver distanciaAoSegmento (utils.js).
+        */
+        const vdt = (typeof dt === 'number' && dt > 0) ? dt : 1 / 60;
+        const bx = Match.ball.position.x, by = Match.ball.position.y, bz = Match.ball.position.z;
+        const ax = bx - Match.ballVel.x * vdt;
+        const ay = by - Match.ballVel.y * vdt;
+        const az = bz - Match.ballVel.z * vdt;
+
         let melhorDist = Infinity, melhorMao = null;
         for (const nome of ['lHand', 'rHand']) {
             const mao = rig[nome];
             if (!mao) continue;
             mao.getWorldPosition(this._v);
-            const dist = this._v.distanceTo(Match.ball.position);
+            const dist = (typeof distanciaAoSegmento === 'function')
+                ? distanciaAoSegmento(this._v.x, this._v.y, this._v.z, ax, ay, az, bx, by, bz)
+                : this._v.distanceTo(Match.ball.position);
             if (dist < melhorDist) { melhorDist = dist; melhorMao = nome; }
         }
         if (melhorMao === null || melhorDist > D.raioMao + BallPhysics.raio) return;

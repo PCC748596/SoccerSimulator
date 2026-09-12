@@ -5806,12 +5806,28 @@ class FootballPlayer {
             `resolveBallContact` passou a fazer: `getWorldPosition` das duas
             maos, contra a posicao ACTUAL da bola.
             */
+            /*
+            E CONTRA O TRAJECTO DO FRAME, nao contra a posicao final dele.
+
+            A 25 m/s a bola anda 0.42 m entre frames — mais do que o raio de
+            contacto — e com os bracos estendidos a frente ela passa-lhes por
+            cima sem nunca ficar perto em frame nenhum. Ver distanciaAoSegmento
+            (utils.js) e a medicao que o motivou.
+            */
+            const bxM = Match.ball.position.x, byM = Match.ball.position.y, bzM = Match.ball.position.z;
+            const axM = bxM - Match.ballVel.x * dt;
+            const ayM = byM - Match.ballVel.y * dt;
+            const azM = bzM - Match.ballVel.z * dt;
+
             let distMaoM = Infinity;
             for (const nome of ['lHand', 'rHand']) {
                 const mao = gkRig && gkRig[nome];
                 if (!mao) continue;
                 mao.getWorldPosition(_p_v3);
-                distMaoM = Math.min(distMaoM, _p_v3.distanceTo(Match.ball.position));
+                const dM = (typeof distanciaAoSegmento === 'function')
+                    ? distanciaAoSegmento(_p_v3.x, _p_v3.y, _p_v3.z, axM, ayM, azM, bxM, byM, bzM)
+                    : _p_v3.distanceTo(Match.ball.position);
+                distMaoM = Math.min(distMaoM, dM);
             }
             if (distMaoM === Infinity) {
                 distMaoM = Math.hypot(dxMaoM, maoYm - Match.ball.position.y,

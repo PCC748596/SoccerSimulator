@@ -5,6 +5,238 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 11 de Setembro de 2026 (4) — o guarda-redes de cima a baixo, a stamina, e uma correcção que custou um golo por jogo
+
+Sessão longa, conduzida por relatos visuais. Três coisas ficaram provadas por
+medição, duas correcções minhas mediram MAL e estão assinaladas, e o lote final
+deixou uma conta em aberto.
+
+#### O atraso de reacção travava o ramo errado
+
+O `possoEspalmar` (player.js) passou a exigir `gkReagiu` numa sessão anterior, e
+isso parecia certo: o ramo principal do mergulho sempre o exigiu e este não. Não
+era. Medido, 30 jogos por variante, três sementes cada:
+
+    variante                                  golos   conversao
+    A  erro de leitura + gate no ramo inteiro  3.17      51.7%
+    B  erro de leitura, sem gate nenhum        2.63      37.3%
+    C  sem erro, sem gate (pré-sessão)         2.87      41.1%
+    D  erro + o atraso trava só o GESTO        2.47      36.6%
+    alvo                                       2.52       ~32%
+
+Com o ramo inteiro travado o guarda-redes não ficava parado à espera: caía na
+âncora de repouso e **recuava para o meio da baliza** enquanto o remate viajava.
+Meio golo por jogo, e catorze pontos de conversão.
+
+Ficou o **D**: o ramo corre sempre e o `gkReagiu` trava só o gesto — antes de
+reagir ele acompanha de pé pelo `gkAlvoX`, e não se atira. E as duas últimas
+linhas dizem a outra coisa: **com o gate fora, o erro de leitura não custa golos
+nenhuns** (B contra C, indistinguíveis dentro da dispersão de 0.4).
+
+**Uma retirada minha que estava errada.** A meio da sessão o lote de 50 jogos
+deu 3.25 golos e eu atribuí isso ao erro de leitura, cortei-lhe o raio de 1.10
+para 0.45 e disse ao utilizador que a minha medição inicial ("o erro sai de
+graça") estava errada. Não estava: esse lote comparava com o gate LIGADO dos
+dois lados. O corte do raio funcionou por não fazer mal, não por corrigir nada.
+
+#### A stamina passou a existir
+
+A `stamina` e a `fitness` vinham de `data/player_skills.js` desde sempre e o
+único sítio do código que lhes tocava era a barra do HUD. Agora há
+`StaminaModel` (config/player_behavior.js) e um depósito por jogador:
+
+    25% do jogo   50%     75%     fim
+        0.911     0.837   0.785   0.729   (média dos 22)
+        0.804     0.654   0.509   0.503   (o pior deles)
+         0/22      0/22    0/22    0/22   (no chão do modelo)
+
+Gasta-se com o QUADRADO da velocidade, recupera-se abaixo de 2 m/s com a
+`fitness` a mandar no ritmo, e corre no relógio do JOGO e não no real — senão
+mexer no `GAME_SPEED` mudava o cansaço sem ninguém pedir. Custa velocidade
+máxima (num sítio só, o `steerArrive`) e custa skill nos campos físicos e
+técnicos. O lote confirmou-a: `energiaFinal` entre 0.69 e 0.78.
+
+#### Equipas de médias diferentes no lote
+
+`Sim.run({ jogos: 24, duracaoSeg: 1200, medias: ['60x70', '70x80', '65x85'] })`.
+
+O que quase escapou: o `TeamSkills` do painel é **fallback**. O `skillFor()` lê
+primeiro as skills individuais, portanto escrever 65 no painel e deixar os onze
+como estavam dava um lote que PARECIA estar a testar e não estava. A média
+desloca as skills individuais, aditivamente sobre o âncora do gerador
+(`base = 80`), e o perfil do jogador mantém-se. Cada par corre metade dos jogos
+com o forte em cada lado. Ver `resumirConfrontos` e `tests/sim_medias.test.js`.
+
+**Por correr:** nenhum lote usou ainda o `medias`.
+
+#### O ritmo a 0.99, e o relógio ao contrário
+
+`GAME_SPEED` 0.9 -> 0.99 (+10%, pedido). Já esteve em 1.035 e voltou; fica
+escrito no config. O `timeScale` é `4.5 / GAME_SPEED`, portanto **acelerar o
+jogo desacelera o relógio**: um lote de 90 minutos passa a precisar de 1188 s em
+vez de 1080. Pagou: remates 89% -> 97%, cantos 52% -> 65%, ataques totais
+75% -> 81%.
+
+#### A animação de passe existia e nunca chegava ao ecrã
+
+Relato: *"não estou vendo a animação de passe durante os passes"*.
+
+O `PASS` faltava na lista de estados protegidos em player.js (~3505), a lista
+que impede o `animateBones` de correr por cima de um gesto com clip. O
+`case 'PASS'` desenhava o `PassClip` e três linhas depois o ramo `speed >= 0.1`
+reescrevia as duas pernas com o ciclo de passada — por `set`, não por lerp,
+portanto sem deixar rasto. O remate escapava por acaso: o `baterFalta` põe a
+velocidade a zero à entrada, e um passe é quase sempre dado em movimento.
+
+#### O guarda-redes caía de lado porque era geometricamente impossível cair de frente
+
+Relato: *"está caindo de lado até uns 45 graus com o solo... deveria cair de
+frente para baixo e colocando os braços para ajudar a aparar a batida"*.
+
+O tombo era uma rotação à volta do eixo FRONTAL do modelo — e rodar à volta da
+própria frente não pode mover a frente. Medido, a componente Y do eixo frontal
+na aterragem: `0.000` nos três tipos de mergulho, sem arredondamento.
+
+O cabeçalho do `gk_dive.js` avisa que o mergulho antigo compunha `rotation.z`
+com `rotation.x` em Euler e *"deixava o boneco virado/torcido"*. A regra **um
+eixo, um ângulo** fica de pé; o que muda é QUAL é o eixo: passou a ser
+`(pesoQuedaFrente, 0, -lado)` normalizado. A 0.55, a frente passa a apontar 28°
+abaixo da horizontal. E o braço líder sai do IK também com a bola fora de
+alcance (`raioIKNoChao`), para os dois irem à frente amparar a queda.
+
+#### E aterrava no ar, ou enterrado
+
+Relato: *"tem que continuar o movimento até o corpo tocar o chão"*.
+
+O voo já ia até ao fim (0.50 s de média, tombo 100% completo). O que falhava era
+a altura: `alturaDeitado` é uma constante para a origem do modelo, e a origem
+está nos pés (`ALTURA_BASE_Y` = -0.03). Ponto mais baixo do corpo ao aterrar:
+
+    tipo      antes      depois
+    baixo    +0.32 m    +0.10 m     (flutuava 32 cm acima do relvado)
+    meio     -0.07 m    +0.10 m
+    alto     -0.51 m    +0.10 m     (meio metro enterrado)
+
+Agora o corpo assenta a sério: mede-se o osso mais baixo e desce-se o modelo até
+ele ficar a `folgaDeitado` do chão (10 cm, porque o que se mede são centros de
+junta). O `levantar` sobe a partir dessa altura e não da constante.
+
+#### O guarda-redes corria a 17 m/s
+
+Relato: *"o goleiro consegue ir atrás da bola numa velocidade maior que a bola"*.
+
+    velocidade planar (900 s)   p50     p99    maximo
+    guarda-redes, antes         0.68    7.50    17.01
+    jogadores de campo          3.81    8.42    23.96
+    guarda-redes, depois        0.75    8.35     9.86
+
+Duas causas somadas: **não havia tecto nenhum** (a `agilidade` multiplicava o
+`speedLerp` e nada travava o resultado — 12.7 m/s no ramo de reacção, com Usain
+Bolt em 12.4), e o estado `maos` **ficou com o lerp exponencial** que os outros
+ramos já tinham perdido (12% do que falta por frame com o alvo a 3 m dá 0.36 m
+NUM frame, ou seja 21.6 m/s; medido, 22.75).
+
+Ficou `GoalkeeperPose.velMaxCorrida` (7.6 m/s a GK 50, 8.4 a GK 100 — o p99
+medido dos jogadores de campo) aplicado DEPOIS da agilidade, nos dois ramos. E
+uma janela de recuperação depois do mergulho (`GoalkeeperDive.recuperacao`),
+porque medido ele levantava-se e voltava aos 3 m/s em 0.44 s de média, 0.02 s no
+melhor caso. Ver `tests/gk_velocidade_humana.test.js`.
+
+#### Os braços iam para trás, e o JointLimits ajudava
+
+Relato: *"quando a bola vai na direção do goleiro os braços dele ficam para trás
+e não para frente na hora da defesa"*.
+
+Medido no rig, com a mão lida por `getWorldPosition`:
+
+    lArm.rotation.x = -1.00  ->  mão 0.50 m A FRENTE do ombro, 0.32 abaixo
+    lArm.rotation.x =  0.00  ->  mão a prumo, 0.59 abaixo
+    lArm.rotation.x = +1.57  ->  mão 0.59 m ATRAS, à altura do ombro
+
+**No rig, para a frente é x NEGATIVO.** A fórmula do estado `maos` era
+`atan2(dy, 0.8) * 1.2`, sem offset e com o sinal ao contrário: bola à altura do
+ombro dava 0 (braços colados ao corpo) e bola ACIMA do ombro dava x positivo, ou
+seja braços atrás das costas — que é a bola ao peito e à cabeça. A conta certa é
+`-PI/2 - atan2(dy, 0.8)`.
+
+**A armadilha vive no `JointLimits`:** `shoulder.x` está documentado como
+`0..180` ("elevação frontal"), que nesta convenção é travar FORA da frente. Os
+estados `maos` e `salto_alto` deixaram de passar por lá e o aviso ficou escrito
+em `js/joint_limits.js`.
+
+#### E isso custou um golo por jogo — lote de 30 jogos
+
+    metrica                lote 60 (antes)   lote 30    alvo    %
+    golos                       2.70           3.68     2.52   146%
+    golos por enquadrado       44.3%          57.1%     ~32%
+    cantos                      6.36           8.79     9.92    89%
+    ataques totais             143.3          157.3   176.63    89%
+    amarelos                    2.85           1.74     5.22    33%
+    impedimentos                5.54           5.04     3.20   158%
+
+A pose está certa (está provada no rig); o que não a acompanhava era o **teste
+da defesa**. Ele media `mao.distanceTo(bola.position)` — a mão contra a
+fotografia daquele frame. A 25 m/s a bola anda 0.42 m entre frames e o raio de
+contacto são 0.53 m: com os braços colados ao corpo a mão estava em cima da
+linha dela e não se notava; com a mão meio metro à frente do peito, ela
+passa-lhe por cima sem nunca ficar perto em frame nenhum.
+
+Corrigido nos dois sítios (mergulho e defesa de pé) com `distanciaAoSegmento`
+(utils.js), que mede contra o TRAJECTO do frame. Emparelhado por semente no
+`lab_gk`, 300 remates cada:
+
+    varrimento    semente 0   1       2       media
+    COM             20.5%   30.6%   38.3%   29.8%
+    SEM (ponto)     31.3%   36.1%   37.5%   35.0%
+
+**É recuperação parcial e o lab discorda do lote em absoluto** (30% contra 57%),
+porque o lab arranca o guarda-redes parado na linha. Fica em aberto: se os golos
+não voltarem para perto de 2.5, as alavancas seguintes são o
+`GkCatchModel.alcanceContacto` / `GoalkeeperDive.raioMao` (alargar o raio, que é
+o que compensa a mão mais longe do corpo) e, por último, recuar a extensão dos
+braços — que seria desfazer uma correcção provada.
+
+#### Miudezas medidas
+
+- **Falta com alguém em cima da bola.** Medido em 105 cobranças: o mais perto
+  está a 7.7-8.0 m de média, mas 1 em 105 ficava a 1.44 m. O `corredorLivre` só
+  empurra quem está no caminho bola->baliza e só quando a decisão é remate;
+  entrou um afastamento RADIAL (`FreeKickModel.folgaDaBola`, 2.5 m). Depois:
+  mínimo 2.50 m em 109 cobranças.
+- **Percepção do fora-de-jogo** cortada de 9.0/0.6 para 6.5/0.4 s (com
+  tacticknow 85, 3.12 s -> 2.23 s), a pedido. **Inconclusivo:** três sementes
+  deram 10.67->10.63, 4.01->1.33, 3.97->4.00, e a métrica a montante não mexeu.
+  A alavanca da FREQUÊNCIA continua a ser o `RunIntoSpaceModel.riscoAlemDaLinha`.
+- **Replay a 0.6x.** Os botões existiam todos no painel mas o `playFrame`
+  ignorava-os — e como o `startReplay` põe o jogo em pausa, o bloco de
+  velocidade do `animate` nem corre. Passou a acumular a fracção entre frames.
+  De caminho saiu uma duplicação: o corpo do `playFrame` era cópia linha a linha
+  do `restoreFrame`. O teste apanhou uma deriva de vírgula flutuante (somar 0.6
+  dez vezes dá 5.999999999999999 e o `floor` comia o décimo passo).
+- **O contacto do lançamento por cima** estava um frame atrasado: `8 / 11` com
+  12 keyframes dá o índice 8, que é o frame 9 (follow-through), quando o clip
+  anota o contacto no 8. Passou a `7 / 11`, o mesmo que o `shot`.
+
+#### Dois tectos de teste que estavam calibrados numa semente
+
+Os dois falharam por alterações que **não os causaram**, e a medição mostrou-o:
+
+- `saida_de_bola_ritmo`: tecto de 8%, e a dispersão medida com e sem stamina é
+  6.3-8.6% e 7.4-8.3% — **a mesma média, 7.8%**. Entrou também um corte de
+  leituras por episódio, porque uma posse encravada enchia a amostra sozinha
+  (3 677 a 24 332 leituras conforme a semente).
+- `passe_para_infiltracao`: tecto de 30%, e cinco sementes deram 28.9, 40.4,
+  45.7, 47.1 e 49.4% — a semente do teste é a mais baixa, com n=1618. Passou a
+  25%, que continua muito acima dos 13.8% que o teste existe para apanhar.
+
+#### Duas falhas que não são desta sessão
+
+`gk_nao_persegue_o_proprio_passe` e `tiro_de_meta_forma` falham desde o
+reinstalar do `node_modules` a meio da sessão (o `git worktree remove` seguiu uma
+junção que eu tinha criado lá dentro e apagou-o; reinstalei com **npm**, e o
+projecto tem `bun.lock`). Verificado numa worktree em `fcd7d6b`, o commit
+anterior a tudo o que se fez aqui: falham lá também.
+
 ### Sessão de 11 de Setembro de 2026 (3) — o guarda-redes lê o remate sem erro nenhum
 
 Pergunta: *"a impressão que eu tenho é que o goleiro está pulando quase que
@@ -7748,6 +7980,7 @@ As de 9 de Setembro. Todas levam `[segundos] [semente]` e o mulberry32 do
 - `livre_impedimento.js [quantos]` — monta livres indirectos e mede se as duas equipas são colocadas, a que distância da bola ficam, e quantos atacantes estão já impedidos no instante da batida.
 - `impedimentos_lote.js` — impedimentos por 90 com semente fixa, mais a linha de fora-de-jogo e a métrica a montante (alvos e corpos além da linha), que tem n≈10 000 por corrida e resolve o que a contagem de apitos não resolve.
 - `cartoes_origem.js` — de onde vêm os cartões: vermelho directo contra segundo amarelo, quantos amarelos são por travar ataque, as faltas por gesto (e quantas de quem já estava advertido), e **as parcelas da gravidade** — foi a última que mostrou que a velocidade do carrinho era uma constante.
+- `amarelos_concentracao.js [jogos] [dur] [semente]` — **em quantas cabeças caem os amarelos**, que era a alavanca que os docs apontavam e nunca tinha sido medida. Dá os jogadores distintos advertidos por jogo, o máximo num só, a repartição de faltas e cartões por POSTO, as disputas tentadas (desarmes e carrinhos) por posto com o rácio de falta por disputa, e o que o ACASO PURO previa com o mesmo número de amarelos. Foi ela que mostrou que a concentração é ~3x o acaso (e não o contrário, como os docs assumiam) e que o CM faz 47% das disputas do jogo com um rácio de falta normal — a alavanca está em quem pressiona, não no `RefereeModel`.
 - `carrinho_velocidade.js` — a velocidade de aproximação no frame em que ele entra em SLIDE_TACKLE, antes de o deslize a reescrever.
 - `passes_faixas.js` — a tabela de passes por faixa de distância (a mesma do lote) com semente fixa. `DURACAOPASSE=` varre o comprimento do gesto do passe.
 - `assento_tres_relatos.js` — a sola da bota por estado do jogo, por `gkEstado`, minuto a minuto e por velocidade de rotação, mais qual das guardas do `assentarNoChao` recusou o assento. `SUAVIZACAO=` e `CORRECCAOMAX=` varrem os dois números.

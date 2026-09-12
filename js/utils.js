@@ -3222,6 +3222,34 @@ function pontoDisputado(pontoX, pontoZ, receptorX, receptorZ, adversarios, opcoe
     return false;
 }
 
+/*
+A BOLA NÃO ESTÁ NUM PONTO — ESTÁ NUM SEGMENTO.
+
+O teste da defesa media `mao.distanceTo(bola.position)`: a mão contra a
+posição DAQUELE frame. A 25 m/s a bola anda 0.42 m entre frames, e nos remates
+fortes mais; com o raio de contacto em 0.53 m, ela salta por cima da mão sem
+nunca ficar perto em nenhum frame.
+
+Isto não se via enquanto o guarda-redes defendia com os braços colados ao
+corpo — a mão ficava em cima da linha da bola. Com os braços à frente (que é a
+pose correcta, medida no rig) a mão passou a estar 0.5 m à frente do peito e o
+salto entre frames passou a contar: medido no lote, a conversão de remate
+enquadrado subiu de 44.3% para 57.1%.
+
+Devolve a distância de um PONTO ao SEGMENTO que a bola percorreu no frame.
+
+Pura: sem Match, sem THREE.
+*/
+function distanciaAoSegmento(px, py, pz, ax, ay, az, bx, by, bz) {
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const comp2 = abx * abx + aby * aby + abz * abz;
+    // Segmento degenerado (bola parada): é o ponto.
+    if (comp2 < 1e-9) return Math.hypot(px - ax, py - ay, pz - az);
+    let t = ((px - ax) * abx + (py - ay) * aby + (pz - az) * abz) / comp2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + abx * t), py - (ay + aby * t), pz - (az + abz * t));
+}
+
 function pontoDeIntercepcaoGK(bolaX, bolaY, bolaZ, velX, velY, velZ, gkZ, gravidade) {
     const vz = Math.abs(velZ);
     if (vz < 0.001) return null;
@@ -4292,6 +4320,6 @@ if (typeof window !== 'undefined') {
         tiroDaFaltaDirecta, tiroTensoDaFaltaDirecta, lugaresDoApoioNaFaltaDirecta,
         passaEntreAdversarios,
         maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR,
-        pontoDeIntercepcaoGK, pontoDisputado, erroLeituraGK, parNormal
+        pontoDeIntercepcaoGK, pontoDisputado, erroLeituraGK, parNormal, distanciaAoSegmento
     });
 }

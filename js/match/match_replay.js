@@ -146,51 +146,69 @@ class ReplaySystem {
         else this.startReplay();
     }
     
+    /*
+    =====================================================================
+    A VELOCIDADE DO REPLAY — o mesmo controlo do jogo, 0.6x incluido
+    =====================================================================
+    O replay corria sempre a 1x: um frame gravado por frame desenhado, e o
+    `window.speedMultiplier` (o 0.6x / 1.0x / 1.2x / 2x / Frame do painel) era
+    ignorado aqui. Pedido: poder ver o replay a 0.6x.
+
+    O `startReplay` poe o jogo em pausa, portanto o bloco de velocidade do
+    `animate` (main.js) nem chega a correr — a velocidade tem de ser lida
+    outra vez, deste lado.
+
+    Devolve quantos frames GRAVADOS avancar por frame desenhado:
+        0.6  -> camara lenta (o mesmo frame fica no ecra 1 ou 2 vezes)
+        2    -> dois frames gravados de cada vez
+        'frame' -> so avanca quando o botao pede o passo seguinte
+    */
+    velocidadeDoReplay() {
+        const v = window.speedMultiplier;
+        if (v === 'frame') {
+            if (typeof Match !== 'undefined' && Match.stepNextFrame) {
+                Match.stepNextFrame = false;
+                return 1;
+            }
+            return 0;
+        }
+        const n = Number(v);
+        return (isFinite(n) && n > 0) ? n : 1;
+    }
+
+    /*
+    Desenha o frame actual e avanca o cursor conforme a velocidade escolhida.
+
+    O corpo que aqui estava era uma copia LINHA A LINHA do `restoreFrame` —
+    as duas versoes tinham de ser mantidas a par a cada osso novo no rig.
+    Agora e uma chamada.
+    */
     playFrame() {
         if (!this.isReplaying || this.count === 0) return;
-        
-        const base = this.replayCursor * FLOATS_PER_FRAME;
-        let pIdx = base;
-        
-        Match.ball.position.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-        Match.ball.quaternion.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
 
-        const allPlayers = Match.players.concat(Match.opponents);
-        for(let i = 0; i < 22; i++) {
-            let p = allPlayers[i];
-            if (!p || !p.model || !p.rig) {
-                pIdx += FLOATS_PER_PLAYER;
-                continue;
-            }
-            
-            p.model.position.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            p.model.quaternion.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
+        this.restoreFrame(this.replayCursor);
 
-            let r = p.rig;
-            r.pelvis.position.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.pelvis.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.chest.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.lArm.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.rArm.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.lElbow.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.rElbow.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.lLeg.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.rLeg.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.lKnee.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.rKnee.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.lFoot.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            r.rFoot.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            
-            if (r.neck) {
-                r.neck.rotation.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-            } else {
-                pIdx += 3;
+        /*
+        A fraccao acumula-se entre frames: a 0.6x, tres frames desenhados
+        fazem avancar 1.8, ou seja um frame gravado e o resto fica para o
+        proximo. E o que faz a camara lenta ser lenta em vez de saltada.
+        */
+        this._avancoPendente = (this._avancoPendente || 0) + this.velocidadeDoReplay();
+        /*
+        O epsilon nao e cosmetico: somar 0.6 dez vezes em virgula flutuante da
+        5.999999999999999, e o `floor` comia o decimo passo — a camara lenta
+        ficava a andar menos do que o pedido, e a deriva acumulava ao longo dos
+        20 s de replay.
+        */
+        let passos = Math.floor(this._avancoPendente + 1e-6);
+        this._avancoPendente -= passos;
+
+        while (passos-- > 0) {
+            this.replayCursor = (this.replayCursor + 1) % REPLAY_FRAMES;
+            if (this.replayCursor === this.head) {
+                this.stopReplay();
+                return;
             }
-        }
-        
-        this.replayCursor = (this.replayCursor + 1) % REPLAY_FRAMES;
-        if (this.replayCursor === this.head) {
-            this.stopReplay();
         }
     }
 }
