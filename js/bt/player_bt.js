@@ -1639,22 +1639,52 @@ function actDribble(ctx) {
 function findBestPassAnywhere(ctx) {
     if (ctx._bestPass !== undefined) return ctx._bestPass;
     const p = ctx.p;
+
+    /*
+    O LANÇAMENTO DEIXOU DE GANHAR SÓ POR EXISTIR.
+
+    Isto era `if (!underPressure) { const tb = findThroughBall(ctx); if (tb)
+    return tb; }` — devolvido ANTES de o passe normal sequer ser calculado.
+    Fora de pressão, que é o estado de quem sai a jogar de trás, o lançamento
+    ganhava por não haver ninguém na votação. Medido em 20 minutos: 71
+    lançamentos, 100% fora de pressão e 100% com passe curto disponível; e os
+    defesas a passar 79% para a frente contra 6% de lado.
+
+    Agora calcula-se primeiro o passe curto e a escolha passa pelo
+    `LancamentoDecisao` (config/passing.js), que é onde vive a regra e as
+    medições que a motivaram.
+    */
+    let target = p.findPassTarget(); // Avalia todos e escolhe o melhor
+
+    // Na defesa, se não houver passe perfeitamente seguro, procura alternativas para forçar a circulação
+    const naDefesa = (p.model.position.z * p.dirZ < 0) || p.role === 'def';
+
+    if (!target && (ctx.underPressure || naDefesa)) target = p.findPassTargetRelaxed();
+    if (!target && (ctx.underPressure || naDefesa) && p.decisionTimer > 0.8) target = p.findPassTargetDesperate();
+
     if (!ctx.underPressure) {
         const tb = findThroughBall(ctx);
         if (tb) {
-            ctx._bestPass = { type: 'through', data: tb };
-            return ctx._bestPass;
+            const bb = ctx.bb;
+            const aceita = (typeof LancamentoDecisao !== 'undefined')
+                ? LancamentoDecisao.aceita({
+                    temPasseCurto: !!target,
+                    receptorEmRuptura: !!(tb.mate && tb.mate.fsm &&
+                        tb.mate.fsm.currentState === 'RUN_INTO_SPACE'),
+                    agressao: bb ? bb.aggression : 0.5,
+                    // O terço próprio, e não a metade: sair a jogar acaba
+                    // quando a bola passa a linha do terço, não a do meio.
+                    defesaNoProprioTerco: (p.role === 'def' &&
+                        p.model.position.z * p.dirZ < -(CAMPO_COMP / 6))
+                })
+                : true;
+            if (aceita) {
+                ctx._bestPass = { type: 'through', data: tb };
+                return ctx._bestPass;
+            }
         }
     }
-    
-    let target = p.findPassTarget(); // Avalia todos e escolhe o melhor
-    
-    // Na defesa, se não houver passe perfeitamente seguro, procura alternativas para forçar a circulação
-    const naDefesa = (p.model.position.z * p.dirZ < 0) || p.role === 'def';
-    
-    if (!target && (ctx.underPressure || naDefesa)) target = p.findPassTargetRelaxed();
-    if (!target && (ctx.underPressure || naDefesa) && p.decisionTimer > 0.8) target = p.findPassTargetDesperate();
-    
+
     if (target) {
         ctx._bestPass = { type: 'pass', target: target };
     } else {

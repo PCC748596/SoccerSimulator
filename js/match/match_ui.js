@@ -263,12 +263,24 @@ Object.assign(Match, {
             lookTarget.set(0, 0, 0);
         }
 
-        // Interpolação de posição (suave)
-        window.cameraCore.position.lerp(targetPos, 0.05);
+        /*
+        Interpolação de posição e de foco, AO TEMPO e não ao frame.
+
+        Era `lerp(alvo, 0.05)` por frame: 5% de cada vez, quantas vezes o
+        browser desenhasse. A constante de tempo passava de 0.33 s a 60 fps
+        para 0.5 s a 40 fps — a imagem arrastava-se mais quanto pior corria,
+        que é o pior momento para isso acontecer. `fatorSuavizacao` (utils.js)
+        devolve os mesmos 0.05 a 60 fps e corrige o resto.
+
+        O `dt` é o do frame desenhado, não o do passo de simulação: a câmara é
+        desenhada uma vez por frame mesmo quando o `Match.update` correu duas.
+        */
+        const dtFrame = (typeof window.lastFrameDelta === 'number') ? window.lastFrameDelta : (1 / 60);
+        window.cameraCore.position.lerp(targetPos, fatorSuavizacao(0.05, dtFrame));
 
         // Interpolação do ponto de foco
         if (!this.currentLookTarget) this.currentLookTarget = new THREE.Vector3();
-        this.currentLookTarget.lerp(lookTarget, 0.08);
+        this.currentLookTarget.lerp(lookTarget, fatorSuavizacao(0.08, dtFrame));
 
         // Usando lookAt direto evita que a câmara torça ou olhe para o céu ao alternar modos
         window.cameraCore.lookAt(this.currentLookTarget);

@@ -1872,8 +1872,94 @@ function chancePorSegundo(taxa, dt) {
     return Math.random() < taxa * dt;
 }
 
+/*
+COMO PARTIR O TEMPO DE UM FRAME EM PASSOS DE SIMULAÇÃO.
+
+O loop do `animate` (js/main.js) não pode mandar o frame inteiro de uma vez
+quando ele é grande: com um passo de 0.15 s a bola anda 1,5 m entre chamadas,
+atravessa a rede e salta contactos. Parte-se, portanto — mas em fatias IGUAIS.
+
+Era `passo = min(PASSO_MAX, restante)`, que dá uma fatia cheia mais um resto:
+25.1 ms com tecto de 24.75 ms saíam como 24.75 + 0.35. E essa fatia de 0.35 ms
+não é inofensiva, porque nem tudo o que corre lá dentro conta o tempo: o
+`lerpTo` suaviza por CHAMADA. Medido no harness, um passo de 0.2 ms move a
+articulação tanto como um de 16.7 ms. O frame que parte gastava duas doses de
+suavização, o que não parte gastava uma, e a animação mudava de ritmo de frame
+para frame — o micro-atraso relatado.
+
+`guarda` é o tecto de passos por frame, e existe para o frame lento não pedir
+mais trabalho ainda e entrar em espiral. Quando morde, perde-se tempo de JOGO
+(o `n * passo` fica abaixo do `restante`) — de propósito.
+*/
+function partirPasso(restante, passoMax, guarda = 40) {
+    const t = Math.max(0, restante);
+    const tecto = Math.max(1e-6, passoMax);
+    let n = Math.ceil(t / tecto);
+    if (n < 1) n = 1;
+    if (n > guarda) return { n: guarda, passo: tecto };
+    return { n: n, passo: t / n };
+}
+
 function lerp(a, b, t) { return a + (b - a) * t; }
-function lerpTo(atual, alvo = 0, v = 0.15) { const r = atual + (alvo - atual) * v; return Math.abs(r - alvo) < 0.001 ? alvo : r; }
+
+/*
+=============================================================================
+A SUAVIZAÇÃO CONTA O TEMPO, E NÃO AS CHAMADAS
+=============================================================================
+`lerpTo` puxava uma fracção fixa por CHAMADA — 15% de cada vez, fosse qual
+fosse o tempo decorrido. Quem o chama é o `animateBones`, dentro do
+`Match.update`, e o `Match.update` corre uma ou duas vezes por frame conforme
+o tempo do frame (ver `partirPasso`). Medido no harness:
+
+    1 passo de 16.7 ms    lArm.x 1.0000 -> 0.8500
+    1 passo de  0.2 ms    lArm.x 1.0000 -> 0.8500    <- 80x menos tempo, mesmo salto
+    2 passos de 16.7 ms   lArm.x 1.0000 -> 0.7225
+
+Ou seja: a mesma animação avançava a ritmos diferentes conforme os fps, e a
+constante de tempo de cada articulação oscilava entre 83 e 167 ms consoante o
+frame partia ou não. É o micro-atraso relatado.
+
+O decaimento certo é exponencial no tempo:
+
+    v_ef = 1 - (1 - v)^(dt * 60)
+
+A 60 fps devolve exactamente o `v` de origem — nenhum dos valores afinados à
+mão ao longo do projecto muda de significado — e dois meios-passos passam a
+dar o mesmo que um passo inteiro.
+
+O `dt` sai do `Match.delta` (o passo de simulação em curso) quando não vem
+dado. Fora do jogo — o editor de animação, por exemplo — assume 60 fps.
+
+A cache existe porque isto corre centenas de vezes por frame e o `dt` é o
+mesmo em todas elas: os `v` distintos do projecto são meia dúzia.
+=============================================================================
+*/
+let _lerpDtCache = -1;
+const _lerpFatores = new Map();
+function fatorSuavizacao(v, dt) {
+    let d = dt;
+    if (typeof d !== 'number' || !(d >= 0)) {
+        d = (typeof Match !== 'undefined' && typeof Match.delta === 'number' && Match.delta >= 0)
+            ? Match.delta : (1 / 60);
+    }
+    const vv = (v < 0) ? 0 : (v > 1 ? 1 : v);
+    if (d !== _lerpDtCache) { _lerpDtCache = d; _lerpFatores.clear(); }
+    const guardado = _lerpFatores.get(vv);
+    if (guardado !== undefined) return guardado;
+    const f = 1 - Math.pow(1 - vv, d * 60);
+    _lerpFatores.set(vv, f);
+    return f;
+}
+
+/*
+O `Math.abs(r - alvo) < 0.001` encosta ao alvo: um decaimento exponencial
+nunca lá chega sozinho, e sem isto ficava para sempre a menos de um milésimo
+dele — o suficiente para manter um osso a escrever e um `!==` a disparar.
+*/
+function lerpTo(atual, alvo = 0, v = 0.15, dt) {
+    const r = atual + (alvo - atual) * fatorSuavizacao(v, dt);
+    return Math.abs(r - alvo) < 0.001 ? alvo : r;
+}
 
 /*
 Wrapper para model.lookAt(ponto) nos jogadores.

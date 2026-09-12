@@ -2158,6 +2158,26 @@ class FootballPlayer {
         const ladoBola = getSectorOfX(ownX);
         const congestaoMeuLado = (teamBB) ? (teamBB.congestion[secToCongestionKey[ladoBola]] || 0) : 0;
 
+        /*
+        SAIR A JOGAR: função, zona e ausência de pressão, decididas UMA vez por
+        avaliação e não por candidato. Ver SaidaDeJogo (config/passing.js), com
+        as medições que o motivaram.
+        */
+        let saidaAplicavel = false;
+        if (typeof SaidaDeJogo !== 'undefined' && this.role === 'def' &&
+            ownZ * dirZ < -(CAMPO_COMP / 6)) {
+            let apertado = false;
+            for (const o of opponents) {
+                if (!o || o.role === 'gk' || !o.model) continue;
+                if (this.model.position.distanceTo(o.model.position) < SaidaDeJogo.raioPressao) {
+                    apertado = true;
+                    break;
+                }
+            }
+            saidaAplicavel = !apertado;
+        }
+        const agressaoEquipa = (teamBB && typeof teamBB.aggression === 'number') ? teamBB.aggression : 0.5;
+
         for (let opt of options) {
             let optPos = alvoDePasse(opt);
             let dist = this.model.position.distanceTo(optPos);
@@ -2274,15 +2294,32 @@ class FootballPlayer {
             let inDefensiveZone = (ownZ * dirZ < -10) || (optPos.z * dirZ < -10); 
             let isDefender = (this.role === 'def' || this.role === 'gk' || opt.role === 'def');
             
+            /*
+            O BÓNUS DE DESMARCADO É PESADO PELA FIABILIDADE DA DISTÂNCIA.
+
+            Esta escada é a parcela mais pesada da nota, e era cega à distância
+            do passe: um avançado livre a 30 m valia os mesmos +500 que um
+            central livre a 8 m, e a seguir os bónus de progressão, tendência e
+            ângulo visual desempatavam sempre para a frente. Daí os 79% de
+            passes para a frente contra 6% de lado nos defesas, medidos em 20
+            minutos, com opção curta disponível em 100% dos longos.
+
+            "Livre" não é a mesma coisa a 8 m e a 30 m. Ver FiabilidadePasse
+            (config/passing.js), que traz as taxas medidas por faixa no lote de
+            60 jogos — 84% a 8 m contra 44% acima de 25.
+            */
+            const fiab = (typeof FiabilidadePasse !== 'undefined')
+                ? FiabilidadePasse.fiabilidade(dist) : 1.0;
+
             if (distMarcador >= 5.0) {
-                // Muito espaço, bónus esmagador (+200 pts) para garantir que a bola vá para ele
-                score += 500;
+                // Muito espaço, bónus esmagador para garantir que a bola vá para ele
+                score += 500 * fiab;
             } else if (distMarcador >= 3.5) {
-                // Espaço livre (+200 pts)
-                score += 300;
+                // Espaço livre
+                score += 300 * fiab;
             } else if (distMarcador >= 2.5) {
-                // Jogador desmarcado (+200 pts)
-                score += 200;
+                // Jogador desmarcado
+                score += 200 * fiab;
             } else {
                 // Marcado de perto (distMarcador < 2.5). Penalização severa.
                 if (this.role === 'gk') {
@@ -2541,12 +2578,43 @@ class FootballPlayer {
                 score *= OffsideModel.penalNota;
             }
 
+            /*
+            E O TERMO DA SAÍDA DE JOGO, no fim: um defesa no próprio terço e sem
+            ninguém em cima prefere o toque de 15 m à bola de 25. Medido, o que
+            os separava eram 50 pontos em 1224 — 4% — e todos os termos que
+            premeiam a frente somavam-se ao mesmo candidato.
+
+            Só sobre notas POSITIVAS, como o bónus de sector: multiplicar uma
+            nota negativa afunda-a ou levanta-a ao contrário do que se quer.
+            */
+            if (saidaAplicavel && score > 0) {
+                score *= SaidaDeJogo.factor(true, dist, agressaoEquipa);
+            }
+
             if (window.showPlayerPoints) { opt.debugPoints = opt.debugPoints || {}; opt.debugPoints['Pass'] = Math.round(score); }
             ratedCandidates.push({ player: opt, score: score });
         }
 
         if (ratedCandidates.length > 0) {
             ratedCandidates.sort((a, b) => b.score - a.score);
+            /*
+            O PÓDIO, guardado no instante da DECISÃO.
+
+            Os `debugPoints` de cada colega não servem para reconstruir uma
+            escolha: a decisão fica em cache no ramo (`currentPassChoice`) e o
+            passe só sai segundos depois (cadência do CadenceModel, até ~3 s),
+            altura em que os `debugPoints` já foram reescritos por avaliações
+            posteriores. Lido de fora, isso faz parecer que ganhou quem não
+            ganhou — aconteceu a medir os passes longos dos defesas.
+
+            Só com o debug ligado: fora disso não custa nada.
+            */
+            if (window.showPlayerPoints) {
+                this._notasPasse = ratedCandidates.slice(0, 4).map(c => ({
+                    pos: c.player.pos, score: Math.round(c.score),
+                    dist: +this.model.position.distanceTo(c.player.model.position).toFixed(1)
+                }));
+            }
             return ratedCandidates[0].player;
         }
 

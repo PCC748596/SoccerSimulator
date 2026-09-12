@@ -63,11 +63,32 @@ const PassTypes = {
     /*
     Primeira regra que casa manda; nenhuma casa -> mistura padrão.
     */
-    misturaPara: function (origem, destino) {
+    misturaPara: function (origem, destino, agressao) {
         for (const r of PassTypeModel.regras) {
-            if (r.quando(origem, destino)) return r.mistura;
+            if (!r.quando(origem, destino)) continue;
+            /*
+            `agressao` (0..1, do blackboard da equipa) é opcional e só é
+            consultada pelas regras que a sabem usar — hoje a `saidaDeTras`,
+            onde a Mentalidade decide quanto se sai a jogar aos pés. Sem ela,
+            cada regra devolve a sua tabela fixa, que é a de Equilibrada: nada
+            muda para quem não a passa.
+            */
+            if (typeof r.porAgressao === 'function' && typeof agressao === 'number') {
+                return r.porAgressao(agressao);
+            }
+            return r.mistura;
         }
         return PassTypeModel.misturaPadrao;
+    },
+
+    /*
+    A agressão da equipa de quem tem a bola, para a `misturaPara`. Devolve
+    `undefined` quando não há blackboard — e aí a tabela fixa manda.
+    */
+    agressaoDe: function (carrier) {
+        if (!carrier || typeof TeamAI === 'undefined' || !TeamAI.get) return undefined;
+        const bb = TeamAI.get(carrier.team);
+        return (bb && typeof bb.aggression === 'number') ? bb.aggression : undefined;
     },
 
     /*
@@ -255,7 +276,7 @@ const PassTypes = {
         const destino = this.zonaDe(mate.model.position.x, mate.model.position.z * dirZ);
 
         const pontos = this.pontosPorMate(carrier)[mate.id] || [];
-        const tipo = this.sortear(this.misturaPara(origem, destino), rnd);
+        const tipo = this.sortear(this.misturaPara(origem, destino, this.agressaoDe(carrier)), rnd);
         const res = this.pontoPara(tipo, pontos, mate, golZ, opponents);
 
         return { mate: mate, tipo: res.tipo, ponto: res.ponto };
@@ -289,7 +310,7 @@ const PassTypes = {
         const origem = this.zonaDe(carrier.model.position.x, carrier.model.position.z * dirZ);
         const destino = this.zonaDe(mate.model.position.x, mate.model.position.z * dirZ);
         const pontos = (this.pontosPorMate(carrier)[mate.id]) || [];
-        const tipo = this.sortear(this.misturaPara(origem, destino), rnd);
+        const tipo = this.sortear(this.misturaPara(origem, destino, this.agressaoDe(carrier)), rnd);
         const opponents = (carrier.team === 'TeamA') ? Match.opponents : Match.players;
         return this.pontoPara(tipo, pontos, mate, carrier.targetGoalZ, opponents);
     },
@@ -479,7 +500,7 @@ const PassTypes = {
             const destino = this.zonaDe(mx, mz * dirZ);
             const pontos = mapa[mate.id] || [];
 
-            const tipoSorteado = this.sortear(this.misturaPara(origem, destino), rnd);
+            const tipoSorteado = this.sortear(this.misturaPara(origem, destino, this.agressaoDe(carrier)), rnd);
             let res = this.pontoPara(tipoSorteado, pontos, mate, golZ, opponents);
 
             /*

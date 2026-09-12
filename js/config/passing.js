@@ -690,6 +690,68 @@ const PassTypeModel = {
             mistura: { space: 0.5, leading: 0.5 }
         },
 
+        /*
+        SAÍDA DE TRÁS: aos pés.
+
+        Relato: "os zagueiros estão chutando longos lançamentos para frente na
+        mentalidade equilibrada com vários jogadores de meio, meio pela lateral
+        e laterais para sair jogando".
+
+        Não havia regra nenhuma para a origem no terço defensivo: a saída de
+        trás caía no `centroParaCentro` ou na `misturaPadrao`, ambas com 0.30
+        de bola aos pés — 70% no espaço. Medido em 20 minutos, o central jogava
+        57% das bolas para o espaço, com média de 21.4 m e 33% delas acima de
+        25 m; o lateral 67%.
+
+        Aquelas duas misturas foram afinadas para a progressão no meio-campo,
+        onde quem recebe já vai em movimento. Atrás é outra coisa: o receptor
+        está parado, de frente para o jogo e sem ninguém em cima — joga-se ao
+        pé dele, que é como se sai a jogar.
+
+        Vem DEPOIS do `defParaAtk` de propósito. Um central que salta o
+        meio-campo inteiro está a fazer uma bola longa deliberada, e essa não
+        se joga aos pés a 40 m; o que esta regra apanha é o resto — def->def e
+        def->mid, a saída propriamente dita.
+
+        Não é 0.85 como o recuo: sobra espaço para o passe que quebra a linha
+        quando o médio já arrancou, senão trocava-se a bola comprida a mais
+        pela saída sempre lateral, que é o mesmo defeito ao contrário.
+
+        E A MENTALIDADE MANDA AQUI — ver `porAgressao` logo abaixo. Era o outro
+        buraco do mesmo relato: a Mentalidade tocava nesta decisão num sítio só
+        (o `aggression` dentro do bónus de progressão, player.js), e só para a
+        AUMENTAR. Não havia caminho por onde Equilibrada ou Defesa pedissem
+        menos bola para a frente do que Ataque.
+        */
+        {
+            nome: 'saidaDeTras', quando: (o) => o.sector === 'def',
+
+            // Equilibrada (agressao 0.50). É o que `porAgressao` devolve lá,
+            // e o que vale quando não há blackboard nenhum a consultar.
+            mistura: { direct: 0.7, space: 0.2, leading: 0.1 },
+
+            /*
+            `agressao` é 0..1 do MentalidadeModel (0.20 Muito Defensiva, 0.35
+            Defesa, 0.50 Equilibrada, 0.65 Ataque, 0.80 Muito Ofensiva),
+            temperado pelo momento do jogo no `computeAggression`.
+
+            Uma equipa que se põe atrás sai a jogar curto porque não tem
+            ninguém lá à frente para receber; uma que ataca arrisca a bola que
+            salta uma linha. O declive é suave de propósito: mesmo em Muito
+            Ofensiva o central joga mais aos pés do que ao espaço — quem manda
+            a bola longa é o meio-campo, não ele.
+
+            O espaço que sobra reparte-se 2:1 entre `space` e `leading`, que é
+            a proporção da linha de cima.
+            */
+            porAgressao: function (agressao) {
+                const a = Math.max(0, Math.min(1, (typeof agressao === 'number') ? agressao : 0.5));
+                const direct = 0.9 - 0.4 * a;
+                const resto = 1 - direct;
+                return { direct: direct, space: resto * (2 / 3), leading: resto * (1 / 3) };
+            }
+        },
+
         // Já no ataque: lá dentro ou a abrir nas pontas.
         {
             nome: 'origemAtaque', quando: (o) => o.sector === 'atk',
@@ -1165,3 +1227,211 @@ const RunIntoSpaceModel = {
 /*
 Fecho do sector (fechoDoSector) foi movido para js/utils.js (ver docs/auditoria_config_match.md item 5).
 */
+
+/*
+=============================================================================
+QUANDO É QUE O LANÇAMENTO GANHA AO PASSE CURTO
+=============================================================================
+Relato: "os zagueiros estão chutando longos lançamentos para frente na
+mentalidade equilibrada com vários jogadores de meio, meio pela lateral e
+laterais para sair jogando".
+
+O `findBestPassAnywhere` (js/bt/player_bt.js) devolvia o lançamento ANTES de
+calcular o passe normal, e a única pergunta que fazia era se o portador estava
+sob pressão. Fora de pressão — que é o estado normal de quem sai a jogar de
+trás — o lançamento ganhava por não haver ninguém na votação.
+
+Medido, 20 minutos de jogo em Equilibrada / Positional:
+
+    lançamentos                     71   100% fora de pressão
+                                         100% com passe curto disponível
+    passes dos defesas             100   79% para a frente, 6% lado, 15% trás
+    desses, >= 22 m                 33   em 100% havia opção de lado ou de trás
+    destino dos longos                   CF 16, RM 8, LM 4, CM 3, LB 2
+
+Um lançamento é uma decisão de RISCO: entrega a bola a 30-38 m por entre a
+linha adversária. Vale a pena quando é isso que ele é — alguém a romper por
+trás da defesa — ou quando a alternativa curta não existe. O que não faz
+sentido é ser a primeira escolha de um central sem pressão com meio campo
+para tocar.
+
+As três portas, e o porquê de cada uma:
+
+`semAlternativa`      não havendo passe curto nenhum, o lançamento é o que há.
+                      Esta porta vem primeiro: sem ela, apertar as outras duas
+                      trocava a bola comprida a mais pela bola presa.
+
+`receptorEmRuptura`   o companheiro já vai lançado em RUN_INTO_SPACE. É o
+                      lançamento verdadeiro, o que rasga a linha, e esse é bom
+                      em qualquer mentalidade — é para isso que ele corre.
+
+`agressaoMinima`      sem ruptura, é uma bola comprida para o espaço. Passa a
+                      depender da MENTALIDADE, que até aqui não tinha palavra
+                      nenhuma nesta escolha: Equilibrada vale 0.50 e não chega,
+                      Ataque 0.65 e Muito Ofensiva 0.80 chegam. Ver
+                      MentalidadeModel.agressao (config/tactics.js).
+
+E uma trava por cima das duas últimas: um DEFESA no PRÓPRIO TERÇO com passe
+curto disponível não lança. Sair a jogar é a função dele ali, e a bola
+comprida perdida à entrada do meio-campo devolve a posse no pior sítio.
+=============================================================================
+*/
+const LancamentoDecisao = {
+    agressaoMinima: 0.60,
+
+    /*
+    `estado` é o que o ramo sabe no instante da decisão:
+
+        temPasseCurto         o findPassTarget devolveu alguém
+        receptorEmRuptura     o destinatário está em RUN_INTO_SPACE
+        agressao              0..1, do blackboard da equipa (computeAggression)
+        defesaNoProprioTerco  o portador é defesa e está no seu terço
+    */
+    aceita: function (estado) {
+        const e = estado || {};
+        if (!e.temPasseCurto) return true;
+        if (e.defesaNoProprioTerco) return false;
+        if (e.receptorEmRuptura) return true;
+        const agressao = (typeof e.agressao === 'number') ? e.agressao : 0.5;
+        return agressao >= this.agressaoMinima;
+    }
+};
+if (typeof window !== 'undefined') window.LancamentoDecisao = LancamentoDecisao;
+
+/*
+=============================================================================
+QUANTO VALE UM COMPANHEIRO LIVRE — DEPENDE DE A BOLA LÁ CHEGAR
+=============================================================================
+O bónus de receptor desmarcado (`findPassTarget`, js/player.js) é uma escada
+fixa: +500 acima de 5 m de marcador, +300 acima de 3.5, +200 acima de 2.5. É a
+parcela mais pesada da nota inteira — e não olhava à DISTÂNCIA do passe. Um
+ponta-de-lança livre a 30 m valia exactamente o mesmo que um central livre a
+8 m, e a seguir os bónus de progressão (+60), de tendência e de ângulo visual
+(+80) desempatavam sempre para a frente.
+
+Daí a leitura dos defesas, medida em 20 minutos: 79% dos passes para a frente
+contra 6% de lado, média de 18.9 m no central e 21.9 m no lateral, e 33% dos
+seus passes acima de 22 m — com opção de lado ou de trás disponível em 100%
+desses casos.
+
+"Livre" não é a mesma coisa a 8 m e a 30 m: a 30 m a bola tem de sobreviver ao
+caminho. As taxas são as do próprio simulador, do lote de 60 jogos
+(`passes` por faixa):
+
+    0-8 m     84% certos
+    8-15 m    83%
+    15-25 m   63%
+    25 m+     44%
+
+O bónus passa a ser pesado por esta curva. Não proíbe o passe longo — um
+avançado livre a 30 m continua a valer 44% de 500 mais tudo o resto, e ganha
+quando não há nada melhor. Deixa é de valer o mesmo que o toque curto.
+
+A curva é contínua de propósito: em degraus o portador mudava de ideias ao
+atravessar a fronteira de uma faixa, e isso já se pagou noutros sítios (ver a
+histerese do OlharModel).
+=============================================================================
+*/
+const FiabilidadePasse = {
+    // Distância (m) -> fracção que chega. Pontos no MEIO de cada faixa medida.
+    pontos: [[4, 0.84], [11.5, 0.83], [20, 0.63], [32, 0.44]],
+    minima: 0.30,   // muito longe continua a valer alguma coisa, não zero
+
+    fiabilidade: function (dist) {
+        const d = Math.max(0, dist);
+        const P = this.pontos;
+        if (d <= P[0][0]) return P[0][1];
+        for (let i = 1; i < P.length; i++) {
+            if (d <= P[i][0]) {
+                const t = (d - P[i - 1][0]) / (P[i][0] - P[i - 1][0]);
+                return P[i - 1][1] + (P[i][1] - P[i - 1][1]) * t;
+            }
+        }
+        // Para lá do último ponto continua a descer, com chão.
+        const ultimo = P[P.length - 1];
+        const anterior = P[P.length - 2];
+        const declive = (ultimo[1] - anterior[1]) / (ultimo[0] - anterior[0]);
+        return Math.max(this.minima, ultimo[1] + declive * (d - ultimo[0]));
+    }
+};
+if (typeof window !== 'undefined') window.FiabilidadePasse = FiabilidadePasse;
+
+/*
+=============================================================================
+SAIR A JOGAR — O PESO DA OPÇÃO CURTA NO DEFESA SEM PRESSÃO
+=============================================================================
+A regra `saidaDeTras` (PassTypeModel, acima) corrigiu o COMO: o central deixou
+de pôr a bola no espaço à frente de quem recebe e passa a jogá-la ao pé.
+Medido em 60 minutos, A/B no mesmo binário:
+
+    defesas com a bola no espaço     61% -> 46%
+    central                          65% -> 44%
+
+Mas não corrigiu o QUANTO LONGE, e o relato falava das duas coisas:
+
+    distância real média dos defesas   20.1 m -> 20.2 m
+    passes de defesa >= 25 m              30% -> 31%
+
+Porque o COMO e o QUEM são decisões separadas: continua a ganhar a votação um
+companheiro distante. O pódio de uma dessas decisões, medido no instante em
+que ela é tomada (e não no instante do passe — a decisão fica em cache até
+~3 s, ver `_notasPasse` em player.js):
+
+    LB escolheu CF a 24.9 m
+    CF 1274 (24.9 m) | CB 1224 (15.7 m) | LM 1048 (8.7 m) | CB 998 (26 m)
+
+Cinquenta pontos em mil e duzentos — 4%. Não é um erro grosseiro na nota, é um
+empate técnico que se resolve sempre para o mesmo lado, porque os termos que
+premeiam a frente (progressão, tendência de posição, ângulo visual) somam-se
+todos ao mesmo candidato.
+
+O que falta na nota é a ideia de SAIR A JOGAR: um defesa no seu terço, sem
+ninguém em cima, tem por função pôr a bola a andar em segurança, e o toque de
+15 m vale-lhe mais do que a bola de 25. Isso é uma regra de função e de zona,
+não um ajuste de pesos — e é aqui.
+
+Sem pressão de propósito: com um adversário em cima, o defesa tem de tirar a
+bola dali e o passe longo volta a ser a opção certa.
+
+A MENTALIDADE tempera a força disto (ver `factorMental`): uma equipa que ataca
+aceita mais risco na saída, uma que se defende menos.
+=============================================================================
+*/
+const SaidaDeJogo = {
+    curta: 18.0,         // até aqui é toque de saída
+    longa: 25.0,         // daqui para cima é bola comprida
+    bonusCurto: 0.12,    // quanto vale a mais o toque curto
+    penalLongo: 0.15,    // quanto vale a menos a bola comprida
+    raioPressao: 3.5,    // o mesmo do `underPressure` da árvore (player_bt.js)
+
+    /*
+    A mentalidade em torno de Equilibrada (0.50): Muito Ofensiva (0.80) fica
+    com 70% do efeito, Muito Defensiva (0.20) com 130%.
+    */
+    factorMental: function (agressao) {
+        const a = (typeof agressao === 'number') ? agressao : 0.5;
+        return Math.max(0, 1 + (0.5 - a));
+    },
+
+    /*
+    Multiplicador da nota de um candidato. 1.0 quando não se aplica — nem a
+    função, nem a zona, nem a ausência de pressão.
+
+        aplicavel   o portador é defesa, no próprio terço, sem ninguém em cima
+        dist        distância do passe ao ponto de mira
+        agressao    0..1 do blackboard da equipa
+
+    Em rampa entre `curta` e `longa`, e não em degrau: com um corte seco o
+    portador muda de ideias ao atravessar a fronteira, e isso já se pagou
+    noutros sítios (ver a histerese do OlharModel).
+    */
+    factor: function (aplicavel, dist, agressao) {
+        if (!aplicavel) return 1.0;
+        const m = this.factorMental(agressao);
+        if (dist <= this.curta) return 1 + this.bonusCurto * m;
+        if (dist >= this.longa) return 1 - this.penalLongo * m;
+        const t = (dist - this.curta) / (this.longa - this.curta);
+        return (1 + this.bonusCurto * m) * (1 - t) + (1 - this.penalLongo * m) * t;
+    }
+};
+if (typeof window !== 'undefined') window.SaidaDeJogo = SaidaDeJogo;

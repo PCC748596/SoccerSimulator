@@ -805,6 +805,9 @@ function animate(time) {
     let delta = (time - lastTime) / 1000;
     if (isNaN(delta) || delta > 0.1) delta = 0.016;
     lastTime = time;
+    // O tempo do FRAME desenhado, para quem suaviza por frame e não por passo
+    // de simulação — a câmara (ver Match.updateCamera).
+    window.lastFrameDelta = delta;
 
     fpsFrames++;
     if (time - fpsLastTime >= 1000) {
@@ -829,15 +832,6 @@ function animate(time) {
         fpsFrames = 0;
         fpsLastTime = time;
     }
-
-    if (window.cameraMode === 'orbit') {
-        if (orbitControls) orbitControls.update();
-    } else {
-        Match.updateCamera();
-    }
-    // Discos em vez de bonecos na câmara de cima — ver atualizarVistaTatica.
-    Match.atualizarVistaTatica();
-    updateCameraFrustum();
 
     if (!window.isPaused) {
         // GAME_SPEED é o ritmo base da partida (config.js); o speedMultiplier
@@ -866,15 +860,18 @@ function animate(time) {
             A `guarda` existe para o caso do frame lento: sem ela, um frame
             demorado pedia mais passos, que o tornavam mais demorado ainda.
             Melhor perder tempo de jogo do que entrar em espiral.
+
+            E os passos são todos do MESMO TAMANHO (ver `partirPasso`,
+            utils.js). Eram uma fatia cheia mais um resto, e o resto podia ser
+            de décimas de milésimo de segundo — tempo nenhum de jogo, mas uma
+            dose inteira de suavização do rig, que conta por chamada e não por
+            segundo. Era isso que fazia a animação mudar de ritmo conforme o
+            frame partia ou não.
             */
-            let restante = delta * window.speedMultiplier * GAME_SPEED;
             const PASSO_MAX = (1 / 60) * GAME_SPEED * 1.5;
-            let guarda = 0;
-            while (restante > 1e-6 && guarda++ < 40) {
-                const passo = Math.min(PASSO_MAX, restante);
-                Match.update(passo);
-                restante -= passo;
-            }
+            const corte = partirPasso(delta * window.speedMultiplier * GAME_SPEED, PASSO_MAX);
+            for (let i = 0; i < corte.n; i++) Match.update(corte.passo);
+            const guarda = corte.n;
             /*
             QUANTOS PASSOS ESTE FRAME PEDIU — contado para a auditoria de
             performance, e não por gosto de contar.
@@ -889,6 +886,28 @@ function animate(time) {
             window._perfPassos = (window._perfPassos || 0) + guarda;
         }
     }
+
+    /*
+    A CÂMARA DEPOIS DO MUNDO, e não antes.
+
+    Isto corria no topo do `animate`, ANTES do `Match.update`: a câmara era
+    apontada à bola do frame ANTERIOR e só depois o mundo avançava, mas o
+    `render` lá em baixo desenha as duas coisas juntas. Ficava um frame
+    inteiro de desencontro entre o que a câmara persegue e o que está
+    desenhado — a 60 fps com a bola a 20 m/s são 33 cm, e lê-se como a
+    imagem a arrastar-se atrás do jogo.
+
+    O `updateCameraFrustum` vem junto de propósito: o frustum tem de ser o
+    desta câmara, não o de uma posição que já não existe.
+    */
+    if (window.cameraMode === 'orbit') {
+        if (orbitControls) orbitControls.update();
+    } else {
+        Match.updateCamera();
+    }
+    // Discos em vez de bonecos na câmara de cima — ver atualizarVistaTatica.
+    Match.atualizarVistaTatica();
+    updateCameraFrustum();
 
     // Fora do `if (!isPaused)`: em pausa os números continuam a valer, e o
     // painel tem de continuar a mostrá-los.
