@@ -1900,6 +1900,39 @@ function partirPasso(restante, passoMax, guarda = 40) {
     return { n: n, passo: t / n };
 }
 
+/*
+=============================================================================
+ARMAR O GUARDA-REDES — um sítio, para as duas bolas
+=============================================================================
+A bola vai para a baliza de duas maneiras: do pé (`executeShotGameplay`,
+js/fsm.js) e da testa (`executeHeader`, js/player.js). As duas têm de avisar o
+guarda-redes da mesma forma, e estavam a avisá-lo de formas diferentes.
+
+O remate já tinha sido corrigido: havia lá um atraso forçado que o sorteio de
+desfechos escrevia — 1.0 s nos remates marcados como golo, 0 nos marcados como
+defesa — e saiu quando o desfecho passou a sair da bola. O cabeceío ficou como
+estava, com `forcedGKDelay = 0.8` e o comentário "GK não chega a tempo" no
+desfecho sorteado como golo.
+
+Medido antes desta correção, 810 minutos de jogo e 33 golos (3.67 por 90,
+alvo 2.52): **70% dos golos eram de cabeça** (23 de 33; no futebol a sério são
+~17%) e em 19 deles o guarda-redes estava `idle`.
+
+Com as duas bolas a passar por aqui, o atraso deixa de poder divergir: é o
+tempo de reação do GoalkeeperDive, 0.10 s a GK 100 e 0.46 s a GK 0, e mais
+nada.
+=============================================================================
+*/
+function armarGuardaRedes(gk, skillGk) {
+    if (!gk) return;
+    const R = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
+    const base = (R && typeof R.reaccaoBase === 'number') ? R.reaccaoBase : 0.45;
+    const amp = (R && typeof R.reaccaoPorSkill === 'number') ? R.reaccaoPorSkill : 0.35;
+    const s = (typeof skillGk === 'number') ? skillGk : 50;
+    gk.gkDelayReacao = base - ((s - 50) / 50) * amp;
+    gk.gkReagiu = false;
+}
+
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 /*

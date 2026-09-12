@@ -1221,6 +1221,101 @@ tratadas em FootballPlayer.updateGK().
 
 const HeaderModel = {
     /*
+    =========================================================================
+    O CABECEÍO À BALIZA: MIRA MAIS ERRO, e não uma tabela de desfechos
+    =========================================================================
+    Estava aqui um sorteio que decidia o DESFECHO antes de a bola sair da
+    testa — 'GOL', 'TRAVE_CAMPO', 'GOLEIRO_DEFENDE', sete faces com pesos — e
+    depois escrevia a física para o cumprir: no 'GOL' mirava a 0.75-0.93 do
+    poste e púnha `forcedGKDelay = 0.8` com o comentário "GK não chega a
+    tempo".
+
+    Medido, 810 minutos de jogo e 33 golos (3.67 por 90, alvo 2.52):
+
+        último contacto antes do golo
+          cabeceío      23   70%      (no futebol a sério ~17%)
+          nada em 5 s    6   18%
+          remate         3    9%
+          passe          1    3%
+        estado do guarda-redes: idle 19 em 33
+
+    Tirado o atraso forçado (ver `armarGuardaRedes`, utils.js), ele passou a
+    mergulhar — idle 19 -> 3 — e os golos quase não mexeram: 3.67 -> 3.56. A
+    razão é a outra metade do dado: continuava a MIRAR no ângulo em ~59% dos
+    cabeceíos limpos, e de 8 m a 17 m/s a bola chega em 0.47 s. Com 0.28 s de
+    reação não há guarda-redes nenhum que cubra 3 m nesse tempo. Uma mira
+    perfeita não se defende — defende-se um cabeceío, que é outra coisa.
+
+    Passa a ser o mesmo desenho do remate (ShotModel): mira-se um ponto que é
+    SEMPRE golo, e o que decide o desfecho é o ERRO somado por cima. Golos,
+    postes e bolas por cima saem da bola, do ferro e do guarda-redes.
+
+    O erro é maior do que o do pé, e tem de ser: cabecear é acertar com a
+    testa numa bola que vem no ar, muitas vezes em salto e com um marcador ao
+    lado. O `ShotModel.erro` vale 1.10 m a 6 m com TEC 50; aqui a base é 1.70
+    a 4 m, o que põe a maioria dos cabeceíos longe do ângulo e ao alcance de
+    quem defende.
+    =========================================================================
+    */
+    remate: {
+        /*
+        A MIRA. Lado contrário ao guarda-redes, como no remate; a ambição é
+        menor — ninguém coloca uma cabeçada no poste como coloca um pé.
+        */
+        fraccaoCantoMin: 0.30,
+        fraccaoCantoMax: 0.80,
+        alturaMin: 0.45,
+        alturaMax: 1.95,
+        gkCentradoMax: 0.6,     // com o GK a menos disto do meio, o lado é à sorte
+
+        /*
+        O ERRO, em metros no plano da baliza. Mesma forma do ShotModel.erro.
+        `aerial` é TEC*0.65 + STRENGTH*0.35, a mesma conta que já decidia a
+        disputa aérea.
+        */
+        erro: {
+            base: 1.70,
+            porMetro: 0.16,
+            distRef: 4.0,
+            fracVertical: 0.75,
+            // Divide o sigma: 0.70 a aerial 100, 1.45 a aerial 0.
+            aerialMin: 0.70,
+            aerialMax: 1.45,
+            // Em salto acerta-se pior do que com os pés no chão.
+            saltoMult: 1.15,
+            // Marcador colado abre a mira, como a pressão no remate.
+            pressaoDist: 2.2,
+            pressaoMult: 1.40,
+
+            /*
+            A MANÍPULA DE CALIBRAÇÃO, como a `escalaGlobal` do remate: acima
+            de 1 saem mais cabeceíos para fora, abaixo de 1 mais à baliza.
+            Existe para acertar a taxa sem voltar a impor desfechos.
+            */
+            escalaGlobal: 1.0
+        },
+
+        // Potência da cabeçada, em m/s, antes do factor de força.
+        potenciaBase: 12.5,
+        potenciaAmplitude: 3.5
+    },
+
+    /*
+    Sigma da cabeçada à baliza. `o`: { dist, aerial, emSalto, distMarcador }.
+    */
+    sigmaCabeceio: function (o) {
+        const E = this.remate.erro;
+        const dist = Math.max(0, (o && o.dist) || 0);
+        const aerial = Math.max(0, Math.min(100, (o && typeof o.aerial === 'number') ? o.aerial : 50));
+        let s = E.base + Math.max(0, dist - E.distRef) * E.porMetro;
+        s *= E.aerialMax - (E.aerialMax - E.aerialMin) * (aerial / 100);
+        if (o && o.emSalto) s *= E.saltoMult;
+        if (o && typeof o.distMarcador === 'number' && o.distMarcador < E.pressaoDist) s *= E.pressaoMult;
+        s *= E.escalaGlobal;
+        return { lateral: s, vertical: s * E.fracVertical };
+    },
+
+    /*
     RAIO EM QUE SE CABECEIA À BALIZA. Fora dele a cabeçada é passe ou alívio,
     nunca remate.
 

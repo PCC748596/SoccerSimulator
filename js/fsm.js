@@ -783,11 +783,9 @@ function executeShotGameplay(p) {
             // Ver GoalkeeperDive.reaccaoBase para o porquê dos números —
             // estavam aqui escritos à mão, e eram lentos ao ponto de o
             // mergulho partir depois de a bola ter chegado.
-            const R = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
-            const base = (R && typeof R.reaccaoBase === 'number') ? R.reaccaoBase : 0.45;
-            const amp = (R && typeof R.reaccaoPorSkill === 'number') ? R.reaccaoPorSkill : 0.35;
-            gkDef.gkDelayReacao = base - ((TeamSkills[defendingTeam].gk - 50) / 50) * amp;
-            gkDef.gkReagiu = false;
+            // Um só sítio para as duas bolas, a do pé e a da testa — ver
+            // `armarGuardaRedes` (utils.js) e a medição que o motivou.
+            armarGuardaRedes(gkDef, TeamSkills[defendingTeam].gk);
         }
         window.bolaChutada = true;
     }

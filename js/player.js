@@ -3119,8 +3119,6 @@ class FootballPlayer {
 
             const maxC = (LARGURA_BALIZA / 2) - 0.5;
             let alvoX, alvoY, pow;
-            let forcedGKDelay = null;
-
             // Fator de força e técnica do cabeceador
             const forcaFactor = 0.85 + (this.skillFor('STRENGTH') / 100) * 0.30 + (this.skillFor('TEC') / 100) * 0.15;
 
@@ -3141,86 +3139,38 @@ class FootballPlayer {
                     (distHC > 0.001 ? dzC / distHC : -this.dirZ) * vhC
                 );
             } else {
-                // 5 & 6. Disputa Atacante x Goleiro
+                /*
+                MIRA MAIS ERRO, como o remate — ver HeaderModel.remate, com a
+                medição que o motivou.
+
+                Estava aqui um sorteio de DESFECHOS ('GOL', 'TRAVE_CAMPO',
+                'GOLEIRO_DEFENDE'...) que escolhia o resultado antes de a bola
+                sair da testa e depois escrevia a física para o cumprir. O que
+                se mira agora é sempre golo; o que decide é o erro por cima.
+                */
+                const HR = HeaderModel.remate;
                 const gkAdversario0 = (this.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
-                let gkScore = 50; 
-                if (gkAdversario0) {
-                    gkScore = gkAdversario0.skillFor('TEC') * 0.30 + gkAdversario0.skillFor('GK') * 0.70;
-                }
-                
-                // 7. Comparar probabilisticamente
-                const attackRatio = Math.min(0.95, Math.max(0.15, (aerialAtacante * 1.25) / (aerialAtacante * 1.25 + gkScore * 0.75)));
-                
-                // Distribuição calibrada para cabeçadas mais certas e perigosas a gol
-                const weights = [
-                    { outcome: 'GOL', weight: Math.pow(attackRatio, 1.1) * 150 },
-                    { outcome: 'TRAVE_CAMPO', weight: attackRatio * 12 },
-                    { outcome: 'TRAVE_FORA', weight: attackRatio * 8 },
-                    { outcome: 'TRAVESSAO_CAMPO', weight: attackRatio * 12 },
-                    { outcome: 'TRAVESSAO_FORA', weight: attackRatio * 8 },
-                    { outcome: 'GOLEIRO_DEFENDE', weight: Math.pow(1 - attackRatio, 1.4) * 50 },
-                    { outcome: 'GOLEIRO_FORA', weight: (1 - attackRatio) * 18 }
-                ];
-                
-                let totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
-                let roll = Math.random() * totalWeight;
-                let selectedOutcome = 'GOLEIRO_DEFENDE';
-                for (let w of weights) {
-                    if (roll < w.weight) {
-                        selectedOutcome = w.outcome;
-                        break;
-                    }
-                    roll -= w.weight;
-                }
-                
-                // 8. Aplicar o resultado fisicamente
-                let sinal = Math.random() > 0.5 ? 1 : -1;
-                
-                switch (selectedOutcome) {
-                    case 'GOL':
-                        // Cabeçada certeira no canto: rente à trave ou picando para baixo / no ângulo
-                        alvoX = sinal * maxC * (0.75 + Math.random() * 0.18);
-                        alvoY = Math.random() > 0.45 ? (Math.random() * 0.7 + 0.25) : (ALTURA_BALIZA - 0.35 - Math.random() * 0.5);
-                        pow = (15.5 + Math.random() * 2.5) * forcaFactor; // ~15.5 a 20.0 m/s
-                        forcedGKDelay = 0.8; // GK não chega a tempo
-                        break;
-                    case 'TRAVE_CAMPO':
-                        alvoX = sinal * (LARGURA_BALIZA / 2 - 0.08); // Bate na parte de dentro do poste
-                        alvoY = 0.6;
-                        pow = (14.0 + Math.random() * 2.0) * forcaFactor;
-                        forcedGKDelay = 0.8;
-                        break;
-                    case 'TRAVE_FORA':
-                        alvoX = sinal * (LARGURA_BALIZA / 2 + 0.08); // Bate na parte de fora do poste
-                        alvoY = 0.6;
-                        pow = (14.0 + Math.random() * 2.0) * forcaFactor;
-                        forcedGKDelay = 0.8;
-                        break;
-                    case 'TRAVESSAO_CAMPO':
-                        alvoX = (Math.random() - 0.5) * maxC;
-                        alvoY = ALTURA_BALIZA - 0.08; // Bate na parte de baixo do travessão
-                        pow = (14.5 + Math.random() * 2.0) * forcaFactor;
-                        forcedGKDelay = 0.8;
-                        break;
-                    case 'TRAVESSAO_FORA':
-                        alvoX = (Math.random() - 0.5) * maxC;
-                        alvoY = ALTURA_BALIZA + 0.08; // Bate na parte de cima do travessão
-                        pow = (14.5 + Math.random() * 2.0) * forcaFactor;
-                        forcedGKDelay = 0.8;
-                        break;
-                    case 'GOLEIRO_DEFENDE':
-                        alvoX = (Math.random() - 0.5) * 2.0; // Vai em direção ao alcance do GK
-                        alvoY = 0.6 + Math.random() * 0.9;
-                        pow = (12.5 + Math.random() * 2.0) * forcaFactor; // Cabeçada firme que o GK defende
-                        forcedGKDelay = 0; // GK reage
-                        break;
-                    case 'GOLEIRO_FORA':
-                        alvoX = sinal * maxC * 1.08; // Vai rente ao poste por fora
-                        alvoY = 1.0;
-                        pow = (14.0 + Math.random() * 2.0) * forcaFactor;
-                        forcedGKDelay = 0;
-                        break;
-                }
+                const gkX0 = gkAdversario0 ? gkAdversario0.model.position.x : 0;
+
+                // Lado contrário ao guarda-redes; com ele ao meio, à sorte.
+                const ladoH = (Math.abs(gkX0) > HR.gkCentradoMax)
+                    ? -Math.sign(gkX0)
+                    : (Math.random() < 0.5 ? -1 : 1);
+                const fracH = HR.fraccaoCantoMin + Math.random() * (HR.fraccaoCantoMax - HR.fraccaoCantoMin);
+                let miraX = ladoH * maxC * fracH;
+                let miraY = HR.alturaMin + Math.random() * (HR.alturaMax - HR.alturaMin);
+
+                // O erro, do tamanho de quem cabeceia e de onde.
+                const sig = HeaderModel.sigmaCabeceio({
+                    dist: distToGoal,
+                    aerial: aerialAtacante,
+                    emSalto: this.jumpTimer > 0,
+                    distMarcador: distMarc
+                });
+                const ruidoH = parNormal(Math.random(), Math.random());
+                alvoX = miraX + ruidoH.u * sig.lateral;
+                alvoY = Math.max(0.15, miraY + ruidoH.v * sig.vertical);
+                pow = (HR.potenciaBase + Math.random() * HR.potenciaAmplitude) * forcaFactor;
 
                 const alvoZc = this.targetGoalZ;
                 const dxC = alvoX - Match.ball.position.x;
@@ -3265,10 +3215,20 @@ class FootballPlayer {
                 let defendingTeam = (this.team === 'TeamA') ? 'TeamB' : 'TeamA';
                 // Notifica o GK adversário com o seu delay de reacção próprio.
                 const gkAdversario = (this.team === 'TeamA') ? Match.opponents[0] : Match.players[0];
-                if (gkAdversario) {
-                    gkAdversario.gkDelayReacao = (forcedGKDelay !== null) ? forcedGKDelay : (0.45 - ((TeamSkills[defendingTeam].gk - 50) / 50) * 0.35);
-                    gkAdversario.gkReagiu = false;
-                }
+                /*
+                O MESMO TEMPO DE REACÇÃO DO REMATE, sempre.
+
+                Estava aqui um `forcedGKDelay` que o sorteio de desfechos
+                escrevia: 0.8 s no cabeceío marcado como golo, com o
+                comentário "GK não chega a tempo". Decidia-se o golo e
+                desligava-se quem o podia evitar — e daí os 70% de golos de
+                cabeça (23 em 33, medidos em 810 minutos) com o guarda-redes
+                parado em 19 deles.
+
+                O sorteio abaixo escolhe a MIRA. Quem decide se entra é a bola
+                e o guarda-redes. Ver `armarGuardaRedes` (utils.js).
+                */
+                armarGuardaRedes(gkAdversario, TeamSkills[defendingTeam].gk);
                 window.bolaChutada = true;
             }
         } else {
