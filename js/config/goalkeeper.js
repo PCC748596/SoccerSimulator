@@ -880,11 +880,20 @@ const GkCatchModel = {
     },
 
     /*
-    O RAIO DO CORPO para esse teste, em metros: meio tronco mais o raio da
-    bola. Menor do que o alcance da mão de propósito — a mão estica-se, o
-    tronco não.
+    O RAIO DO CORPO para esse teste, em metros: meio ombro (0.22) mais o raio
+    da bola (0.11). Menor do que o alcance da mão de propósito — a mão
+    estica-se, o tronco não.
+
+    Varrido (9 sementes, 45 min cada) e o número quase não manda no resultado:
+    0.20 dá 14% de conversão nos remates à baliza, 0.26 dá 17% e 0.32 dá 19%.
+    A razão é que QUALQUER contacto salva — dos três desfechos do
+    `resolverDefesaGK` só o `roca` deixa a bola seguir, e com o `base.corpo`
+    alto quase nunca sai. Fica no valor físico, que é o defensável, e o que
+    sobra para chegar aos ~29% reais não é este raio: é a COLOCAÇÃO do remate,
+    que no jogo cai a 1.5-1.8 m do centro da baliza (o meio, onde ele está) em
+    vez de junto aos postes.
     */
-    alcanceCorpo: 0.42,
+    alcanceCorpo: 0.32,
     /*
     Altura do corpo que conta, dos pés para cima. Acima disto a bola passa-lhe
     por cima da cabeça e é o salto que trata dela (ver o ramo do `salto`).

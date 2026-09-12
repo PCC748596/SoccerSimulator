@@ -9085,3 +9085,72 @@ mergulho contra a colocação do remate a média distância. A medição que fal
 onde a bola cruza a linha nos que entram contra nos que são defendidos — se os
 golos se concentrarem junto aos postes, o remate é colocado demais; se estiverem
 espalhados, o mergulho é curto.
+
+#### A defesa ao CORPO, que não existia
+
+Encontrada a seguir à medição acima, e é um defeito de colisão e não de
+calibração: o teste de defesa do guarda-redes de pé media só a distância às
+duas MÃOS (`GkCatchModel.alcanceContacto`, 0.95 m cada). As mãos ficam
+penduradas ao lado do corpo, portanto um remate ao peito, à barriga ou entre as
+pernas não ficava perto de nenhuma delas e passava inteiro.
+
+A assinatura estava na medição: dos remates À BALIZA, os que cruzavam a linha a
+menos de um metro do guarda-redes entravam **48%** — MAIS do que os que
+cruzavam a três metros dele (36%). A proximidade não previa o desfecho, que é o
+retrato de um teste de colisão a falhar e não de um mergulho curto nem de um
+remate colocado.
+
+Duas peças:
+
+- `distanciaEntreSegmentos` (utils.js): distância segmento-a-segmento em 3D,
+  para o trajecto da bola no frame contra o corpo. Ponto-contra-segmento não
+  serve — a 25 m/s a bola anda 42 cm entre frames e atravessava-o sem ficar
+  perto em frame nenhum. (Ao escrevê-la troquei o sinal de `r` e dois segmentos
+  que se cruzam davam 1.41 m em vez de zero; apanhado pelos cinco casos de
+  verificação.)
+- O corpo como segmento vertical nos pés dele (`alcanceCorpo` 0.32 m = meio
+  ombro mais o raio da bola, `alturaCorpo` 1.85 m) e o tipo `corpo` no
+  `resolverDefesaGK`, com extensão zero — não há nada a esticar numa bola ao
+  corpo.
+
+Depois, a distância ao guarda-redes passou a PREVER o desfecho, monotonicamente:
+**6% → 9% → 12% → 27%** de golos conforme a bola cruza a menos de 1 m, a 1-2 m,
+a 2-3 m ou a mais de 3 m dele. E no lote de 60 jogos:
+
+```
+                       antes    agora     alvo    %
+  golos                 4.72     3.46     2.52   137%   (era 187%)
+  finalizações         34.48    35.28    26.11   135%
+  cantos                6.97     8.24     9.92    83%   (era 70%)
+  faltas               27.74    27.86    27.63   101%   ok
+  impedimentos          2.73     2.82     3.20    88%   ok
+  ataques perigosos     66.2     67.4     77.8    87%   ok
+  xG por remate        0.054    0.052    0.109    48%
+```
+
+O raio foi varrido (0.20 / 0.26 / 0.32) e quase não manda: 14%, 17% e 19% de
+conversão nos remates à baliza. A razão é que QUALQUER contacto salva — dos
+três desfechos do `resolverDefesaGK` só o `roca` deixa a bola seguir. Fica no
+valor físico, que é o defensável.
+
+Dois testes do guarda-redes tiveram de mudar por causa disto:
+
+- `gk_agarra_com_a_mao` exigia que nenhuma captura acontecesse a mais de 1.30 m
+  da mão. Uma defesa ao corpo é exactamente isso — a captura que falhava tinha
+  a bola a 0.13 m do TRONCO e 1.34 m da mão. A regra passou a ser "perto da mão
+  OU no corpo" e continua a apanhar o defeito original (bolas agarradas a dois
+  metros, sem gesto nenhum).
+- `gk_salta_no_momento` falhava por 0.01 s no pior caso (0.88 contra tecto
+  0.87). Medido em três sementes: média 0.37-0.41 s e pior caso 0.43 em duas
+  delas; a semente do teste tem UM mergulho em 16 a 0.88. O comportamento está
+  são e o que falhava era a regra do MÁXIMO ABSOLUTO, que um lance decide —
+  passou a tolerar um décimo da amostra fora do tecto. É a única vez nesta
+  sessão em que um critério foi relaxado em vez de o código ser corrigido, e
+  fica dito.
+
+**O que fica por fazer**, com a causa já medida: golos a 137% e xG por remate a
+48% porque **75% dos remates saem de 16 m+** e só 7% de dentro dos 11 m, contra
+metade dos remates dentro da área num jogo a sério. O jogo chega ao último
+terço (ataques perigosos a 87%) e não entra na área. O próximo alvo é a decisão
+de conduzir/passar dentro dos 16 m em vez de rematar de fora — não o
+guarda-redes.

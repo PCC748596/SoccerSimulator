@@ -63,7 +63,27 @@ proto.grabBall = function () {
             m.getWorldPosition(_w);
             mao = Math.min(mao, _w.distanceTo(Match.ball.position));
         }
-        if (mao < Infinity) registos.push({ mao: mao, estado: this.gkEstado });
+        /*
+        E A DISTÂNCIA AO CORPO, que passou a valer: desde que existe a defesa
+        ao corpo (ver GkCatchModel.alcanceCorpo), uma bola ao peito ou às
+        pernas é agarrada sem estar perto de nenhuma mão — e é assim que se
+        defende um remate ao corpo.
+
+        O que este teste guarda continua a ser o que o relato descreve: a bola
+        agarrada de LONGE, a dois metros, sem gesto nenhum. Por isso a conta
+        passou a ser "perto da mão OU no corpo" em vez de só a primeira.
+        */
+        let corpo = Infinity;
+        if (typeof distanciaEntreSegmentos === 'function') {
+            const alt = (typeof GkCatchModel.alturaCorpo === 'number')
+                ? GkCatchModel.alturaCorpo : 1.85;
+            const b = Match.ball.position;
+            corpo = distanciaEntreSegmentos(
+                this.model.position.x, ALTURA_BASE_Y, this.model.position.z,
+                this.model.position.x, ALTURA_BASE_Y + alt, this.model.position.z,
+                b.x, b.y, b.z, b.x, b.y, b.z);
+        }
+        if (mao < Infinity) registos.push({ mao: mao, corpo: corpo, estado: this.gkEstado });
     }
     return orig.call(this);
 };
@@ -83,15 +103,23 @@ test('a bola que passa ao lado ja e mergulho, e nao um passe de magica', () => {
         'alcance do braco e o mergulho continua sem gesto nenhum');
 });
 
-test('nenhuma bola e agarrada de longe da mao', () => {
-    const longe = registos.filter(r => r.mao > GkCatchModel.alcanceContacto + 0.35);
-    const pior = registos.length ? Math.max(...registos.map(r => r.mao)) : 0;
+test('nenhuma bola e agarrada de longe do corpo e da mao', () => {
+    const limiteMao = GkCatchModel.alcanceContacto + 0.35;
+    const limiteCorpo = (typeof GkCatchModel.alcanceCorpo === 'number')
+        ? GkCatchModel.alcanceCorpo + 0.15 : 0;
+
+    // De longe = longe da mão E longe do corpo. Uma das duas basta para a
+    // defesa ser legítima.
+    const longe = registos.filter(r => r.mao > limiteMao && r.corpo > limiteCorpo);
+    const pior = registos.length ? Math.max(...registos.map(r => Math.min(r.mao, r.corpo))) : 0;
     const media = registos.length
-        ? registos.reduce((s, r) => s + r.mao, 0) / registos.length : 0;
-    console.log(`  ${registos.length} agarradas | media ${media.toFixed(2)} m da mao, ` +
-        `pior ${pior.toFixed(2)} m | de longe: ${longe.length}`);
+        ? registos.reduce((s, r) => s + Math.min(r.mao, r.corpo), 0) / registos.length : 0;
+    const aoCorpo = registos.filter(r => r.corpo <= limiteCorpo && r.mao > limiteMao).length;
+    console.log(`  ${registos.length} agarradas | media ${media.toFixed(2)} m do ponto mais ` +
+        `proximo (mao ou corpo), pior ${pior.toFixed(2)} m | ao corpo: ${aoCorpo} | de longe: ${longe.length}`);
     assert.ok(registos.length >= 5, `amostra curta: ${registos.length} agarradas`);
     assert.ok(longe.length === 0,
         `${longe.length} de ${registos.length} agarradas com a bola a mais de ` +
-        `${(GkCatchModel.alcanceContacto + 0.35).toFixed(2)} m da mao (a pior a ${pior.toFixed(2)} m)`);
+        `${limiteMao.toFixed(2)} m da mao E a mais de ${limiteCorpo.toFixed(2)} m do corpo ` +
+        `(a pior a ${pior.toFixed(2)} m)`);
 });
