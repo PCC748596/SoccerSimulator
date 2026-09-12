@@ -9240,8 +9240,17 @@ escala — e as faixas foram remedidas as duas vezes:
   25 m           —        29%      27%      passa
 ```
 
-O tecto do guarda subiu 1.15 -> 1.20 -> 1.40. **O que as faixas não dizem, e
-está escrito lá:** elas medem o PONTO VISADO de um rematador médio isolado, e
+O tecto do guarda subiu 1.15 -> 1.20 -> 1.40. E o efeito no LOTE, que é o que
+conta, com a única métrica que se mexeu mais do que o ruído:
+
+```
+                   escala 1.18    escala 1.36
+  % no alvo            21.5%          19.3%     <- desce, e afasta-se dos 33%
+  golos                 3.93           3.40     dentro do ruído (+-0.5)
+  cantos                9.68           8.40     desce: menos bolas à baliza
+```
+
+**O que as faixas não dizem, e está escrito lá:** elas medem o PONTO VISADO de um rematador médio isolado, e
 não o que a ficha do jogo conta. A percentagem de remates no alvo que o LOTE
 mede (21-23%) já está abaixo dos ~33% reais, e cada subida desta escala
 afasta-a mais. O pedido foi feito três vezes no mesmo sentido; fica a decisão e
