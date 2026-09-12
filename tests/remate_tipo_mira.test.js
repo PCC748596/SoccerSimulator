@@ -236,10 +236,24 @@ remedir antes de deixar passar — e as faixas foram remedidas a 1.18:
 
 Todas dentro do que o `distribuicao` já exigia, portanto a calibração das
 faixas continua a valer e é o tecto que se move, não elas.
+
+TECTO A 1.40 quando a escala foi a 1.36 (terceiro pedido no mesmo sentido:
+"reduz em mais 15% a precisão dos chutes"). Remedido outra vez:
+
+     6 m: 70% no alvo
+    12 m: 54%
+    18 m: 40%
+    25 m: 27%
+
+Continuam dentro das faixas. Vale notar onde isto vai parar: a percentagem de
+remates no alvo que o LOTE mede (21-23%) já está abaixo dos ~33% reais, e cada
+subida desta escala afasta-a mais. As faixas deste teste medem o PONTO VISADO
+com um rematador médio isolado, e não o mesmo que a ficha do jogo conta — por
+isso passam enquanto o número do lote piora, e por isso este comentário existe.
 */
 test('a escala global fica dentro do intervalo calibrado', () => {
     const e = ShotModel.erro.escalaGlobal;
-    assert.ok(e >= 0.95 && e <= 1.20,
+    assert.ok(e >= 0.95 && e <= 1.40,
         `escala global em ${e}: fora do intervalo em que as faixas de precisão ` +
         'acima foram medidas — remede-as antes de a deixar aqui');
 });

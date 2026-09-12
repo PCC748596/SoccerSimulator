@@ -419,8 +419,14 @@ const ShotModel = {
         60 jogos a 1.07 dava 22.6%. Isto desce mais, o que reduz os golos
         (estavam em 137% do alvo) e afasta a percentagem no alvo da realidade
         ao mesmo tempo. É a troca que o pedido faz, dita por inteiro.
+
+        MAIS 15%, a pedido ("reduz em mais 15% a precisão dos chutes"):
+        1.18 -> 1.36. O aviso acima vale a dobrar agora, e com número: a 1.18
+        o lote deu 21-23% dos remates no alvo contra os ~33% reais, e isto
+        baixa mais. É a terceira vez que o pedido vai neste sentido, portanto
+        fica a decisão e fica o custo escrito.
         */
-        escalaGlobal: 1.18
+        escalaGlobal: 1.36
     }
 };
 

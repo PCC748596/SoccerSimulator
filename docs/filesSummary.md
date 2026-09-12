@@ -9219,3 +9219,161 @@ O lote de 60 jogos com as três alterações:
 Os golos desceram de 137% para 129% e a percentagem no alvo desceu de 22.6 para
 21.7 — os dois movimentos que o pedido faz, um a favor do alvo e outro contra,
 e ficam ditos os dois.
+
+### Sessão de 12 de Setembro de 2026 (continuação) — precisão, defesas para fora, e o ruído do lote
+
+#### Menos precisão, em dois instrumentos diferentes
+
+Três pedidos seguidos no mesmo sentido, e o segundo mudou o instrumento.
+
+**−10% e −15% no ERRO DE EXECUÇÃO** (`ShotModel.erro.escalaGlobal`): 1.07 ->
+1.18 -> 1.36. Isto espalha a bola em torno do ponto visado, portanto manda mais
+remates para FORA da moldura. O `remate_tipo_mira` falhou as duas vezes — é o
+que ele existe para fazer, obrigar a remedir as faixas antes de deixar passar a
+escala — e as faixas foram remedidas as duas vezes:
+
+```
+                 1.07     1.18     1.36     faixa do teste
+   6 m           —        72%      70%      passa
+  12 m           —        57%      54%      passa
+  18 m           —        43%      40%      passa
+  25 m           —        29%      27%      passa
+```
+
+O tecto do guarda subiu 1.15 -> 1.20 -> 1.40. **O que as faixas não dizem, e
+está escrito lá:** elas medem o PONTO VISADO de um rematador médio isolado, e
+não o que a ficha do jogo conta. A percentagem de remates no alvo que o LOTE
+mede (21-23%) já está abaixo dos ~33% reais, e cada subida desta escala
+afasta-a mais. O pedido foi feito três vezes no mesmo sentido; fica a decisão e
+fica o custo medido.
+
+**−10% na COLOCAÇÃO** (`ShotModel.mira.fraccaoCanto`), que é outro instrumento
+e foi escolhido pela segunda metade do pedido: *"reduz em mais 10% a precisão
+dos chutes, mas esses chutes têm que ser defesas do goleiro para fora"*. Bola
+nas bancadas não é defesa do guarda-redes; a imprecisão que produz defesas é a
+da colocação — o remate continua dentro da baliza mas mais perto do corpo dele.
+As quatro faixas desceram 10% (`forca` 0.30-0.90 -> 0.27-0.81, etc.).
+
+#### A defesa para fora, e a cadeia toda medida
+
+Para os remates mais centrais acabarem em canto e não em rebote, três números
+do guarda-redes mexeram na sequência, cada um medido antes do seguinte:
+
+```
+                                   golos   no alvo   cantos
+  antes                             129%     21.7%     75%
+  mira -10% de ambição              138%     22.0%     79%
+  + alcanceCorpo 0.32 -> 0.45       128%     20.9%     75%
+  + base.corpo 0.94 -> 0.55         144%     22.1%     89%
+  + qualidadeBase 0.62 -> 0.80      156%     21.5%     98%
+```
+
+- `alcanceCorpo` subiu porque os remates centrais que a mira nova produz iam ao
+  corpo dele e a barreira tinha de crescer com eles;
+- `base.corpo` desceu porque com 0.94 ele AGARRAVA quase tudo, e bola agarrada
+  mata o lance em vez de o mandar para canto — a 0.55 a maior parte passa a ser
+  espalmada, e o `custoVel` do `resolverDefesaGK` garante que é o remate FORTE
+  que se espalma e o toque fraco que fica nas mãos;
+- `qualidadeBase` subiu para as espalmadas saírem em vez de caírem no miolo
+  (`espalmarForaMargem` tinha subido antes para 3.6 m, senão um remate central
+  não tinha como sair).
+
+**Cantos: 75% -> 98% do alvo.** É o melhor número de realismo que essa métrica
+teve, e é o pedido cumprido.
+
+#### O RUÍDO DO LOTE, e três conclusões minhas que ele apagou
+
+Atribuí a subida dos golos nessa tabela às minhas alterações — primeiro aos
+cantos, depois aos rebotes das espalmadas. Medi as duas hipóteses:
+
+```
+  1620 min de jogo | 65 golos | 168 cantos | 171 defesas
+  golos na janela de um canto:          0   (0%,  real ~15%)
+  golos em 6 s depois de uma defesa:    0   (0%)
+```
+
+Zero e zero. Nenhuma das duas explicava nada. Então medi o que faltava —
+**o ruído do próprio lote** — com o `LOTE_SEMENTE` novo, que desloca o conjunto
+de sementes sem mudar mais nada:
+
+```
+                   sementes 1000    sementes 7000
+  golos                 3.93            3.42       <- diferença 0.51
+  no alvo              21.5%           23.0%
+  cantos                9.68            9.13
+  vermelhos             0.06            0.20
+```
+
+**O lote de 60 jogos tem ±0.5 golos por 90 de ruído** — maior do que TODAS as
+diferenças que eu andei a atribuir a efeito (0.23, 0.39, 0.31). Portanto:
+
+- nenhum dos movimentos de golos entre aqueles cinco lotes é distinguível do
+  acaso, e as três explicações que dei para eles não se sustentam;
+- o que é sólido é o movimento dos CANTOS (7.42 -> 8.86 -> 9.68, e 9.13 no
+  controlo), que é muito maior que o ruído e repete-se nos dois conjuntos;
+- os golos estão em **≈3.5 ± 0.5 por 90 (≈140% do alvo)**, sem alteração
+  demonstrável em nenhum sentido.
+
+**Regra para o futuro:** este lote não resolve diferenças de golos abaixo de
+~0.5. Para afinar conversão são precisos 4 a 6 vezes mais jogos, ou os MESMOS
+pares de sementes entre configurações. E o `remates_conversao.js` leva agora um
+aviso no cabeçalho: subconta (17.6 remates/90 contra os 34.6 da ficha) e os
+números ABSOLUTOS dele não valem — serve para comparar faixas entre si e o
+mesmo número antes e depois.
+
+Dois defeitos ficaram a descoberto por estas medições, ambos zeros absolutos em
+65 golos: **nenhum golo vem de canto** (real ~15%) e **nenhum golo vem de
+rebote de defesa**. O primeiro só se tornou mensurável agora que os cantos
+chegaram a volume realista.
+
+#### As proporções do campo: estão certas; o que está errado é a velocidade
+
+Dúvida levantada com uma captura do Winning Eleven 4: *"fico na dúvida achando
+que nosso campo está sempre um pouco pequeno e o gol também"*. Medido:
+
+```
+                  nosso            regra
+  campo           68 x 106 m       68 x 105 (padrão FIFA)
+  baliza          7.32 x 2.44 m    7.32 x 2.44
+  grande área     40.32 x 16.5 m   40.32 x 16.5
+  bola            0.22 m           0.22
+  jogador         1.86 m de altura 1.75-1.85 típico
+```
+
+E as proporções, que é o que o olho lê, batem a 3%:
+
+```
+  altura do jogador / altura da baliza      0.76   (real 0.74)
+  largura da baliza / altura do jogador     3.94   (real 4.07)
+  comprimento do campo / altura do jogador    57   (real 58)
+```
+
+Na captura do WE4 é o contrário: a baliza ocupa ~115 px e o guarda-redes ~60 px
+à mesma profundidade, quando pelas proporções reais ele mediria ~29 px (1.86 /
+7.32 = 25% da largura da baliza). **O WE4 desenha os jogadores ao dobro do
+tamanho** — convenção da geração dele, para o boneco se ler na resolução da
+PlayStation. Comparado com ele, o nosso campo parece maior e não menor.
+
+A causa real da sensação está na VELOCIDADE, e essa está medida:
+
+```
+  velocidade dos jogadores de campo (m/s), 10 min de relógio
+    mediana   3.92     real em jogo: 1.5-2      <- o dobro
+    p90       7.72
+    p99       9.20     ponta de um profissional: 8.5-9.5   <- certo
+    máxima   13.02     = 46.9 km/h; recorde humano ~37     <- impossível
+```
+
+A PONTA está certa; a MEDIANA é o dobro do real. Os jogadores passam o jogo a
+correr em vez de andar e trotar, e um campo atravessado ao dobro da velocidade
+parece pequeno — é isso que se vê, e é coerente com os ataques totais em 81%
+(as jogadas acabam depressa demais). O pico de 13.02 m/s é um defeito à parte,
+provavelmente multiplicadores de sprint a acumular. Nada disto se corrige
+mexendo numa dimensão do campo.
+
+#### Um nome de uma letra no espaço global
+
+O `skill_map.js` declarava `function n(v)` — no espaço global, que em `js/` é
+partilhado por todos os ficheiros. Colidiu com o primeiro `let n` de um script
+de medição e o erro saiu como "falhou a carregar skill_map.js", que não diz
+nada sobre a causa. Passou a `atributoOuMedia`.

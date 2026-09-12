@@ -279,40 +279,40 @@ uma escolha de autor, e essa não se discute.
 const EstiloDerivado = {
     GK: [
         // Sai da baliza: joga com os pés e cobre espaço.
-        { estilo: 'offensive_gk', nota: (r) => n(r.kicking) + n(r.posGK) + n(r.speed) },
-        { estilo: 'defensive_gk', nota: (r) => n(r.reflexes) + n(r.handling) + n(r.diving) }
+        { estilo: 'offensive_gk', nota: (r) => atributoOuMedia(r.kicking) + atributoOuMedia(r.posGK) + atributoOuMedia(r.speed) },
+        { estilo: 'defensive_gk', nota: (r) => atributoOuMedia(r.reflexes) + atributoOuMedia(r.handling) + atributoOuMedia(r.diving) }
     ],
     LB: 'lateral', RB: 'lateral',
     CB: [
-        { estilo: 'build_up', nota: (r) => n(r.passing) * 1.5 + n(r.longPassing) + n(r.composure) },
-        { estilo: 'extra_frontman', nota: (r) => n(r.headAccurancy) * 1.5 + n(r.strength) + n(r.jumping) },
-        { estilo: 'the_destroyer', nota: (r) => n(r.tackleStanding) * 1.5 + n(r.aggression) + n(r.manMarking) }
+        { estilo: 'build_up', nota: (r) => atributoOuMedia(r.passing) * 1.5 + atributoOuMedia(r.longPassing) + atributoOuMedia(r.composure) },
+        { estilo: 'extra_frontman', nota: (r) => atributoOuMedia(r.headAccurancy) * 1.5 + atributoOuMedia(r.strength) + atributoOuMedia(r.jumping) },
+        { estilo: 'the_destroyer', nota: (r) => atributoOuMedia(r.tackleStanding) * 1.5 + atributoOuMedia(r.aggression) + atributoOuMedia(r.manMarking) }
     ],
     DM: [
-        { estilo: 'the_destroyer', nota: (r) => n(r.tackleStanding) * 1.5 + n(r.aggression) + n(r.manMarking) },
-        { estilo: 'anchor_man', nota: (r) => n(r.posDefense) * 1.5 + n(r.tacticalAwa) + n(r.composure) },
-        { estilo: 'orchestrator', nota: (r) => n(r.longPassing) * 1.5 + n(r.vision) + n(r.passing) },
-        { estilo: 'box_to_box', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.strength) }
+        { estilo: 'the_destroyer', nota: (r) => atributoOuMedia(r.tackleStanding) * 1.5 + atributoOuMedia(r.aggression) + atributoOuMedia(r.manMarking) },
+        { estilo: 'anchor_man', nota: (r) => atributoOuMedia(r.posDefense) * 1.5 + atributoOuMedia(r.tacticalAwa) + atributoOuMedia(r.composure) },
+        { estilo: 'orchestrator', nota: (r) => atributoOuMedia(r.longPassing) * 1.5 + atributoOuMedia(r.vision) + atributoOuMedia(r.passing) },
+        { estilo: 'box_to_box', nota: (r) => atributoOuMedia(r.stamina) * 1.5 + atributoOuMedia(r.speed) + atributoOuMedia(r.strength) }
     ],
     CM: [
-        { estilo: 'orchestrator', nota: (r) => n(r.longPassing) * 1.5 + n(r.vision) + n(r.passing) },
-        { estilo: 'box_to_box', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.strength) },
-        { estilo: 'classic_no10', nota: (r) => n(r.vision) * 1.5 + n(r.ballControl) + n(r.freekicks) },
-        { estilo: 'hole_player', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.agility) },
-        { estilo: 'the_destroyer', nota: (r) => n(r.tackleStanding) + n(r.aggression) + n(r.manMarking) }
+        { estilo: 'orchestrator', nota: (r) => atributoOuMedia(r.longPassing) * 1.5 + atributoOuMedia(r.vision) + atributoOuMedia(r.passing) },
+        { estilo: 'box_to_box', nota: (r) => atributoOuMedia(r.stamina) * 1.5 + atributoOuMedia(r.speed) + atributoOuMedia(r.strength) },
+        { estilo: 'classic_no10', nota: (r) => atributoOuMedia(r.vision) * 1.5 + atributoOuMedia(r.ballControl) + atributoOuMedia(r.freekicks) },
+        { estilo: 'hole_player', nota: (r) => atributoOuMedia(r.dribbling) * 1.5 + atributoOuMedia(r.finishing) + atributoOuMedia(r.agility) },
+        { estilo: 'the_destroyer', nota: (r) => atributoOuMedia(r.tackleStanding) + atributoOuMedia(r.aggression) + atributoOuMedia(r.manMarking) }
     ],
     AM: [
-        { estilo: 'classic_no10', nota: (r) => n(r.vision) * 1.5 + n(r.passing) + n(r.ballControl) },
-        { estilo: 'hole_player', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.agility) },
-        { estilo: 'dummy_runner', nota: (r) => n(r.posOffense) * 1.5 + n(r.acceleration) + n(r.reactions) },
-        { estilo: 'box_to_box', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.strength) }
+        { estilo: 'classic_no10', nota: (r) => atributoOuMedia(r.vision) * 1.5 + atributoOuMedia(r.passing) + atributoOuMedia(r.ballControl) },
+        { estilo: 'hole_player', nota: (r) => atributoOuMedia(r.dribbling) * 1.5 + atributoOuMedia(r.finishing) + atributoOuMedia(r.agility) },
+        { estilo: 'dummy_runner', nota: (r) => atributoOuMedia(r.posOffense) * 1.5 + atributoOuMedia(r.acceleration) + atributoOuMedia(r.reactions) },
+        { estilo: 'box_to_box', nota: (r) => atributoOuMedia(r.stamina) * 1.5 + atributoOuMedia(r.speed) + atributoOuMedia(r.strength) }
     ],
     LM: 'ala', RM: 'ala', LW: 'extremo', RW: 'extremo',
     CF: [
-        { estilo: 'goal_poacher', nota: (r) => n(r.finishing) * 1.5 + n(r.posOffense) + n(r.reactions) },
-        { estilo: 'target_man', nota: (r) => n(r.strength) * 1.5 + n(r.headAccurancy) + n(r.jumping) },
-        { estilo: 'fox_in_the_box', nota: (r) => n(r.volleys) * 1.5 + n(r.finishing) + n(r.balance) },
-        { estilo: 'dummy_runner', nota: (r) => n(r.acceleration) * 1.5 + n(r.speed) + n(r.posOffense) }
+        { estilo: 'goal_poacher', nota: (r) => atributoOuMedia(r.finishing) * 1.5 + atributoOuMedia(r.posOffense) + atributoOuMedia(r.reactions) },
+        { estilo: 'target_man', nota: (r) => atributoOuMedia(r.strength) * 1.5 + atributoOuMedia(r.headAccurancy) + atributoOuMedia(r.jumping) },
+        { estilo: 'fox_in_the_box', nota: (r) => atributoOuMedia(r.volleys) * 1.5 + atributoOuMedia(r.finishing) + atributoOuMedia(r.balance) },
+        { estilo: 'dummy_runner', nota: (r) => atributoOuMedia(r.acceleration) * 1.5 + atributoOuMedia(r.speed) + atributoOuMedia(r.posOffense) }
     ]
 };
 
@@ -320,28 +320,36 @@ const EstiloDerivado = {
 // médios de ala também. Escrever duas vezes era ter dois sítios para afinar.
 const EstiloDerivadoGrupos = {
     lateral: [
-        { estilo: 'offensive_fullback', nota: (r) => n(r.crossing) * 1.5 + n(r.stamina) + n(r.speed) },
-        { estilo: 'fullback_finisher', nota: (r) => n(r.finishing) * 1.5 + n(r.dribbling) + n(r.acceleration) },
-        { estilo: 'defensive_fullback', nota: (r) => n(r.manMarking) * 1.5 + n(r.tackleStanding) + n(r.posDefense) }
+        { estilo: 'offensive_fullback', nota: (r) => atributoOuMedia(r.crossing) * 1.5 + atributoOuMedia(r.stamina) + atributoOuMedia(r.speed) },
+        { estilo: 'fullback_finisher', nota: (r) => atributoOuMedia(r.finishing) * 1.5 + atributoOuMedia(r.dribbling) + atributoOuMedia(r.acceleration) },
+        { estilo: 'defensive_fullback', nota: (r) => atributoOuMedia(r.manMarking) * 1.5 + atributoOuMedia(r.tackleStanding) + atributoOuMedia(r.posDefense) }
     ],
     ala: [
-        { estilo: 'cross_specialist', nota: (r) => n(r.crossing) * 1.5 + n(r.longPassing) + n(r.composure) },
-        { estilo: 'roaming_flank', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.agility) },
-        { estilo: 'creative_playmaker', nota: (r) => n(r.vision) * 1.5 + n(r.ballControl) + n(r.passing) },
-        { estilo: 'hole_player', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.agility) },
-        { estilo: 'box_to_box', nota: (r) => n(r.stamina) + n(r.strength) + n(r.tackleStanding) }
+        { estilo: 'cross_specialist', nota: (r) => atributoOuMedia(r.crossing) * 1.5 + atributoOuMedia(r.longPassing) + atributoOuMedia(r.composure) },
+        { estilo: 'roaming_flank', nota: (r) => atributoOuMedia(r.stamina) * 1.5 + atributoOuMedia(r.speed) + atributoOuMedia(r.agility) },
+        { estilo: 'creative_playmaker', nota: (r) => atributoOuMedia(r.vision) * 1.5 + atributoOuMedia(r.ballControl) + atributoOuMedia(r.passing) },
+        { estilo: 'hole_player', nota: (r) => atributoOuMedia(r.dribbling) * 1.5 + atributoOuMedia(r.finishing) + atributoOuMedia(r.agility) },
+        { estilo: 'box_to_box', nota: (r) => atributoOuMedia(r.stamina) + atributoOuMedia(r.strength) + atributoOuMedia(r.tackleStanding) }
     ],
     extremo: [
-        { estilo: 'prolific_winger', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.acceleration) },
-        { estilo: 'cross_specialist', nota: (r) => n(r.crossing) * 1.5 + n(r.longPassing) + n(r.composure) },
-        { estilo: 'roaming_flank', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.agility) },
-        { estilo: 'creative_playmaker', nota: (r) => n(r.vision) * 1.5 + n(r.ballControl) + n(r.passing) }
+        { estilo: 'prolific_winger', nota: (r) => atributoOuMedia(r.dribbling) * 1.5 + atributoOuMedia(r.finishing) + atributoOuMedia(r.acceleration) },
+        { estilo: 'cross_specialist', nota: (r) => atributoOuMedia(r.crossing) * 1.5 + atributoOuMedia(r.longPassing) + atributoOuMedia(r.composure) },
+        { estilo: 'roaming_flank', nota: (r) => atributoOuMedia(r.stamina) * 1.5 + atributoOuMedia(r.speed) + atributoOuMedia(r.agility) },
+        { estilo: 'creative_playmaker', nota: (r) => atributoOuMedia(r.vision) * 1.5 + atributoOuMedia(r.ballControl) + atributoOuMedia(r.passing) }
     ]
 };
 
-// Atributo em falta vale a média (50) e não zero: um campo que o registo não
-// traz não pode ser lido como "é péssimo nisso".
-function n(v) {
+/*
+Atributo em falta vale a média (50) e não zero: um campo que o registo não traz
+não pode ser lido como "é péssimo nisso".
+
+Chamava-se `n`. Um nome de uma letra no espaço GLOBAL do jogo — todos os
+ficheiros de `js/` correm no mesmo contexto — e colidiu com o primeiro `let n`
+de um script de medição, com o erro a sair como "falhou a carregar
+skill_map.js". Um contador local em qualquer parte do projecto podia fazer o
+mesmo.
+*/
+function atributoOuMedia(v) {
     const x = Number(v);
     return isFinite(x) ? x : 50;
 }
