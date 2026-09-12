@@ -3850,6 +3850,19 @@ class FootballPlayer {
         */
         maxSpeed *= this.factorCansaco();
 
+        /*
+        E O TECTO HUMANO, aqui e só aqui — ver VelocidadeHumana (config/gait.js)
+        com a medição que o motivou: os multiplicadores das vinte folhas
+        empilhavam-se até 15.18 m/s (54 km/h).
+
+        Depois do cansaço de propósito: o tecto é o que o corpo dá quando está
+        inteiro, e um jogador gasto não passa a correr mais por causa dele.
+        */
+        if (typeof VelocidadeHumana !== 'undefined') {
+            const tecto = VelocidadeHumana.tecto(this.skillFor('SPEED')) * this.factorCansaco();
+            if (maxSpeed > tecto) maxSpeed = tecto;
+        }
+
         let desired = _p_v1.subVectors(target, this.model.position);
         desired.y = 0; let d = desired.length();
 

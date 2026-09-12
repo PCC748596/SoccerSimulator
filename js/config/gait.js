@@ -337,3 +337,41 @@ const OlharDaCabeca = {
     suavizacao: 0.25
 };
 if (typeof window !== 'undefined') window.OlharDaCabeca = OlharDaCabeca;
+/*
+=============================================================================
+O TECTO HUMANO DA VELOCIDADE
+=============================================================================
+O `speedMult` é uma velocidade-alvo em m/s e é escrito em VINTE folhas da
+árvore (ver a nota do `steerArrive` em player.js). Cada uma tem a sua conta, e
+os factores multiplicam-se: o escalão de reposicionamento a 25 m dá 7.82, o
+`ganhoSkill` do `RepositionPace` põe-lhe +20% e o `bonusRecuo` outros +35% —
+7.82 x 1.2 x 1.35 = **12.7 m/s**, e medido em jogo apareceram picos de
+**15.18 m/s**.
+
+15 m/s são 54 km/h. O recorde mundial dos 100 m tem ponta a ~12.4 m/s (44.7
+km/h) e um futebolista de elite chega a 9-9.5. Não é uma questão de
+calibração: é um número impossível, e vinha de multiplicadores a empilhar sem
+ninguém a somar.
+
+O tecto entra num sítio só — o `steerArrive`, por onde TODAS as vinte folhas
+passam — e não em cada folha, pela mesma razão que o cansaço já entra lá: numa
+delas esquecia-se.
+
+Depende da SKILL de velocidade, que é o que distingue um extremo de um
+central: 100 dá `maximo`, 0 dá `maximo - amplitude`.
+=============================================================================
+*/
+const VelocidadeHumana = {
+    maximo: 9.5,      // m/s com SPEED 100 — ponta de um profissional rápido
+    amplitude: 2.2,   // quanto desce até SPEED 0 (7.3 m/s)
+
+    /*
+    O tecto deste jogador. `skillSpeed` é 0..100; fora disso corta-se, para um
+    skill em falta não abrir o tecto por acidente.
+    */
+    tecto: function (skillSpeed) {
+        const s = Math.max(0, Math.min(100, (typeof skillSpeed === 'number') ? skillSpeed : 50));
+        return this.maximo - this.amplitude * (1 - s / 100);
+    }
+};
+

@@ -634,18 +634,23 @@ const GoalkeeperDive = {
     9.92 (9% do alvo) — a defesa para canto e a fonte mais natural deles.
     */
     /*
-    2.4 -> 3.6, na mesma alteração que baixou 10% a ambição da mira
-    (`ShotModel.mira.fraccaoCanto`): o pedido era "reduz em mais 10% a
-    precisão dos chutes, mas esses chutes têm que ser DEFESAS DO GOLEIRO PARA
-    FORA".
+    FICA EM 2.4, e a subida a 3.6 está registada como erro meu.
 
-    Os remates que essa alteração produz são mais CENTRAIS — vão ao corpo dele
-    em vez do canto. Com a margem em 2.4 m do poste, um remate central nunca
-    podia ser mandado para fora: só sobrava o rebote para o meio da área, que
-    é o contrário do que o pedido diz. A 3.6 m do poste a janela cobre também
-    a bola que vem a meio caminho entre o poste e o centro.
+    Subi-a para os remates mais centrais (os que a mira menos ambiciosa
+    produz) poderem ser mandados para fora. Mas a baliza tem 3.66 m de
+    meia-largura: uma margem de 3.6 deixa uma faixa central de SEIS
+    CENTÍMETROS, ou seja toda a espalmada passa a sair. É exactamente o caso
+    degenerado que o teste ao lado avisa — *"a margem tem de caber dentro da
+    baliza, senão TODA a espalmada sai"* — e o `penalti_defesa` apanhou-o com
+    uma bola em x = 0.2 a ser mandada para canto.
+
+    E não era preciso: a mira nova aponta entre 0.76 e 2.28 m do centro
+    (`fraccaoCanto.forca` sobre a meia-baliza útil de 2.81), o que dá 1.38 a
+    2.90 m do poste — a maior parte já dentro dos 2.4 de origem. A faixa
+    central que volta ao campo é a de quem remata em cima do guarda-redes, e
+    essa deve mesmo voltar: é o rebote.
     */
-    espalmarForaMargem: 3.6,   // a menos disto do poste, a espalmada sai
+    espalmarForaMargem: 2.4,   // a menos disto do poste, a espalmada sai
     espalmarAltaY: 1.70,       // acima disto sai por cima do travessão
     espalmarFolga: 0.35,       // quanto passa por fora do poste/travessão
     espalmarLateral: 5.0,      // m/s que leva para lá do poste
@@ -870,43 +875,23 @@ const GkCatchModel = {
     mesmo declive para todas.
     */
     base: {
+        /*
+        Bola mansa ao corpo, dentro da área. O `custoVel` do
+        `resolverDefesaGK` é que separa o toque fraco do remate forte, e faz
+        isso sozinho — medido com esta base: 95% agarradas a 8-14 m/s, 71% a
+        25 e 51% a 30. Ou seja o remate forte ao corpo JÁ era espalmado sem
+        se mexer aqui.
+
+        Foi por não ter verificado isto que baixei esta chave para 0.55 numa
+        alteração anterior — pior, acrescentando uma SEGUNDA chave `corpo` ao
+        mesmo objecto, que em JavaScript ganha por ser a última. O efeito foi
+        passar a deixar cair quase metade das bolas mansas ao corpo, e os
+        testes `gk_defesa` apanharam-no (a média das quatro defesas caiu de
+        ~65% para 53.3%, e a ordem "ao corpo é mais fácil que de pé"
+        inverteu-se). A chave voltou ao valor de origem.
+        */
         corpo: 0.98,      // bola mansa ao corpo, dentro da área
         maos: 0.90,       // de pé, bola perto do tronco
-        /*
-        BOLA AO CORPO. Um remate que lhe vai ao peito, à barriga ou às pernas
-        defende-se com o que estiver à frente dela — e agarra-se mais vezes do
-        que uma bola à mão esticada, porque não é preciso alcançar nada.
-
-        Existe porque NÃO existia: o teste de defesa de pé media só a distância
-        às duas MÃOS (0.55 m de raio cada, ver alcanceContacto), e as mãos
-        penduradas ao lado do corpo deixam passar tudo o que vá ao tronco ou
-        entre as pernas. Medido em 591 remates (tools/headless/
-        remates_conversao.js): dos remates à baliza que cruzavam a MENOS DE UM
-        METRO do guarda-redes, **48% eram golo** — mais do que os que cruzavam a
-        três metros dele (36%). A proximidade não previa nada, que é a
-        assinatura de um teste de colisão a falhar e não de um mergulho curto.
-        */
-        /*
-        0.94 -> 0.55, pela segunda metade do pedido: "esses chutes têm que ser
-        DEFESAS DO GOLEIRO PARA FORA".
-
-        Com 0.94 quase toda a bola ao corpo era AGARRADA, e uma bola agarrada
-        não é uma defesa para fora — mata o lance. Medido no lote: ao subir o
-        alcance do corpo os golos caíram de 138% para 128% do alvo, mas os
-        cantos caíram com eles (79% -> 75%), porque as defesas que apareceram
-        foram todas capturas.
-
-        A 0.55 a maior parte das bolas ao corpo passa a ser ESPALMADA, e com o
-        `espalmarForaMargem` em 3.6 m a espalmada de um remate central sai
-        pela linha de fundo — defesa para canto, que é o que o pedido descreve
-        e é também a fonte natural dos escanteios que faltam (75% do alvo).
-
-        Agarrar continua a ser o caso mais provável de uma bola mansa: o
-        `custoVel` do `resolverDefesaGK` desce a probabilidade com a
-        velocidade, portanto é o remate FORTE ao corpo que passa a ser
-        espalmado, e o toque fraco continua a ficar nas mãos.
-        */
-        corpo: 0.55,
         salto: 0.80,      // no ar, cruzamento ou bola alta
         mergulho: 0.68    // esticado, o mais difícil de segurar
     },
@@ -1015,20 +1000,23 @@ const GkCatchModel = {
     mais vezes do que isso, e e essa a diferenca entre um rebote e uma defesa.
     */
     /*
-    0.62 -> 0.80, a fechar o pedido "defesas do goleiro PARA FORA".
+    FICA EM 0.62, e a tentativa de a subir está aqui registada porque foi
+    instrutiva.
 
-    O `destinoDaEspalmada` (utils.js) reparte as espalmadas por esta
-    qualidade: `canto` quando pode sair, `lateral` quando não, e `meio` — o
-    rebote curto à frente da baliza — no que sobra. Medido no lote, ao passar
-    as bolas ao corpo de capturas para espalmadas (ver base.corpo) os cantos
-    saltaram de 75% para 89% do alvo, e os golos subiram de 128% para 144%:
-    as espalmadas que NÃO saíam viravam rebote e eram marcadas.
+    Subi-a a 0.80 para fechar o pedido "defesas do goleiro PARA FORA" — o
+    `destinoDaEspalmada` (utils.js) reparte as espalmadas por esta qualidade:
+    `canto` quando pode sair, `lateral` quando não, e `meio` (o rebote à frente
+    da baliza) no que sobra. Os cantos subiram mesmo, mas o teste
+    `gk_defesa` apanhou o preço: com 0.80 um guarda-redes de TEC 90 fica em
+    **1.0** (0.80 + 0.45 satura) e a técnica deixa de separar o destino do
+    rebote — 1000 cantos contra 530 de um TEC 20, quando a regra é que o bom
+    mande para canto mais do que o dobro do mau. Saturar um parâmetro é
+    apagar a variável que ele existe para representar.
 
-    A 0.80 quatro em cada cinco vão para fora ou para a lateral em vez de
-    ficarem no miolo. É o que o pedido diz — e é também o que um guarda-redes
-    faz com uma bola que lhe bate no corpo: atira-a para longe, não a deixa
-    cair aos pés de quem remata.
+    O trabalho de mandar a bola PARA FORA está no `espalmarForaMargem` (subiu
+    a 3.6 m na mesma alteração), que decide se a espalmada PODE sair. Esse não
+    satura nada: continua a ser a técnica a decidir se ela sai mesmo.
     */
-    qualidadeBase: 0.80,
+    qualidadeBase: 0.62,
     qualidadePorTEC: 0.45
 };
