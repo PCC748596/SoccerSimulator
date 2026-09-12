@@ -9018,3 +9018,70 @@ recuo PARA ele continua a valer porque aí o destinatário é ele próprio.
 O teste passou a contar só ENQUANTO O PASSE ESTÁ VIVO. Os frames que sobravam
 eram depois de o passe acabar, com a bola solta a 7.5 m — ir buscá-la ali é o
 trabalho dele, e contá-los media o guarda-redes a fazer o que deve.
+
+#### Onde estão os golos a mais: dos remates à baliza, entram 44% em vez de 29%
+
+O lote de 50 jogos do browser (21 min cada, ~94 min de jogo) deu o retrato que
+o headless não tinha dado tão limpo:
+
+```
+  % passes certos   69.8      —        —
+  golos             3.75    2.52    149%
+  finalizações     24.37   26.11     93%   <- o volume está certo
+  % no alvo         26.9      —        —
+  cantos            6.58    9.92     66%
+  faltas           28.26   27.63    102%
+  impedimentos      4.96    3.20    155%
+  ataques perigosos 64.7    77.8     83%
+  ataques totais   142.6   176.6     81%
+  xG total          1.25    2.84     44%
+  xG por remate    0.051   0.109     47%
+```
+
+O jogo cria a quantidade certa de remates, o xG diz que valem metade, e entram
+uma vez e meia mais. `tools/headless/remates_conversao.js` foi escrito para
+separar as duas hipóteses — rematar de longe, ou converter demais — e mediu as
+duas em 591 remates (12 sementes, 60 min cada):
+
+```
+faixa            remates   % remates   xG médio   entraram    real
+  até 6 m              3        1%       0.505       33%     35-40%
+  6 a 11 m            28        6%       0.321       29%       ~20%
+  11 a 16 m           91       19%       0.147       24%       ~10%
+  16 a 22 m          226       46%       0.071       15%        ~5%
+  22 m +             143       29%       0.041        5%       2-3%
+```
+
+E a decomposição que fecha o caso:
+
+```
+                        remates    golos    % golos     real
+  a baliza                 184       81        44%      ~29%
+  fora da baliza           407        2         0%       ~0%
+  % a baliza               31%                     ~33%
+
+remates A BALIZA por faixa:   n   golos   defendidos
+  até 11 m              23     43%          57%
+  11 a 16 m             46     50%          35%
+  16 a 22 m             78     51%          33%
+  22 m +                37     22%          35%
+```
+
+**A pontaria está certa** (31% à baliza contra ~33% reais) e os remates fora
+não entram (0%). O excesso está todo no último passo: de cada dez remates à
+baliza entram 4.4 em vez de 2.9. A pior faixa é a de 16-22 m, que é também a
+mais frequente — 78 dos 184 remates à baliza — e converte 51% quando um remate
+à baliza dessa distância se defende três vezes em quatro.
+
+O que NÃO é: não é o modelo de xG (conferido à mão — penálti dá 0.26, remate
+central de 18 m dá 0.095, ambos no valor real), não é o volume de remates, não
+é a reacção do guarda-redes (`GoalkeeperDive.reaccaoBase` 0.28 menos skill dá
+0.11 s a um GK de 97, mais rápido do que um humano de elite), e não é a
+decisão de rematar sozinha — embora 75% dos remates saírem de 16 m+ também
+esteja longe da distribuição real, que tem metade dos remates dentro da área.
+
+O que sobra, e é onde a próxima afinação tem de ir: o alcance/velocidade do
+mergulho contra a colocação do remate a média distância. A medição que falta é
+onde a bola cruza a linha nos que entram contra nos que são defendidos — se os
+golos se concentrarem junto aos postes, o remate é colocado demais; se estiverem
+espalhados, o mergulho é curto.
