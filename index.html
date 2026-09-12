@@ -49,6 +49,14 @@
                 <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.triggerDirectFreeKick()">Falta
                     Direta</button>
             </div>
+            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <!-- Laboratório do duelo: avançado a 25 m do centro da baliza,
+                     a 45 graus, a correr para ela. O lado alterna a cada
+                     clique — ver Match.triggerCaraACara. -->
+                <button class="btn-action" style="flex: 1; margin-top: 0;"
+                    title="Avançado a 25 m da baliza, a 45 graus, a correr para ela — o lado alterna a cada clique"
+                    onclick="Match.triggerCaraACara()">Cara a cara</button>
+            </div>
 
             <!-- Planteis reais (data/squads.js). A lista é preenchida no
                  arranque por preencherSelectoresDeEquipa() em js/main.js; sem
@@ -352,12 +360,14 @@
                     onclick="togglePainelJogadores(undefined, event)">&minus;</button>
             </div>
             <div id="painel-jogadores-conteudo">
+                <!-- Os títulos passam a ser os nomes das equipas escolhidas
+                     (ver popularPainelJogadores), e não Blue/Red fixos. -->
                 <div class="jogadores-col">
-                    <h3 style="color:#3498db">Blue</h3>
+                    <h3 id="titulo-jogadores-a" style="color:#3498db">Blue</h3>
                     <div id="lista-jogadores-a"></div>
                 </div>
                 <div class="jogadores-col">
-                    <h3 style="color:#e74c3c">Red</h3>
+                    <h3 id="titulo-jogadores-b" style="color:#e74c3c">Red</h3>
                     <div id="lista-jogadores-b"></div>
                 </div>
             </div>

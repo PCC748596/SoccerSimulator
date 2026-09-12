@@ -25,8 +25,8 @@ guarda, e é por aí que o conversor e os testes lhe chegam sem haver duas
 cópias da tradução.
 */
 const { SkillMap, SkillCalib, PosicaoPorIndice, PbPorPos, EstiloJsonParaMotor,
-    skillDeAtributos, calibrarSkill, escolherOnzeDaFormacao } =
-    require(path.join(RAIZ, 'js/config/skill_map.js'));
+    skillDeAtributos, calibrarSkill, escolherOnzeDaFormacao, estiloDeAtributos,
+    notasDeEstilo } = require(path.join(RAIZ, 'js/config/skill_map.js'));
 
 /*
 A formação de referência para medir a escala — a mesma por omissão do jogo.
@@ -82,13 +82,22 @@ function converterJogador(reg) {
     const nome = limparNome(reg.shirtName) || limparNome(reg.pseudonym) ||
         limparNome(reg.lastName) || limparNome(reg.firstName) || 'Jogador';
 
+    /*
+    O ESTILO dos dados, quando existe. O derivado é escrito na segunda passagem
+    (ver derivarEstilos), que precisa da população da posição para comparar as
+    candidaturas.
+    */
+    const doFicheiro = EstiloJsonParaMotor[reg.playingStyle] || null;
+
     return {
         id: Number(reg.playerID) || 0,
         nome: nome,
         pos: pos,
         role: ROLE_POR_POS[pos] || 'mid',
         numero: Number(reg.shirtNumber) || 0,
-        estilo: EstiloJsonParaMotor[reg.playingStyle] || null,
+        estilo: doFicheiro,
+        estiloOrigem: doFicheiro ? 'dados' : null,
+        _reg: reg,
         pb: pb,
         ...skills
     };
@@ -142,6 +151,42 @@ function calibrarPlanteis(todos, titulares) {
     return pop;
 }
 
+/*
+OS ESTILOS DERIVADOS, em duas passagens.
+
+A primeira mede, POR POSIÇÃO, a média e o desvio da nota de cada candidatura;
+a segunda escolhe, para cada jogador, aquela em que ele mais se destaca dos
+outros da mesma posição. A razão está em `estiloDeAtributos` (skill_map.js):
+comparar notas em bruto fazia quase todos os centrais destruidores, porque
+neste ficheiro os centrais desarmam melhor do que passam.
+*/
+function derivarEstilos(todos) {
+    const notasPorPos = new Map();
+    for (const j of todos) {
+        const notas = notasDeEstilo(j._reg, j.pos);
+        if (!notas) continue;
+        if (!notasPorPos.has(j.pos)) notasPorPos.set(j.pos, []);
+        notasPorPos.get(j.pos).push(notas);
+    }
+
+    const pop = new Map();
+    for (const [pos, lista] of notasPorPos) {
+        const porEstilo = {};
+        for (const estilo of Object.keys(lista[0])) {
+            porEstilo[estilo] = estatistica(lista.map(x => x[estilo]));
+        }
+        pop.set(pos, porEstilo);
+    }
+
+    for (const j of todos) {
+        if (!j.estilo) {
+            const derivado = estiloDeAtributos(j._reg, j.pos, pop.get(j.pos));
+            if (derivado) { j.estilo = derivado; j.estiloOrigem = 'derivado'; }
+        }
+        delete j._reg;
+    }
+}
+
 // Planteis por equipa.
 const porEquipa = new Map();
 for (const reg of players) {
@@ -172,6 +217,7 @@ for (const [, plantel] of convertidos) {
     if (onze) titulares.push(...onze);
 }
 const popMedida = calibrarPlanteis([...convertidos.values()].flat(), titulares);
+derivarEstilos([...convertidos.values()].flat());
 
 const equipas = [];
 const rejeitadas = [];
@@ -226,5 +272,11 @@ const outJs = path.join(RAIZ, 'data', 'squads.js');
 fs.writeFileSync(outJs, 'const SquadsData = ' + JSON.stringify(data) + ';\n');
 
 const kb = (f) => (fs.statSync(f).size / 1024).toFixed(0) + ' KB';
+const todosJog = equipas.flatMap(e => e.plantel);
+const dos = (o) => todosJog.filter(j => j.estiloOrigem === o).length;
+const estilos = {};
+for (const j of todosJog) if (j.estilo) estilos[j.estilo] = (estilos[j.estilo] || 0) + 1;
 console.log(`${equipas.length} equipas jogáveis (>= ${MIN_PLANTEL} jogadores e 1 GK), ${rejeitadas.length} rejeitadas`);
+console.log(`playing styles: ${dos('dados')} dos dados, ${dos('derivado')} derivados dos atributos, ` +
+    `${todosJog.length - dos('dados') - dos('derivado')} sem estilo (${Object.keys(estilos).length} estilos diferentes em uso)`);
 console.log(`Escrito ${outJson} (${kb(outJson)}) e ${outJs} (${kb(outJs)})`);

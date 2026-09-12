@@ -254,6 +254,142 @@ const EstiloJsonParaMotor = {
 };
 
 /*
+=============================================================================
+O ESTILO QUANDO OS DADOS NÃO O TRAZEM — derivado dos atributos
+=============================================================================
+Medido no ficheiro de origem: o campo `playingStyle` **existe em 91 dos 3 124
+registos**. Não vem vazio nos outros — não vem. (Todos os outros 77 campos
+existem em todos os registos, portanto não é leitura: é o ficheiro.)
+
+Sem isto, 97% dos jogadores caíam no `EstiloPorOmissao` da POSIÇÃO (ver
+tactics.js): todos os laterais direitos do país com o mesmo estilo, e os
+atributos que o ficheiro traz — crossing, finishing, vision, strength — sem
+consequência nenhuma no jogo.
+
+Aqui cada posição tem as suas candidaturas, cada uma com uma nota tirada dos
+atributos que a definem, e ganha a mais alta. As chaves e as posições onde
+cada estilo é legal são as do catálogo `PlayingStyles`; o motor volta a
+verificar isso no `aplicarPlayingStyle`, e o que não passar cai no estilo por
+omissão como antes.
+
+Um estilo que venha NOS DADOS manda sempre sobre o derivado: 91 jogadores têm
+uma escolha de autor, e essa não se discute.
+=============================================================================
+*/
+const EstiloDerivado = {
+    GK: [
+        // Sai da baliza: joga com os pés e cobre espaço.
+        { estilo: 'offensive_gk', nota: (r) => n(r.kicking) + n(r.posGK) + n(r.speed) },
+        { estilo: 'defensive_gk', nota: (r) => n(r.reflexes) + n(r.handling) + n(r.diving) }
+    ],
+    LB: 'lateral', RB: 'lateral',
+    CB: [
+        { estilo: 'build_up', nota: (r) => n(r.passing) * 1.5 + n(r.longPassing) + n(r.composure) },
+        { estilo: 'extra_frontman', nota: (r) => n(r.headAccurancy) * 1.5 + n(r.strength) + n(r.jumping) },
+        { estilo: 'the_destroyer', nota: (r) => n(r.tackleStanding) * 1.5 + n(r.aggression) + n(r.manMarking) }
+    ],
+    DM: [
+        { estilo: 'the_destroyer', nota: (r) => n(r.tackleStanding) * 1.5 + n(r.aggression) + n(r.manMarking) },
+        { estilo: 'anchor_man', nota: (r) => n(r.posDefense) * 1.5 + n(r.tacticalAwa) + n(r.composure) },
+        { estilo: 'orchestrator', nota: (r) => n(r.longPassing) * 1.5 + n(r.vision) + n(r.passing) },
+        { estilo: 'box_to_box', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.strength) }
+    ],
+    CM: [
+        { estilo: 'orchestrator', nota: (r) => n(r.longPassing) * 1.5 + n(r.vision) + n(r.passing) },
+        { estilo: 'box_to_box', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.strength) },
+        { estilo: 'classic_no10', nota: (r) => n(r.vision) * 1.5 + n(r.ballControl) + n(r.freekicks) },
+        { estilo: 'hole_player', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.agility) },
+        { estilo: 'the_destroyer', nota: (r) => n(r.tackleStanding) + n(r.aggression) + n(r.manMarking) }
+    ],
+    AM: [
+        { estilo: 'classic_no10', nota: (r) => n(r.vision) * 1.5 + n(r.passing) + n(r.ballControl) },
+        { estilo: 'hole_player', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.agility) },
+        { estilo: 'dummy_runner', nota: (r) => n(r.posOffense) * 1.5 + n(r.acceleration) + n(r.reactions) },
+        { estilo: 'box_to_box', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.strength) }
+    ],
+    LM: 'ala', RM: 'ala', LW: 'extremo', RW: 'extremo',
+    CF: [
+        { estilo: 'goal_poacher', nota: (r) => n(r.finishing) * 1.5 + n(r.posOffense) + n(r.reactions) },
+        { estilo: 'target_man', nota: (r) => n(r.strength) * 1.5 + n(r.headAccurancy) + n(r.jumping) },
+        { estilo: 'fox_in_the_box', nota: (r) => n(r.volleys) * 1.5 + n(r.finishing) + n(r.balance) },
+        { estilo: 'dummy_runner', nota: (r) => n(r.acceleration) * 1.5 + n(r.speed) + n(r.posOffense) }
+    ]
+};
+
+// Grupos partilhados: os dois laterais têm as mesmas candidaturas, e os dois
+// médios de ala também. Escrever duas vezes era ter dois sítios para afinar.
+const EstiloDerivadoGrupos = {
+    lateral: [
+        { estilo: 'offensive_fullback', nota: (r) => n(r.crossing) * 1.5 + n(r.stamina) + n(r.speed) },
+        { estilo: 'fullback_finisher', nota: (r) => n(r.finishing) * 1.5 + n(r.dribbling) + n(r.acceleration) },
+        { estilo: 'defensive_fullback', nota: (r) => n(r.manMarking) * 1.5 + n(r.tackleStanding) + n(r.posDefense) }
+    ],
+    ala: [
+        { estilo: 'cross_specialist', nota: (r) => n(r.crossing) * 1.5 + n(r.longPassing) + n(r.composure) },
+        { estilo: 'roaming_flank', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.agility) },
+        { estilo: 'creative_playmaker', nota: (r) => n(r.vision) * 1.5 + n(r.ballControl) + n(r.passing) },
+        { estilo: 'hole_player', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.agility) },
+        { estilo: 'box_to_box', nota: (r) => n(r.stamina) + n(r.strength) + n(r.tackleStanding) }
+    ],
+    extremo: [
+        { estilo: 'prolific_winger', nota: (r) => n(r.dribbling) * 1.5 + n(r.finishing) + n(r.acceleration) },
+        { estilo: 'cross_specialist', nota: (r) => n(r.crossing) * 1.5 + n(r.longPassing) + n(r.composure) },
+        { estilo: 'roaming_flank', nota: (r) => n(r.stamina) * 1.5 + n(r.speed) + n(r.agility) },
+        { estilo: 'creative_playmaker', nota: (r) => n(r.vision) * 1.5 + n(r.ballControl) + n(r.passing) }
+    ]
+};
+
+// Atributo em falta vale a média (50) e não zero: um campo que o registo não
+// traz não pode ser lido como "é péssimo nisso".
+function n(v) {
+    const x = Number(v);
+    return isFinite(x) ? x : 50;
+}
+
+// As candidaturas desta posição, já resolvidas se forem um grupo partilhado.
+function regrasDeEstilo(pos) {
+    let regras = EstiloDerivado[pos];
+    if (typeof regras === 'string') regras = EstiloDerivadoGrupos[regras];
+    return (regras && regras.length) ? regras : null;
+}
+
+// A nota de cada candidatura para este registo, como {estilo: nota}.
+function notasDeEstilo(registo, pos) {
+    const regras = regrasDeEstilo(pos);
+    if (!registo || !regras) return null;
+    const out = {};
+    for (const regra of regras) out[regra.estilo] = regra.nota(registo);
+    return out;
+}
+
+/*
+O estilo derivado para este registo, ou null se a posição não tiver
+candidaturas. `pos` é a posição do motor (ver PosicaoPorIndice).
+
+`pop` — a média e o desvio de cada candidatura DENTRO DA POSIÇÃO — é o que faz
+a escolha significar alguma coisa. Sem ela compara-se a nota de "destruidor"
+(tackleStanding) com a de "saída a jogar" (passing) em bruto, e como os
+centrais deste ficheiro desarmam melhor do que passam, quase todos saíam
+destruidores: medido, 322 `the_destroyer` contra 18 `build_up`. Com a
+população, a pergunta passa a ser a certa — "em que é que ELE se destaca dos
+outros centrais" — e não "que número é maior".
+
+Sem `pop` (um registo sozinho, sem população para comparar) fica a nota bruta.
+*/
+function estiloDeAtributos(registo, pos, pop) {
+    const notas = notasDeEstilo(registo, pos);
+    if (!notas) return null;
+
+    let melhor = null, melhorZ = -Infinity;
+    for (const estilo in notas) {
+        const p = pop && pop[estilo];
+        const z = (p && p.desvio > 0.001) ? (notas[estilo] - p.media) / p.desvio : notas[estilo];
+        if (z > melhorZ) { melhorZ = z; melhor = estilo; }
+    }
+    return melhor;
+}
+
+/*
 Aplica um dos mapas acima a um jogador do ficheiro de dados. Pura: recebe o
 registo e devolve o número, sem tocar em nada.
 
@@ -278,6 +414,8 @@ function skillDeAtributos(registo, pesos) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         SkillMap, SkillCalib, PosicaoPorIndice, PbPorPos, EstiloJsonParaMotor,
-        skillDeAtributos, calibrarSkill, escolherOnzeDaFormacao
+        skillDeAtributos, calibrarSkill, escolherOnzeDaFormacao,
+        EstiloDerivado, EstiloDerivadoGrupos, estiloDeAtributos,
+        regrasDeEstilo, notasDeEstilo
     };
 }

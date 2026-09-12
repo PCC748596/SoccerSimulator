@@ -1199,6 +1199,140 @@ Object.assign(Match, {
         this.setupSetPiece('PENALTY', team);
     },
 
+    /*
+    =========================================================================
+    CARA A CARA — o avançado sozinho contra o guarda-redes
+    =========================================================================
+    Pedido: um botão que ponha o atacante a 25 m do CENTRO DA BALIZA, a 45
+    graus, a correr para a baliza, para se ver a reacção dele e a do
+    guarda-redes.
+
+    O lado ALTERNA a cada clique (direito, esquerdo, direito...): os dois
+    ângulos são lances diferentes — o pé de apoio muda, o ângulo de remate
+    muda, e o mergulho do guarda-redes muda de lado com eles. Um botão que
+    fizesse sempre o mesmo lado escondia metade do que há para ver.
+
+    Não é uma bola parada: o jogo fica em PLAY e ninguém apita. É uma
+    MONTAGEM — põe-se o lance no sítio e deixa-se correr, que é o que um
+    laboratório precisa.
+
+    Todos os outros saem da jogada, menos os dois guarda-redes: com os
+    companheiros por perto o avançado passa a bola, e com defesas atrás
+    ninguém vê o duelo. Vão para o meio-campo do lado oposto, longe o
+    suficiente para o `ShootingModel.frenteAFrente` (30 m de tecto) ainda
+    reconhecer o lance como um frente-a-frente.
+    */
+    caraACaraLado: 1,
+
+    triggerCaraACara: function (forceTeam = null, forceLado = null) {
+        const team = forceTeam || this.possessionTeam || 'TeamA';
+        const atacantes = (team === 'TeamA') ? this.players : this.opponents;
+        const defensores = (team === 'TeamA') ? this.opponents : this.players;
+        if (!atacantes.length || !defensores.length) return;
+
+        const lado = forceLado || this.caraACaraLado;
+        this.caraACaraLado = -lado;
+
+        /*
+        O atacante: o avançado mais adiantado da formação. Sem avançado (uma
+        formação sem `atk`), serve o que estiver mais à frente — o lance é
+        sobre a posição e não sobre o posto.
+        */
+        const semGk = atacantes.filter(p => p.role !== 'gk');
+        const atacante = semGk.find(p => p.role === 'atk') || semGk[semGk.length - 1];
+        const gkDef = defensores.find(p => p.role === 'gk') || defensores[0];
+        if (!atacante || !gkDef) return;
+
+        this.mudarEstado('PLAY', 'cara_a_cara');
+        this.setPieceTimer = 0;
+        this.setPieceTaker = null;
+        this.kickoffActive = false;
+        this.kickoffTimer = 0;
+        /*
+        A bandeira da saída de bola mata-se aqui: sem isto o avançado chega
+        aos 25 m da baliza adversária e o ramo `PasseSaidaDeBola` manda-o
+        tocar para trás, porque a bandeira do pontapé de saída anterior ainda
+        estava de pé. (O ramo passou também a exigir campo próprio — ver
+        `precisaPassarAosDefesas` em bt/player_bt.js.)
+        */
+        this.kickoffPendingPassToDef = false;
+
+        /*
+        A GEOMETRIA. `dir` é o sentido de ataque, logo a baliza atacada está
+        em `z = dir * CAMPO_COMP/2`. A 45 graus, os 25 m repartem-se em partes
+        iguais pelos dois eixos (25·cos45 = 25·sin45 = 17.68 m): o avançado
+        fica a 17.68 m da linha de fundo e a 17.68 m do eixo, do lado pedido.
+        */
+        const dir = atacante.dirZ;
+        const fundoZ = dir * (CAMPO_COMP / 2);
+        const comp = 25 * Math.SQRT1_2;
+        const px = lado * comp;
+        const pz = fundoZ - dir * comp;
+
+        atacante.model.position.set(px, ALTURA_BASE_Y, pz);
+        atacante.velocity.set(0, 0, 0);
+        atacante.dynamicTarget = new THREE.Vector3(0, ALTURA_BASE_Y, fundoZ);
+        atacante.baseTarget.set(px, ALTURA_BASE_Y, pz);
+        if (atacante.fsm) atacante.fsm.changeState('CARRY');
+        atacante.touchLock = 0;
+        atacante.hasBall = true;
+
+        // De frente para a baliza, e a bola meio metro à frente do pé — é
+        // isso que faz o lance começar em CORRIDA e não parado.
+        if (typeof lookAtBola === 'function') {
+            atacante.model.lookAt(0, atacante.model.position.y, fundoZ);
+        }
+        const rumo = new THREE.Vector3(-px, 0, fundoZ - pz).normalize();
+        this.ball.position.set(px + rumo.x * 0.5, BallPhysics.raio, pz + rumo.z * 0.5);
+        this.ballVel.set(0, 0, 0);
+
+        this.ballCarrier = atacante;
+        this.intendedReceiver = null;
+        this.passTargetPos = null;
+        this.possessionTeam = team;
+        this.possessionTimer = 0;
+        this.lastTouchedTeam = team;
+        this.lastTouchedPlayer = atacante;
+        window.bolaChutada = false;
+
+        // O guarda-redes na linha, ao centro: a posição dele daí em diante é
+        // do gkAnchor, e é justamente isso que se quer ver.
+        const gkZ = dir * (CAMPO_COMP / 2) - dir * 0.5;
+        gkDef.model.position.set(0, ALTURA_BASE_Y, gkZ);
+        gkDef.velocity.set(0, 0, 0);
+        if (gkDef.fsm) gkDef.fsm.changeState('IDLE');
+
+        /*
+        Todos os outros para o meio-campo de trás, em duas filas afastadas do
+        corredor do lance. Escreve-se a posição E o alvo: sem o alvo, o nível 1
+        trazia-os de volta à jogada em dois segundos.
+        */
+        let i = 0;
+        for (const lista of [atacantes, defensores]) {
+            const ladoFila = (lista === atacantes) ? -1 : 1;
+            for (const p of lista) {
+                if (p === atacante || p === gkDef || p.role === 'gk') continue;
+                const fx = ladoFila * (CAMPO_LARG / 2 - 3);
+                const fz = -dir * (10 + (i % 10) * 3.5);
+                p.model.position.set(fx, ALTURA_BASE_Y, fz);
+                p.velocity.set(0, 0, 0);
+                p.dynamicTarget = new THREE.Vector3(fx, ALTURA_BASE_Y, fz);
+                p.baseTarget.set(fx, ALTURA_BASE_Y, fz);
+                p.hasBall = false;
+                if (p.fsm) p.fsm.changeState('IDLE');
+                i++;
+            }
+        }
+
+        if (typeof Officials !== 'undefined' && Officials.anunciar) {
+            Officials.anunciar(lado > 0 ? 'CARA A CARA (dir)' : 'CARA A CARA (esq)');
+        }
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('CARA_A_CARA', { p: atacante, gk: gkDef, lado: lado });
+        }
+        return { atacante: atacante, gk: gkDef, lado: lado };
+    },
+
     triggerThrowIn: function (forceTeam = null) {
         const ultimo = this.lastTouchedTeam ||
             (this.ballCarrier ? this.ballCarrier.team : null) || 'TeamA';

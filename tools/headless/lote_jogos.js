@@ -73,7 +73,15 @@ if (process.env.LOTE_WORKER) {
     if (typeof Sim === 'undefined') global.Sim = {};
     Sim.running = true;
 
-    const equipas = (typeof SquadsData !== 'undefined' && SquadsData.equipas) ? SquadsData.equipas : [];
+    /*
+    `LOTE_GENERICAS=1` corre o lote com as equipas genéricas do
+    `player_skills.js` em vez dos planteis reais. É o controlo: os mesmos 60
+    jogos, a mesma medição, e a única diferença é quem joga — sem isto não se
+    sabe se um número fora de banda é dos planteis ou do jogo.
+    */
+    const genericas = process.env.LOTE_GENERICAS === '1';
+    const equipas = (!genericas && typeof SquadsData !== 'undefined' && SquadsData.equipas)
+        ? SquadsData.equipas : [];
 
     for (const i of indices) {
         // Semente por jogo: dois jogos do lote nunca são o mesmo jogo.

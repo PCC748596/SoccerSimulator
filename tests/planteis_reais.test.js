@@ -48,7 +48,8 @@ function extrairObjecto(nome) {
 const PlayingStyles = extrairObjecto('PlayingStyles');
 const FormationsData = extrairObjecto('FormationsData');
 const { PosicaoPorIndice, PbPorPos, EstiloJsonParaMotor, skillDeAtributos,
-    escolherOnzeDaFormacao, SkillCalib } = require(path.join(raiz, 'js/config/skill_map.js'));
+    escolherOnzeDaFormacao, SkillCalib, estiloDeAtributos, regrasDeEstilo } =
+    require(path.join(raiz, 'js/config/skill_map.js'));
 
 const SKILLS = ['gk', 'tec', 'marking', 'intercept', 'pass', 'speed',
     'strength', 'tacticknow', 'stamina', 'fitness'];
@@ -157,4 +158,79 @@ test('a escala dos titulares cai na banda do motor', () => {
         assert.ok(Math.abs(media - alvo.media) <= 2.5,
             `${chave}: titulares a ${media.toFixed(1)}, alvo ${alvo.media}`);
     }
+});
+
+/*
+OS PLAYING STYLES. O ficheiro de origem só traz o campo em 91 dos 3 124
+registos — os outros 97% ficam com um estilo DERIVADO dos atributos (ver
+EstiloDerivado em skill_map.js). O que este teste guarda:
+
+  - ninguém fica sem estilo, senão volta-se ao estilo por omissão da posição
+    e os atributos do ficheiro deixam de ter consequência;
+  - o estilo derivado é LEGAL para a posição natural do jogador, senão o
+    `aplicarPlayingStyle` deita-o fora em silêncio;
+  - nenhuma posição fica dominada por um estilo só. Foi o defeito da primeira
+    versão: comparava notas em bruto e dava 322 `the_destroyer` contra 18
+    `build_up` nos centrais, porque neste ficheiro os centrais desarmam
+    melhor do que passam.
+*/
+test('todo o jogador tem estilo, legal para a posição dele', () => {
+    const semEstilo = todos.filter(j => !j.estilo);
+    assert.equal(semEstilo.length, 0, `${semEstilo.length} jogadores sem playing style`);
+
+    const derivados = todos.filter(j => j.estiloOrigem === 'derivado');
+    assert.ok(derivados.length > todos.length / 2,
+        `só ${derivados.length} estilos derivados — a derivação não está a correr`);
+
+    for (const j of derivados) {
+        const def = PlayingStyles[j.estilo];
+        assert.ok(def, `${j.nome}: estilo ${j.estilo} não existe no catálogo`);
+        assert.ok(def.posicoes.indexOf(j.pos) >= 0,
+            `${j.nome} (${j.pos}): estilo derivado ${j.estilo} não é legal nessa posição`);
+    }
+});
+
+test('nenhuma posição fica dominada por um estilo só', () => {
+    const porPos = {};
+    for (const j of todos) {
+        if (j.estiloOrigem !== 'derivado') continue;
+        (porPos[j.pos] = porPos[j.pos] || {});
+        porPos[j.pos][j.estilo] = (porPos[j.pos][j.estilo] || 0) + 1;
+    }
+    for (const pos in porPos) {
+        const contagens = Object.values(porPos[pos]);
+        const total = contagens.reduce((a, b) => a + b, 0);
+        // Posições com pouca gente (o ficheiro quase não tem LM/RM de origem)
+        // não dizem nada sobre distribuição.
+        if (total < 30) continue;
+        const maior = Math.max(...contagens);
+        const quantos = regrasDeEstilo(pos) ? regrasDeEstilo(pos).length : 1;
+        assert.ok(maior / total <= 0.7,
+            `${pos}: ${(100 * maior / total).toFixed(0)}% num estilo só, de ${quantos} candidaturas`);
+    }
+});
+
+/*
+A derivação sem população compara notas em bruto; com população compara o
+z-score. As duas têm de continuar a funcionar — a primeira é o que serve um
+registo sozinho, a segunda é o que o conversor usa.
+*/
+test('estiloDeAtributos: bruto sem população, relativo com ela', () => {
+    // Um central que passa muito melhor do que desarma.
+    const passador = { passing: 95, longPassing: 92, composure: 90,
+        headAccurancy: 40, strength: 45, jumping: 40,
+        tackleStanding: 50, aggression: 45, manMarking: 48 };
+    assert.equal(estiloDeAtributos(passador, 'CB'), 'build_up');
+
+    // O mesmo jogador entre centrais que passam ainda melhor: deixa de ser o
+    // que se destaca a passar.
+    const pop = {
+        build_up: { media: 300, desvio: 5 },
+        extra_frontman: { media: 100, desvio: 5 },
+        the_destroyer: { media: 100, desvio: 5 }
+    };
+    assert.notEqual(estiloDeAtributos(passador, 'CB', pop), 'build_up');
+
+    // Posição sem candidaturas não inventa estilo.
+    assert.equal(estiloDeAtributos(passador, 'SS'), null);
 });

@@ -540,10 +540,23 @@ function popularPainelJogadores() {
     };
     buildLista('lista-jogadores-a', Match.players);
     buildLista('lista-jogadores-b', Match.opponents);
+
+    /*
+    E o título de cada coluna: o nome da equipa escolhida, ou o Blue/Red de
+    sempre. Sem isto ficavam duas listas de nomes brasileiros debaixo de
+    "Blue" e "Red" e não se sabia qual era qual.
+    */
+    const titulo = (elId, info, omissao) => {
+        const el = document.getElementById(elId);
+        if (el) el.textContent = (info && info.nome) ? info.nome : omissao;
+    };
+    titulo('titulo-jogadores-a', Match.equipaInfoA, 'Blue');
+    titulo('titulo-jogadores-b', Match.equipaInfoB, 'Red');
 }
 
 function abrirModalSkills(p) {
     const skills = p.skills;
+    jogadorNoModal = p;
     const modal = document.getElementById('modal-skills');
     const titulo = document.getElementById('modal-skills-titulo');
     const corpo = document.getElementById('modal-skills-corpo');
@@ -603,7 +616,15 @@ function abrirModalSkills(p) {
     modal.classList.remove('oculto');
 }
 
+/*
+O MODAL DO JOGADOR FICA COM O JOGADOR QUE ESTAVA ABERTO — e se o elenco
+mudar, esse jogador já não está em campo. Guarda-se quem está lá dentro para
+o poder fechar na troca de equipas (ver TEAMS_CHANGED).
+*/
+let jogadorNoModal = null;
+
 function fecharModalSkills() {
+    jogadorNoModal = null;
     const modal = document.getElementById('modal-skills');
     if (modal) modal.classList.add('oculto');
 }
@@ -1013,13 +1034,35 @@ function trocarEquipaDoPainel() {
     if (!selA || !selB || typeof Match === 'undefined') return;
 
     const idDe = (sel) => (sel.value === '') ? null : Number(sel.value);
+    // Quem actualiza o painel, os nomes e o modal é o TEAMS_CHANGED que o
+    // `trocarEquipas` emite — ver ligarActualizacaoDoElenco. Assim a troca
+    // feita pela consola ou pelo lote actualiza a mesma coisa.
     Match.trocarEquipas({ A: idDe(selA), B: idDe(selB) });
+}
 
-    // O placar passa a dar os nomes reais, quando os há.
-    if (typeof actualizarNomesNoPlacar === 'function') actualizarNomesNoPlacar();
-    // A lista do painel "Player Skills" é montada uma vez no arranque; com
-    // outro plantel em campo tem de ser refeita.
-    if (typeof popularPainelJogadores === 'function') popularPainelJogadores();
+/*
+LIGA A UI À TROCA DE ELENCO. Uma vez, no arranque.
+
+O painel "Player Skills" nasceu a ser montado uma vez só — as skills eram
+fixas, geradas por `tools/gen_player_skills.js`. Com planteis reais o elenco
+muda em jogo, e tudo o que mostra jogadores tem de ser refeito: as duas
+listas, os títulos das colunas, os nomes do placar, e o modal que pode estar
+aberto com um jogador que já saiu de campo.
+
+O HUD do portador e do marcador não entra aqui: refaz-se sozinho a cada 200 ms
+a partir das listas vivas (ver updateHudJogadores).
+*/
+function ligarActualizacaoDoElenco() {
+    if (typeof EventBus === 'undefined') return;
+    EventBus.on('TEAMS_CHANGED', () => {
+        if (jogadorNoModal) {
+            const emCampo = Match.players.includes(jogadorNoModal) ||
+                Match.opponents.includes(jogadorNoModal);
+            if (!emCampo) fecharModalSkills();
+        }
+        popularPainelJogadores();
+        actualizarNomesNoPlacar();
+    });
 }
 
 /*
@@ -1111,6 +1154,7 @@ document.addEventListener("DOMContentLoaded", () => {
         scene.add(ambientLight);
 
         preencherSelectoresDeEquipa();
+        ligarActualizacaoDoElenco();
         Match.init(scene);
         
         if (isTouchDevice) {

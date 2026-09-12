@@ -829,6 +829,112 @@ Object.assign(Match, {
         return escolherOnzeDaFormacao(plantel, fData.map(f => f.pos));
     },
 
+    /*
+    TROCA DE EQUIPAS EM JOGO.
+
+    Recriar os bonecos é o caminho curto e o certo: as skills são lidas por
+    `p.skills` em dezenas de sítios e meia dúzia de sistemas guardam
+    referências a jogadores (marcações, o portador da bola, os alvos do bloco).
+    Substituir os dados por baixo deles deixava ponteiros para gente que já
+    não joga; deitar os bonecos fora e montar de novo não deixa nenhum.
+
+    `ids` pode trazer só um dos lados — o outro fica como está.
+    */
+    trocarEquipas: function (ids) {
+        if (!this.scene) return;
+        if (ids && 'A' in ids) this.equipaIdA = ids.A;
+        if (ids && 'B' in ids) this.equipaIdB = ids.B;
+
+        /*
+        OS EXPULSOS TAMBÉM. Eles não estão nas listas — o cartão vermelho
+        tira-os de lá e guarda-os no `Match.expulsos`, e o `reporExpulsos`
+        (chamado pelo `resetPlay` aqui em baixo) volta a metê-los na lista da
+        equipa deles. Sem os limpar aqui, o primeiro jogo com uma expulsão
+        envenenava o seguinte: os bonecos antigos eram devolvidos às listas
+        NOVAS, ficava uma equipa com doze, e dois deles eram fantasmas sem
+        modelo na cena.
+        */
+        const todos = [...this.players, ...this.opponents, ...(this.expulsos || [])];
+        for (const p of todos) {
+            /*
+            Tudo o que o jogador pôs na cena, e não só o boneco: os anéis do
+            debug e a linha do alvo são filhos da CENA e não do modelo (para
+            não subirem com ele no salto), portanto não saem com o `model`.
+            Sem isto a cena crescia 88 objectos por jogo num lote.
+            */
+            for (const obj of [p.model, p.discoTatico, p.btTargetGroup, p.btLine,
+                p.positionTargetGroup, p.styleTargetGroup]) {
+                if (obj) this.scene.remove(obj);
+            }
+        }
+        if (this.expulsos) this.expulsos.length = 0;
+        this.players = [];
+        this.opponents = [];
+
+        this.createTeams();
+        this.esquecerJogadoresAntigos(todos);
+        this.resetPlay();
+        if (typeof MatchStats !== 'undefined' && MatchStats.reset) MatchStats.reset();
+
+        /*
+        QUEM MOSTRA JOGADORES TEM DE SABER QUE ELES MUDARAM.
+
+        O painel "Player Skills" é montado uma vez (as skills eram fixas) e o
+        modal do jogador guarda a referência do boneco que estava aberto — os
+        dois ficavam a mostrar o elenco anterior. O evento avisa-os, e serve
+        qualquer origem da troca: os selectores do painel, a consola, ou o
+        lote de jogos.
+        */
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('TEAMS_CHANGED', { A: this.equipaInfoA, B: this.equipaInfoB });
+        }
+    },
+
+    /*
+    APAGA AS REFERÊNCIAS AOS JOGADORES QUE JÁ NÃO JOGAM.
+
+    O `Match` guarda jogadores em dezenas de campos — o portador, o receptor
+    do passe, o batedor, os perseguidores, o plano da saída de bola, a barreira
+    da falta. Trocar as listas não limpa nenhum deles, e um deles é o suficiente
+    para partir o jogo seguinte: medido num lote, um jogo acabou em GOAL, o
+    `saidaPlano` guardou o batedor desse jogo, e o `resetPlay` do jogo SEGUINTE
+    reutilizou-o — o jogo inteiro passou com a bola no meio-campo, agarrada a um
+    boneco que já não estava na cena. Zero passes em 18 minutos.
+
+    Varre-se o objecto inteiro em vez de listar os campos à mão: a lista à mão
+    fica desactualizada no dia em que alguém acrescentar mais um campo, e o
+    defeito volta calado.
+    */
+    esquecerJogadoresAntigos: function (antigos) {
+        if (!antigos || !antigos.length) return;
+        const fora = new Set(antigos);
+        const ehAntigo = (v) => v && typeof v === 'object' && fora.has(v);
+
+        for (const chave of Object.keys(this)) {
+            if (chave === 'players' || chave === 'opponents') continue;
+            const v = this[chave];
+            if (!v || typeof v !== 'object') continue;
+
+            if (ehAntigo(v)) { this[chave] = null; continue; }
+
+            if (Array.isArray(v)) {
+                if (v.some(ehAntigo)) this[chave] = v.filter(x => !ehAntigo(x));
+                continue;
+            }
+
+            // Planos e lances guardam jogadores lá dentro (saidaPlano.taker,
+            // cantoVivo.equipa, faltaDirectaPlano...). Um plano com gente que
+            // já não joga não se conserta: deita-se fora inteiro.
+            for (const sub of Object.keys(v)) {
+                const filho = v[sub];
+                if (ehAntigo(filho) || (Array.isArray(filho) && filho.some(ehAntigo))) {
+                    this[chave] = null;
+                    break;
+                }
+            }
+        }
+    },
+
     createTeams: function () {
         // Skills fixas (data/player_skills.js) — atribuídas por ÍNDICE, não
         // por posição da formação: a formação pode mudar (442/433/4231),

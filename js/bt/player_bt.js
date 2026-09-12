@@ -2991,6 +2991,30 @@ const PlayerBT = sel('PlayerRoot',
                 cond('precisaPassarAosDefesas', (ctx) => {
                     if (typeof Match === 'undefined' || !Match.kickoffPendingPassToDef) return false;
                     if (ctx.p.role === 'gk') return false;
+
+                    /*
+                    SÓ NO CAMPO PRÓPRIO, E NUNCA EM ZONA DE REMATE.
+
+                    A bandeira `kickoffPendingPassToDef` não tinha prazo nem
+                    lugar: ficava de pé até alguém tocar para trás. Se a bola
+                    chegasse antes disso a um avançado — uma intercepção logo
+                    a seguir ao pontapé de saída — este ramo ganhava (está
+                    acima do `Dominar`) e ele tocava para trás de frente para
+                    a baliza. É o relato: "tem jogador dentro da área, de
+                    frente para o gol, tocando pra trás ao invés de chutar".
+
+                    Reproduzido com o botão "Cara a cara": avançado a 25 m da
+                    baliza adversária, primeira decisão PASS, rasto
+                    `precisaPassarAosDefesas > passarAosDefesas`.
+
+                    Sair a jogar de trás é no CAMPO DE TRÁS. Passada a linha
+                    do meio-campo a saída já aconteceu, e quem tem a bola
+                    decide como qualquer outro portador.
+                    */
+                    const avanco = ctx.p.model.position.z * ctx.p.dirZ;
+                    if (avanco > 0) return false;
+                    if (typeof emZonaDeRemate === 'function' && emZonaDeRemate(ctx)) return false;
+
                     const defTarget = encontrarDefesaParaSaida(ctx.p);
                     if (!defTarget) return false;
                     ctx.kickoffDefTarget = defTarget;
