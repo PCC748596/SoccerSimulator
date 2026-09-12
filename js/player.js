@@ -3228,7 +3228,7 @@ class FootballPlayer {
                 O sorteio abaixo escolhe a MIRA. Quem decide se entra é a bola
                 e o guarda-redes. Ver `armarGuardaRedes` (utils.js).
                 */
-                armarGuardaRedes(gkAdversario, TeamSkills[defendingTeam].gk);
+                armarGuardaRedes(gkAdversario, TeamSkills[defendingTeam].gk, distToGoal);
                 window.bolaChutada = true;
             }
         } else {
@@ -5094,7 +5094,32 @@ class FootballPlayer {
                     */
                     const naHora = this.horaDeMergulhar(lateral, tempoAteGolo);
 
-                    if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
+                    /*
+                    DE PERTO E POR BAIXO: a perna esticada no chão.
+
+                    Pedido, com fotografia. Ver GoalkeeperPose.barreira: a
+                    essa distância não há voo para mergulhar (7 m a 20 m/s são
+                    0.35 s, e só a reação come 0.28), e de pé a bola passa por
+                    baixo das mãos e por fora dos pés. Abre-se e tapa campo.
+
+                    É uma POSE do ramo 'maos', e não um estado novo, de
+                    propósito: assim herda o teste de contacto que já lá está
+                    (mãos lidas do rig contra o trajecto do frame) em vez de
+                    ganhar uma cópia dele para divergir.
+                    */
+                    const RB = GoalkeeperPose.barreira;
+                    this.gkBarreira = !!(RB &&
+                        (this.gkDistRemate || 99) <= RB.distMax &&
+                        interY <= RB.alturaMax);
+                    if (this.gkBarreira) {
+                        // O lado da bola, no referencial do MODELO: `lateral` é
+                        // em X do mundo, e o modelo está rodado por lookAt.
+                        _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
+                        _v2.set(interX - gkCorpo.position.x, 0,
+                            Match.ball.position.z - gkCorpo.position.z);
+                        this.gkLadoBarreira = Math.sign(_v1.x * _v2.x + _v1.z * _v2.z) || 1;
+                        this.gkEstado = 'maos';
+                    } else if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
                         this.gkEstado = 'maos';
                     } else if (!naHora) {
                         /*
@@ -5349,7 +5374,27 @@ class FootballPlayer {
                                 estava no lado ERRADO, com 4.5 a 6.1 m de erro.
                                 */
                                 const alvoEspT = alvoEsp ? alvoEsp.t : tempoAteMim;
-                                if (podeAtirarSe && Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
+                                /*
+                                A BARREIRA TAMBÉM AQUI — e é aqui que ela conta.
+
+                                Há dois sítios que escolhem o gesto do
+                                guarda-redes, e a defesa de perto passa por
+                                ESTE: medido em 120 remates rasteiros de 3.5 a
+                                7 m com a decisão só no outro ramo, a barreira
+                                disparou ZERO vezes, com 'maos' 36 e 'mergulho'
+                                73. Ver GoalkeeperPose.barreira.
+                                */
+                                const RB2 = GoalkeeperPose.barreira;
+                                this.gkBarreira = !!(RB2 && podeAtirarSe &&
+                                    (this.gkDistRemate || 99) <= RB2.distMax &&
+                                    espY <= RB2.alturaMax);
+                                if (this.gkBarreira) {
+                                    _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
+                                    _v2.set(espX - gkCorpo.position.x, 0,
+                                        Match.ball.position.z - gkCorpo.position.z);
+                                    this.gkLadoBarreira = Math.sign(_v1.x * _v2.x + _v1.z * _v2.z) || 1;
+                                    this.gkEstado = 'maos';
+                                } else if (podeAtirarSe && Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
                                     this.gkEstado = 'maos';
                                 } else if (!podeAtirarSe || !this.horaDeMergulhar(lateralEsp, alvoEspT)) {
                                     // Ainda nao reagiu, ou ainda ha tempo: acompanha
@@ -5786,6 +5831,39 @@ class FootballPlayer {
                     ? Math.sign(passoM) * tectoM : passoM;
             }
 
+            if (this.gkBarreira) {
+                /*
+                A DEFESA DE PERTO E POR BAIXO — ver GoalkeeperPose.barreira.
+
+                O corpo desce, a pélvis inclina para o lado da bola, a perna
+                desse lado estica ao longo do relão (joelho quase a zero, que
+                é o que a torna uma barreira) e a outra recolhe por baixo.
+
+                `gkLadoBarreira` é +1 quando a bola está do lado DIREITO do
+                modelo. O rig do projecto tem `lLeg.rotation.z` positivo a
+                abrir para um lado e `rLeg` para o outro, por isso o sinal
+                entra multiplicado e a pose sai certa nas duas equipas — o
+                erro que a nota dos braços aqui em cima descreve.
+                */
+                const B = GoalkeeperPose.barreira;
+                const v = B.suavizacao;
+                const lado = this.gkLadoBarreira || 1;
+
+                gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + B.altura, v);
+                gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, v);
+                gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, lado * B.inclinacao, v);
+                gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, 0.10, v);
+
+                // A perna do lado da bola estica; a outra dobra-se por baixo.
+                const perto = (lado > 0) ? 'r' : 'l';
+                const longe = (lado > 0) ? 'l' : 'r';
+                gkRig[perto + 'Leg'].rotation.z = lerpTo(gkRig[perto + 'Leg'].rotation.z, -lado * B.pernaEsticada, v);
+                gkRig[perto + 'Leg'].rotation.x = lerpTo(gkRig[perto + 'Leg'].rotation.x, 0.05, v);
+                gkRig[perto + 'Knee'].rotation.x = lerpTo(gkRig[perto + 'Knee'].rotation.x, B.pernaJoelho, v);
+                gkRig[longe + 'Leg'].rotation.z = lerpTo(gkRig[longe + 'Leg'].rotation.z, lado * 0.10, v);
+                gkRig[longe + 'Leg'].rotation.x = lerpTo(gkRig[longe + 'Leg'].rotation.x, B.pernaDobrada, v);
+                gkRig[longe + 'Knee'].rotation.x = lerpTo(gkRig[longe + 'Knee'].rotation.x, B.pernaDobradaJoelho, v);
+            } else {
             gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + Pm.altura, 0.25);
             gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, 0.3);
             gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, 0, 0.3);
@@ -5796,6 +5874,7 @@ class FootballPlayer {
             gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, Pm.joelho, 0.25);
             gkRig.lLeg.rotation.z = lerpTo(gkRig.lLeg.rotation.z, Pm.abertura, 0.25);
             gkRig.rLeg.rotation.z = lerpTo(gkRig.rLeg.rotation.z, -Pm.abertura, 0.25);
+            }
 
             const ombroYm = gkCorpo.position.y + 0.35;
             const dyM = Match.ball.position.y - ombroYm;
@@ -5839,12 +5918,42 @@ class FootballPlayer {
             let abreM = 0.20 + Math.min(1.3, Math.abs(dxM) * 0.65);
             const clM = { x: elevM, z: abreM };
 
+            if (this.gkBarreira) {
+                /*
+                OS BRAÇOS DA BARREIRA SÃO ASSIMÉTRICOS, ao contrário dos de pé.
+
+                De pé abrem-se os dois na mesma amplitude — e a nota aqui em
+                cima explica porquê: `lArm`/`rArm` são esquerda/direita DO
+                MODELO e o modelo está rodado por lookAt, portanto escolher
+                "o braço do lado da bola" pelo x do mundo dá o braço errado
+                para uma das equipas.
+
+                Aqui a assimetria é o gesto, e por isso o lado vem do
+                `gkLadoBarreira`, que JÁ foi medido no referencial do modelo
+                (ver a decisão, mais acima). O de cima sobe acima da cabeça
+                com a mão aberta, o de baixo fica junto ao chão.
+                */
+                const B = GoalkeeperPose.barreira;
+                const v = B.suavizacao;
+                const lado = this.gkLadoBarreira || 1;
+                const alto = (lado > 0) ? 'r' : 'l';
+                const baixo = (lado > 0) ? 'l' : 'r';
+                const sinal = (alto === 'l') ? 1 : -1;
+
+                gkRig[alto + 'Arm'].rotation.x = lerpTo(gkRig[alto + 'Arm'].rotation.x, B.bracoAlto, v);
+                gkRig[alto + 'Arm'].rotation.z = lerpTo(gkRig[alto + 'Arm'].rotation.z, sinal * B.bracoAltoZ, v);
+                gkRig[baixo + 'Arm'].rotation.x = lerpTo(gkRig[baixo + 'Arm'].rotation.x, B.bracoBaixo, v);
+                gkRig[baixo + 'Arm'].rotation.z = lerpTo(gkRig[baixo + 'Arm'].rotation.z, -sinal * B.bracoBaixoZ, v);
+                gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, B.cotovelo, v);
+                gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, B.cotovelo, v);
+            } else {
             gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, clM.x, 0.4);
             gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, clM.x, 0.4);
             gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, clM.z, 0.4);
             gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -clM.z, 0.4);
             gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, -0.25, 0.4);
             gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, -0.25, 0.4);
+            }
 
             /*
             Ponto de contacto: as duas mãos, projectadas do ângulo REAL do
@@ -5938,11 +6047,36 @@ class FootballPlayer {
                 typeof GkCatchModel.alturaCorpo === 'number')
                 ? GkCatchModel.alturaCorpo : 1.85;
 
+            /*
+            NA BARREIRA O CORPO ESTÁ DEITADO, e o segmento tem de o acompanhar.
+
+            O teste normal é uma COLUNA VERTICAL nos pés dele. Nesta pose o que
+            tapa a baliza é a perna esticada ao longo do relão — se o segmento
+            ficasse vertical, a pose mudava no ecrã e não defendia nada, que é
+            o pior dos dois mundos: o jogador vê a defesa e a bola entra.
+
+            O segmento passa a ir do tronco até à ponta da bota, no sentido em
+            que ele se abriu.
+            */
+            let corpoAx = gkCorpo.position.x, corpoAy = ALTURA_BASE_Y, corpoAz = gkCorpo.position.z;
+            let corpoBx = gkCorpo.position.x, corpoBy = ALTURA_BASE_Y + ALT_CORPO, corpoBz = gkCorpo.position.z;
+            let raioCorpoM = RAIO_CORPO;
+            if (this.gkBarreira) {
+                const B = GoalkeeperPose.barreira;
+                _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
+                const lado = this.gkLadoBarreira || 1;
+                corpoAy = ALTURA_BASE_Y + B.alturaDeitado;
+                corpoBx = gkCorpo.position.x + _v1.x * lado * B.alcanceDeitado;
+                corpoBz = gkCorpo.position.z + _v1.z * lado * B.alcanceDeitado;
+                corpoBy = ALTURA_BASE_Y + 0.12;   // a bota quase no relão
+                raioCorpoM = B.raioDeitado;
+            }
+
             let distCorpoM = Infinity;
             if (typeof distanciaEntreSegmentos === 'function') {
                 distCorpoM = distanciaEntreSegmentos(
-                    gkCorpo.position.x, ALTURA_BASE_Y, gkCorpo.position.z,
-                    gkCorpo.position.x, ALTURA_BASE_Y + ALT_CORPO, gkCorpo.position.z,
+                    corpoAx, corpoAy, corpoAz,
+                    corpoBx, corpoBy, corpoBz,
                     axM, ayM, azM, bxM, byM, bzM);
             } else {
                 /*
@@ -5956,7 +6090,7 @@ class FootballPlayer {
             }
 
             if (!jaEntrouM && Match.ballVel.lengthSq() > 0 &&
-                (distMaoM < alcanceMao || distCorpoM < RAIO_CORPO)) {
+                (distMaoM < alcanceMao || distCorpoM < raioCorpoM)) {
                 /*
                 Bola ao alcance do corpo, de pé. A decisão sai do
                 `resolverDefesaGK` (utils.js), a mesma dos outros três tipos —
@@ -5992,6 +6126,9 @@ class FootballPlayer {
             contrário de um `!this.hasBall`, que descreve só o caso de hoje.
             */
             if (tM >= GoalkeeperPose.maosDur && this.gkEstado === 'maos') {
+                // A barreira é deste lance e só deste: sem isto a pose
+                // sobrevivia para a defesa seguinte, que pode ser de longe.
+                this.gkBarreira = false;
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
             }

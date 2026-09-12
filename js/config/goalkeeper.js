@@ -97,6 +97,60 @@ const GoalkeeperPose = {
     corpo exige que ele se ATIRE, e se ela vier baixa é o mergulho rasteiro
     (`gkTipoMergulho = 'baixo'`) que o relato pede.
     */
+    /*
+    =========================================================================
+    A DEFESA DE PERTO E POR BAIXO — a perna esticada no chão
+    =========================================================================
+    Pedido, com fotografia: remate de <= 7 m e rasteiro defende-se com o corpo
+    baixo e a perna do lado da bola ESTICADA ao longo do relão, a outra
+    dobrada por baixo, e o braço de cima no ar com a mão aberta.
+
+    Não é um mergulho: a essa distância não há tempo de voo nenhum para
+    mergulhar — uma bola a 20 m/s de 7 m chega em 0.35 s, e o tempo de reação
+    sozinho já come 0.28. O que um guarda-redes faz ali é abrir-se e tapar
+    campo: a perna cobre o rasteiro, o braço cobre o meio-alto, e o corpo fica
+    entre a bola e a baliza.
+
+    Também não é o estado 'maos', que o deixa de pé com os braços à frente —
+    de pé não se defende um rasteiro a 5 m: a bola passa-lhe por baixo das
+    mãos e por fora dos pés, que é justamente o buraco que a perna esticada
+    fecha.
+
+    `distMax` é a distância de onde o remate SAIU, e não a que a bola está
+    agora: é ela que diz se houve tempo de reagir.
+    =========================================================================
+    */
+    barreira: {
+        distMax: 7.0,        // remate de mais longe do que isto não entra aqui
+        alturaMax: 0.95,     // e só para bola que cruza a linha abaixo disto
+
+        altura: -0.62,       // o corpo desce quase ao chão (soma a ALTURA_BASE_Y)
+        inclinacao: 0.85,    // rotação da pélvis para o lado da bola, rad
+
+        pernaEsticada: 1.25, // abertura lateral da perna do lado da bola, rad
+        pernaJoelho: 0.05,   // e quase sem joelho — é o que a faz uma barreira
+        pernaDobrada: 0.35,  // a outra perna recolhe
+        pernaDobradaJoelho: 1.30,
+
+        bracoAlto: -2.35,    // braço de cima, acima da cabeça (x negativo é para a frente)
+        bracoAltoZ: 1.15,    // e aberto para o lado da bola
+        bracoBaixo: -0.55,   // o outro fica junto ao chão
+        bracoBaixoZ: 0.30,
+        cotovelo: -0.12,     // braços quase direitos: é uma barreira, não um agarrar
+
+        suavizacao: 0.45,    // a pose entra depressa — são décimas de segundo
+
+        /*
+        O corpo, para o teste de contacto, deixa de ser um segmento VERTICAL
+        nos pés e passa a ser o que se vê: um segmento deitado, do tronco até
+        à ponta da bota esticada. Sem isto a pose mudava no ecrã e não defendia
+        nada — o teste continuava a medir uma coluna vertical.
+        */
+        alcanceDeitado: 1.45,   // metros de perna, do tronco à bota
+        alturaDeitado: 0.55,    // altura do tronco nesta pose, para o segmento
+        raioDeitado: 0.34       // raio de contacto ao longo da perna
+    },
+
     mergulhoLateralMin: 1.0,
     // Duração (s) do estado 'maos' antes de voltar ao idle.
     maosDur: 1.0,

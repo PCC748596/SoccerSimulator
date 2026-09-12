@@ -1923,8 +1923,16 @@ tempo de reação do GoalkeeperDive, 0.10 s a GK 100 e 0.46 s a GK 0, e mais
 nada.
 =============================================================================
 */
-function armarGuardaRedes(gk, skillGk) {
+function armarGuardaRedes(gk, skillGk, distRemate) {
     if (!gk) return;
+    /*
+    DE ONDE VEIO O REMATE — guardado aqui porque é aqui que se sabe.
+
+    A distância da bola ao guarda-redes muda a cada frame; o que decide o
+    gesto é de onde ela SAIU, que é o que diz quanto tempo ele tem. Ver
+    GoalkeeperPose.barreira, a defesa de perto e por baixo.
+    */
+    gk.gkDistRemate = (typeof distRemate === 'number') ? distRemate : 99;
     const R = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
     const base = (R && typeof R.reaccaoBase === 'number') ? R.reaccaoBase : 0.45;
     const amp = (R && typeof R.reaccaoPorSkill === 'number') ? R.reaccaoPorSkill : 0.35;

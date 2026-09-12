@@ -785,7 +785,8 @@ function executeShotGameplay(p) {
             // mergulho partir depois de a bola ter chegado.
             // Um só sítio para as duas bolas, a do pé e a da testa — ver
             // `armarGuardaRedes` (utils.js) e a medição que o motivou.
-            armarGuardaRedes(gkDef, TeamSkills[defendingTeam].gk);
+            armarGuardaRedes(gkDef, TeamSkills[defendingTeam].gk,
+                Math.hypot(p.model.position.x, p.targetGoalZ - p.model.position.z));
         }
         window.bolaChutada = true;
     }
