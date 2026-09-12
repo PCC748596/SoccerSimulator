@@ -56,11 +56,12 @@ global.THREE = require('three');
 win.THREE = global.THREE;
 
 const FICHEIROS = [
-    'assets/ball_mesh.js', 'data/player_skills.js',
+    'assets/ball_mesh.js', 'data/player_skills.js', 'data/squads.js',
     'js/event_bus.js', 'js/joint_limits.js',
     'js/config/physics.js', 'js/config/animations.js', 'js/config/gait.js',
     'js/config/tactics.js', 'js/config/passing.js', 'js/config/shooting.js',
     'js/config/defense.js', 'js/config/goalkeeper.js', 'js/config/player_behavior.js',
+    'js/config/skill_map.js',
     'js/stats.js',
     'js/utils.js', 'js/ik.js', 'js/reach.js', 'js/gk_dive.js',
     'js/bt/action_state.js', 'js/perception.js', 'js/playing_styles.js',

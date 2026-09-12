@@ -280,6 +280,51 @@ console.log(LF + '5 — o braço volta a cair');
         erro(`a ordem das rotações do braço é ${signalArm.rotation.order}, devia ser YXZ`);
     } else ok('ordem YXZ: guinada primeiro, elevação depois');
 
+    /*
+    A FALTA É UM T: o braço a 90 graus do tronco E a apontar o ataque.
+
+    Pedido do utilizador. Para as duas coisas serem verdade ao mesmo tempo é o
+    CORPO que roda — fica de perfil para a baliza apontada. É o que separa
+    este caso do penálti aqui em cima, onde se aponta um sítio a poucos metros
+    e o corpo fica onde o `mover` o pôs.
+    */
+    const rigT = {
+        rArm: { rotation: { x: 0, y: 0, order: 'XYZ' } },
+        lArm: { rotation: { x: 0, y: 0, order: 'XYZ' } },
+        rElbow: { rotation: { x: 0 } },
+        lElbow: { rotation: { x: 0 } }
+    };
+    const corpoT = { position: { x: 0, z: 0 }, rotation: { y: 0 } };
+    const selfT = {
+        arbitro: {
+            rig: rigT,
+            model: corpoT,
+            // Alvo MESMO EM FRENTE (+z) e elevação de falta: é o caso que
+            // antes dava o braço colado ao tronco.
+            sinal: { x: 0, z: 40, elev: R.elevacaoSinal, timer: 2.0 }
+        }
+    };
+    for (let n = 0; n < 60; n++) tick(selfT, 0.016);   // ~1 s
+
+    const bracoT = (rigT.rArm.rotation.order === 'YXZ') ? rigT.rArm : rigT.lArm;
+    const guinadaT = Math.abs(bracoT.rotation.y) * 180 / Math.PI;
+    if (Math.abs(guinadaT - 90) > 5) {
+        erro(`falta: o braço devia ficar a 90° do tronco, está a ${guinadaT.toFixed(0)}°`);
+    } else ok(`falta: braço a ${guinadaT.toFixed(0)}° do tronco — o T`);
+
+    // E continua a apontar o alvo em coordenadas do mundo.
+    const anguloMundo = corpoT.rotation.y + bracoT.rotation.y;
+    const alvoMundo = 0;   // o alvo está em +z, que é o ângulo zero
+    let erroMundo = Math.atan2(Math.sin(anguloMundo - alvoMundo), Math.cos(anguloMundo - alvoMundo));
+    erroMundo = Math.abs(erroMundo) * 180 / Math.PI;
+    if (erroMundo > 5) {
+        erro(`falta: o braço aponta ${erroMundo.toFixed(0)}° ao lado da baliza atacada`);
+    } else ok(`falta: braço a apontar a baliza (erro ${erroMundo.toFixed(1)}°)`);
+
+    if (Math.abs(corpoT.rotation.y) < 0.5) {
+        erro('falta: o corpo não rodou — sem isso o braço não pode estar a 90° e a apontar');
+    } else ok(`falta: o corpo ficou de perfil (${(corpoT.rotation.y * 180 / Math.PI).toFixed(0)}°)`);
+
     for (let n = 0; n < 60; n++) tick(self, 0.016);   // passa 1 s
     if (self.arbitro.sinal) erro('passou a duração e o gesto continua');
     else ok('passada a duração, o gesto termina');

@@ -798,19 +798,63 @@ Object.assign(Match, {
         return malha;
     },
 
+    /*
+    A EQUIPA ESCOLHIDA, ou nada. `Match.equipaIdA`/`equipaIdB` guardam o id de
+    `data/squads.js` (ver tools/gen_squads.js); sem eles — ou sem o ficheiro
+    carregado — o jogo continua com os 22 de sempre do `player_skills.js`.
+    */
+    equipaIdA: null,
+    equipaIdB: null,
+
+    equipaDoPlantel: function (id) {
+        if (typeof SquadsData === 'undefined' || !SquadsData.equipas) return null;
+        if (id === null || id === undefined) return null;
+        return SquadsData.equipas.find(e => e.id === id) || null;
+    },
+
+    /*
+    O ONZE da formação activa, a partir do plantel.
+
+    A escolha em si vive em `escolherOnzeDaFormacao` (js/config/skill_map.js),
+    partilhada com o conversor dos planteis e com o teste — é a mesma regra nos
+    três, e a razão de ser gulosa global está explicada lá.
+
+    Escolhe-se UMA VEZ, no `createTeams`. Mudar a formação a meio do jogo move
+    os mesmos onze pelo campo — não troca de gente, que é o que um treinador
+    faz. Para trocar de gente há a troca de equipa, que recomeça o jogo.
+    */
+    escolherOnze: function (plantel, formacaoKey) {
+        if (typeof escolherOnzeDaFormacao !== 'function') return null;
+        const fData = FormationsData[formacaoKey || '442'] || FormationsData['442'];
+        return escolherOnzeDaFormacao(plantel, fData.map(f => f.pos));
+    },
+
     createTeams: function () {
         // Skills fixas (data/player_skills.js) — atribuídas por ÍNDICE, não
         // por posição da formação: a formação pode mudar (442/433/4231),
         // mas o elenco (jogador 0..10) é sempre o mesmo, ver
         // tools/gen_player_skills.js.
-        const skillsA = (typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamA : null;
-        const skillsB = (typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamB : null;
+        //
+        // Com uma equipa real escolhida (ver equipaIdA/equipaIdB), o onze vem
+        // do plantel dela e estes ficam por usar.
+        const equipaA = this.equipaDoPlantel(this.equipaIdA);
+        const equipaB = this.equipaDoPlantel(this.equipaIdB);
+        const onzeA = equipaA ? this.escolherOnze(equipaA.plantel, Tatics.formacaoA || '442') : null;
+        const onzeB = equipaB ? this.escolherOnze(equipaB.plantel, Tatics.formacaoB || '442') : null;
+        this.equipaInfoA = onzeA ? equipaA : null;
+        this.equipaInfoB = onzeB ? equipaB : null;
+
+        const skillsA = onzeA || ((typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamA : null);
+        const skillsB = onzeB || ((typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamB : null);
 
         for (let i = 0; i < 11; i++) {
             let corCamisa = (i === 0) ? '#f1c40f' : '#3498db';
             let corCalcao = (i === 0) ? '#1e1b18' : '#34495e';
             let p = new FootballPlayer(i, corCamisa, corCalcao, 'TeamA');
             p.skills = skillsA ? skillsA[i] : null;
+            // O estilo que o jogador traz nos dados manda sobre o estilo por
+            // omissão da posição — ver aplicarPlayingStyle.
+            p.playingStyleFixo = (p.skills && p.skills.estilo) ? p.skills.estilo : null;
             this.players.push(p);
             this.scene.add(p.model);
         }
@@ -820,6 +864,7 @@ Object.assign(Match, {
             let corCalcao = (i === 0) ? '#111111' : '#ffffff';
             let p = new FootballPlayer(i + 20, corCamisa, corCalcao, 'TeamB');
             p.skills = skillsB ? skillsB[i] : null;
+            p.playingStyleFixo = (p.skills && p.skills.estilo) ? p.skills.estilo : null;
             this.opponents.push(p);
             this.scene.add(p.model);
         }
@@ -965,6 +1010,19 @@ Object.assign(Match, {
         const fDataB = FormationsData[Tatics.formacaoB || '442'];
 
         const processTeam = (teamList, fData, isTeamA) => {
+            /*
+            O NÚMERO DA CAMISOLA é o do jogador, quando os dados o trazem. Só
+            vale se for único DENTRO deste onze: o plantel tem 60 jogadores e
+            dois deles podem partilhar o 0 (o ficheiro de origem usa o 0 para
+            "sem número"). Onde não dá, fica o número da formação, que é o que
+            havia antes.
+            */
+            const contagemNum = {};
+            for (let i = 0; i < 11; i++) {
+                const n = teamList[i].skills && teamList[i].skills.numero;
+                if (n) contagemNum[n] = (contagemNum[n] || 0) + 1;
+            }
+
             const campo = fData.filter(f => f.role !== 'gk');
             const zMin = Math.min(...campo.map(f => f.z));
             const zMax = Math.max(...campo.map(f => f.z));
@@ -984,7 +1042,9 @@ Object.assign(Match, {
                 teamList[i].baseTarget.set(x * (CAMPO_LARG / 2) * compMult, ALTURA_BASE_Y, z * (CAMPO_COMP / 2));
                 teamList[i].role = fData[i].role;
                 teamList[i].slot = slot;
-                teamList[i].updateShirt(fData[i].num, fData[i].pos);
+                const numReal = teamList[i].skills && teamList[i].skills.numero;
+                const num = (numReal && contagemNum[numReal] === 1) ? numReal : fData[i].num;
+                teamList[i].updateShirt(num, fData[i].pos);
                 
                 const idxPos = contagemPos[fData[i].pos] || 0;
                 contagemPos[fData[i].pos] = idxPos + 1;

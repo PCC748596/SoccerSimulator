@@ -8744,3 +8744,122 @@ Ajustes matemáticos e expansão de lógica de jogo envolvendo vários subsistem
 - **Frente a Frente com o Guarda-Redes**: Introdução de lógica estrita para desmarcações limpas até à baliza (`ShootingModel.frenteAFrente`). Em vez de chutar de longe mal entram na área, os atacantes carregam até 11 metros e finalizam obrigatoriamente num remate colocado ou rasteiro, anulando o remate em força de forma a tirar a bola do corpo do GR.
 - **Guarda-Redes (Recuo com o Pé)**: Em situações de passe atrasado onde a Lei 12 proíbe o uso das mãos, sob pressão, o GR já não trava a bola deixando-a fugir, mas chuta-a longe imediatamente como num pontapé de baliza (`chutarRecuoDeUrgencia`). Efeito de espalmar da bola ampliado para facilitar os cantos (`espalmarForaMargem`).
 - **Tendência por Posição e Atributo**: O cálculo de decisão combina finalmente o perfil tático da posição e o atributo do próprio jogador, criando condutas variadas. Passes, finalizações e remates reflectem os *stats*. Adição da inclinação estrutural `PositionalTendencies.driveSpace` para diferenciar ataques ao espaço (e.g. ST avança, CM distribui).
+
+### Sessão de 11 de Setembro de 2026 — largura das alas, bancadas, planteis reais
+
+Seis relatos, todos medidos antes de se lhes tocar. As ferramentas de medição
+ficam em `tools/headless/` e repetem-se com semente fixa.
+
+#### O lateral e o médio de ala do lado contrário viviam no meio
+
+Relato repetido: *"o Lateral e o Meia da lateral oposta da jogada estão muito
+no meio. Estão se confundindo com os CM e CBs"*. Medido em 45 min, o `|x|`
+REAL com a bola numa ala:
+
+```
+                lado oposto      mesmo lado
+lateral (LB)        10.5             20.2
+lateral (RB)        11.6             21.0
+médio ala (LM)       9.5             19.4
+médio ala (RM)      10.2             20.3
+central (CB)         4.4              8.6
+médio centro (CM)    3.3              9.8
+```
+
+O lateral do lado oposto estava a metro e meio do médio-centro. A causa NÃO
+era a largura do bloco, que é onde as tentativas anteriores foram mexer (ver a
+nota do `fecho` em `LineShape` e a da `basculacao`): o `xTarget` do slot já
+saía a 18-19 m, e era o **nível 2 que comia cinco metros** — a separação do par
+lateral↔médio deixa o lateral abdicar de `separacaoLateral` (6 m) do slot dele,
+e a mola de coesão e o pêndulo tiram o resto. Cada uma é defensável sozinha e
+todas puxam para o mesmo lado.
+
+A correcção é o `WideAnchor` (`config/tactics.js`): um PISO DE LARGURA em
+metros ao eixo do CAMPO — 20 m com bola e 17 sem ela para os laterais, 23 e 19
+para os médios de ala — aplicado duas vezes, no slot e outra vez depois do
+alisamento do `dynamicTarget`, porque o lerp arrasta o alvo já encolhido do
+frame anterior. Só empurra para FORA, cede a quem tem tarefa de bola (chaser,
+intercetor, bloqueador) e não se aplica a defender no próprio terço.
+
+Depois: lado oposto **17.3 / 18.5 / 18.0 / 17.2**, mesmo lado 22-24, e os
+centrais e médios-centro não se mexeram.
+
+Pelo caminho: o lado do jogador **não se lê pela letra da posição**. Metade dos
+laterais `LB` joga em x positivo — a formação é espelhada por equipa. O lado
+vem do `u` da formação (nível 1) e do posto (nível 2).
+
+#### As duas bancadas festejavam o golo
+
+Duas causas independentes. A primeira: os ultras (`fraccaoSaltoSempre`, 10% da
+bancada) saltam sempre e nos DOIS lados; no golo, com a bancada de quem sofreu
+sentada, eram os únicos a mexer-se lá — e por cima do grito do golo lia-se como
+a bancada adversária a festejar. O `uFracSalto` passou a `vec2`, uma fatia por
+claque, e no golo a de quem sofreu vai a `fraccaoSaltoLuto` (0).
+
+A segunda: o gatilho lia `Match.lastTouchedTeam` como "quem marcou". Num
+autogolo é a equipa errada — o mesmo defeito que o `creditarGolo` já tinha
+corrigido para o placar em Agosto e que aqui ficou por corrigir. O
+`creditarGolo` passa a publicar `Match.golMarcadoPor`, e é esse que a bancada
+lê.
+
+#### A matada no peito não caía no pé
+
+Medido (`tools/headless/peito_queda.js`, 68 min): 5 matadas por jogo, a bola a
+tocar o relvado a **0.84 m** do peito — que era o que o modelo mandava, porque
+à TEC real dos jogadores (~63) a conta dava 0.81. Oitenta centímetros é a bola
+à frente dos pés e não NO pé, e num lance disputado ganha quem chegar primeiro:
+das cinco matadas, duas acabaram no adversário.
+
+`peitoQuedaMin`/`peitoQuedaMax` apertados de 0.35/1.6 para **0.25/1.0**. Depois,
+em quatro sementes, a bola fica com quem a matou em 16 de 21 matadas (era 2 em
+5), e o adversário passou a apanhar 3.
+
+#### O árbitro apontava a falta, mas não se via
+
+Relato: *"o juiz não está apontando para que lado é a falta. Braço a 90 graus
+com o corpo apontando para o gol do ataque (tipo T pose com um braço só)"*.
+
+Medido em 67 min: o gesto EXISTIA e estava geometricamente certo — braço na
+horizontal exacta e a apontar a baliza atacada com **1.2° de erro**. O que
+faltava era a outra metade do pedido: o corpo ficava virado para a BOLA
+(decisão deliberada, para o árbitro não dar as costas ao lance) e, com a
+baliza em frente dele, o braço saía quase colado ao tronco — a `margem` de
+0.35 rad — e não se lia como gesto nenhum.
+
+Para as duas coisas serem verdade ao mesmo tempo é o CORPO que tem de rodar.
+Na falta, o árbitro passa a ficar **de perfil para a baliza apontada**, das duas
+orientações possíveis a que o deixa mais virado para a bola, com a volta
+suavizada por `RefereeModel.suavizacaoCorpoSinal`. No penálti não se toca: ali
+aponta-se um SÍTIO a poucos metros e não um sentido.
+
+#### Planteis reais: `assets/players.json` + `assets/teams.json`
+
+3 124 jogadores com 79 campos e 218 equipas passam a poder jogar. O caminho:
+
+- `tools/gen_squads.js` (offline) lê os dois ficheiros e escreve
+  `data/squads.js` — 57 equipas com plantel jogável, 938 KB em vez dos 5 MB da
+  origem. Os 5 MB não entram no browser.
+- `js/config/skill_map.js` é a tradução, e vive no config e não no conversor
+  para se afinar sem mexer na ferramenta: as nove skills do `skillFor` como
+  média pesada dos atributos de origem, o `firstPosition` (índice 1..13 nas
+  colunas `pb*`, conferido em 99.7% dos jogadores) e os playing styles, que já
+  vêm nos dados e são o mesmo catálogo do motor em camelCase.
+- `Match.escolherOnze` monta o onze por guloso GLOBAL sobre os pares
+  (lugar, jogador) ordenados pela avaliação `pb` — e não lugar a lugar, que
+  dava o RM ao melhor médio só porque o RM vem antes na lista.
+- `Match.trocarEquipas` recria os bonecos. Substituir os dados por baixo deles
+  deixava meia dúzia de sistemas (marcações, portador, alvos do bloco) com
+  ponteiros para gente que já não joga.
+- Dois selectores no painel, o placar com os nomes reais, e
+  `tests/planteis_reais.test.js` a guardar as invariantes: onze montável com
+  guarda-redes para as três formações, as nove skills presentes e em 1..100, e
+  nenhum estilo gravado fora do catálogo.
+
+#### O lote de aceitação
+
+`tools/headless/lote_jogos.js` corre N jogos completos com equipas reais
+diferentes e sementes diferentes, em processos paralelos, e no fim lista as
+PENDÊNCIAS jogo a jogo — golos, remates e faltas por 90 fora de banda, posse
+desequilibrada, jogo parado tempo a mais, alguém fora do campo, posições não
+numéricas, alas fechadas, matadas no peito a menos. É o teste que apanha o que
+um teste unitário não vê.

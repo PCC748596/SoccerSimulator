@@ -50,6 +50,22 @@
                     Direta</button>
             </div>
 
+            <!-- Planteis reais (data/squads.js). A lista é preenchida no
+                 arranque por preencherSelectoresDeEquipa() em js/main.js; sem
+                 o ficheiro carregado, os dois selectores ficam escondidos e o
+                 jogo usa as equipas genéricas de sempre. -->
+            <div id="bloco-equipas" style="display: none;">
+                <label>Equipa A</label>
+                <select id="t-equipa-A" onchange="trocarEquipaDoPainel()">
+                    <option value="">— genérica (Blue) —</option>
+                </select>
+
+                <label>Equipa B</label>
+                <select id="t-equipa-B" onchange="trocarEquipaDoPainel()">
+                    <option value="">— genérica (Red) —</option>
+                </select>
+            </div>
+
             <label>Formation Team A</label>
             <select id="t-formacao-A" onchange="Tatics.update()">
                 <option value="442">4-4-2</option>
@@ -382,7 +398,12 @@
 
     <canvas id="minimapa"></canvas>
 
-    <div id="placar">RED <span id="placar-a">0</span> x <span id="placar-b">0</span> BLUE | TIME: <span
+    <!-- O `placar-a` mostra o golo do TeamB e o `placar-b` o do TeamA (ver
+         updatePlacar em match_ui.js) — por isso o nome da esquerda é o do
+         TeamB. Os nomes vivem em spans próprios para poderem passar a ser os
+         das equipas reais escolhidas no painel (ver actualizarNomesNoPlacar). -->
+    <div id="placar"><span id="placar-nome-b">RED</span> <span id="placar-a">0</span> x <span
+            id="placar-b">0</span> <span id="placar-nome-a">BLUE</span> | TIME: <span
             id="placar-tempo">00:00</span></div>
 
 
@@ -396,6 +417,8 @@
 
     <!-- Skills fixas de cada jogador (gerado por tools/gen_player_skills.js) -->
     <script src="data/player_skills.js"></script>
+    <!-- Planteis reais (gerado por tools/gen_squads.js a partir de assets/) -->
+    <script src="data/squads.js"></script>
 
     <!-- Simulador: carregado por ordem de dependência -->
     <!-- EventBus: sistemas reagem a eventos (GK_CATCH_BALL, ...) em vez de
@@ -414,6 +437,7 @@
     <script src="js/config/defense.js"></script>
     <script src="js/config/goalkeeper.js"></script>
     <script src="js/config/player_behavior.js"></script>
+    <script src="js/config/skill_map.js"></script>
     <script src="js/stats.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/controls.js"></script>

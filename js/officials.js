@@ -368,7 +368,15 @@ const RefereeModel = {
     */
     raioNoLugar: 1.5,
     marcaPenaltiZ: 11.0,           // distancia da marca a linha de fundo
-    suavizacaoBraco: 0.25
+    suavizacaoBraco: 0.25,
+
+    /*
+    Com que rapidez o CORPO roda para ficar de perfil para o alvo durante o
+    gesto da falta (ver tickSinal). Fracção por frame, como a do braço: a 0.15
+    a volta de 90 graus leva pouco mais de meio segundo, dentro dos 2.5 s do
+    gesto e sem o arbitro estalar de lado no frame do apito.
+    */
+    suavizacaoCorpoSinal: 0.15
 };
 
 const Officials = {
@@ -1059,14 +1067,30 @@ const Officials = {
         if (!rig || !rig.rArm || !rig.lArm) return;
 
         /*
-        O CORPO NAO SE MEXE AQUI. Quem o vira e o `mover`, que ja o poe a olhar
-        para a BOLA — e e isso que se quer ver: o arbitro de frente para o
-        lance, com o braco a apontar o ataque. Rodar o corpo para o alvo punha-o
-        de costas para a jogada que acabou de marcar.
+        O BRACO A 90 GRAUS DO CORPO, e a apontar o ataque — as duas coisas.
 
-        Logo a direccao tem de ser dada pelo BRACO, em coordenadas do mundo: a
-        guinada dele e a diferenca entre o angulo para o alvo e o angulo a que o
-        corpo esta.
+        Pedido: "braco a 90 graus com o corpo apontando para o gol do ataque,
+        tipo T pose com um braco so". Antes so a segunda metade era verdade: o
+        corpo ficava virado para a BOLA e o braco guinava em mundo ate ao alvo,
+        portanto com a baliza em frente dele o braco saia quase colado ao
+        tronco (a `margem` de 0.35 rad) e nao se lia como gesto nenhum. Medido
+        em 67 min: elevacao certa, alvo certo a 1.2 graus, e mesmo assim sem
+        gesto visivel.
+
+        Para o braco ficar perpendicular E a apontar o alvo, e o CORPO que tem
+        de rodar: fica-se com o alvo a +/-90 graus dele. Das duas
+        orientacoes possiveis escolhe-se a que deixa o arbitro mais virado para
+        a bola — ele fica de perfil para o lance, que e o que um arbitro faz
+        mesmo ao assinalar a direccao, e nunca de costas.
+
+        So na FALTA. No penalti aponta-se um SITIO (a marca, a poucos metros) e
+        nao um sentido: ali o braco continua a guinar em mundo, com o corpo
+        onde o `mover` o pos.
+
+        `order = 'YXZ'` porque a guinada tem de ser aplicada ANTES da elevacao.
+        Na ordem por omissao (XYZ) a elevacao roda primeiro e a guinada passa a
+        girar em torno de um eixo ja inclinado — o braco acaba a apontar para
+        outro sitio qualquer.
 
         `order = 'YXZ'` porque a guinada tem de ser aplicada ANTES da elevacao.
         Na ordem por omissao (XYZ) a elevacao roda primeiro e a guinada passa a
@@ -1077,6 +1101,43 @@ const Officials = {
         const dz = arb.sinal.z - arb.model.position.z;
 
         const k = RefereeModel.suavizacaoBraco;
+        const ehFalta = Math.abs(arb.sinal.elev - RefereeModel.elevacaoSinal) < 0.01;
+
+        if (ehFalta && Math.hypot(dx, dz) > 0.05) {
+            /*
+            O CORPO DE PERFIL PARA O ALVO. As duas hipoteses sao o alvo a
+            +90 ou a -90 graus do corpo; ganha a que fica mais perto de onde o
+            `mover` o tinha posto (virado para a bola), pelo menor dos dois
+            caminhos.
+            */
+            const anguloAlvo = Math.atan2(dx, dz);
+            const meiaVolta = Math.PI / 2;
+            const curto = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+            const op1 = anguloAlvo - meiaVolta;
+            const op2 = anguloAlvo + meiaVolta;
+
+            /*
+            A VOLTA TEM MEMORIA PROPRIA, e nao parte do que o `mover` escreveu.
+
+            O `mover` corre ANTES disto e poe o arbitro a olhar para a bola
+            todos os frames. Suavizar a partir do valor dele era andar 15% do
+            caminho e ser puxado de volta no frame seguinte: o corpo ficava
+            num compromisso a meio, medido a 76 graus em vez de 90, e o gesto
+            continuava a nao se ler como um T.
+
+            Guardado no proprio gesto e nao no arbitro: quando o gesto acaba,
+            some com ele e a passada seguinte volta a ser do `mover`.
+            */
+            if (typeof arb.sinal.corpoY !== 'number') arb.sinal.corpoY = arb.model.rotation.y;
+            const alvoCorpo =
+                Math.abs(curto(op1 - arb.sinal.corpoY)) <= Math.abs(curto(op2 - arb.sinal.corpoY))
+                    ? op1 : op2;
+
+            // Roda pelo caminho curto e devagar, senao o arbitro estala 90
+            // graus no frame do apito.
+            arb.sinal.corpoY += curto(alvoCorpo - arb.sinal.corpoY) * RefereeModel.suavizacaoCorpoSinal;
+            arb.model.rotation.y = arb.sinal.corpoY;
+        }
 
         if (Math.hypot(dx, dz) > 0.05) {
             let guinada = Math.atan2(dx, dz) - arb.model.rotation.y;
@@ -1115,7 +1176,7 @@ const Officials = {
                 : Math.max(Math.min(guinada, -margem), -Math.PI + margem);
 
             // Infrações (falta livre) ficam paralelas ao chao.
-            const ehHorizontal = Math.abs(arb.sinal.elev - RefereeModel.elevacaoSinal) < 0.01;
+            const ehHorizontal = ehFalta;
             signalArm.rotation.x = ehHorizontal
                 ? -Math.PI / 2
                 : lerpTo(signalArm.rotation.x, arb.sinal.elev, k);

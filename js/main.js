@@ -977,6 +977,62 @@ function validarModelosDoJogo() {
     }
 }
 
+/*
+OS DOIS SELECTORES DE EQUIPA, a partir de `data/squads.js`.
+
+Preenchidos em código e não escritos à mão no HTML: são 57 equipas geradas
+por `tools/gen_squads.js`, e a lista muda sempre que os dados de origem
+mudarem. Sem o ficheiro carregado o bloco fica escondido — o jogo continua
+com as equipas genéricas.
+*/
+function preencherSelectoresDeEquipa() {
+    const bloco = document.getElementById('bloco-equipas');
+    const selA = document.getElementById('t-equipa-A');
+    const selB = document.getElementById('t-equipa-B');
+    if (!bloco || !selA || !selB) return;
+    if (typeof SquadsData === 'undefined' || !SquadsData.equipas || !SquadsData.equipas.length) return;
+
+    for (const e of SquadsData.equipas) {
+        for (const sel of [selA, selB]) {
+            const opt = document.createElement('option');
+            opt.value = String(e.id);
+            opt.textContent = `${e.nome} (${e.plantel.length})`;
+            sel.appendChild(opt);
+        }
+    }
+    bloco.style.display = '';
+}
+
+/*
+Troca as equipas escolhidas no painel. Os bonecos são recriados — ver
+Match.trocarEquipas, que explica porquê.
+*/
+function trocarEquipaDoPainel() {
+    const selA = document.getElementById('t-equipa-A');
+    const selB = document.getElementById('t-equipa-B');
+    if (!selA || !selB || typeof Match === 'undefined') return;
+
+    const idDe = (sel) => (sel.value === '') ? null : Number(sel.value);
+    Match.trocarEquipas({ A: idDe(selA), B: idDe(selB) });
+
+    // O placar passa a dar os nomes reais, quando os há.
+    if (typeof actualizarNomesNoPlacar === 'function') actualizarNomesNoPlacar();
+    // A lista do painel "Player Skills" é montada uma vez no arranque; com
+    // outro plantel em campo tem de ser refeita.
+    if (typeof popularPainelJogadores === 'function') popularPainelJogadores();
+}
+
+/*
+Nomes no placar: o das equipas escolhidas, ou o RED/BLUE de sempre.
+*/
+function actualizarNomesNoPlacar() {
+    if (typeof Match === 'undefined') return;
+    const elA = document.getElementById('placar-nome-a');
+    const elB = document.getElementById('placar-nome-b');
+    if (elA) elA.textContent = (Match.equipaInfoA && Match.equipaInfoA.nome) ? Match.equipaInfoA.nome : 'BLUE';
+    if (elB) elB.textContent = (Match.equipaInfoB && Match.equipaInfoB.nome) ? Match.equipaInfoB.nome : 'RED';
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     try {
         validarModelosDoJogo();
@@ -1054,6 +1110,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
         scene.add(ambientLight);
 
+        preencherSelectoresDeEquipa();
         Match.init(scene);
         
         if (isTouchDevice) {

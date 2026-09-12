@@ -660,8 +660,21 @@ const BallControl = {
     (TEC 0) é o pior amortecimento que ainda conta como matada — acima disto
     seria um ressalto, não uma recepção.
     */
-    peitoQuedaMin: 0.35,  // metros à frente a TEC 100 — no pé
-    peitoQuedaMax: 1.6,   // e a TEC 0
+    /*
+    APERTADO (0.35/1.6 -> 0.25/1.0), a pedido: "não vi nenhuma matada no peito
+    em que a bola cai no pé do jogador que matou a bola".
+
+    Medido antes (tools/headless/peito_queda.js, 68 min): a bola tocava o
+    relvado a **0.84 m** do peito — que é o que o modelo mandava, porque à TEC
+    real dos jogadores (~63) a conta dava 0.81 m. Oitenta centímetros é a bola
+    à frente dos pés, não NO pé, e num lance disputado é quem chegar primeiro
+    que fica com ela: das cinco matadas do jogo, duas acabaram no adversário.
+
+    O máximo é o pior amortecimento que ainda conta como matada — acima disto
+    seria um ressalto, não uma recepção — e é ele que manda no caso médio.
+    */
+    peitoQuedaMin: 0.25,  // metros à frente a TEC 100 — no pé
+    peitoQuedaMax: 1.0,   // e a TEC 0
     sigmaQueda: 0.25,     // dispersão relativa em torno dessa distância
     /*
     Só a CINTURA para trás — `chest.rotation.x`, aplicado em
