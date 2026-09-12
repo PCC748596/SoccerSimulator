@@ -1207,10 +1207,15 @@ Object.assign(Match, {
     graus, a correr para a baliza, para se ver a reacção dele e a do
     guarda-redes.
 
-    O lado ALTERNA a cada clique (direito, esquerdo, direito...): os dois
-    ângulos são lances diferentes — o pé de apoio muda, o ângulo de remate
-    muda, e o mergulho do guarda-redes muda de lado com eles. Um botão que
-    fizesse sempre o mesmo lado escondia metade do que há para ver.
+    O ÂNGULO É SORTEADO na faixa inteira, e não fixo nos 45 graus (pedido:
+    "não é apenas a 45 graus; é de 45 de um lado até 45 do outro aleatório...
+    ajusta para 30 para cada lado"). Portanto: um ângulo qualquer entre
+    -`caraACaraAnguloMax` e +`caraACaraAnguloMax`, sempre a 25 m do CENTRO da
+    baliza — o que muda é a direcção, não a distância.
+
+    Um ângulo fixo mostrava um lance só. Com a faixa sorteada vê-se a série
+    inteira de decisões: perto do eixo o remate é outro, a 30 graus o
+    guarda-redes tapa outro canto, e o pé de apoio muda com o lado.
 
     Não é uma bola parada: o jogo fica em PLAY e ninguém apita. É uma
     MONTAGEM — põe-se o lance no sítio e deixa-se correr, que é o que um
@@ -1222,16 +1227,25 @@ Object.assign(Match, {
     suficiente para o `ShootingModel.frenteAFrente` (30 m de tecto) ainda
     reconhecer o lance como um frente-a-frente.
     */
-    caraACaraLado: 1,
+    // Meia-abertura da faixa sorteada, em graus. 30 para cada lado do eixo.
+    caraACaraAnguloMax: 30,
+    caraACaraDistancia: 25,
 
-    triggerCaraACara: function (forceTeam = null, forceLado = null) {
+    /*
+    `forceAngulo` (em graus, positivo à direita do eixo) serve os testes e as
+    ferramentas de medição: sem ele o ângulo é sorteado.
+    */
+    triggerCaraACara: function (forceTeam = null, forceAngulo = null) {
         const team = forceTeam || this.possessionTeam || 'TeamA';
         const atacantes = (team === 'TeamA') ? this.players : this.opponents;
         const defensores = (team === 'TeamA') ? this.opponents : this.players;
         if (!atacantes.length || !defensores.length) return;
 
-        const lado = forceLado || this.caraACaraLado;
-        this.caraACaraLado = -lado;
+        const maxG = this.caraACaraAnguloMax;
+        const grausDoEixo = (typeof forceAngulo === 'number')
+            ? forceAngulo
+            : (Math.random() * 2 - 1) * maxG;
+        const lado = (grausDoEixo >= 0) ? 1 : -1;
 
         /*
         O atacante: o avançado mais adiantado da formação. Sem avançado (uma
@@ -1259,15 +1273,18 @@ Object.assign(Match, {
 
         /*
         A GEOMETRIA. `dir` é o sentido de ataque, logo a baliza atacada está
-        em `z = dir * CAMPO_COMP/2`. A 45 graus, os 25 m repartem-se em partes
-        iguais pelos dois eixos (25·cos45 = 25·sin45 = 17.68 m): o avançado
-        fica a 17.68 m da linha de fundo e a 17.68 m do eixo, do lado pedido.
+        em `z = dir * CAMPO_COMP/2`. O avançado fica a `caraACaraDistancia` do
+        CENTRO da baliza, num ângulo `grausDoEixo` medido a partir do eixo do
+        campo: o x é o seno e a profundidade é o cosseno. A zero graus fica em
+        frente à baliza, a 30 fica na diagonal — e a distância ao centro é
+        sempre a mesma, que é o que torna os lances comparáveis.
         */
         const dir = atacante.dirZ;
         const fundoZ = dir * (CAMPO_COMP / 2);
-        const comp = 25 * Math.SQRT1_2;
-        const px = lado * comp;
-        const pz = fundoZ - dir * comp;
+        const rad = grausDoEixo * Math.PI / 180;
+        const dist = this.caraACaraDistancia;
+        const px = Math.sin(rad) * dist;
+        const pz = fundoZ - dir * Math.cos(rad) * dist;
 
         atacante.model.position.set(px, ALTURA_BASE_Y, pz);
         atacante.velocity.set(0, 0, 0);
@@ -1325,12 +1342,14 @@ Object.assign(Match, {
         }
 
         if (typeof Officials !== 'undefined' && Officials.anunciar) {
-            Officials.anunciar(lado > 0 ? 'CARA A CARA (dir)' : 'CARA A CARA (esq)');
+            Officials.anunciar('CARA A CARA ' + Math.round(grausDoEixo) + '°');
         }
         if (typeof EventBus !== 'undefined') {
-            EventBus.emit('CARA_A_CARA', { p: atacante, gk: gkDef, lado: lado });
+            EventBus.emit('CARA_A_CARA', {
+                p: atacante, gk: gkDef, lado: lado, graus: grausDoEixo
+            });
         }
-        return { atacante: atacante, gk: gkDef, lado: lado };
+        return { atacante: atacante, gk: gkDef, lado: lado, graus: grausDoEixo };
     },
 
     triggerThrowIn: function (forceTeam = null) {

@@ -1544,6 +1544,90 @@ function podeDriblar(ctx) {
     return true;
 }
 
+/*
+DRIBLAR O GUARDA-REDES — ver DribbleModel.aoGuardaRedes (player_behavior.js),
+que traz os números e o pedido que os motivou.
+
+Cinco condições, e todas são a mesma pergunta: vale mais passá-lo do que
+rematar-lhe?
+
+  1. ele deixou `espacoAtras` metros atrás de si (saiu da linha);
+  2. estou a `distEngajar` dele — é aí que se toca a bola para o lado, e não
+     a dez metros nem já em cima dele;
+  3. ele está ENTRE mim e a baliza (se já o passei, remato);
+  4. não há um defesa a tapar o buraco atrás dele;
+  5. tenho pé para isto (`tecMin`).
+
+O gesto é o do DRIBBLE de sempre — toque de lado a 34 graus, aceleração, e o
+remate sai do CARRY em que ele termina.
+*/
+function podeDriblarGuardaRedes(ctx) {
+    const p = ctx.p;
+    if (p.role === 'gk') return false;
+    /*
+    A BOLA É DELE mesmo com `hasBall` a false: durante a CONDUÇÃO a bola anda
+    à frente do pé e a bandeira pisca. Medido no lance do pedido, no frame em
+    que ele entra na janela do drible o `hasBall` estava false e a condição
+    morria ali. O que não pisca é o `ballCarrier`.
+    */
+    const comBola = p.hasBall ||
+        (typeof Match !== 'undefined' && Match.ballCarrier === p);
+    if (!comBola) return false;
+    if (p.fsm.currentState === 'DRIBBLE') return false;
+    const D = (typeof DribbleModel !== 'undefined') ? DribbleModel.aoGuardaRedes : null;
+    if (!D) return false;
+
+    const tec = p.skillFor ? p.skillFor('TEC') : ctx.skillTec;
+    if (tec < D.tecMin) return false;
+
+    const gk = (ctx.opponents || []).find(o => o && o.role === 'gk' && o.model);
+    if (!gk) return false;
+
+    // 1. Espaço atrás dele: a que distância está da própria linha.
+    const fundo = Math.abs(p.targetGoalZ);
+    const espacoAtras = fundo - Math.abs(gk.model.position.z);
+    if (espacoAtras < D.espacoAtras) return false;
+
+    /*
+    2 e 3. A JANELA MEDE-SE EM PROFUNDIDADE, e não em distância directa.
+
+    Medido: a correr a 6 m/s em diagonal, quando a distância directa ao
+    guarda-redes desce a 4 m ele já está AO LADO dele (0.2 m à frente em
+    profundidade) — e aí driblar não é nada, já passou. O que descreve o lance
+    é quanto o guarda-redes ainda está À FRENTE dele, mais um corredor
+    lateral: é assim que se chega a ele de frente e se toca a bola para o
+    lado.
+    */
+    const meuAvanco = p.model.position.z * p.dirZ;
+    const avancoGk = gk.model.position.z * p.dirZ;
+    const dzGk = avancoGk - meuAvanco;
+    if (dzGk > D.distEngajar || dzGk < D.distMinima) return false;
+    if (Math.abs(gk.model.position.x - p.model.position.x) > D.larguraEngajar) return false;
+
+    /*
+    E A BOLA AO PÉ. Este ramo corre ACIMA do `RecuperarControlo` — tem de
+    correr, senão nunca ganha: em condução a bola vai à frente do pé, o
+    `bolaFugiu` é verdade quase todos os frames e era ele que levava o lance.
+    Mas acima dele sem esta guarda, ele "driblava" com a bola a cinco metros.
+    `bolaAoPe` é a distância a que ainda se pode empurrar a bola para o lado.
+    */
+    if (typeof Match !== 'undefined' && Match.ball &&
+        p.model.position.distanceTo(Match.ball.position) > D.bolaAoPe) return false;
+
+    // 4. Ninguém a tapar o buraco atrás dele.
+    for (const o of ctx.opponents) {
+        if (!o || o === gk || !o.model) continue;
+        const av = o.model.position.z * p.dirZ;
+        if (av > avancoGk && (av - avancoGk) < D.folgaAtras &&
+            Math.abs(o.model.position.x - gk.model.position.x) < D.folgaAtras) {
+            return false;
+        }
+    }
+
+    ctx.dribbleOpponent = gk;
+    return true;
+}
+
 function actDribble(ctx) {
     const p = ctx.p;
     if (p.aguardarPassada()) return true;
@@ -2966,6 +3050,32 @@ const PlayerBT = sel('PlayerRoot',
         cond('tenhoABola', temBola),
 
         sel('DecisaoComBola',
+            /*
+            DRIBLAR O GUARDA-REDES — o primeiro de todos, e por medição.
+
+            Com o guarda-redes a 15 m da linha e a três metros à frente, a
+            baliza atrás dele está aberta: passá-lo vale mais do que
+            rematar-lhe ao corpo. Ver DribbleModel.aoGuardaRedes
+            (player_behavior.js) e `podeDriblarGuardaRedes`, que traz as
+            condições.
+
+            Porque está no TOPO: abaixo do `Rematar` nunca ganhava (o
+            `emZonaDeRemate` é verdade em todo o lance de frente-a-frente), e
+            abaixo do `RecuperarControlo` também não — em condução a bola vai
+            à frente do pé, o `bolaFugiu` é verdade quase todos os frames e
+            era esse ramo que levava o lance. Medido: o avançado acabava a
+            passar o guarda-redes CINCO METROS ao lado e a rematar de 9 m,
+            sem drible nenhum.
+
+            O preço de estar no topo é pago na condição: ela exige a bola ao
+            pé (`bolaAoPe`), o guarda-redes à frente e não ao lado, e técnica.
+            Nenhuma dessas coisas é verdade num lance normal.
+            */
+            seq('DriblarGuardaRedes',
+                cond('podeDriblarGuardaRedes', podeDriblarGuardaRedes),
+                act('driblarGuardaRedes', actDribble)
+            ),
+
             seq('RecuperarControlo',
                 cond('bolaFugiu', (ctx) => !ctx.p.hasBall),
                 act('correrParaBola', actCarry)

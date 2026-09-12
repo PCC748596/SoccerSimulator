@@ -385,8 +385,17 @@ const ShotModel = {
         justifica, e parte disso e a mira ser boa demais para remates que sao
         maus. Mas a correccao tem um tecto: passado esse ponto o jogo deixa de
         ter golos a menos e passa a ter remates para as bancadas.
+
+        MENOS 10% DE PRECISÃO, a pedido ("reduz a precisão nos chutes dos
+        jogadores em 10%"): 1.07 -> 1.18, que é o sigma dez por cento maior.
+
+        O aviso acima continua a valer e agora está pago em número: a 1.15 já
+        se mediram 15.5% dos remates no alvo contra os ~33% reais, e o lote de
+        60 jogos a 1.07 dava 22.6%. Isto desce mais, o que reduz os golos
+        (estavam em 137% do alvo) e afasta a percentagem no alvo da realidade
+        ao mesmo tempo. É a troca que o pedido faz, dita por inteiro.
         */
-        escalaGlobal: 1.07
+        escalaGlobal: 1.18
     }
 };
 

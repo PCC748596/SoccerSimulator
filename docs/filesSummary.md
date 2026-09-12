@@ -9154,3 +9154,68 @@ metade dos remates dentro da área num jogo a sério. O jogo chega ao último
 terço (ataques perigosos a 87%) e não entra na área. O próximo alvo é a decisão
 de conduzir/passar dentro dos 16 m em vez de rematar de fora — não o
 guarda-redes.
+
+#### Precisão −10%, o cara a cara com ângulo sorteado, e a quarta finalização
+
+Três pedidos de uma vez, e o terceiro obrigou a verificar o que já existia.
+
+**Precisão.** `ShotModel.erro.escalaGlobal` de 1.07 para 1.18 — o sigma dez por
+cento maior. O `remate_tipo_mira` falhou de propósito (existe para obrigar a
+remedir as faixas quando alguém mexe na escala) e as faixas foram remedidas a
+1.18: 72% no alvo a 6 m, 57% a 12 m, 43% a 18 m, 29% a 25 m, todas dentro do que
+o teste já exigia. Subiu o tecto do intervalo (1.15 -> 1.20), não as faixas.
+
+**Cara a cara.** O ângulo passou a ser SORTEADO entre -30 e +30 graus do eixo
+(`caraACaraAnguloMax`), sempre a 25 m do CENTRO da baliza. Antes era fixo nos
+45 graus com o lado a alternar, o que mostrava um lance só.
+
+**As quatro finalizações.** Verificado primeiro, como pedido: três já existiam
+e saem do `tipoDeRemate` (utils.js), com a mira sempre no canto mais longe do
+guarda-redes — `rasteiro`/`colocado` para o canto de perto, `forca` para o de
+longe, `chapeu` para a cobertura. A quarta — driblar o guarda-redes — NÃO
+existia, e não por acaso: o `podeDriblar` salta o guarda-redes de propósito
+(`if (opp.role === 'gk') continue`), portanto ele nunca era alvo de drible em
+circunstância nenhuma.
+
+O GESTO não precisou de nada novo: o estado DRIBBLE já toca a bola de lado a
+0.6 rad (34 graus, dentro dos "uns 30 graus" pedidos), acelera para lá e volta a
+CARRY — e é do CARRY que sai o remate à baliza aberta. Faltava a DECISÃO:
+`DribbleModel.aoGuardaRedes` e o ramo `DriblarGuardaRedes`.
+
+Três coisas que a medição mudou em relação à primeira versão:
+
+- **A janela mede-se em PROFUNDIDADE**, não em distância directa. A correr em
+  diagonal, quando a distância directa desce a 4 m ele já está ao LADO do
+  guarda-redes (0.2 m à frente) e já não há nada a driblar.
+- **O ramo tem de estar no TOPO** da decisão com bola. Abaixo do `Rematar`
+  nunca ganhava (`emZonaDeRemate` é verdade em todo o lance de frente-a-frente);
+  abaixo do `RecuperarControlo` também não — em condução a bola vai à frente do
+  pé, o `bolaFugiu` é verdade quase todos os frames e era esse ramo que levava o
+  lance. Medido: o avançado passava o guarda-redes CINCO metros ao lado e
+  rematava de 9 m, sem drible nenhum.
+- O preço de estar no topo paga-se na condição: bola ao pé (1.8 m),
+  guarda-redes 1-4 m à FRENTE e num corredor de 5 m, 15 m de baliza aberta
+  atrás dele, ninguém a tapar esse buraco, e TEC >= 70 (o "de acordo com a
+  técnica" do pedido).
+
+No lance do pedido: dribla ao segundo 1.42, remata ao 4.40, golo ao 5.8. Em
+90 minutos de jogo normal: ZERO disparos, que é o que tem de ser.
+
+O lote de 60 jogos com as três alterações:
+
+```
+                       antes    agora     alvo     %
+  golos                 3.46     3.25     2.52   129%   (era 187% antes do corpo)
+  finalizações         35.28    32.49    26.11   124%
+  % no alvo            22.6     21.7        —      —
+  cantos                8.24     7.42     9.92    75%
+  faltas               27.86    27.30    27.63    99%   ok
+  impedimentos          2.82     3.63     3.20   114%   ok
+  ataques perigosos     67.4     67.0     77.8    86%   ok
+  xG total              1.86     1.69     2.84    59%
+  xG por remate        0.052    0.052    0.109    47%
+```
+
+Os golos desceram de 137% para 129% e a percentagem no alvo desceu de 22.6 para
+21.7 — os dois movimentos que o pedido faz, um a favor do alvo e outro contra,
+e ficam ditos os dois.

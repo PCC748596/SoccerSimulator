@@ -224,10 +224,22 @@ a chance de bola na defesa e fora", com 2.90 golos por jogo contra o alvo de
 2.52). As faixas acima continuam a passar a 1.07 — foi verificado ao fazer a
 alteração —, e é isso que este teste passa a fixar: a escala anda dentro do
 intervalo em que a calibração medida ainda vale, e não um valor único.
+
+TECTO SUBIDO A 1.20 quando a escala foi a 1.18 (pedido: "reduz a precisão nos
+chutes dos jogadores em 10%"). O teste fez o que existe para fazer — obrigou a
+remedir antes de deixar passar — e as faixas foram remedidas a 1.18:
+
+     6 m: 72% no alvo    (faixa do teste acima)
+    12 m: 57%
+    18 m: 43%
+    25 m: 29%
+
+Todas dentro do que o `distribuicao` já exigia, portanto a calibração das
+faixas continua a valer e é o tecto que se move, não elas.
 */
 test('a escala global fica dentro do intervalo calibrado', () => {
     const e = ShotModel.erro.escalaGlobal;
-    assert.ok(e >= 0.95 && e <= 1.15,
+    assert.ok(e >= 0.95 && e <= 1.20,
         `escala global em ${e}: fora do intervalo em que as faixas de precisão ` +
         'acima foram medidas — remede-as antes de a deixar aqui');
 });

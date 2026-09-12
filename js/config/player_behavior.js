@@ -487,6 +487,52 @@ jogador e pela proximidade do adversário.
 const DribbleModel = {
     triggerDist: 3.2,     // distância para activar drible 1v1 (adversário à frente)
     angleSide: 0.6,       // ângulo lateral do toque (~35°, entre 30 e 45)
+
+    /*
+    =====================================================================
+    DRIBLAR O GUARDA-REDES — a quarta opção de finalização
+    =====================================================================
+    Pedido: *"dribrar o goleiro se tiver mais de 15 metros atrás do goleiro:
+    vai tocar para o lado num ângulo de uns 30 graus, uns 3 metros de
+    distância do goleiro, ultrapassar o goleiro e chutar direto para o
+    gol"*.
+
+    Das quatro finalizações pedidas, três já existiam e saem do
+    `tipoDeRemate` (utils.js): o canto de perto (`rasteiro`/`colocado`), o
+    canto de longe (`forca`) e a cobertura (`chapeu`). Esta não existia — e
+    não por acaso: o `podeDriblar` SALTA o guarda-redes de propósito
+    (`if (opp.role === 'gk') continue`), portanto ele nunca era alvo de
+    drible em nenhuma circunstância.
+
+    O GESTO não precisou de nada novo: o estado DRIBBLE já toca a bola para
+    o lado a `angleSide` (0.6 rad = 34°, dentro dos "uns 30 graus"),
+    acelera para lá e volta a CARRY — e é do CARRY que o remate à baliza
+    vazia sai. O que faltava era a DECISÃO.
+
+    `espacoAtras` é o que o pedido nomeia: quantos metros o guarda-redes
+    tem de ter deixado atrás de si — ou seja, a que distância está da
+    própria linha. Com 15 m, a baliza atrás dele está aberta e passá-lo vale
+    mais do que rematar; com ele na linha, driblá-lo é dar-lhe a bola.
+
+    `tecMin` é o "de acordo com a técnica": driblar o guarda-redes é a mais
+    difícil das quatro, e um jogador sem pé não a tenta — remata.
+    */
+    aoGuardaRedes: {
+        espacoAtras: 15.0,    // metros entre o guarda-redes e a própria linha
+        /*
+        A que distância se toca a bola para o lado. O pedido diz "uns 3
+        metros" e ficou em 4.0 por medição: com o tecto em 3.0 o lance nunca
+        disparava — o avançado aproxima-se até 3.4 m, o `actCarry` afasta-o
+        outra vez e ele acaba a rematar de 8.9 m. A janela tem de conter a
+        aproximação real, senão a regra existe e não acontece.
+        */
+        distEngajar: 4.0,     // toca-se para o lado a esta distância dele
+        distMinima: 1.0,      // mais perto do que isto já é tarde
+        larguraEngajar: 5.0,  // corredor lateral: ele à minha frente, não ao lado
+        bolaAoPe: 1.8,        // a bola tem de estar a este alcance para se empurrar
+        tecMin: 70,           // abaixo disto remata em vez de driblar
+        folgaAtras: 4.0       // nenhum defesa a menos disto atrás dele
+    },
     touchPower: 8.5,      // força do toque lateral
     successBase: 0.65,    // chance base de sucesso
     successSideBonus: 0.20, // bónus por ir para o lado (vs reto)
