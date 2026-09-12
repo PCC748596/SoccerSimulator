@@ -633,7 +633,19 @@ const GoalkeeperDive = {
     quase tudo voltava ao campo. Os escanteios estao em 0.91 por jogo contra
     9.92 (9% do alvo) — a defesa para canto e a fonte mais natural deles.
     */
-    espalmarForaMargem: 2.4,   // a menos disto do poste, a espalmada sai
+    /*
+    2.4 -> 3.6, na mesma alteração que baixou 10% a ambição da mira
+    (`ShotModel.mira.fraccaoCanto`): o pedido era "reduz em mais 10% a
+    precisão dos chutes, mas esses chutes têm que ser DEFESAS DO GOLEIRO PARA
+    FORA".
+
+    Os remates que essa alteração produz são mais CENTRAIS — vão ao corpo dele
+    em vez do canto. Com a margem em 2.4 m do poste, um remate central nunca
+    podia ser mandado para fora: só sobrava o rebote para o meio da área, que
+    é o contrário do que o pedido diz. A 3.6 m do poste a janela cobre também
+    a bola que vem a meio caminho entre o poste e o centro.
+    */
+    espalmarForaMargem: 3.6,   // a menos disto do poste, a espalmada sai
     espalmarAltaY: 1.70,       // acima disto sai por cima do travessão
     espalmarFolga: 0.35,       // quanto passa por fora do poste/travessão
     espalmarLateral: 5.0,      // m/s que leva para lá do poste

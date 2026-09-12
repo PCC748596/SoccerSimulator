@@ -329,11 +329,36 @@ const ShotModel = {
         Isto NÃO é o erro de execução: esse continua a ser o `ShotModel.erro`,
         que se soma por cima do ponto visado. Isto é onde o jogador APONTA.
         */
+        /*
+        MENOS 10% DE AMBIÇÃO, a pedido: "reduz em mais 10% a precisão dos
+        chutes, mas esses chutes têm que ser defesas do goleiro para fora".
+
+        A segunda metade do pedido é que escolhe o instrumento. Tirar outros
+        10% ao `escalaGlobal` (o erro de execução) manda mais bolas para FORA
+        da moldura — foi o que a subida anterior fez, com a percentagem no
+        alvo a cair de 22.6 para 21.7 quando o real são ~33%. Bolas nas
+        bancadas não são defesas do guarda-redes.
+
+        A imprecisão que produz defesas é a da COLOCAÇÃO: o remate continua
+        dentro da baliza mas mais perto do corpo dele, e aí é defendido. Por
+        isso os 10% saem daqui, de quanto o jogador se atreve a procurar o
+        canto, e não do erro de execução.
+
+        Cada faixa desceu 10%:
+            forca     0.30-0.90  ->  0.27-0.81
+            colocado  0.65-1.00  ->  0.59-0.90
+            rasteiro  0.55-1.00  ->  0.50-0.90
+            chapeu    0.10-0.45  ->  0.09-0.41
+
+        E para a defesa sair PARA FORA, e não em rebote aos pés do avançado,
+        o `GoalkeeperDive.espalmarForaMargem` subiu na mesma alteração — ver
+        a nota lá.
+        */
         fraccaoCanto: {
-            forca: { min: 0.30, max: 0.90 },
-            colocado: { min: 0.65, max: 1.00 },
-            rasteiro: { min: 0.55, max: 1.00 },
-            chapeu: { min: 0.10, max: 0.45 }
+            forca: { min: 0.27, max: 0.81 },
+            colocado: { min: 0.59, max: 0.90 },
+            rasteiro: { min: 0.50, max: 0.90 },
+            chapeu: { min: 0.09, max: 0.41 }
         },
         alturaRasteira: 0.30,
         alturaMeia: 1.05,
