@@ -5868,14 +5868,67 @@ class FootballPlayer {
             const alcanceMao = (typeof GkCatchModel !== 'undefined' &&
                 typeof GkCatchModel.alcanceContacto === 'number')
                 ? GkCatchModel.alcanceContacto : 0.55;
-            if (!jaEntrouM && distMaoM < alcanceMao && Match.ballVel.lengthSq() > 0) {
+            /*
+            E O CORPO, que não era testado em lado nenhum.
+
+            O teste acima mede a distância às duas MÃOS. As mãos estão
+            penduradas ao lado do corpo, portanto um remate ao peito, à barriga
+            ou entre as pernas não fica perto de nenhuma delas e passava
+            inteiro. Medido em 591 remates
+            (`tools/headless/remates_conversao.js`): dos remates À BALIZA que
+            cruzavam a linha a MENOS DE UM METRO do guarda-redes, 48% eram
+            golo — mais do que os que cruzavam a três metros dele (36%). A
+            proximidade não previa o desfecho, que é a assinatura de um teste
+            de colisão a falhar e não de um mergulho curto ou de um remate
+            colocado.
+
+            O corpo é um SEGMENTO VERTICAL nos pés dele, de zero a
+            `alturaCorpo`, com `alcanceCorpo` de raio — e contra o trajecto do
+            frame, pela mesma razão que as mãos: a 25 m/s a bola anda 42 cm
+            entre frames e atravessava-o sem nunca ficar perto num frame.
+
+            Acima da cabeça não entra: essa é a bola do `salto`, que tem o seu
+            próprio ramo.
+            */
+            const RAIO_CORPO = (typeof GkCatchModel !== 'undefined' &&
+                typeof GkCatchModel.alcanceCorpo === 'number')
+                ? GkCatchModel.alcanceCorpo : 0.42;
+            const ALT_CORPO = (typeof GkCatchModel !== 'undefined' &&
+                typeof GkCatchModel.alturaCorpo === 'number')
+                ? GkCatchModel.alturaCorpo : 1.85;
+
+            let distCorpoM = Infinity;
+            if (typeof distanciaEntreSegmentos === 'function') {
+                distCorpoM = distanciaEntreSegmentos(
+                    gkCorpo.position.x, ALTURA_BASE_Y, gkCorpo.position.z,
+                    gkCorpo.position.x, ALTURA_BASE_Y + ALT_CORPO, gkCorpo.position.z,
+                    axM, ayM, azM, bxM, byM, bzM);
+            } else {
+                /*
+                Sem a distância segmento-segmento, aproxima-se: a bola contra o
+                EIXO dele em planta, com a altura cortada à parte. É pior, mas
+                é o caso que nunca deve acontecer (a função vive em utils.js).
+                */
+                const dxy = Math.hypot(bxM - gkCorpo.position.x, bzM - gkCorpo.position.z);
+                const dentroDaAltura = (byM >= ALTURA_BASE_Y && byM <= ALTURA_BASE_Y + ALT_CORPO);
+                distCorpoM = dentroDaAltura ? dxy : Infinity;
+            }
+
+            if (!jaEntrouM && Match.ballVel.lengthSq() > 0 &&
+                (distMaoM < alcanceMao || distCorpoM < RAIO_CORPO)) {
                 /*
                 Bola ao alcance do corpo, de pé. A decisão sai do
                 `resolverDefesaGK` (utils.js), a mesma dos outros três tipos —
                 aqui estava `0.55 + (GK-50)/100`, sem saber a que velocidade a
                 bola vinha nem quão esticado ele estava.
+
+                Bola ao CORPO é outro tipo: agarra-se mais vezes do que uma
+                bola à mão esticada, e a extensão é zero porque não há nada a
+                esticar.
                 */
-                this.resolverDefesaComMaos('maos', distMaoM / alcanceMao);
+                const aoCorpo = (distCorpoM < RAIO_CORPO) && !(distMaoM < alcanceMao);
+                if (aoCorpo) this.resolverDefesaComMaos('corpo', 0);
+                else this.resolverDefesaComMaos('maos', distMaoM / alcanceMao);
             }
 
             /*

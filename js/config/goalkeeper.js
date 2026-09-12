@@ -860,9 +860,36 @@ const GkCatchModel = {
     base: {
         corpo: 0.98,      // bola mansa ao corpo, dentro da área
         maos: 0.90,       // de pé, bola perto do tronco
+        /*
+        BOLA AO CORPO. Um remate que lhe vai ao peito, à barriga ou às pernas
+        defende-se com o que estiver à frente dela — e agarra-se mais vezes do
+        que uma bola à mão esticada, porque não é preciso alcançar nada.
+
+        Existe porque NÃO existia: o teste de defesa de pé media só a distância
+        às duas MÃOS (0.55 m de raio cada, ver alcanceContacto), e as mãos
+        penduradas ao lado do corpo deixam passar tudo o que vá ao tronco ou
+        entre as pernas. Medido em 591 remates (tools/headless/
+        remates_conversao.js): dos remates à baliza que cruzavam a MENOS DE UM
+        METRO do guarda-redes, **48% eram golo** — mais do que os que cruzavam a
+        três metros dele (36%). A proximidade não previa nada, que é a
+        assinatura de um teste de colisão a falhar e não de um mergulho curto.
+        */
+        corpo: 0.94,
         salto: 0.80,      // no ar, cruzamento ou bola alta
         mergulho: 0.68    // esticado, o mais difícil de segurar
     },
+
+    /*
+    O RAIO DO CORPO para esse teste, em metros: meio tronco mais o raio da
+    bola. Menor do que o alcance da mão de propósito — a mão estica-se, o
+    tronco não.
+    */
+    alcanceCorpo: 0.42,
+    /*
+    Altura do corpo que conta, dos pés para cima. Acima disto a bola passa-lhe
+    por cima da cabeça e é o salto que trata dela (ver o ramo do `salto`).
+    */
+    alturaCorpo: 1.85,
 
     pesoGK: 0.30,         // amplitude entre GK 0 e GK 100
     pesoTEC: 0.12,        // idem para a Técnica

@@ -3250,6 +3250,65 @@ function distanciaAoSegmento(px, py, pz, ax, ay, az, bx, by, bz) {
     return Math.hypot(px - (ax + abx * t), py - (ay + aby * t), pz - (az + abz * t));
 }
 
+/*
+DISTÂNCIA ENTRE DOIS SEGMENTOS em 3D — o trajecto da bola contra o corpo do
+guarda-redes.
+
+Existe para o teste de defesa ao CORPO (ver player.js, o ramo de pé): o corpo
+é um segmento vertical nos pés dele e a bola é o segmento que ela percorreu
+neste frame. Ponto-contra-segmento não chega — a 25 m/s a bola anda 42 cm
+entre frames e atravessa-o sem ficar perto num frame nenhum.
+
+O algoritmo é o clássico: minimiza-se a distância ao quadrado sobre os dois
+parâmetros, resolve-se o sistema 2x2, e os parâmetros são cortados a [0, 1]
+com uma segunda passagem — sem o corte as duas rectas INFINITAS podem
+cruzar-se fora dos segmentos e a distância sair zero onde não há contacto.
+
+Pura: sem Match, sem THREE.
+*/
+function distanciaEntreSegmentos(p1x, p1y, p1z, q1x, q1y, q1z,
+    p2x, p2y, p2z, q2x, q2y, q2z) {
+    const dax = q1x - p1x, day = q1y - p1y, daz = q1z - p1z;
+    const dbx = q2x - p2x, dby = q2y - p2y, dbz = q2z - p2z;
+    // `r` é do SEGUNDO para o PRIMEIRO: é a convenção que o resto das contas
+    // aqui em baixo assume (t = (b·s + f)/e). Com o sinal trocado, dois
+    // segmentos que se cruzam davam 1.41 m em vez de zero.
+    const rx = p1x - p2x, ry = p1y - p2y, rz = p1z - p2z;
+
+    const a = dax * dax + day * day + daz * daz;
+    const e = dbx * dbx + dby * dby + dbz * dbz;
+    const f = dbx * rx + dby * ry + dbz * rz;
+
+    const EPS = 1e-9;
+    let s = 0, t = 0;
+
+    if (a <= EPS && e <= EPS) {
+        // Os dois degenerados: é ponto contra ponto.
+        return Math.hypot(rx, ry, rz);
+    }
+    if (a <= EPS) {
+        // O primeiro é um ponto.
+        t = Math.max(0, Math.min(1, f / e));
+    } else {
+        const c = dax * rx + day * ry + daz * rz;
+        if (e <= EPS) {
+            // O segundo é um ponto.
+            s = Math.max(0, Math.min(1, -c / a));
+        } else {
+            const b = dax * dbx + day * dby + daz * dbz;
+            const denom = a * e - b * b;
+            s = (denom > EPS) ? Math.max(0, Math.min(1, (b * f - c * e) / denom)) : 0;
+            t = (b * s + f) / e;
+            if (t < 0) { t = 0; s = Math.max(0, Math.min(1, -c / a)); }
+            else if (t > 1) { t = 1; s = Math.max(0, Math.min(1, (b - c) / a)); }
+        }
+    }
+
+    const cax = p1x + dax * s, cay = p1y + day * s, caz = p1z + daz * s;
+    const cbx = p2x + dbx * t, cby = p2y + dby * t, cbz = p2z + dbz * t;
+    return Math.hypot(cax - cbx, cay - cby, caz - cbz);
+}
+
 function pontoDeIntercepcaoGK(bolaX, bolaY, bolaZ, velX, velY, velZ, gkZ, gravidade) {
     const vz = Math.abs(velZ);
     if (vz < 0.001) return null;
@@ -4320,6 +4379,7 @@ if (typeof window !== 'undefined') {
         tiroDaFaltaDirecta, tiroTensoDaFaltaDirecta, lugaresDoApoioNaFaltaDirecta,
         passaEntreAdversarios,
         maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR,
+        distanciaEntreSegmentos,
         pontoDeIntercepcaoGK, pontoDisputado, erroLeituraGK, parNormal, distanciaAoSegmento
     });
 }

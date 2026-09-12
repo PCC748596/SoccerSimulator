@@ -48,6 +48,17 @@ Math.random = mulberry32(1000 + semente * 977);
 
 require('./harness.js');
 
+/*
+`GK_CORPO=0.30` sobrepõe o `GkCatchModel.alcanceCorpo` só nesta corrida, para
+se varrer o número sem editar o config entre medições.
+*/
+if (process.env.GK_CORPO) {
+    GkCatchModel.alcanceCorpo = Number(process.env.GK_CORPO);
+}
+if (process.env.GK_CORPO_BASE) {
+    GkCatchModel.base.corpo = Number(process.env.GK_CORPO_BASE);
+}
+
 const dt = 1 / 60;
 const scene = new THREE.Scene();
 Match.init(scene);
@@ -95,6 +106,7 @@ global.xgDoRemate = function (x, z, golZ, larguraBaliza, M) {
     fecharAberto('sem desfecho');
     aberto = {
         frame: frameActual,
+        golZ: golZ,
         dist: Math.hypot(x, golZ - z),
         ang: anguloDaBaliza(x, z, golZ, larguraBaliza),
         xg: xg,
@@ -142,6 +154,35 @@ for (let f = 0; f < passos; f++) {
     frame anterior — foi o que me deu zero remates à baliza na primeira
     tentativa.
     */
+    /*
+    ONDE A BOLA IA CRUZAR A LINHA, e a que distância do guarda-redes.
+
+    É a medição que separa as duas hipóteses que sobraram: remate colocado
+    demais (os golos junto aos postes, longe dele) ou mergulho curto (os golos
+    espalhados, alguns a poucos metros dele).
+
+    A conta é balística e feita no frame do remate, com a velocidade já
+    aplicada: o arrasto do jogo é quadrático, portanto isto sobrestima um
+    pouco a abertura — mas do mesmo modo para os golos e para as defesas, que
+    é o que a comparação precisa.
+    */
+    if (aberto && aberto.frame === f && aberto.cx === undefined) {
+        const b = Match.ball.position, vb = Match.ballVel;
+        const dz = aberto.golZ - b.z;
+        if (Math.abs(vb.z) > 0.5 && dz * vb.z > 0) {
+            const t = dz / vb.z;
+            const g = BallPhysics.gravidade;
+            aberto.cx = b.x + vb.x * t;
+            aberto.cy = Math.max(0, b.y + vb.y * t - 0.5 * g * t * t);
+            aberto.tVoo = t;
+            const gkDef = [...Match.players, ...Match.opponents].find(
+                pl => pl.role === 'gk' && Math.sign(pl.ownGoalZ) === Math.sign(aberto.golZ));
+            aberto.gkx = gkDef ? gkDef.model.position.x : null;
+        } else {
+            aberto.cx = null;
+        }
+    }
+
     const agora = contA();
     if (aberto && aberto.naBaliza === undefined) {
         if (agora.alvo > antes.alvo) aberto.naBaliza = true;
@@ -173,7 +214,11 @@ if (process.env.LOTE_JSON === '1') {
         console.log(JSON.stringify({
             d: +r.dist.toFixed(2), a: +r.ang.toFixed(4), x: +r.xg.toFixed(4),
             g: r.desfecho === 'golo' ? 1 : 0,
-            b: r.naBaliza ? 1 : 0, s: r.defendido ? 1 : 0
+            b: r.naBaliza ? 1 : 0, s: r.defendido ? 1 : 0,
+            cx: (typeof r.cx === 'number') ? +r.cx.toFixed(2) : null,
+            cy: (typeof r.cy === 'number') ? +r.cy.toFixed(2) : null,
+            gkx: (typeof r.gkx === 'number') ? +r.gkx.toFixed(2) : null,
+            tv: (typeof r.tVoo === 'number') ? +r.tVoo.toFixed(3) : null
         }));
     }
     process.exit(0);
