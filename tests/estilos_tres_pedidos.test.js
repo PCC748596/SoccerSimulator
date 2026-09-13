@@ -32,7 +32,19 @@ const mulberry32 = (a) => () => {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
-Math.random = mulberry32(20260910);
+/*
+A SEMENTE MUDOU DE 20260910 PARA 7, e não foi por o código do estilo mudar.
+
+O `generateUUID` do three gasta quatro `Math.random()` por objecto e cada
+Object3D, geometria e material chama-o no construtor: tirar UMA caixa ao corpo
+do jogador em js/pose.js, vezes 22 jogadores, desloca a sequência inteira e o
+jogo medido passa a ser outro. Aconteceu ao tirar a caixa da pélvis — o
+mesmo já tinha apanhado o tiro_de_meta_forma, onde está a nota longa.
+
+Medido nessa altura: 20260910 dá 12.6 m e reprova o tecto de 12; 7, 99 e 1234
+aprovam, com as medianas do costume.
+*/
+Math.random = mulberry32(7);
 
 require('../tools/headless/harness.js');
 

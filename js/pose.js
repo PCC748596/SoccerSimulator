@@ -81,28 +81,26 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
 
     /*
     =========================================================================
-    O CALÇÃO ANDA COM AS PERNAS
+    NÃO HÁ PÉLVIS. O CALÇÃO É A PERNA TODA DE CIMA.
     =========================================================================
-    Relato: *"a perna está entrando por dentro do short"*.
+    Pedido, com três fotografias: *"não é pra ter pelvis. O short já começa de
+    cima e vai até o final da coxa, quase no joelho"*.
 
-    Estava aqui um bloco de calção preso à PÉLVIS — uma caixa parada de
-    1.35 x 0.65 x 0.85. A coxa roda a partir de y -0.30, ou seja de DENTRO
-    dessa caixa: quanto mais a perna sobe, mais entra nela. Não era falta de
-    peça, era a peça errada a estar parada.
+    Isto já foi, por esta ordem: uma caixa de calção presa à anca (a coxa
+    rodava de DENTRO dela — *"a perna está entrando por dentro do short"*),
+    depois uma bainha de camisa a descer sobre a anca, depois a própria caixa
+    da pélvis pintada de calção. Todas partilhavam o mesmo defeito: a anca era
+    uma peça PARADA e o calção ficava partido em duas, uma que não se mexia e
+    outra que se mexia.
 
-    Agora a anca é tapada pela BAINHA DA CAMISA (filha do peito, mais abaixo)
-    e o calção vive todo na coxa, onde já havia meio — ver `criarPerna`. Cada
-    perna leva o seu, e por isso acompanha o movimento em vez de o atravessar.
-
-    E a PÉLVIS leva `shortMat`, não `blockMat`: ela é a cintura, e cintura não
-    é pele. Com pele ficava um anel cor de pele à volta do corpo todo, entre a
-    camisa e o calção: *"ainda tem alguma coisa cor da pele no meio do
-    corpo"*. Pintar a peça que já existe chega, e é ela que veste a anca desde
-    que a camisa acaba no peito — acrescentar outra caixa parada aqui era
-    repetir o bug de cima.
+    Agora `rig.pelvis` é só o nó da anca — um Group sem malha nenhuma. Continua
+    a ser a raiz do corpo (o fsm e o replay escrevem-lhe posição e rotação, e
+    nada disso lê geometria); o que desapareceu foi o bloco visível. Quem veste
+    a anca são os dois calções das coxas, que sobem acima da articulação e se
+    sobrepõem ao meio — ver `criarPerna`.
     =========================================================================
     */
-    const pelvis = criarPeca(new THREE.BoxGeometry(u * 1.3, u * 0.6, u * 0.8), shortMat, true); pelvis.position.y = 2.6; corpo.add(pelvis); rig.pelvis = pelvis;
+    const pelvis = new THREE.Group(); pelvis.position.y = 2.6; corpo.add(pelvis); rig.pelvis = pelvis;
     /*
     TRONCO — uma peça só (pedido).
 
@@ -119,20 +117,19 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
     */
     const chest = criarPeca(new THREE.BoxGeometry(u * 1.4, u * 1.45, u * 0.75), blockMat);
     chest.position.y = 1.025;
-    chest.add(criarPeca(new THREE.BoxGeometry(u * 1.45, u * 1.5, u * 0.8), chestMats));
+    /*
+    A SOMBRA DO TRONCO vive aqui. Era a caixa da pélvis que a projectava e ela
+    deixou de existir; sem esta linha o jogador passa a fazer sombra de pernas
+    e cabeça com um buraco no meio.
+    */
+    chest.add(criarPeca(new THREE.BoxGeometry(u * 1.45, u * 1.5, u * 0.8), chestMats, true));
     /*
     SEM BAINHA. A camisa acaba no peito — pedido: *"ajusta a cor da camisa só
     no peito"*.
 
-    Houve aqui uma peça extra, cor de camisa, a descer sobre a anca. Deixou de
-    fazer falta quando a PÉLVIS passou a ter a cor do calção (ver nota lá em
-    cima): a anca já está vestida pela peça que sempre lá esteve, e a bainha
-    só pintava de camisa aquilo que é cintura.
-
-    A costura fecha na mesma, sem a peça: em espaço da pélvis a caixa de fora
-    do peito acaba em 0.275 e a pélvis começa em 0.30 — sobrepõem 0.025, e a
-    do peito é mais larga (1.45 contra 1.30), portanto tapa por fora. Mais
-    abaixo, o calção da coxa sobe até -0.155 e a pélvis desce até -0.30.
+    Houve aqui uma peça extra, cor de camisa, a descer sobre a anca. A casca
+    do peito acaba em 0.275 no espaço da anca e o calção das coxas sobe até
+    0.30, portanto a costura fecha sem ela.
     */
     pelvis.add(chest); rig.chest = chest;
     const neck = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.15, u * 0.35), blockMat); neck.position.y = 0.8; chest.add(neck); rig.neck = neck;
@@ -169,27 +166,60 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
     }
 
     function criarPerna(x) {
-        const grp = new THREE.Group(); grp.position.set(x, -0.3, 0); grp.add(criarPeca(jointGeo, jointMat));
-        const coxa = criarPeca(new THREE.BoxGeometry(u * 0.45, u * 1.0, u * 0.45), blockMat, true); coxa.position.y = -0.5;
         /*
-        O CALÇÃO É A PARTE DE CIMA DA PERNA — pedido, com fotografia.
+        O PIVO DA PERNA DE CIMA ESTÁ NA CINTURA, não a meio da coxa — pedido:
+        *"o pivo da parte de cima da perna tem que estar na cintura"*.
 
-        Era um cubo de 0.5 no topo da coxa, e depois um calção curto por baixo
-        de uma camisa comprida. Está ao contrário: na referência a camisa acaba
-        na cintura e é o calção que envolve a anca e desce até meio da coxa.
+        Estava em -0.30 no espaço da anca, que é mesmo o meio do calção (ele vai
+        de +0.30 a -1.15). Rodar a perna rodava o calção à volta do próprio
+        centro: a metade de baixo ia para a frente e a de CIMA para trás,
+        atravessando a barriga. É o que se via no pontapé alto.
 
-        A coxa vai de +0.5 (anca) a -0.5 (joelho) no seu próprio espaço. O
-        calção vai de +0.645 a -0.205: começa ACIMA da articulação, o que o
-        faz envolver a anca em vez de acabar nela, e desce a 30% da coxa.
+        Agora o nó da perna está em +0.30 — a cintura, o topo do calção — e a
+        coxa e o joelho descem os mesmos 0.60 cá dentro (-0.5 → -1.1, -1.0 →
+        -1.6). Em pé o corpo fica exactamente onde estava; o que muda é o
+        centro da rotação, que passa a ser a cintura, e por isso o topo do
+        calção fica quieto enquanto a perna balança.
 
-        Largo de propósito — 0.62 contra 0.45 da coxa: um calção de futebol
-        cai solto, e é a largura que o distingue de tinta pintada na perna.
+        A CONTRAPARTIDA, dita já: o braço de alavanca cresceu de 1.00 para 1.60
+        (do pivo ao joelho). O mesmo ângulo de anca passa a levar o joelho 1.6x
+        mais longe, ou seja a passada abre para o mesmo valor escrito nos
+        keyframes. Quem afinar a corrida mexe nos ângulos, não aqui.
 
-        Como é filho da COXA, tudo isto roda com ela: a anca deixa de ter uma
-        caixa parada para a perna atravessar, que era o relato de origem.
+        A esfera da anca desce para -0.60 (a anca anatómica, onde estava): no
+        pivo ela ficaria meia de fora, na costura da camisa.
         */
-        const shortL = criarPeca(new THREE.BoxGeometry(u * 0.62, u * 0.85, u * 0.62), shortMat); shortL.position.y = 0.22; coxa.add(shortL); grp.add(coxa);
-        const joelho = new THREE.Group(); joelho.position.y = -1.0; grp.add(joelho); joelho.add(criarPeca(smallJointGeo, jointMat));
+        const grp = new THREE.Group(); grp.position.set(x, 0.3, 0);
+        const ancaBola = criarPeca(jointGeo, jointMat); ancaBola.position.y = -0.6; grp.add(ancaBola);
+        const coxa = criarPeca(new THREE.BoxGeometry(u * 0.45, u * 1.0, u * 0.45), blockMat, true); coxa.position.y = -1.1;
+        /*
+        O CALÇÃO: da cintura a meio da coxa, uma peça só, e a peça inteira anda
+        com a perna.
+
+        Contas em espaço da anca (`rig.pelvis`), onde a coxa vai de -0.30 a
+        -1.30 e o joelho está em -1.30:
+
+          . topo em +0.30, que é 0.025 ACIMA de onde acaba a casca do peito
+            (0.275) — daí não abrir costura entre a camisa e o calção. É
+            também onde está o pivo da perna, ver a nota aí em cima;
+          . fundo em -0.95, a 0.35 do joelho. Chegou a ir a -1.15 e ficava
+            colado à articulação: *"o short está descendo até muito próximo do
+            joelho, sobe um pouco"*.
+
+        Em espaço da COXA dá de +1.10 a -0.15: 1.25 de altura, centro +0.475.
+
+        LARGURA 0.82 com as pernas em x ±0.40 — *"o rectângulo do short tem
+        que ser um pouco mais fino"*, era 0.86. É o mínimo prático: cada lado
+        vai de -0.01 a +0.81, portanto os dois calções ainda se SOBREPÕEM no
+        meio. Abaixo de 0.80 abria fresta ao centro, e não havendo pélvis por
+        trás isso era ver o campo através do jogador. Fundo 0.80, igual ao do
+        tronco.
+
+        Continua muito mais largo que a coxa (0.45), que é o que o faz ler como
+        pano solto e não como tinta pintada na perna.
+        */
+        const shortL = criarPeca(new THREE.BoxGeometry(u * 0.82, u * 1.25, u * 0.80), shortMat); shortL.position.y = 0.475; coxa.add(shortL); grp.add(coxa);
+        const joelho = new THREE.Group(); joelho.position.y = -1.6; grp.add(joelho); joelho.add(criarPeca(smallJointGeo, jointMat));
         const canela = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.9, u * 0.35), blockMat, true); canela.position.y = -0.45;
         const meiao = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 0.85, u * 0.4), sockMats); meiao.position.y = 0.0; canela.add(meiao); joelho.add(canela);
         const peG = new THREE.Group(); peG.position.y = -0.9; joelho.add(peG);
