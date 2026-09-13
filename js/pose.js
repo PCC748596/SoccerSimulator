@@ -42,7 +42,35 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
     const shirtMat = new THREE.MeshStandardMaterial({ color: corCamisa, roughness: 0.9 }); const shortMat = new THREE.MeshStandardMaterial({ color: corCalcao, roughness: 0.9 });
     const bootMat = new THREE.MeshStandardMaterial({ color: ap.corChuteira, roughness: 0.5 }); const studMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
     const hairMat = new THREE.MeshStandardMaterial({ color: ap.cabelo, roughness: 0.9 });
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x2f3640, linewidth: 2 }); const lineMat = new THREE.LineBasicMaterial({ color: 0x2f3640 });
+    /*
+    A TINTA DO ROSTO SAI DA PELE.
+
+    Relato: *"os modelos de pele escura estão sem rosto"*. E estavam mesmo —
+    olhos, nariz e boca eram 0x2f3640 fixo para toda a gente. Medido em
+    luminância (linear, que é como o THREE.Color guarda): esse cinzento dá
+    0.04 e a pele do tipo `negro` (0x6b4630, ver config/player_behavior.js) dá
+    0.08. Quatro centésimos de diferença — a cara existia, só que desenhada em
+    cima da própria pele. As outras três peles andam entre 0.62 e 0.75 e aí
+    vê-se bem, que é porque isto passou despercebido.
+
+    Agora a tinta INVERTE-SE em pele escura: a mesma cor da pele puxada 72%
+    para o branco, o que dá contraste sem deixar de pertencer à cara — preto
+    puro numa pele escura fica sujo, e branco puro fica máscara.
+
+    O corte está em 0.42 de luminância, e não há pele nenhuma perto dele: a
+    escura está em 0.08, a mais escura das claras em 0.62. Contraste medido
+    depois da mudança: 0.66 na pele escura (tinta #e2dfde), 0.58 a 0.72 nas
+    outras.
+    */
+    const lumPele = (() => {
+        const c = new THREE.Color(corPele);
+        return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    })();
+    const corTinta = lumPele < 0.42
+        ? new THREE.Color(corPele).lerp(new THREE.Color(0xffffff), 0.72).getHex()
+        : 0x2f3640;
+
+    const edgeMat = new THREE.LineBasicMaterial({ color: corTinta, linewidth: 2 }); const lineMat = new THREE.LineBasicMaterial({ color: corTinta });
 
     const cvsV = document.createElement('canvas'); cvsV.width = 512; cvsV.height = 512; const ctxV = cvsV.getContext('2d');
     ctxV.fillStyle = corCamisa; ctxV.fillRect(0, 0, 512, 512); ctxV.fillStyle = '#dcdde1'; ctxV.beginPath(); ctxV.moveTo(136, 0); ctxV.lineTo(376, 0); ctxV.lineTo(256, 280); ctxV.fill(); ctxV.strokeStyle = '#2f3640'; ctxV.lineWidth = 12; ctxV.stroke();
@@ -136,7 +164,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
     const head = criarPeca(new THREE.BoxGeometry(u * 0.8, u * 1.0, u * 0.85), blockMat, true); head.position.y = 0.575;
 
     const faceGrp = new THREE.Group(); const faceZ = u * 0.426;
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2f3640 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: corTinta });
     rig.olhoEsq = new THREE.Mesh(new THREE.PlaneGeometry(u * 0.08, u * 0.14), eyeMat); rig.olhoEsq.position.set(-u * 0.16, u * 0.15, faceZ);
     rig.olhoDir = new THREE.Mesh(new THREE.PlaneGeometry(u * 0.08, u * 0.14), eyeMat); rig.olhoDir.position.set(u * 0.16, u * 0.15, faceZ);
     const nariz = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, u * 0.05, faceZ), new THREE.Vector3(0, -u * 0.08, faceZ), new THREE.Vector3(u * 0.06, -u * 0.08, faceZ)]), lineMat);
