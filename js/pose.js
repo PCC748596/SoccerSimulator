@@ -193,32 +193,37 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
         const ancaBola = criarPeca(jointGeo, jointMat); ancaBola.position.y = -0.6; grp.add(ancaBola);
         const coxa = criarPeca(new THREE.BoxGeometry(u * 0.45, u * 1.0, u * 0.45), blockMat, true); coxa.position.y = -1.1;
         /*
-        O CALÇÃO: da cintura a meio da coxa, uma peça só, e a peça inteira anda
-        com a perna.
+        O CALÇÃO: da cintura a meio da coxa, e nunca mais largo que o tronco.
+
+        Pedido, com fotografia de costas: *"o short tem que ser mais curto e
+        não pode ultrapassar a largura do corpo"*. Via-se a anca a sair para
+        fora da linha da camisa, de um lado e do outro.
 
         Contas em espaço da anca (`rig.pelvis`), onde a coxa vai de -0.30 a
-        -1.30 e o joelho está em -1.30:
+        -1.30, o joelho está em -1.30 e a casca do peito tem meia-largura
+        0.725:
 
-          . topo em +0.30, que é 0.025 ACIMA de onde acaba a casca do peito
-            (0.275) — daí não abrir costura entre a camisa e o calção. É
-            também onde está o pivo da perna, ver a nota aí em cima;
-          . fundo em -0.95, a 0.35 do joelho. Chegou a ir a -1.15 e ficava
-            colado à articulação: *"o short está descendo até muito próximo do
-            joelho, sobe um pouco"*.
+          . topo em +0.30, 0.025 acima de onde acaba a camisa (0.275) — daí
+            não abrir costura. É também onde está o pivo da perna, ver acima;
+          . fundo em -0.80, a meia coxa. Foi descendo (-1.15, -0.95) e vai
+            parar aqui, a 0.50 do joelho.
 
-        Em espaço da COXA dá de +1.10 a -0.15: 1.25 de altura, centro +0.475.
+        Em espaço da COXA: de +1.10 a 0.00, 1.10 de altura, centro +0.55.
 
-        LARGURA 0.82 com as pernas em x ±0.40 — *"o rectângulo do short tem
-        que ser um pouco mais fino"*, era 0.86. É o mínimo prático: cada lado
-        vai de -0.01 a +0.81, portanto os dois calções ainda se SOBREPÕEM no
-        meio. Abaixo de 0.80 abria fresta ao centro, e não havendo pélvis por
-        trás isso era ver o campo através do jogador. Fundo 0.80, igual ao do
-        tronco.
+        A LARGURA É ASSIMÉTRICA na perna, e é a única maneira de ter as duas
+        coisas ao mesmo tempo. As pernas estão em x ±0.40; um calção CENTRADO
+        na perna ou passa a linha do tronco por fora, ou deixa fresta ao meio
+        — e sem pélvis por trás, fresta ao meio é ver o campo através do
+        jogador. Então a caixa (0.68 de largura) leva 0.08 para DENTRO: cada
+        lado vai de -0.02 a +0.66. Por fora sobra 0.065 até à camisa, por
+        dentro os dois calções ainda se sobrepõem 0.04 no meio.
 
-        Continua muito mais largo que a coxa (0.45), que é o que o faz ler como
-        pano solto e não como tinta pintada na perna.
+        Cobre a coxa toda na mesma — ela vai até 0.625 — e continua muito mais
+        larga que ela (0.68 contra 0.45), que é o que o faz ler como pano.
         */
-        const shortL = criarPeca(new THREE.BoxGeometry(u * 0.82, u * 1.25, u * 0.80), shortMat); shortL.position.y = 0.475; coxa.add(shortL); grp.add(coxa);
+        const shortL = criarPeca(new THREE.BoxGeometry(u * 0.68, u * 1.10, u * 0.80), shortMat);
+        shortL.position.set(x > 0 ? -0.08 : 0.08, 0.55, 0);
+        coxa.add(shortL); grp.add(coxa);
         const joelho = new THREE.Group(); joelho.position.y = -1.6; grp.add(joelho); joelho.add(criarPeca(smallJointGeo, jointMat));
         const canela = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.9, u * 0.35), blockMat, true); canela.position.y = -0.45;
         const meiao = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 0.85, u * 0.4), sockMats); meiao.position.y = 0.0; canela.add(meiao); joelho.add(canela);
