@@ -3596,6 +3596,14 @@ const PlayerBT = sel('PlayerRoot',
                     const carrier = Match.ballCarrier;
                     if (!carrier || carrier.team === ctx.p.team || carrier.role === 'gk') return false;
 
+                    /*
+                    A ESPERA DEPOIS DO CORTE ANTERIOR — ver CorteModel
+                    (config/defense.js), que tem a medição e o porquê da faixa.
+                    Quem acabou de se atirar está fora do lance; só volta a
+                    tentar quando se recompôs.
+                    */
+                    if (ctx.p.corteCooldown > 0) return false;
+
                     // Marcação com roubo de bola no Defensive Pressure Balanceado (e Low) SOMENTE no campo de defesa.
                     // No campo de ataque (carrierZ * dirZ > 0), a equipa marca à distância e não faz roubo de bola,
                     // a não ser que a pressão defensiva esteja configurada como High ('high').
@@ -3633,6 +3641,15 @@ const PlayerBT = sel('PlayerRoot',
                     return false;
                 }),
                 act('tentarDesarme', (ctx) => {
+                    /*
+                    A espera arma-se na TENTATIVA, antes de se saber o desfecho
+                    (ver CorteModel). Sorteada na faixa para os defensores não
+                    voltarem todos ao mesmo tempo.
+                    */
+                    if (typeof CorteModel !== 'undefined') {
+                        const min = CorteModel.arrefecimentoMin, max = CorteModel.arrefecimentoMax;
+                        ctx.p.corteCooldown = min + Math.random() * Math.max(0, max - min);
+                    }
                     if (ctx.distToBall > 1.4) {
                         actSlideTackle(ctx);
                     } else {

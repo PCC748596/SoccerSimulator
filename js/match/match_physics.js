@@ -74,7 +74,18 @@ Object.assign(Match, {
             // Ressalto: só ressalta se ainda vier com velocidade vertical
             // suficiente, senão assenta em vez de tremer no chão.
             if (this.ballVel.y < 0) {
-                if (-this.ballVel.y > B.vMinRessalto) {
+                /*
+                TOQUE AMORTECIDO: não ressalta nenhuma vez.
+
+                Põe-na aqui quem amorteceu (por agora o peito, ver
+                `largarDoPeito`), e o primeiro contacto com o relvado gasta a
+                bandeira. É o que separa uma bola amortecida de uma bola
+                largada: a primeira fica onde cai, a segunda salta e foge.
+                */
+                if (this.bolaAmortecida) {
+                    this.bolaAmortecida = false;
+                    this.ballVel.y = 0;
+                } else if (-this.ballVel.y > B.vMinRessalto) {
                     this.ballVel.y *= -B.restituicao;
                     this.ballVel.x *= B.atritoRessalto;
                     this.ballVel.z *= B.atritoRessalto;
@@ -458,6 +469,26 @@ Object.assign(Match, {
         */
         if (this.state === 'THROW_IN' || this.state === 'FREE_KICK' ||
             this.state === 'PENALTY') return false;
+
+        /*
+        BOLA NAS MÃOS DO GUARDA-REDES NÃO SE TOCA.
+
+        Apanhado a seguir uma matada no peito frame a frame
+        (`tools/scratch/peito_traco.js`): o guarda-redes estava em 'segurando',
+        com a bola colada ao peito dele, e um jogador de campo MATOU-A NO
+        PEITO na mesma — a bola continuava presa às mãos dele e o outro ficava
+        com o gesto a andar ao lado, sem bola nenhuma. Os dois donos ao mesmo
+        tempo.
+
+        O `hasBall` do guarda-redes com as mãos ocupadas é posse fechada: nada
+        aqui lhe pode tocar até ele a largar (o ramo 'segurando' do updateGK
+        cuida disso e tem prazo próprio).
+        */
+        for (const g of [this.players[0], this.opponents[0]]) {
+            if (!g || g.role !== 'gk') continue;
+            if (g.hasBall && (g.gkEstado === 'segurando' || g.gkEstado === 'apanhar' ||
+                g.gkEstado === 'lancando' || g.gkEstado === 'chutando')) return false;
+        }
 
         /*
         Prioridade do guarda-redes na própria área: sem isto, um atacante

@@ -178,6 +178,8 @@ class FootballPlayer {
         this.runTimer = 0;
         this.runCarrier = null;
         this.runCooldown = 0;
+        // Espera depois de uma tentativa de corte — ver CorteModel.
+        this.corteCooldown = 0;
 
         // `marcRef` é a escolha do nível de equipa (atribuirMarcacoesDaEquipa,
         // team_bt.js): quem este jogador acompanha, com histerese.
@@ -2073,11 +2075,51 @@ class FootballPlayer {
             ? this.peitoAlturaContacto : B.peitoAltura;
         const queda = Math.max(0.1, h - BallPhysics.raio);
         const t = (vy + Math.sqrt(vy * vy + 2 * g * queda)) / g;
-        const vh = dist / Math.max(0.1, t);
+
+        /*
+        O `dist` É ONDE A BOLA FICA, e não onde ela aterra.
+
+        Relato: *"quando o jogador mata no peito e não está pressionado, a bola
+        cai no pé dele e ele fica com ela dominada — não é o que acontece no
+        jogo"*.
+
+        A conta era `vh = dist / t`: a bola percorria `dist` durante a QUEDA e
+        depois continuava a rolar, porque no chão ainda levava `vh` inteiro.
+        Medido com `tools/scratch/peito_dominio.js`, 40 min de jogo: com o
+        `quedaNoPeito` a pedir 0.25 m para um técnico de 70+, a bola andava
+        1.48 m e ficava 1.31 m fora do pé — seis vezes o pedido. O domínio
+        via-se, mas a bola fugia dele.
+
+        Agora a distância pedida inclui o rolamento. Com a bola a aterrar com
+        `vh`, o chão tira-lhe `μ·g` por segundo e ela ainda corre
+        `vh² / (2·μ·g)`. Somando as duas pernas do percurso:
+
+            vh·t  +  vh²/(2·μ·g)  =  dist
+
+        que é uma quadrática em `vh`. A raiz positiva é a velocidade que deixa
+        a bola PARADA à distância pedida, que é o que "cair no pé" quer dizer.
+        */
+        const desaceleracao = Math.max(0.1, BallPhysics.atritoRolamento * g);
+        const a = 1 / (2 * desaceleracao);
+        const vh = (-t + Math.sqrt(t * t + 4 * a * Math.max(0, dist))) / (2 * a);
 
         _v1.set(0, 0, 1).applyQuaternion(this.model.quaternion);
         Match.ballVel.set(_v1.x * vh, vy, _v1.z * vh);
         this.peitoCola = 0;
+        /*
+        E NÃO RESSALTA: uma matada no peito é um toque AMORTECIDO.
+
+        Com a bola a cair de 1.2 m ela chegava ao chão com energia que chegava
+        para um salto, e o salto levava-a mais para a frente — medido, 1.0
+        ressaltos por matada e a bola a acabar 1.3 m fora do pé mesmo com o
+        `quedaNoPeito` a pedir 0.25. O ressalto anula a conta de cima, que
+        assume queda e rolamento.
+
+        A bandeira vale um contacto com o relvado, e é o próprio relvado que a
+        consome (ver o ressalto em match_physics.js). Só no domínio BOM: um
+        peito mal dado deve mesmo repicar.
+        */
+        if (this.peitoBom && typeof Match !== 'undefined') Match.bolaAmortecida = true;
     }
 
     /*
@@ -3339,6 +3381,8 @@ class FootballPlayer {
         // arrefecimento tem de correr JUSTAMENTE quando ele ja nao esta a
         // correr.
         if (this.runCooldown > 0) this.runCooldown = Math.max(0, this.runCooldown - dt);
+        // A espera entre cortes corre com o jogo, como as outras — ver CorteModel.
+        if (this.corteCooldown > 0) this.corteCooldown = Math.max(0, this.corteCooldown - dt);
 
         /*
         Freeze do kickoff: runBehaviorTree/fsm ficavam a correr por jogador

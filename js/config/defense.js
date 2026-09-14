@@ -114,6 +114,33 @@ const ClearanceModel = {
 
 if (typeof window !== 'undefined') window.ClearanceModel = ClearanceModel;
 
+/*
+=============================================================================
+DEPOIS DE UM CORTE, ESPERA-SE ANTES DE TENTAR OUTRO
+=============================================================================
+Pedido: *"depois que um jogador tenta um corte tem que esperar de 3-6 s para
+tentar outro"*.
+
+Não havia nada disto. Medido com `tools/scratch/cortes_intervalo.js`, 40 min de
+jogo: 156 tentativas de desarme, e dos 137 intervalos entre duas tentativas do
+MESMO jogador, 11% ficavam abaixo de 6 s, 7% abaixo de 3 s e 4% abaixo de meio
+segundo — seis deles a zero, ou seja duas tentativas em frames seguidos. É o
+defensor a atirar-se duas vezes seguidas ao mesmo lance.
+
+A espera é SORTEADA na faixa a cada tentativa, e não fixa: com um número fixo,
+onze defensores que tentam ao mesmo tempo voltam a tentar todos ao mesmo tempo.
+
+Conta a partir da TENTATIVA, ganhe ela ou perca. Quem desarma limpo tem a bola
+e não precisa de cortar nada; quem falha é que fica fora do lance, que é
+precisamente o que a espera representa.
+=============================================================================
+*/
+const CorteModel = {
+    arrefecimentoMin: 3.0,
+    arrefecimentoMax: 6.0
+};
+if (typeof window !== 'undefined') window.CorteModel = CorteModel;
+
 const SlideTackleModel = {
     lancamento: 0.15,
     deslize: 0.95,
