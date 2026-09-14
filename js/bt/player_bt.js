@@ -1941,6 +1941,38 @@ function actEsperarDevolucao(ctx) {
     }
 }
 
+/*
+O ALVO AÉREO DE UM JOGADOR: onde a bola desce pela testa dele, com o erro de
+leitura já aplicado, e a que velocidade tem de ir para lá chegar A TEMPO.
+
+O ruído da leitura vive no jogador e sorteia-se uma vez por voo — ver
+`pontoDeCabeceio` (utils.js). Um voo novo reconhece-se por ele não ter estado
+a seguir a bola no frame anterior.
+*/
+function alvoAereoDoJogador(p) {
+    if (typeof pontoDeCabeceio !== 'function') return null;
+    if (!p._leituraAerea || (Match.tempoJogo || 0) - (p._leituraAereaT || 0) > 0.5) {
+        const r = (typeof parNormal === 'function')
+            ? parNormal(Math.random(), Math.random()) : { u: 0, v: 0 };
+        p._leituraAerea = { u: r.u, v: r.v };
+    }
+    p._leituraAereaT = (Match.tempoJogo || 0);
+    return pontoDeCabeceio(p, p._leituraAerea.u, p._leituraAerea.v);
+}
+
+/*
+A velocidade que põe o jogador no ponto à hora certa. Ir depressa de mais é
+chegar cedo e ficar a ver a bola cair ao lado; ir devagar é chegar tarde. O
+tecto é o sprint dele, e o chão é a velocidade que a folha já tinha escolhido.
+*/
+function ritmoParaChegarATempo(p, alvo, base) {
+    if (!alvo || !alvo.tempo) return base;
+    const d = Math.hypot(p.model.position.x - alvo.x, p.model.position.z - alvo.z);
+    const pedido = d / Math.max(0.15, alvo.tempo);
+    const tecto = p.sprintSpeed || (6.5 * 1.3);
+    return Math.max(base, Math.min(pedido, tecto));
+}
+
 function actChaseBall(ctx) {
     const p = ctx.p;
 
@@ -1971,7 +2003,32 @@ function actChaseBall(ctx) {
 
     p.speedMult = (5.8 + ((ctx.skillSpeed - 50) / 50) * 1.5) * 1.25 * 0.9;
     if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
-    p.dynamicTarget.copy(Match.ball.position);
+
+    /*
+    BOLA NO AR: O ALVO É ONDE ELA CRUZA A ALTURA DA TESTA.
+
+    Isto mandava-o para `Match.ball.position` — o x/z do INSTANTE, que num
+    cruzamento a descer está sempre à frente de onde ele a poderia cabecear.
+    Ele corria atrás da sombra dela e chegava tarde a toda a parte.
+
+    O `actReceivePass` já fazia esta conta, mas só o DESTINATÁRIO do passe
+    passa por lá — e num cruzamento ou num canto não há destinatário nenhum.
+    Era por isso que ninguém se punha debaixo da bola: medido
+    (`tools/scratch/cabecada_gate.js`), quando a bola passava à altura da
+    testa o mais perto que alguém estava eram 0.65 m, e o cabeceio exige 0.45.
+
+    Sem cruzar a altura da testa (bola baixa), fica o comportamento de sempre.
+    */
+    const noArChase = Match.ball.position.y > BallPhysics.raio + 0.35 &&
+        Match.ballVel.lengthSq() > 1.0;
+    const alvoAereo = noArChase ? alvoAereoDoJogador(p) : null;
+    if (alvoAereo) {
+        p.dynamicTarget.set(alvoAereo.x, ALTURA_BASE_Y, alvoAereo.z);
+        // E a tempo, não só na direcção certa.
+        p.speedMult = ritmoParaChegarATempo(p, alvoAereo, p.speedMult);
+    } else {
+        p.dynamicTarget.copy(Match.ball.position);
+    }
     p.fsm.changeState('MOVE_TO_POS');
 }
 
@@ -2064,14 +2121,39 @@ function actReceivePass(ctx) {
         (SaltoCabeceio) disparava no último instante, com a bola já quase no
         chão. Só vale a pena se lá chegar a tempo; senão, ponto de queda.
         */
-        const cabeca = preverBolaEmAltura(ALTURA_BASE_Y + ALTURA_TESTA);
+        /*
+        O PONTO DA TESTA É O ALVO, chegue ele a tempo ou não.
+
+        A condição era `dCab <= velocidade * tempo * 0.95`: só ia para lá quem
+        lhe chegasse a tempo, e todos os outros iam para o PONTO DE QUEDA. E é
+        aí que estava o cabeceio de longe — o ponto de queda fica METROS depois
+        do ponto onde a bola cruza a altura da testa, porque ela continua a
+        descer em diagonal. Quem espera onde ela ATERRA vê-a passar-lhe por
+        cima da cabeça antes de lá chegar: medido, 0.73 m ao lado, e nenhum dos
+        47 cabeceios com contacto a sério.
+
+        Agora o ponto da testa é o destino sempre que existe. Quem não lhe
+        chega a tempo fica mais perto do que ficava, que é melhor do que
+        acertar num sítio onde a bola já não está à altura de a cabecear. Só se
+        vai ao ponto de queda quando a bola nem chega à altura da testa — aí
+        não há cabeceio nenhum para preparar.
+        */
+        const cabeca = alvoAereoDoJogador(p);
         if (cabeca) {
+            p.dynamicTarget.set(cabeca.x, ALTURA_BASE_Y, cabeca.z);
+            p.speedMult = ritmoParaChegarATempo(p, cabeca, p.speedMult);
             const dCab = Math.hypot(p.model.position.x - cabeca.x, p.model.position.z - cabeca.z);
-            if (dCab <= p.speedMult * cabeca.tempo * 0.95) {
-                p.dynamicTarget.set(cabeca.x, ALTURA_BASE_Y, cabeca.z);
+            const tolCab = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaPonto === 'number')
+                ? HeaderModel.toleranciaPonto : 0.30;
+            if (dCab < tolCab) {
+                // Já está debaixo dela: pára e espera de frente, sem oscilar.
+                p.velocity.set(0, 0, 0);
+                p.fsm.changeState('IDLE');
+                lookAtBola(p.model, bola);
+            } else {
                 p.fsm.changeState('MOVE_TO_POS');
-                return;
             }
+            return;
         }
 
         const queda = preverQuedaDaBola();
@@ -2083,7 +2165,11 @@ function actReceivePass(ctx) {
         oscilar por baixo da bola no momento em que ela chega.
         */
         const distQueda = Math.hypot(p.model.position.x - queda.x, p.model.position.z - queda.z);
-        if (distQueda < 1.0) {
+        // A tolerância vive no HeaderModel e vale o raio de contacto da testa:
+        // parar a um metro da bola era cabecear de longe. Ver `toleranciaPonto`.
+        const tolPonto = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaPonto === 'number')
+            ? HeaderModel.toleranciaPonto : 1.0;
+        if (distQueda < tolPonto) {
             p.velocity.set(0, 0, 0);
             p.fsm.changeState('IDLE');
             lookAtBola(p.model, bola);

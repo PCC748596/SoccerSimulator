@@ -747,7 +747,21 @@ const BallControl = {
     ping-pong que ele fecha.
     */
     peitoSemPressao: 7.0,      // metros ao adversário mais próximo
-    peitoAlturaLivre: 1.75,    // sem pressão, aceita a bola até esta altura
+    /*
+    1.38, E NÃO 1.75: ACIMA DISTO É CABEÇA.
+
+    O valor antigo deixava o jogador livre "matar no peito" bolas até 1.75 m —
+    treze centímetros acima da TESTA (1.62) e acima do próprio topo do crânio
+    (1.72). Na prática isso apagava o cabeceio: toda a bola que vinha à altura
+    da cabeça era desviada para o ramo do peito antes de chegar ao teste do
+    cabeceio, e só sobravam para cabecear as bolas que passavam BEM ACIMA da
+    cabeça — que era o relato, *"cabeceiam de ombro"*, medido como zero
+    contactos reais em 47 cabeceios.
+
+    A janela do cabeceio começa em `ALTURA_TESTA - janelaContacto` = 1.40. O
+    tecto do peito fica dois centímetros abaixo disso: cada bola tem um dono.
+    */
+    peitoAlturaLivre: 1.38,    // sem pressão, aceita a bola até esta altura
 
     /*
     Distância a que a bola fica ADIANTADA depois da matada, por TEC. O máximo

@@ -844,7 +844,65 @@ Object.assign(Match, {
         que passavam bem por cima do crânio — cabeceava-se sem tocar nela.
         A janela é agora simétrica à volta da testa (ver ALTURA_TESTA).
         */
-        if (Math.abs(bestAltura - ALTURA_TESTA) <= HeaderModel.janelaContacto) {
+        /*
+        =====================================================================
+        O CABECEIO MEDE-SE NA TESTA, E NÃO NO TOPO DO CORPO
+        =====================================================================
+        Relato: *"os jogadores parecem que estão a cabecear de ombro; a cabeçada
+        é com a bola a tocar na testa"*.
+
+        O `bestAltura` vem do `distanciaAoCorpo`, e essa função CLAMPA a altura
+        do contacto ao corpo: uma bola a três metros do chão dá `alturaContacto`
+        = 1.72 (o topo da cabeça), que está a 0.10 da testa e passa a janela de
+        0.22 sem hesitar. Ou seja: TUDO o que voava acima da cabeça contava como
+        estar à altura da testa, e a distância que sobrava (até aos 0.9 m do
+        `reach`) era quase toda VERTICAL.
+
+        Medido, nas avaliações que passavam o teste antigo: distância mínima
+        0.66 m, mediana 0.82 — nenhuma abaixo de 0.5. E medido do outro lado
+        (`tools/scratch/cabecada_altura.js`), a bola ficava em média 0.73 m ao
+        lado da cabeça e 0.40 m acima dela: em 47 cabeceios, zero contactos.
+
+        Agora são dois testes explicitos e separados:
+
+          . a bola está MESMO à altura da testa — altura real acima dos pés
+            dele, sem clamp nenhum;
+          . e está ao alcance dela na HORIZONTAL (`raioContacto`).
+
+        Quem falha o segundo não cabeceia nada: a bola passa-lhe ao lado, que é
+        o que ela faz mesmo.
+        =====================================================================
+        */
+        const alturaRealDaBola = this.ball.position.y - best.model.position.y;
+
+        /*
+        ACIMA DA CABEÇA NÃO HÁ CONTACTO NENHUM — a bola segue viagem.
+
+        Este era o último nó do cabeceio de ar. O contacto é avaliado assim que
+        alguém fica a menos de `reach` do EIXO do corpo, e o eixo vai até ao
+        topo do crânio: uma bola a 1.9 m sobre a cabeça dele passava o filtro,
+        e como não estava na janela da testa caía no ramo de baixo — domínio
+        com o PÉ, a 1.9 m de altura. O lance ficava resolvido antes de a bola
+        descer até à testa, e por isso nunca chegava lá.
+
+        Medido com `tools/scratch/cabecada_gate.js`: das avaliações à altura da
+        testa, a mais próxima estava sempre a 0.65 m ou mais — nunca havia
+        ninguém debaixo dela, porque quem estava debaixo dela já lhe tinha
+        "tocado" um metro acima.
+
+        Agora a bola acima da janela da testa não é tocada por ninguém: cai, e
+        quem estiver lá cabeceia-a quando ela chegar à altura certa.
+        */
+        if (alturaRealDaBola > ALTURA_TESTA + HeaderModel.janelaContacto) return false;
+
+        const naAlturaDaTesta = Math.abs(alturaRealDaBola - ALTURA_TESTA) <= HeaderModel.janelaContacto;
+        const distHorizontal = Math.hypot(
+            this.ball.position.x - best.model.position.x,
+            this.ball.position.z - best.model.position.z);
+        const raioTesta = (typeof HeaderModel.raioContacto === 'number')
+            ? HeaderModel.raioContacto : BallControl.reach;
+        if (naAlturaDaTesta && distHorizontal > raioTesta) return false;
+        if (naAlturaDaTesta) {
             best.executeHeader();
         } else {
             window.bolaChutada = false;

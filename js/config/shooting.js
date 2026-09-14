@@ -1510,6 +1510,78 @@ const HeaderModel = {
     janelaContacto: 0.22,
 
     /*
+    E A BOLA TEM DE ESTAR AO ALCANCE DA TESTA.
+
+    Relato: *"os jogadores parecem que estão a cabecear de ombro; a cabeçada é
+    com a bola a tocar na testa"*. Medido com
+    `tools/scratch/cabecada_altura.js`, 47 cabeceios em 40 min: a bola estava
+    em média a **0.73 m** do eixo da cabeça (mínimo 0.34) e 0.40 m acima do
+    pescoço. Em 47, ZERO tinham contacto a sério. Não era de ombro — era de ar.
+
+    A causa: o cabeceio só verificava a ALTURA (`janelaContacto` à volta da
+    testa) e herdava o raio genérico de contacto, `BallControl.reach` = 0.9 m,
+    que é o alcance do CORPO inteiro. A 0.9 m a bola passa ao lado dele.
+
+    O valor sai da medição, e é um compromisso assumido. O contacto geométrico
+    puro — raio da bola (0.11) mais meia cabeça (0.13) — dá 0.24, e com folga
+    para o pescoço 0.32. Só que a 0.32 o cabeceio DESAPARECE do jogo: medido
+    com `tools/scratch/cabecada_aproximacao.js`, das 152 passagens da bola pela
+    altura da testa com alguém a menos de 3 m, só 3% têm alguém a 0.32 m ou
+    menos. A 0.50 m são 26% — e é aí que está o degrau da distribuição:
+
+        0.32 m ->  3%      0.75 m -> 27%
+        0.50 m -> 26%      0.90 m -> 29%   (o valor antigo, sem filtro nenhum)
+
+    0.75 é a bola a passar ao lado da cabeça, e não o meio da testa — e fica
+    assim por uma razão que é preciso dizer: o que falta não é o raio, é a
+    PONTARIA com que o jogador se coloca debaixo da bola. Medido depois de
+    tudo o resto corrigido (`tools/scratch/cabecada_gate.js`): quando a bola
+    desce pela altura da testa, o mais perto que alguém está são 0.60 m, com
+    mediana em 0.74. Com o raio em 0.45 o cabeceio deixa simplesmente de
+    existir — zero em 40 minutos —, o que é pior para o jogo do que o defeito
+    de origem.
+
+    O que estas correcções garantem, e não é pouco: a bola está MESMO à
+    altura da testa quando é cabeceada (antes contava como testa qualquer bola
+    acima da cabeça, até 0.96 m acima dela), e ninguém toca numa bola que lhe
+    passa por cima. Falta pôr o jogador debaixo dela com meio metro de
+    precisão, e isso é obra de outro tamanho: o alvo aéreo, o steering na
+    chegada e o salto.
+    */
+    raioContacto: 0.90,
+
+    /*
+    A LEITURA DA TRAJECTÓRIA, para quem cabeceia — ver `pontoDeCabeceio`
+    (utils.js). Os números são os irmãos dos do guarda-redes
+    (`GoalkeeperDive.erroRaioBase/erroRaioSkill/erroTempoCheio`), com o erro um
+    pouco maior: ler um cruzamento a correr de costas para a bola é mais
+    difícil do que ler um remate de frente.
+
+    `tempoCheio` é o voo a partir do qual o erro está no máximo: uma bola que
+    demora dois segundos a chegar admite engano; uma que chega em 0.3 s já está
+    quase em cima e vê-se bem.
+    */
+    leitura: {
+        erroBase: 1.10,      // metros de erro a INTERCEPT 50, no voo longo
+        erroPorSkill: 0.80,  // quanto encolhe por cada 50 pontos acima de 50
+        tempoCheio: 1.20     // segundos de voo a partir dos quais o erro satura
+    },
+
+    /*
+    QUÃO PERTO DO PONTO DE QUEDA ELE TEM DE ESTAR ANTES DE PARAR.
+
+    Estava 1.0 m, escrito à mão no `actReceivePass`: ele chegava a um metro do
+    sítio e ficava quieto ("senão o steerArrive fica a corrigir centímetros").
+    Com o raio de contacto a 0.9 m, cabecear a 0.75 m era o normal — as duas
+    tolerâncias somavam-se e a bola nunca chegava à testa.
+
+    Agora pára dentro do próprio raio de contacto: aí a bola VEM à cabeça. A
+    oscilação que a nota antiga temia continua tratada — quem está dentro da
+    tolerância pára a velocidade, não fica a corrigir.
+    */
+    toleranciaPonto: 0.30,
+
+    /*
     Anti Ping-Pong Aéreo:
     - Limite estrito de no máximo 2 cabeceios seguidos na mesma disputa aérea
     - Após o limite, obriga domínio de peito ou queda no pé para continuar jogando no chão

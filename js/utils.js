@@ -1686,6 +1686,51 @@ quem cruzou não é ponto de cabeceio de ninguém.
 
 Devolve `{x, z, tempo}`, ou `null` se a bola nunca chega a essa altura.
 */
+/*
+=============================================================================
+LER A TRAJECTÓRIA PARA CABECEAR — o que o guarda-redes já fazia, para todos
+=============================================================================
+Pedido: *"os jogadores têm que saber qual é a trajetória da bola para poderem
+pular e tentar cabecear; é a mesma dinâmica do guarda-redes"*.
+
+O guarda-redes tem três coisas: o ponto onde a bola cruza o plano dele
+(`pontoDeIntercepcaoGK`), um ERRO de leitura que encolhe com o atributo dele
+(`erroLeituraGK`), e um gesto lançado a tempo (`GkDive`). Quem cabeceia tinha
+só a primeira, e mesmo essa usada como destino solto — sem prazo e sem erro.
+
+Aqui fica a mesma leitura para toda a gente:
+
+  . ONDE — o ponto em que a bola desce pela altura da TESTA dele;
+  . QUANDO — quanto falta para isso, que é o que permite ir a tempo em vez de
+    ir depressa;
+  . COM QUE ERRO — proporcional ao tempo que falta e inverso ao INTERCEPT do
+    jogador, exactamente como o erro do guarda-redes cresce com o tempo de voo
+    e encolhe com o GK dele.
+
+O ruído (`u`, `v`) sorteia-se UMA vez por voo e guarda-se no jogador: por
+frame, a média dava outra vez o ponto exacto e ele só tremia à volta dele — a
+mesma armadilha que a nota do `_gkErroU` descreve.
+=============================================================================
+*/
+function pontoDeCabeceio(p, u, v) {
+    if (typeof preverBolaEmAltura !== 'function' || !p || !p.model) return null;
+    const alvo = preverBolaEmAltura(p.model.position.y + ALTURA_TESTA);
+    if (!alvo) return null;
+
+    const L = (typeof HeaderModel !== 'undefined') ? HeaderModel.leitura : null;
+    if (!L) return { x: alvo.x, z: alvo.z, tempo: alvo.tempo, erro: 0 };
+
+    const skill = (typeof p.skillFor === 'function') ? p.skillFor('INTERCEPT') : 50;
+    const fracT = Math.max(0, Math.min(1, alvo.tempo / Math.max(0.001, L.tempoCheio)));
+    const raio = Math.max(0, L.erroBase - ((skill - 50) / 50) * L.erroPorSkill) * fracT;
+    return {
+        x: alvo.x + raio * (u || 0),
+        z: alvo.z + raio * (v || 0),
+        tempo: alvo.tempo,
+        erro: raio
+    };
+}
+
 function preverBolaEmAltura(altura) {
     const B = BallPhysics;
     let x = Match.ball.position.x, y = Match.ball.position.y, z = Match.ball.position.z;
