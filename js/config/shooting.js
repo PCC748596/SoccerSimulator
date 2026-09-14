@@ -183,7 +183,58 @@ const ShootingModel = {
         7 m é o espaço que o guarda-redes cobre no tempo de armar e bater: com
         ele mais perto do que isto, esperar mais um metro é dar-lhe a bola.
         */
-        gkAoAlcance: 7.0
+        gkAoAlcance: 7.0,
+
+        /*
+        E COM ELE FORA DA BALIZA, REMATA-SE JÁ — sem esperar que chegue perto.
+
+        Relato: *"com o guarda-redes ofensivo o atacante está a esperar demais
+        para finalizar; o ofensivo sai do golo mais cedo, o atacante tem de
+        perceber isso e finalizar mais rápido"*.
+
+        Medido com `tools/scratch/cara_a_cara_gk_ofensivo.js`, 12 lances com o
+        traço ofensivo forçado: o guarda-redes passava os 5 m de avanço ao
+        segundo 1.9 e o remate só saía 0.71 s depois, com ele já a 1.2-1.7 m do
+        avançado e 10 m fora da linha. Ou seja: o avançado esperava por ele.
+
+        O `gkAoAlcance` acima não chega porque mede a distância ENTRE OS DOIS, e
+        entre o gatilho e a bola sair passam a cadência da decisão e os 0.32 s
+        de armação — tempo em que um guarda-redes lançado faz quatro metros.
+        Este mede o que interessa de verdade: quanto ele JÁ saiu da baliza. A
+        partir de 4 m fora da linha, o que está atrás dele é baliza aberta, e
+        esperar mais um metro só lhe dá tempo de fechar o ângulo.
+
+        É também a condição de que o chapéu vive (ver `chapeuGkAdiantado` no
+        ShotModel): rematar mais cedo põe o chapéu em cima da mesa.
+
+        7 m, e não 4: o `GoalkeeperStyle.defensive` tem `depthMax` 6.0, ou
+        seja um guarda-redes NORMAL passa a vida até aos 6 m fora da linha. Com
+        o corte a 4 m, isto disparava contra toda a gente e virava "rematar de
+        longe sempre" — e o lote já diz que se remata 44% a mais do que devia.
+        A 7 m só apanha quem saiu mesmo: o ofensivo, que vai até aos 11 de
+        profundidade e 20 de varrida.
+        */
+        gkAdiantadoRemata: 7.0,
+
+        /*
+        E O OUTRO SINAL: ELE VEM A SAIR.
+
+        Só a profundidade não chega, e mediu-se porquê. Com o corte a 7 m, o
+        guarda-redes ofensivo do lance só o cruza quando já está a dois metros
+        do avançado — a espera voltava aos 0.68 s. Com o corte a 4 m disparava
+        contra toda a gente, porque um guarda-redes NORMAL vive até aos 6 m
+        fora da linha.
+
+        O que distingue os dois casos não é onde ele está: é se vem a correr
+        para fora. Um guarda-redes lançado a 4 m/s deixou a baliza vazia atrás
+        dele mesmo estando ainda perto dela; um que está quieto a 5 m não.
+
+        Medido com `tools/scratch/cara_a_cara_gk_ofensivo.js`: com os dois
+        sinais, a espera cai de 0.68 s para ~0.30 s — que é o tempo da própria
+        armação, ou seja o avançado deixa de esperar.
+        */
+        gkAdiantadoMin: 3.0,
+        gkVelSaida: 4.0
     },
 
     /*

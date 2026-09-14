@@ -2730,13 +2730,37 @@ function emZonaDeRemate(ctx) {
         fechar. Ver `gkAoAlcance` no ShootingModel para a medição.
         */
         const gkEmCima = ff.distGk <= (FF.gkAoAlcance || 0);
-        if (!gkEmCima && ff.livre && ff.dist > FF.distanciaIdeal && ff.dist <= FF.distanciaMax) {
+        /*
+        E O GUARDA-REDES FORA DA BALIZA vale por si — ver `gkAdiantadoRemata`.
+        O `gkEmCima` mede a distância entre os dois e chega tarde com um
+        guarda-redes lançado; este mede quanto ele já saiu da linha.
+        */
+        let gkSaiuDaBaliza = false;
+        if (gkAdv && typeof FF.gkAdiantadoRemata === 'number') {
+            const avancoGk = Math.abs(p.targetGoalZ) - Math.abs(gkAdv.model.position.z);
+            gkSaiuDaBaliza = avancoGk >= FF.gkAdiantadoRemata;
+            /*
+            Ou ele está a SAIR: já fora da linha o suficiente e a vir depressa
+            na minha direcção. Ver `gkVelSaida` no ShootingModel.
+            */
+            if (!gkSaiuDaBaliza && typeof FF.gkVelSaida === 'number' && gkAdv.velocity &&
+                avancoGk >= (FF.gkAdiantadoMin || 0)) {
+                const dx = p.model.position.x - gkAdv.model.position.x;
+                const dz = p.model.position.z - gkAdv.model.position.z;
+                const d = Math.hypot(dx, dz);
+                if (d > 0.01) {
+                    const aproxima = (gkAdv.velocity.x * dx + gkAdv.velocity.z * dz) / d;
+                    gkSaiuDaBaliza = aproxima >= FF.gkVelSaida;
+                }
+            }
+        }
+        if (!gkEmCima && !gkSaiuDaBaliza && ff.livre && ff.dist > FF.distanciaIdeal && ff.dist <= FF.distanciaMax) {
             p.frenteAFrente = false;
             return false;
         }
         // Guardado para o remate saber que é um frente-a-frente e tocar ao
         // canto em vez de bater (ver initiateShoot/tipoDeRemate).
-        p.frenteAFrente = ff.livre && (ff.dist <= FF.distanciaIdeal || gkEmCima);
+        p.frenteAFrente = ff.livre && (ff.dist <= FF.distanciaIdeal || gkEmCima || gkSaiuDaBaliza);
     }
 
     /*

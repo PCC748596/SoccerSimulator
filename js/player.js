@@ -5652,6 +5652,16 @@ class FootballPlayer {
             // alvo — senão a animação tentava acompanhar o salto impossível.
             let velX = dt > 0.0001 ? stepX / dt : 0;
             let velZ = dt > 0.0001 ? stepZ / dt : 0;
+            /*
+            E FICA NO `velocity`, como a de toda a gente.
+
+            O guarda-redes move-se por passo escrito (`position += step`) e
+            nunca escrevia o campo; quem o lesse de fora via zero ou lixo de um
+            lance antigo. Passou a ser preciso quando o avançado ganhou o
+            direito de rematar ao ver o guarda-redes A SAIR (ver
+            `gkVelSaida` no ShootingModel): sair é velocidade, não posição.
+            */
+            this.velocity.set(velX, 0, velZ);
             let lookPos = Match.ball.position.clone(); lookPos.y = gkCorpo.position.y; lookAtBola(gkCorpo, lookPos);
 
             gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, 0.25);
