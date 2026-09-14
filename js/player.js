@@ -3430,7 +3430,20 @@ class FootballPlayer {
         if (this.hasBall || (graceActiva && !outroTemBola)) this.decisionTimer += dt;
         else this.decisionTimer = 0;
 
-        if (this.role === 'gk' && Match.state !== 'CORNER_KICK') {
+        /*
+        E TAMBÉM DURANTE O CANTO, SE ELE FOR A MEIO DE UM MERGULHO.
+
+        Foi a defesa dele que deu o canto: no frame em que o árbitro o marca,
+        o corpo está no ar. Com o `updateGK` cortado, o `GkDive.update` deixava
+        de correr e o gesto congelava aí — metade do relato *"o guarda-redes
+        não vai até ao chão"*. A outra metade era a reposição por cima dele,
+        ver `reporGuardaRedes` (match_setpieces.js).
+
+        Só enquanto o mergulho dura: acabado ele, o `GkDive` põe-o em 'idle' e
+        o canto volta a ser tratado como sempre.
+        */
+        const gkAMergulhar = (this.role === 'gk' && this.gkEstado === 'mergulho' && this.dive);
+        if (this.role === 'gk' && (Match.state !== 'CORNER_KICK' || gkAMergulhar)) {
             // Corre também durante GOAL_KICK: é o updateGK que conduz o gesto
             // do tiro de meta (estados 'tiro_meta' -> 'chutando').
             this.updateGK(dt);
@@ -3493,9 +3506,40 @@ class FootballPlayer {
                 Match.ball.position.lerp(_p_v2, 0.5);
                 Match.ball.position.y = BallPhysics.raio; Match.ballVel.set(0, 0, 0);
             } else {
-                // -0.6m: Aumentado um pouco para a bola não ficar tão "escondida" debaixo do jogador
-                // durante a corrida e para dar mais espaço natural ao passe/remate.
-                let footOffset = _p_v1.set(0, 0, 0.6).applyQuaternion(this.model.quaternion);
+                /*
+                A BOLA SAI DA FRENTE DO CORPO E VAI PARA O LADO DO PÉ QUE BATE.
+
+                Relato, com fotografia: *"o pé de apoio está atrás da bola; para
+                chutar, o jogador tem de colocar o pé de apoio AO LADO da
+                bola"*. A causa não estava no clip — estava aqui. Enquanto ele
+                tem a bola, ela é colada a (0, 0, 0.6): mesmo à frente do
+                corpo, 0.6 m adiante. Medido com
+                `tools/scratch/remate_pe_apoio.js`, no instante do contacto: a
+                bola 0.5 m à frente do corpo, o pé de apoio 0.6 m atrás dela e
+                1 cm ao lado, em 24 remates de 24. Com a bola sempre a meio
+                metro em frente, nenhum pé de apoio lhe pode ficar ao lado.
+
+                A correr, à frente está certo — é a bola conduzida. No GESTO de
+                rematar ou de passar, ela desliza para junto do pé que bate e
+                recua até à linha do corpo, que é onde ela está na fotografia:
+                aí o pé de apoio planta-se ao lado dela e a perna de bater passa
+                por trás. A transição acompanha a armação e está completa no
+                contacto.
+
+                A perna que bate vive em x NEGATIVO no rig (`criarPerna(-0.4)`
+                é a direita, ver pose.js), por isso o lado sai com sinal.
+                */
+                let avancoPe = 0.6, ladoPe = 0;
+                const gesto = this.fsm && (this.fsm.currentState === 'SHOOT' || this.fsm.currentState === 'PASS');
+                if (gesto && this.actionState && typeof PlantarBola !== 'undefined') {
+                    const cont = this.actionState.contactTime || 0.6;
+                    const u = THREE.MathUtils.clamp(
+                        (this.actionState.t / Math.max(0.001, this.actionState.duration)) / Math.max(0.001, cont), 0, 1);
+                    const chuteR = (ShotClip.pernaChute === 'r');
+                    avancoPe = 0.6 + (PlantarBola.avanco - 0.6) * u;
+                    ladoPe = (chuteR ? -1 : 1) * PlantarBola.lateral * u;
+                }
+                let footOffset = _p_v1.set(ladoPe, 0, avancoPe).applyQuaternion(this.model.quaternion);
                 _p_v2.copy(this.model.position).add(footOffset);
                 Match.ball.position.lerp(_p_v2, 0.5);
                 Match.ball.position.y = BallPhysics.raio; Match.ballVel.set(0, 0, 0);
@@ -5004,7 +5048,33 @@ class FootballPlayer {
             const ruido = parNormal(Math.random(), Math.random());
             this._gkErroU = ruido.u;
             this._gkErroV = ruido.v;
+            /*
+            E A ÂNCORA CONGELA NO INSTANTE DO REMATE.
+
+            Relato: *"o jogador só chuta em cima do guarda-redes no cara a
+            cara"*. E era verdade, mas o remate não tinha culpa: seguido com
+            `tools/scratch/cara_a_cara_voo.js`, o remate saía a 33 m/s e ia
+            cruzar a linha em x=-0.57, com o guarda-redes em x=+0.5. Durante os
+            0.3 s de voo ele deslizou de +0.5 para -0.9 — e a bola chegou-lhe
+            às mãos, de pé, sem mergulho nenhum.
+
+            A causa é o `gkAnchor`, que lê a posição ACTUAL da bola. Com a bola
+            parada isso é posicionamento; com a bola A VOAR PARA A BALIZA, o x
+            dela varre exactamente até ao ponto onde vai cruzar, e seguir esse
+            x é seguir o próprio remate. Nenhum erro de leitura conta, porque
+            ele não está a LER a trajectoria: está a ser levado por ela.
+
+            Congelada a âncora onde a bola estava quando saiu do pé, sobram-lhe
+            as duas coisas que um guarda-redes tem mesmo: o ponto de
+            intercepção LIDO (com o erro do `erroLeituraGK`, e só depois do
+            tempo de reacção) e o mergulho.
+            */
+            this._gkAncoraRemate = {
+                x: Match.ball.position.x,
+                z: Match.ball.position.z
+            };
         }
+        if (!window.bolaChutada) this._gkAncoraRemate = null;
         this._gkChutadoAnt = !!window.bolaChutada;
 
         if (window.bolaChutada && !this.gkReagiu) {
@@ -5044,7 +5114,9 @@ class FootballPlayer {
                 ? { x: 0, z: this.ownGoalZ }
                 : naLinhaDaFalta
                 ? { x: gkCorpo.position.x, z: this.ownGoalZ }
-                : gkAnchor(Match.ball.position.x, Match.ball.position.z,
+                : gkAnchor(
+                    this._gkAncoraRemate ? this._gkAncoraRemate.x : Match.ball.position.x,
+                    this._gkAncoraRemate ? this._gkAncoraRemate.z : Match.ball.position.z,
                     this.ownGoalZ, this.dirZ, gkStyleAtual);
 
             let alvoGkZ = (typeof Match !== 'undefined' && Match.state === 'GOAL')
@@ -5362,8 +5434,28 @@ class FootballPlayer {
                                     : Match.ball.position.y;
                                 const lateralEsp = espX - gkCorpo.position.x;
                                 this.gkTempoMergulho = 0;
-                                this.gkAlvoX = espX;
-                                this.gkAlvoY = espY;
+                                /*
+                                O ALVO SÓ SE ESCREVE DEPOIS DE ELE REAGIR.
+
+                                Relato: *"o jogador só chuta em cima do
+                                guarda-redes no cara a cara"*. Seguido frame a
+                                frame (`tools/scratch/cara_a_cara_voo.js`): o
+                                remate saiu a 33 m/s e ia cruzar a linha a 1.6 m
+                                do guarda-redes; ele pôs o `gkAlvoX` no ponto de
+                                cruzamento no PRIMEIRO frame do voo — com
+                                `gkReagiu` ainda falso — e deslizou até lá de pé,
+                                a tempo, sem mergulhar. Assim nenhum remate
+                                passa: ele está sempre onde a bola vai dar.
+
+                                O `podeAtirarSe` já existia e já guardava o
+                                mergulho e a barreira; faltava guardar isto, que
+                                é o que o move. Ninguém se desloca para onde a
+                                bola vai antes de ver que ela saiu.
+                                */
+                                if (podeAtirarSe) {
+                                    this.gkAlvoX = espX;
+                                    this.gkAlvoY = espY;
+                                }
                                 /*
                                 A MESMA HORA DO OUTRO RAMO. Este disparava assim
                                 que `tempoAteMim < 0.6`, e como o `GkDive.iniciar`
@@ -5396,9 +5488,32 @@ class FootballPlayer {
                                     this.gkEstado = 'maos';
                                 } else if (podeAtirarSe && Math.abs(lateralEsp) < GoalkeeperPose.mergulhoLateralMin) {
                                     this.gkEstado = 'maos';
-                                } else if (!podeAtirarSe || !this.horaDeMergulhar(lateralEsp, alvoEspT)) {
-                                    // Ainda nao reagiu, ou ainda ha tempo: acompanha
-                                    // de pe, pelo gkAlvoX. Ver a nota do possoEspalmar.
+                                } else if (!podeAtirarSe) {
+                                    /*
+                                    AINDA NÃO REAGIU: FICA ONDE ESTÁ.
+
+                                    Estava aqui um `!podeAtirarSe ||` que o
+                                    mandava acompanhar o ponto de cruzamento a
+                                    6 m/s antes de reagir — e era isso, e não a
+                                    pontaria do avançado, que dava o relato *"o
+                                    jogador só chuta em cima do guarda-redes no
+                                    cara a cara"*. Medido com
+                                    `tools/scratch/cara_a_cara_voo.js`: remate a
+                                    33 m/s de 8 m, a cruzar a linha 1.6 m ao
+                                    lado dele; durante os 0.30 s de voo ele
+                                    andou os 1.4 m e apanhou-a de pé, sem
+                                    mergulho. Com o tempo de reacção a valer
+                                    (0.17 s neste caso), sobra-lhe metade do voo
+                                    — e aí tem de se atirar, que é o que se quer
+                                    ver.
+
+                                    Fica quieto de propósito: o `alvoGkX` nesta
+                                    altura é a âncora, ou seja a posição em que o
+                                    remate o apanhou.
+                                    */
+                                } else if (!this.horaDeMergulhar(lateralEsp, alvoEspT)) {
+                                    // Reagiu e ainda ha tempo: acompanha de pe,
+                                    // pelo gkAlvoX. Ver a nota do possoEspalmar.
                                     alvoGkX = espX;
                                     speedLerp = 6.0;
                                 } else {

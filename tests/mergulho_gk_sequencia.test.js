@@ -152,8 +152,24 @@ console.log(LF + '5 — no chão os braços vão à frente');
     const d = { ladoLocal: -1, agarrou: true };
     repetir(() => GkDive.poseBracosChao(rig, d));
     const B = GkDive.bracos(rig, d);
-    if (!(S.chao.liderX > 0 && S.chao.traseiroX > 0)) {
-        erro('"à frente" é x positivo no rig: o config está a mandá-los atrás');
+    /*
+    O SINAL: "À FRENTE" É x NEGATIVO, e esta linha já afirmou o contrário.
+
+    Medido com `tools/scratch/braco_convencao.js`, que roda só o ombro e lê a
+    mão no referencial do peito (z positivo é a frente do corpo, que é o lado
+    onde está a cara):
+
+        ombro.x = -0.90  ->  mão 1.41 m À FRENTE do peito
+        ombro.x = +0.90  ->  mão 1.41 m ATRÁS
+
+    O teste e o config diziam os dois a mesma coisa errada, e por isso
+    concordavam: a pose do chão mandava os braços para trás das costas com o
+    comentário a dizer que os punha à frente. Em jogo (300 s,
+    `tools/scratch/gk_braco_tras.js`) isso dava 60% das amostras da fase 'chao'
+    com a mão atrás do peito; com o sinal corrigido são 4%.
+    */
+    if (!(S.chao.liderX < 0 && S.chao.traseiroX < 0)) {
+        erro('"à frente" é x NEGATIVO no rig: o config está a mandá-los atrás');
     } else if (Math.abs(B.traseiro.rotation.x - S.chao.traseiroX) > 0.05) {
         erro('o braço de trás não foi à frente na aterragem');
     } else if (Math.abs(B.lider.rotation.x - S.chao.liderX) > 0.05) {

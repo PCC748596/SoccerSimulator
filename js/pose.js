@@ -406,7 +406,22 @@ function aplicarPoseRemate(rig, K) {
 
     rig.chest.rotation.set(K.chest, chuteR ? K.chestY : -K.chestY, 0);
 
-    pernaC.rotation.set(K.coxaChute, 0, 0);
+    /*
+    A ANCA DO LADO QUE BATE PODE ABRIR — `coxaChuteY`.
+
+    Com ela a zero a perna balança no plano do corpo e o que chega à bola é a
+    PONTA do pé: é o remate de bico, e era assim que o passe saía. Relato: *"o
+    passe está sendo dado de bico e não com o lado do pé"*. Abrindo a anca, a
+    perna roda para fora e quem fica virado para a bola é a face interna.
+
+    O sinal segue a perna e sai da MEDIÇÃO, não da intuição: neste rig um `y`
+    positivo roda a perna direita de modo a pôr a face interna do pé virada
+    para a frente (ver tools/scratch/passe_pe_diag.js, que mede o ângulo entre
+    essa face e a direcção do passe). Com o sinal trocado dá o contrário —
+    medido, a ponta do pé a 40 graus do alvo e a face interna a 128.
+    */
+    const abrirAnca = K.coxaChuteY || 0;
+    pernaC.rotation.set(K.coxaChute, chuteR ? abrirAnca : -abrirAnca, 0);
     joelhoC.rotation.set(K.joelhoChute, 0, 0);
     pernaA.rotation.set(K.coxaApoio, 0, 0);
     joelhoA.rotation.set(K.joelhoApoio, 0, 0);
@@ -416,8 +431,14 @@ function aplicarPoseRemate(rig, K) {
     rig.lElbow.rotation.x = K.cotoveloL;
     rig.rElbow.rotation.x = K.cotoveloR;
 
-    rig.lFoot.rotation.set(0, Math.PI / 16, 0);
-    rig.rFoot.rotation.set(0, -Math.PI / 16, 0);
+    /*
+    E O PÉ ACOMPANHA A ANCA — `peChuteY`, somado à abertura de repouso (PI/16,
+    que é só a postura de pé). É o tornozelo trancado para fora do passe pelo
+    lado do pé; o remate não traz o canal e fica com a postura de sempre.
+    */
+    const abrirPe = K.peChuteY || 0;
+    rig.lFoot.rotation.set(0, (Math.PI / 16) - (chuteR ? 0 : abrirPe), 0);
+    rig.rFoot.rotation.set(0, -(Math.PI / 16) + (chuteR ? abrirPe : 0), 0);
 
     aplicarPesECabeca(rig, K);
 }
@@ -674,6 +695,17 @@ function amostrarClipRemate(norm) {
     const u = pos - i;
     const a = fr[i], b = fr[i + 1];
     const mix = (k) => a[k] + (b[k] - a[k]) * u;
+    /*
+    CANAIS OPCIONAIS — zero quando o clip não os traz. São a abertura da anca e
+    do pé do lado que bate: o remate bate com o peito do pé e deixa-os a zero,
+    o passe abre-os para bater com o LADO do pé. Sem isto, `mix` de uma chave
+    que não existe dá NaN e a perna desaparece do ecrã.
+    */
+    const mixOpt = (k) => {
+        const va = (typeof a[k] === 'number') ? a[k] : 0;
+        const vb = (typeof b[k] === 'number') ? b[k] : 0;
+        return va + (vb - va) * u;
+    };
     return {
         leanZ: mix('leanZ'), pelvisY: mix('pelvisY'),
         chest: mix('chest'), chestY: mix('chestY'),
@@ -682,6 +714,7 @@ function amostrarClipRemate(norm) {
         bracoLx: mix('bracoLx'), bracoLz: mix('bracoLz'),
         bracoRx: mix('bracoRx'), bracoRz: mix('bracoRz'),
         cotoveloL: mix('cotoveloL'), cotoveloR: mix('cotoveloR'),
+        coxaChuteY: mixOpt('coxaChuteY'), peChuteY: mixOpt('peChuteY'),
         altura: mix('altura')
     };
 }
@@ -701,6 +734,17 @@ function amostrarClipPasse(norm) {
     const u = pos - i;
     const a = fr[i], b = fr[i + 1];
     const mix = (k) => a[k] + (b[k] - a[k]) * u;
+    /*
+    CANAIS OPCIONAIS — zero quando o clip não os traz. São a abertura da anca e
+    do pé do lado que bate: o remate bate com o peito do pé e deixa-os a zero,
+    o passe abre-os para bater com o LADO do pé. Sem isto, `mix` de uma chave
+    que não existe dá NaN e a perna desaparece do ecrã.
+    */
+    const mixOpt = (k) => {
+        const va = (typeof a[k] === 'number') ? a[k] : 0;
+        const vb = (typeof b[k] === 'number') ? b[k] : 0;
+        return va + (vb - va) * u;
+    };
     return {
         leanZ: mix('leanZ'), pelvisY: mix('pelvisY'),
         chest: mix('chest'), chestY: mix('chestY'),
@@ -709,6 +753,7 @@ function amostrarClipPasse(norm) {
         bracoLx: mix('bracoLx'), bracoLz: mix('bracoLz'),
         bracoRx: mix('bracoRx'), bracoRz: mix('bracoRz'),
         cotoveloL: mix('cotoveloL'), cotoveloR: mix('cotoveloR'),
+        coxaChuteY: mixOpt('coxaChuteY'), peChuteY: mixOpt('peChuteY'),
         altura: mix('altura')
     };
 }

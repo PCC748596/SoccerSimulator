@@ -163,8 +163,51 @@ const ShootingModel = {
         corredorMeiaLargura: 4.0,
         recuoAtras: 2.0,
         distanciaIdeal: 11.0,
-        distanciaMax: 30.0
-    }
+        distanciaMax: 30.0,
+
+        /*
+        COM O GUARDA-REDES A ESTA DISTÂNCIA, REMATA-SE JÁ.
+
+        Relato: *"o jogador do cara a cara ou chuta antes de entrar na área ou
+        não chuta; nem o guarda-redes pega a bola; fica um a tentar correr de
+        frente para o outro"*.
+
+        A regra de cima manda aproximar até à `distanciaIdeal` (11 m) e só
+        depois rematar. Só que ela é cega ao guarda-redes: o corredor conta os
+        adversarios de campo, e quem chama já filtrou o `gk`. Seguido com
+        `tools/scratch/cara_a_cara_timeline.js` (ângulo 20): o avançado entra
+        na área aos 1.5 s, continua a conduzir porque ainda está a 13 m, e aos
+        2.9 s o guarda-redes sai e agarra-lhe a bola aos pés. Nunca houve
+        remate — e, sem remate, também nunca houve defesa para ver.
+
+        7 m é o espaço que o guarda-redes cobre no tempo de armar e bater: com
+        ele mais perto do que isto, esperar mais um metro é dar-lhe a bola.
+        */
+        gkAoAlcance: 7.0
+    },
+
+    /*
+    A BOLA AO ALCANCE DO PÉ, para se poder rematar sem a ter colada.
+
+    Relato, na sequência do anterior: *"ou chuta antes de entrar na área ou não
+    chuta"*. Seguido com `tools/scratch/cara_a_cara_timeline.js`, a causa não
+    era a decisão de rematar: era não se chegar a ela. Em condução a bola vai
+    0.6 a 0.8 m à frente do pé e o `hasBall` é falso na maioria dos frames; o
+    ramo `RecuperarControlo` ("a bola fugiu, vai buscá-la") está acima do
+    `Rematar` e ganhava quase sempre. O avançado atravessava a área inteira a
+    correr atrás da própria bola, e quem chegava primeiro era o guarda-redes.
+
+    Com a bola mais perto do que isto E em zona de remate, deixa de se ir
+    "buscar" a bola: remata-se. 1.3 m é menos do que o `bolaAoPe` do drible ao
+    guarda-redes (1.8) de propósito — empurrar a bola para o lado aceita-a mais
+    longe do que bater nela.
+
+    O gesto continua a exigir a bola no pé no INSTANTE do contacto (ver
+    `initiateShoot`): entre a decisão e o pé passam 0.318 s, que a esta
+    distância dá para ele alcançar a bola. Quando não dá, sai uma furada e
+    está contada em `remates.furados`.
+    */
+    bolaAoPeRemate: 1.3
 };
 
 /*

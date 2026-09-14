@@ -1,4 +1,37 @@
 Object.assign(Match, {
+    /*
+    =========================================================================
+    UM GUARDA-REDES A MEIO DE UM MERGULHO NÃO SE TELETRANSPORTA
+    =========================================================================
+    Relato: *"o guarda-redes não vai até ao chão; quando a bola sai ele é
+    teletransportado para a posição idle"*. E era exactamente isso: a defesa
+    manda a bola à linha, o `setupSetPiece` do canto (ou do tiro de meta, ou
+    do livre) corre no mesmo frame e escreve `model.position.set(...)` por cima
+    de um corpo que ia a meio do voo. O gesto desaparecia a meio.
+
+    O `arrumarGuardaRedesNoGolo` (match_physics.js) já tinha esta proteção
+    para o golo — "quem está a meio do voo não é tocado" — e faltava-a em
+    todo o resto.
+
+    Aqui não se descarta a reposição: escreve-se o ALVO. Ele acaba de cair,
+    levanta-se (o `GkDive` põe-no em 'idle' no fim) e vai a pé até ao sítio.
+    Há tempo: todos estes lances têm espera antes de a bola voltar a jogo.
+    =========================================================================
+    */
+    reporGuardaRedes: function (gk, x, z, olharPara) {
+        if (!gk || !gk.model) return false;
+        const aMergulhar = (gk.gkEstado === 'mergulho' && gk.dive);
+        if (aMergulhar) {
+            if (gk.dynamicTarget) gk.dynamicTarget.set(x, ALTURA_BASE_Y, z);
+            return false;
+        }
+        gk.model.position.set(x, ALTURA_BASE_Y, z);
+        if (gk.dynamicTarget) gk.dynamicTarget.set(x, ALTURA_BASE_Y, z);
+        if (gk.velocity) gk.velocity.set(0, 0, 0);
+        if (olharPara) lookAtBola(gk.model, olharPara);
+        return true;
+    },
+
     setupSetPiece: function (type, team) {
         this.mudarEstado(type, 'setpiece_' + type.toLowerCase());
         this.setPieceTeam = team;
@@ -314,18 +347,19 @@ Object.assign(Match, {
 
             let defGK = defendingPlayers.find(p => p.role === 'gk');
             if (defGK) {
-                defGK.model.position.set(0, ALTURA_BASE_Y, linhaZ - attDir * 1.5);
-                defGK.dynamicTarget.set(0, ALTURA_BASE_Y, linhaZ - attDir * 2.0);
-                lookAtBola(defGK.model, this.ball.position);
-                defGK.fsm.changeState('SET_PIECE_WAIT');
+                // Ver `reporGuardaRedes`: a meio de um mergulho isto só escreve
+                // o alvo, e ele vai a pé depois de se levantar.
+                if (this.reporGuardaRedes(defGK, 0, linhaZ - attDir * 1.5, this.ball.position)) {
+                    defGK.dynamicTarget.set(0, ALTURA_BASE_Y, linhaZ - attDir * 2.0);
+                    defGK.fsm.changeState('SET_PIECE_WAIT');
+                }
             }
 
             let attGK = attackingPlayers.find(p => p.role === 'gk');
             if (attGK) {
-                attGK.model.position.set(0, ALTURA_BASE_Y, -linhaZ + attDir * 2.0);
-                attGK.dynamicTarget.set(0, ALTURA_BASE_Y, -linhaZ + attDir * 2.0);
-                lookAtBola(attGK.model, this.ball.position);
-                attGK.fsm.changeState('SET_PIECE_WAIT');
+                if (this.reporGuardaRedes(attGK, 0, -linhaZ + attDir * 2.0, this.ball.position)) {
+                    attGK.fsm.changeState('SET_PIECE_WAIT');
+                }
             }
 
         } else if (type === 'THROW_IN') {
@@ -544,15 +578,14 @@ Object.assign(Match, {
                     gkOffX = THREE.MathUtils.clamp(gkOffX, -LARGURA_BALIZA / 2 + 0.6, LARGURA_BALIZA / 2 - 0.6);
                 }
                 const linhaBalizaZ = attDir * (CAMPO_COMP / 2) - attDir * 0.4;
-                gkDefensor.model.position.set(gkOffX, ALTURA_BASE_Y, linhaBalizaZ);
-                gkDefensor.dynamicTarget.set(gkOffX, ALTURA_BASE_Y, linhaBalizaZ);
-                gkDefensor.velocity.set(0, 0, 0);
-                gkDefensor.gkEstado = 'idle';
-                gkDefensor.gkReagiu = false;
-                gkDefensor.dive = null;
-                lookAtBola(gkDefensor.model, bolaFK);
-                gkDefensor.resetBonesToDefault();
-                gkDefensor.fsm.changeState('SET_PIECE_WAIT');
+                // A meio de um mergulho não se lhe toca: ver `reporGuardaRedes`.
+                if (this.reporGuardaRedes(gkDefensor, gkOffX, linhaBalizaZ, bolaFK)) {
+                    gkDefensor.gkEstado = 'idle';
+                    gkDefensor.gkReagiu = false;
+                    gkDefensor.dive = null;
+                    gkDefensor.resetBonesToDefault();
+                    gkDefensor.fsm.changeState('SET_PIECE_WAIT');
+                }
             }
 
             /*
@@ -1083,9 +1116,29 @@ Object.assign(Match, {
                 depois de a bola assentar na quina da pequena área — ver
                 golKickPendente no update().
                 */
-                gk.gkEstado = 'tiro_meta_espera';
+                /*
+                MAS NÃO A MEIO DE UM MERGULHO.
+
+                Medido com `tools/scratch/gk_mergulho_completo.js`: de 13
+                mergulhos em 15 minutos, SEIS acabavam cortados em pleno voo, e
+                os seis com `gkEstado` a passar a 'tiro_meta_espera'. É o
+                caminho mais comum do jogo — a defesa manda a bola à linha de
+                fundo e o tiro de meta é montado no mesmo frame —, e explica o
+                relato *"o guarda-redes não vai até ao chão; quando a bola sai
+                ele é teletransportado para a posição idle"*.
+
+                A bandeira fica pendente e quem a levanta é o `match_loop`,
+                quando o corpo já aterrou. O `golKickAtrasoInicio` dá o tempo:
+                cair, levantar e ir a pé buscar a bola.
+                */
+                const gkNoAr = (gk.gkEstado === 'mergulho' && gk.dive);
+                if (gkNoAr) {
+                    gk.gkTiroMetaPendente = true;
+                } else {
+                    gk.gkEstado = 'tiro_meta_espera';
+                }
                 gk.gkTiroFase = 0;              // 0 = caminhar, 1 = corrida
-                gk.gkTempoMergulho = 0;
+                if (!gkNoAr) gk.gkTempoMergulho = 0;
                 gk.gkKickAction = null;
                 const recuo = G.tiroMetaRecuo || 3.8;
                 // Posição de arranque atrás da bola à esquerda do alinhamento da bola
@@ -1093,9 +1146,15 @@ Object.assign(Match, {
                     x: bolaX + gk.dirZ * 0.70,
                     z: bolaZ - gk.dirZ * recuo
                 };
-                // Posiciona o goleiro no ponto de partida do tiro de meta virado para a bola
-                gk.model.position.set(gk.gkTiroAlvo.x, ALTURA_BASE_Y, gk.gkTiroAlvo.z);
-                lookAtBola(gk.model, { x: bolaX, y: ALTURA_BASE_Y, z: bolaZ });
+                /*
+                Posiciona-o no ponto de partida — mas não a meio de um
+                mergulho: o tiro de meta vem quase sempre a seguir a uma
+                defesa dele, que é precisamente quando o corpo ainda está no
+                ar. Ver `reporGuardaRedes`; o `golKickAtrasoInicio` dá-lhe o
+                tempo de se levantar e ir a pé.
+                */
+                this.reporGuardaRedes(gk, gk.gkTiroAlvo.x, gk.gkTiroAlvo.z,
+                    { x: bolaX, y: ALTURA_BASE_Y, z: bolaZ });
             }
 
             /*

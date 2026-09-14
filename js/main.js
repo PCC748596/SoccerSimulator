@@ -850,8 +850,10 @@ function animate(time) {
             era, o passo seria ~0.15 s (7 Hz), e a essa cadência a bola anda
             1,5 m entre frames — atravessa a rede (testada por bandas de
             0.22 m), passa ao lado dos contactos, e os temporizadores da FSM
-            saltam gestos inteiros. O botão está hoje em 2x, mas a partição
-            fica: é ela que torna a escolha do multiplicador inofensiva.
+            saltam gestos inteiros. O 2x já saiu do painel e o mais rápido é
+            hoje 1.2x, mas a partição fica: é ela que torna a escolha do
+            multiplicador inofensiva, e o mesmo código serve o 0.3x novo — aí
+            é sempre um passo só, mais pequeno que o frame.
 
             Correr N passos do tamanho normal dá exactamente o mesmo jogo, só
             mais vezes por frame. Abaixo de `PASSO_MAX` isto é um passo só, ou

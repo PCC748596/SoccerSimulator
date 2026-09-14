@@ -243,6 +243,30 @@ const CarryModel = {
     pesoSector: 1.6,
 
     /*
+    PERTO DA BALIZA, PROGREDIR É APROXIMAR-SE DELA — e não ganhar profundidade.
+
+    Relato: *"no cara a cara, o jogador em vez de ir na direção do gol vai na
+    direção da linha de fundo e tenta chutar sem ângulo"*.
+
+    O progresso era `(tz - pz) * sentido`, ou seja metros ganhos em Z. A 25 m
+    da baliza, ir a direito para a linha de fundo pontua tanto como ir para a
+    baliza — os dois ganham a mesma profundidade — e o termo do espaço
+    desempata para o lado errado, porque quem defende está ao centro e a relva
+    livre está na ponta. Medido com `tools/scratch/cara_a_cara_diag.js`, o
+    lance montado a 20 e a 30 graus acabava com o avançado a |x| 17-19 m e a
+    z 45-52 (a linha está em 53), com 0.0 a 0.2 graus de baliza aberta.
+
+    Dentro de `progressoParaBalizaDist` metros do centro da baliza, o progresso
+    passa a ser a DISTÂNCIA ganha à baliza. Ir para a ponta deixa de pontuar
+    sozinho: aproxima pouco ou nada, e o ângulo fecha.
+
+    30 m é pouco mais do que a `distanciaIdeal` do frente-a-frente e cobre a
+    zona de remate inteira; fora disso continua a valer a profundidade, que é
+    o que se quer a meio-campo.
+    */
+    progressoParaBalizaDist: 30.0,
+
+    /*
     Espaço livre à frente. Medido num corredor que abre para longe (`corredor`
     metros de meia-largura à altura do jogador, mais `abertura` por cada metro
     de profundidade), até ao adversário mais próximo lá dentro.
@@ -472,7 +496,31 @@ const CarryModel = {
     da linha; o resto é apanhado pelo emZonaDeFinalizacao, que trava o toque
     em toda a zona de remate.
     */
-    margemLinhaFundo: 3.5
+    margemLinhaFundo: 3.5,
+
+    /*
+    COM O GUARDA-REDES A ESTA DISTÂNCIA NÃO SE ADIANTA A BOLA.
+
+    Relato: *"o jogador do cara a cara ou chuta antes de entrar na área ou não
+    chuta — e nem o guarda-redes pega a bola; fica um a tentar correr de frente
+    para o outro"*.
+
+    O toque de condução empurra a bola 1.6 a 2.5 m à frente e o portador vai
+    atrás dela. Isso serve em campo aberto; num duelo com o guarda-redes a sair
+    é oferecer-lha, porque durante esse tempo todo a bola não está no pé de
+    ninguém e ele está mais perto dela. Medido com
+    `tools/scratch/cara_a_cara_timeline.js`: o último toque saiu a 20 m da
+    baliza e o avançado só voltou a ter a bola ao pé aos 13 m, com o
+    guarda-redes já em cima dela.
+
+    Não chega travar o toque dentro da área (que é o que o
+    `emZonaDeFinalizacao` faz): o toque que estraga o lance é o de ANTES de
+    entrar nela. Com 20 m nada mudava — o toque decisivo saiu a 20.5 m e
+    escapava por meio metro. A 25 m o lance passa a ser o que se espera: bola
+    no pé pela área dentro, corte para o meio e remate de 10.9 m com 32 graus
+    de baliza aberta, contra o remate que antes nunca chegava a existir.
+    */
+    semToqueComGkA: 25.0
 };
 
 /*

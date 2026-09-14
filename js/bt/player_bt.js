@@ -2714,19 +2714,29 @@ function emZonaDeRemate(ctx) {
     */
     const FF = ShootingModel.frenteAFrente;
     if (FF && typeof frenteAFrenteComGk === 'function') {
+        const gkAdv = ctx.opponents.find(o => o.role === 'gk' && o.model);
         const ff = frenteAFrenteComGk({
             x: p.model.position.x, z: p.model.position.z,
             dirZ: p.dirZ, golZ: p.targetGoalZ,
+            gk: gkAdv ? { x: gkAdv.model.position.x, z: gkAdv.model.position.z } : null,
             adversarios: ctx.opponents.filter(o => o.role !== 'gk' && o.model)
                 .map(o => ({ x: o.model.position.x, z: o.model.position.z }))
         });
-        if (ff.livre && ff.dist > FF.distanciaIdeal && ff.dist <= FF.distanciaMax) {
+        /*
+        A ESPERA TEM UM FIM: o guarda-redes a sair.
+
+        `ff.livre` olha para o corredor sem contar com ele, portanto "aproximar
+        mais um bocado" continuava a ser a resposta certa enquanto ele vinha a
+        fechar. Ver `gkAoAlcance` no ShootingModel para a medição.
+        */
+        const gkEmCima = ff.distGk <= (FF.gkAoAlcance || 0);
+        if (!gkEmCima && ff.livre && ff.dist > FF.distanciaIdeal && ff.dist <= FF.distanciaMax) {
             p.frenteAFrente = false;
             return false;
         }
         // Guardado para o remate saber que é um frente-a-frente e tocar ao
         // canto em vez de bater (ver initiateShoot/tipoDeRemate).
-        p.frenteAFrente = ff.livre && ff.dist <= FF.distanciaIdeal;
+        p.frenteAFrente = ff.livre && (ff.dist <= FF.distanciaIdeal || gkEmCima);
     }
 
     /*
@@ -3106,8 +3116,29 @@ const PlayerBT = sel('PlayerRoot',
                 act('driblarGuardaRedes', actDribble)
             ),
 
+            /*
+            IR BUSCAR A BOLA — menos quando o que falta fazer é rematá-la.
+
+            `bolaFugiu` era só `!hasBall`, e em condução isso é verdade na
+            maioria dos frames: a bola vai à frente do pé. Como este ramo está
+            acima do `Rematar`, o avançado atravessava a área a correr atrás da
+            própria bola sem nunca chegar à decisão de rematar. Ver
+            `bolaAoPeRemate` no ShootingModel para a medição do lance.
+
+            A guarda é estreita de propósito: bola ao alcance do pé E zona de
+            remate. Fora disso, quem perdeu a bola continua a ir buscá-la.
+            */
             seq('RecuperarControlo',
-                cond('bolaFugiu', (ctx) => !ctx.p.hasBall),
+                cond('bolaFugiu', (ctx) => {
+                    if (ctx.p.hasBall) return false;
+                    const R = (typeof ShootingModel !== 'undefined') ? ShootingModel.bolaAoPeRemate : null;
+                    if (typeof R === 'number' && typeof Match !== 'undefined' && Match.ball &&
+                        ctx.p.model.position.distanceTo(Match.ball.position) <= R &&
+                        typeof emZonaDeRemate === 'function' && emZonaDeRemate(ctx)) {
+                        return false;
+                    }
+                    return true;
+                }),
                 act('correrParaBola', actCarry)
             ),
             /*

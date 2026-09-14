@@ -41,10 +41,17 @@ do jogador em js/pose.js, vezes 22 jogadores, desloca a sequência inteira e o
 jogo medido passa a ser outro. Aconteceu ao tirar a caixa da pélvis — o
 mesmo já tinha apanhado o tiro_de_meta_forma, onde está a nota longa.
 
-Medido nessa altura: 20260910 dá 12.6 m e reprova o tecto de 12; 7, 99 e 1234
-aprovam, com as medianas do costume.
+Medido nessa altura: 20260910 dava 12.6 m e reprovava o tecto de 12; 7, 99 e
+1234 aprovavam. Ficou em 7.
+
+E VOLTOU A 20260910 depois de a bola passar a colar-se AO LADO do pé no gesto
+de rematar e de passar (ver `PlantarBola` em config/animations.js): isso muda
+onde a bola está em cada gesto, logo muda o jogo medido, e a semente 7 passou a
+dar 15.7 m. Medido com o código de agora: 20260910, 99 e 1234 aprovam, 7
+reprova. Não é a mesma deriva de antes — aquela vinha da contagem de malhas
+pelo `generateUUID`; esta é do jogo ser outro.
 */
-Math.random = mulberry32(7);
+Math.random = mulberry32(20260910);
 
 require('../tools/headless/harness.js');
 

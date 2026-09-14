@@ -524,9 +524,29 @@ Object.assign(Match, {
                 if (dMao > alcance) continue;
             }
             const distZFromGoal = (this.ball.position.z - gk.ownGoalZ) * gk.dirZ;
+            /*
+            E A BOLA TEM DE ESTAR DESTE LADO DA LINHA.
+
+            Relato: *"o jogador chuta, a bola passa pelo guarda-redes e volta
+            depois de passar por ele... parece haver uma barreira entre ele e a
+            baliza"*.
+
+            O limite era `> -1.0`: o guarda-redes podia tocar numa bola que já
+            estava UM METRO para lá da linha de fundo. Quando ela vai dentro da
+            moldura isso nunca se vê, porque o teste do golo corre antes nesta
+            mesma função e o lance já parou. O que se vê é o outro caso: a bola
+            que passa ao lado do poste ou por cima e já cruzou a linha — essa
+            não dá golo, o estado continua em PLAY, e ele ia buscá-la atrás da
+            linha e espalmava-a de volta para o campo. Vista de frente, a bola
+            passa por ele e volta sozinha.
+
+            O corte passa a ser o mesmo do golo (`|z| - raio > CAMPO_COMP/2`,
+            mais acima): enquanto a bola não estiver inteira lá fora, ainda se
+            defende; a partir daí já não há nada a defender.
+            */
             const dentroArea = Math.abs(this.ball.position.x) < Area.meiaLargura &&
                 distZFromGoal < Area.profundidade &&
-                distZFromGoal > -1.0;
+                distZFromGoal > -BallPhysics.raio;
             if (!dentroArea) continue;
             /*
             RECUO COM O PE: as maos estao proibidas. Nao se agarra, e a bola

@@ -9,10 +9,21 @@ Object.assign(Match, {
                 if(this.defLineB) this.defLineB.visible = this.showOffsideLines;
             }
             if (e.key === 'f' || e.key === 'F') this.setSpeed('frame');
-            if (e.key === '1') this.setSpeed(0.9);
+            /*
+            AS TECLAS SÃO AS VELOCIDADES QUE EXISTEM MESMO.
+
+            O '1' estava em 0.9x, que não tem botão nenhum: carregar nele punha
+            o jogo a uma velocidade que o painel não marcava em lado nenhum.
+            O '4' fazia DUAS coisas — setSpeed(2) e a seguir a câmara central,
+            portanto a velocidade mudava e o botão 2x acendia sem que ninguém
+            tivesse pedido a câmara. O 2x saiu (pedido) e a colisão com ele.
+
+            O 0.3x novo não tem tecla: só há três livres antes do '4' começar as
+            câmaras, e ficam para as três de jogar.
+            */
+            if (e.key === '1') this.setSpeed(0.6);
             if (e.key === '2') this.setSpeed(1.0);
             if (e.key === '3') this.setSpeed(1.2);
-            if (e.key === '4') this.setSpeed(2);
             if (e.key === '4') this.setCameraMode('center');
             if (e.key === '5') this.setCameraMode('sideline');
             if (e.key === '6') this.setCameraMode('topdown');

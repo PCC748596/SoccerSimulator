@@ -1768,6 +1768,24 @@ function emZonaDeFinalizacao(p) {
     const dx = p.model.position.x;
     const dz = p.targetGoalZ - p.model.position.z;
     const dist = Math.hypot(dx, dz);
+
+    /*
+    DENTRO DA GRANDE ÁREA JÁ É ZONA DE FINALIZAÇÃO — a mesma regra que o
+    `emZonaDeRemate` usa para decidir rematar (ShootingModel.dentroDaArea).
+
+    As duas noções andavam desencontradas e o preço via-se no cara a cara: o
+    `emZonaDeRemate` diz "dentro da área remata-se", mas quem trava o toque de
+    condução é esta função, que só conhecia o `shootingRange` (13 m com a skill
+    a 50, contra 16.5 m de fundo de área). Resultado, medido com
+    `tools/scratch/cara_a_cara_timeline.js`: o avançado entrava na área e
+    continuava a empurrar a bola 2 m à frente, ficava sem ela ao pé, e o ramo
+    que ganhava era o de ir buscá-la. Quem chegava primeiro era o guarda-redes.
+
+    Dentro da área a bola fica no pé. É também o que se vê num jogo.
+    */
+    const A = ShootingModel.dentroDaArea;
+    if (A && Math.abs(dz) <= A.profundidade && Math.abs(dx) <= A.meiaLargura) return true;
+
     if (dist >= p.shootingRange() || Math.abs(dx) >= ShootingModel.maxOffsetX) return false;
 
     /*
@@ -3016,7 +3034,15 @@ function frenteAFrenteComGk(o) {
     const F = (typeof ShootingModel !== 'undefined') ? ShootingModel.frenteAFrente : null;
     const dirZ = Math.sign(o.dirZ) || 1;
     const dist = Math.abs(o.golZ - o.z);
-    if (!F) return { livre: false, dist: dist };
+    /*
+    E A DISTÂNCIA AO GUARDA-REDES, que faltava por completo: os `adversarios`
+    chegam aqui JÁ SEM ele (quem chama filtra o `role === 'gk'`), portanto esta
+    função dizia "corredor livre" com o guarda-redes a três metros a fechar.
+    Quem decide o que fazer com isso é o `emZonaDeRemate`; aqui só se mede.
+    */
+    const distGk = (o.gk && typeof o.gk.x === 'number')
+        ? Math.hypot(o.gk.x - o.x, o.gk.z - o.z) : Infinity;
+    if (!F) return { livre: false, dist: dist, distGk: distGk };
 
     for (const a of (o.adversarios || [])) {
         if (!a) continue;
@@ -3025,9 +3051,9 @@ function frenteAFrenteComGk(o) {
         if (aoLongo < -F.recuoAtras) continue;
         // Já atrás da linha de fundo não estorva nada.
         if (aoLongo > dist) continue;
-        if (Math.abs(a.x - o.x) <= F.corredorMeiaLargura) return { livre: false, dist: dist };
+        if (Math.abs(a.x - o.x) <= F.corredorMeiaLargura) return { livre: false, dist: dist, distGk: distGk };
     }
-    return { livre: true, dist: dist };
+    return { livre: true, dist: dist, distGk: distGk };
 }
 
 /*
@@ -3367,6 +3393,21 @@ Devolve a distância de um PONTO ao SEGMENTO que a bola percorreu no frame.
 
 Pura: sem Match, sem THREE.
 */
+/*
+ONDE, NO SEGMENTO, FICA O PONTO MAIS PRÓXIMO — o parâmetro t em [0, 1].
+
+Serve o contacto do guarda-redes: saber que a mão tocou na bola não chega, é
+preciso saber ONDE no trajecto do frame, para a devolver a esse ponto antes de
+lhe mexer na velocidade. Ver `defender` (gk_dive.js).
+*/
+function fraccaoNoSegmento(px, py, pz, ax, ay, az, bx, by, bz) {
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const comp2 = abx * abx + aby * aby + abz * abz;
+    if (comp2 < 1e-9) return 0;
+    const t = ((px - ax) * abx + (py - ay) * aby + (pz - az) * abz) / comp2;
+    return Math.max(0, Math.min(1, t));
+}
+
 function distanciaAoSegmento(px, py, pz, ax, ay, az, bx, by, bz) {
     const abx = bx - ax, aby = by - ay, abz = bz - az;
     const comp2 = abx * abx + aby * aby + abz * abz;

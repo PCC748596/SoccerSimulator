@@ -34,6 +34,9 @@ const GkDive = {
     _v: new THREE.Vector3(),
     _v2: new THREE.Vector3(),
     _alvoMao: new THREE.Vector3(),
+    // Para o corte do alvo no espaço do peito (ver apontarBracos).
+    _matPeito: new THREE.Matrix4(),
+    _vLocal: new THREE.Vector3(),
     _cima: new THREE.Vector3(0, 1, 0),
     _eixoZ: new THREE.Vector3(0, 0, 1),
     _qTilt: new THREE.Quaternion(),
@@ -229,8 +232,34 @@ const GkDive = {
                 // E por cima disso a assimetria: a perna de baixo empurra o
                 // chão, a de cima já dobra para sair.
                 this.poseImpulso(rig, d, k);
-                // E os braços atrás, com o tronco já a torcer para o lado.
+                /*
+                OS BRAÇOS: arranque atrás, e depois JÁ A CAMINHO DA BOLA.
+
+                Relato: *"o pulo do goleiro está horrível, ele está pulando com
+                os braços do lado do corpo"*. Medido com
+                `tools/scratch/gk_bracos_diag.js`: na fase de impulso o ombro
+                abria 0.32 rad em média (0 é colado ao corpo, 1.57 é na
+                horizontal) e a mão estava 0.35 m ABAIXO do peito. São 16
+                frames — mais de um quarto de segundo — no instante mais
+                visível do gesto, o da saída do chão.
+
+                O balanço para trás existe num mergulho a sério, mas é o
+                arranque dele e não o gesto todo. Passada `fracIK` da fase, o
+                IK entra e os braços vão à bola — sem o teste de defesa, que
+                continua a ser só do voo e do chão: quem ainda tem os pés no
+                relvado não defende com a mão esticada no ar.
+                */
                 this.poseBracosImpulso(rig, d, k);
+                {
+                    const Pi = GoalkeeperDive.sequenciaBracos && GoalkeeperDive.sequenciaBracos.impulso;
+                    const fracIK = (Pi && typeof Pi.fracIK === 'number') ? Pi.fracIK : 0.35;
+                    if (k >= fracIK) {
+                        // Entra a subir: no primeiro frame quase não puxa, no
+                        // último puxa o peso inteiro. Sem isto o braço salta.
+                        const rampa = (k - fracIK) / Math.max(1e-6, 1 - fracIK);
+                        this.apontarBracos(rig, GoalkeeperDive.pesoIK * rampa);
+                    }
+                }
                 this.torcerTronco(rig, d, 'impulso', k);
                 this.actualizarAlvo(p, d);
                 // O corpo já começa a tombar antes de sair do chão.
@@ -408,7 +437,7 @@ const GkDive = {
     baixo da linha ombro-mão, mesmo com o corpo deitado. Ver a nota sobre pole
     vectors em js/ik.js.
     */
-    mirarBola(p, rig) {
+    apontarBracos(rig, peso) {
         const D = GoalkeeperDive;
         const C = IKChains.braco;
 
@@ -417,9 +446,49 @@ const GkDive = {
         if (prev) this._alvoMao.set(prev.x, prev.y, prev.z);
         else this._alvoMao.copy(Match.ball.position);
 
-        IK.resolverSuave(rig.lArm, rig.lElbow, C.L1, C.L2, this._alvoMao, this._cima, D.pesoIK);
-        IK.resolverSuave(rig.rArm, rig.rElbow, C.L1, C.L2, this._alvoMao, this._cima, D.pesoIK);
+        /*
+        O ALVO NÃO PODE FICAR ATRÁS DO PEITO.
 
+        Relato, com fotografias: *"o braço do guarda-redes está a dobrar por
+        trás do corpo na hora do salto"*. Medido com
+        `tools/scratch/gk_braco_tras.js`, em 300 s de jogo e no referencial do
+        peito (z positivo é à frente): no VOO, 29% das amostras têam a mão
+        atrás do peito, até -1.18 m; no chão, 60%.
+
+        A razão é o próprio IK a fazer o que lhe mandam: os dois braços vão à
+        BOLA, e a bola que já lhe passou está atrás do ombro. A cadeia
+        obedece e dobra o braço para trás das costas — uma pose que um ombro
+        não faz, e que nas fotografias de referência nunca aparece: ali os
+        braços vão sempre à frente, no ar e no chão.
+
+        O alvo é projectado para o plano à frente do peito quando cai atrás
+        dele. O braço continua a apontar para o LADO certo (x e y ficam
+        intactos), só deixa de poder ir buscar o que está nas costas.
+        */
+        if (rig.chest) {
+            rig.chest.updateWorldMatrix(true, false);
+            this._matPeito.copy(rig.chest.matrixWorld).invert();
+            this._vLocal.copy(this._alvoMao).applyMatrix4(this._matPeito);
+            const minZ = (typeof D.maoMinZPeito === 'number') ? D.maoMinZPeito : 0.15;
+            if (this._vLocal.z < minZ) {
+                this._vLocal.z = minZ;
+                this._alvoMao.copy(this._vLocal).applyMatrix4(rig.chest.matrixWorld);
+            }
+        }
+
+        const w = (typeof peso === 'number') ? peso : D.pesoIK;
+        IK.resolverSuave(rig.lArm, rig.lElbow, C.L1, C.L2, this._alvoMao, this._cima, w);
+        IK.resolverSuave(rig.rArm, rig.rElbow, C.L1, C.L2, this._alvoMao, this._cima, w);
+    },
+
+    /*
+    O IK MAIS O TESTE DA DEFESA. São duas coisas e vivem separadas de propósito:
+    apontar os braços é pose e pode correr em qualquer fase, defender é o
+    contacto e só pode correr onde ele conta. Ver a nota do `apontarBracos` na
+    fase de impulso.
+    */
+    mirarBola(p, rig) {
+        this.apontarBracos(rig);
         this.defender(p, rig);
     },
 
@@ -440,6 +509,16 @@ const GkDive = {
         if (d.tocou) return;
         if (Match.state !== 'PLAY') return;
         if (Match.ballVel.lengthSq() <= 0.0001) return;
+        /*
+        E NÃO SE DEFENDE O QUE JÁ ESTÁ ATRÁS DA LINHA — a mesma regra do ramo de
+        pé (ver a nota do `dentroArea` em match_physics.js). Uma bola que
+        passou ao lado do poste continua em jogo até o árbitro a marcar, e sem
+        isto o guarda-redes ia buscá-la lá atrás e devolvia-a ao campo.
+        */
+        if (typeof p.ownGoalZ === 'number') {
+            const atrasDaLinha = (Match.ball.position.z - p.ownGoalZ) * p.dirZ;
+            if (atrasDaLinha <= -BallPhysics.raio) return;
+        }
 
         /*
         E A BOLA MEDE-SE NO TRAJECTO DO FRAME, nao na posicao final.
@@ -472,6 +551,31 @@ const GkDive = {
         if (melhorMao === null || melhorDist > D.raioMao + BallPhysics.raio) return;
 
         d.tocou = true;
+
+        /*
+        A BOLA VOLTA AO PONTO DO CONTACTO ANTES DE SE LHE MEXER.
+
+        Relato: *"o jogador chuta, a bola passa pelo guarda-redes e volta
+        depois de passar por ele; parece uma barreira entre o guarda-redes e a
+        baliza"*. E era isso que se via, embora barreira não houvesse nenhuma.
+
+        O teste de contacto mede o TRAJECTO do frame contra a mão (segmento, e
+        não ponto — a 30 m/s a bola anda meio metro entre frames). Está certo
+        para saber SE tocou. O que faltava era o resto: a espalmada mexia só na
+        velocidade e deixava a bola onde o frame a tinha posto, que podia ser
+        meio metro para lá das mãos — já passada a linha do corpo dele. Com o
+        `ballVel.z` invertido a seguir, ela recuava dali: passava e voltava.
+
+        `fraccaoNoSegmento` (utils.js) diz em que ponto do trajecto a mão
+        estava mais perto; a bola é reposta aí. O contacto passa a acontecer
+        onde as mãos estão, e um ressalto para trás sai de onde deve sair.
+        */
+        if (typeof fraccaoNoSegmento === 'function') {
+            const mao = rig[melhorMao];
+            mao.getWorldPosition(this._v);
+            const t = fraccaoNoSegmento(this._v.x, this._v.y, this._v.z, ax, ay, az, bx, by, bz);
+            Match.ball.position.set(ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t);
+        }
 
         /*
         A decisão é do `resolverDefesaGK` (utils.js), a mesma para os quatro
@@ -772,8 +876,11 @@ const GkDive = {
         rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, -0.5 * dobra, 0.2);
         rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, -0.5 * dobra, 0.2);
         rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, 0.5 * dobra, 0.2);
-        rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, 0.4 * dobra, 0.2);
-        rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, 0.4 * dobra, 0.2);
+        // Negativo é à frente (ver a nota do `chao` no GoalkeeperDive): quem se
+        // levanta do chão apoia as mãos À FRENTE e empurra. Era +0.4, ou seja
+        // os dois braços atrás das costas durante a levantada inteira.
+        rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, -0.4 * dobra, 0.2);
+        rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, -0.4 * dobra, 0.2);
         rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, Math.PI / 16, 0.2);
         rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -Math.PI / 16, 0.2);
         // E desfaz a torção do mergulho: quem se levanta fica de frente.

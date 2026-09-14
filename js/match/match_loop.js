@@ -585,8 +585,33 @@ Object.assign(Match, {
             em 'tiro_meta'. Até lá fica parado no ponto de arranque, virado
             para a bola (postura escrita no setupSetPiece).
             */
+            /*
+            O GUARDA-REDES QUE FICOU A MEIO DO MERGULHO entra na espera do tiro
+            de meta assim que aterra e se levanta — ver a nota do `gkNoAr` em
+            setupSetPiece (match_setpieces.js). Até lá o gesto corre inteiro.
+            */
+            if (this.golKickPendente) {
+                const gkTM = this.setPieceTaker;
+                if (gkTM && gkTM.gkTiroMetaPendente && gkTM.gkEstado !== 'mergulho') {
+                    gkTM.gkTiroMetaPendente = false;
+                    gkTM.gkEstado = 'tiro_meta_espera';
+                    gkTM.gkTempoMergulho = 0;
+                    if (gkTM.gkTiroAlvo && gkTM.dynamicTarget) {
+                        gkTM.dynamicTarget.set(gkTM.gkTiroAlvo.x, ALTURA_BASE_Y, gkTM.gkTiroAlvo.z);
+                    }
+                }
+            }
+
             if (this.golKickPendente && !this.golKickBolaAlvo) {
-                this.golKickAtrasoInicio -= dt;
+                /*
+                O relógio da espera só anda com ele de pé. Sem isto, um
+                guarda-redes que ainda estivesse a aterrar gastava a espera no
+                chão e chegava ao fim dela sem nunca ter entrado em
+                'tiro_meta_espera' — e ficava aí até o `prazoTiroDeMeta` do
+                árbitro repor o lance.
+                */
+                const gkEspera = this.setPieceTaker;
+                if (!(gkEspera && gkEspera.gkTiroMetaPendente)) this.golKickAtrasoInicio -= dt;
                 if (this.golKickAtrasoInicio <= 0) {
                     this.golKickPendente = false;
                     const gkTM = this.setPieceTaker;

@@ -799,9 +799,21 @@ const GoalkeeperDive = {
         que cai. Escreve os dois: ainda não há contacto nenhum a proteger.
         */
         impulso: {
-            liderX: -0.55, liderZ: 0.55,
-            traseiroX: -0.70, traseiroZ: 0.35,
-            cotovelo: -0.55
+            liderX: -0.55, liderZ: 0.90,
+            traseiroX: -0.70, traseiroZ: 0.55,
+            cotovelo: -0.55,
+            /*
+            A partir desta fracção da fase, os braços deixam o balanço e vão
+            à bola por IK (ver a nota na fase 'impulso' do gk_dive.js). O
+            balanço fica nos primeiros 35% — o suficiente para se ver o
+            arranque, pouco o bastante para ele não sair do chão com os
+            braços colados.
+
+            E o `liderZ` subiu de 0.55 para 0.90: mesmo no balanço o braço do
+            lado do mergulho já está aberto do tronco. 0.55 rad são 31 graus,
+            que à vista é um braço ao lado do corpo.
+            */
+            fracIK: 0.35
         },
 
         /*
@@ -820,8 +832,21 @@ const GoalkeeperDive = {
         cima a proteger a bola e o de baixo esticado no relvado.
         */
         chao: {
-            liderX: 0.95, liderZ: 0.85,
-            traseiroX: 0.75, traseiroZ: 0.55,
+            /*
+            O SINAL DO `x` ESTAVA TROCADO, e era metade do relato *"o braço do
+            guarda-redes dobra por trás do corpo"*.
+
+            No rig, `ombro.rotation.x` NEGATIVO leva a mão à FRENTE — medido
+            com `tools/scratch/braco_convencao.js`: x=-0.90 põe a mão 1.41 m à
+            frente do peito, x=+0.90 põe-a 1.41 m atrás. Com +0.95 e +0.75,
+            esta pose — cujo próprio comentário diz "os dois braços à frente,
+            a amparar a batida" — punha-os exactamente ao contrário. Medido
+            na fase 'chao': 60% das amostras com a mão atrás do peito.
+
+            As magnitudes ficam como estavam; muda o sinal.
+            */
+            liderX: -0.95, liderZ: 0.85,
+            traseiroX: -0.75, traseiroZ: 0.55,
             cotovelo: -0.35
         }
     },
@@ -833,7 +858,18 @@ const GoalkeeperDive = {
     */
     torcaoTronco: { impulso: 0.30, voo: 0.18, chao: 0.45 },
 
-    pesoIK: 0.45           // suavização do IK dos braços por frame
+    pesoIK: 0.45,          // suavização do IK dos braços por frame
+
+    /*
+    O Z MÍNIMO DA MÃO NO ESPAÇO DO PEITO, em metros. Abaixo disto o alvo do IK
+    é empurrado para a frente — ver `apontarBracos` (gk_dive.js), que tem a
+    medição. Serve para o braço nunca dobrar para trás das costas atrás de uma
+    bola que já passou.
+
+    0.15 m é mesmo à frente do peito: chega para tirar a pose errada sem
+    encolher o alcance lateral, que é onde as defesas se ganham.
+    */
+    maoMinZPeito: 0.15
 };
 
 /*

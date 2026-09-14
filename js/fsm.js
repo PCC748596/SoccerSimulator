@@ -1453,6 +1453,16 @@ class PlayerFSM {
                         // linha sem nunca poder adiantar a bola.
                         const avancoMax = CAMPO_COMP / 2 - CarryModel.margemLinhaFundo;
 
+                        /*
+                        A BALIZA ATACADA, para o termo de progresso saber para
+                        onde puxar quando ele já lá está perto. Num recuo não
+                        se aplica — aí progredir é sair de lá, não chegar.
+                        */
+                        const alvoBalizaZ = (!p.carryRecuo && typeof p.targetGoalZ === 'number')
+                            ? p.targetGoalZ : null;
+                        const distBalizaAgora = (alvoBalizaZ !== null)
+                            ? Math.hypot(px, alvoBalizaZ - pz) : Infinity;
+
                         // Gera ângulos dinamicamente dentro do cone de visão do jogador
                         const passos = 9;
                         for (let k = 0; k < passos; k++) {
@@ -1500,7 +1510,44 @@ class PlayerFSM {
                             ganhava sempre ao espaço.
                             */
                             const espacoNorm = Math.min(maisPerto, CarryModel.spaceCap) / CarryModel.spaceCap;
-                            let progressoNorm = Math.max(0, Math.min(1, ((tz - pz) * sentido) / visDist));
+                            /*
+                            PROGRESSO. Longe da baliza é profundidade ganha;
+                            perto dela é distância ganha À BALIZA — ver
+                            `progressoParaBalizaDist` no CarryModel, que é
+                            onde está a explicação e a medição.
+
+                            Sem isto, a 25 m da baliza correr para a linha de
+                            fundo vale tanto como correr para o golo: ambos
+                            ganham a mesma profundidade, e o espaçaço livre da
+                            ponta desempatava para fora.
+                            */
+                            let progressoNorm;
+                            if (alvoBalizaZ !== null && distBalizaAgora <= CarryModel.progressoParaBalizaDist) {
+                                const dAlvo = Math.hypot(tx, alvoBalizaZ - tz);
+                                const ganhoDist = Math.max(0, Math.min(1, (distBalizaAgora - dAlvo) / visDist));
+                                /*
+                                METADE DISTÂNCIA, METADE ÂNGULO. Só a distância
+                                ainda deixa ir pela diagonal até junto ao poste,
+                                que é perto da baliza e sem baliza nenhuma para
+                                acertar. O ângulo aberto é o que falta: cortar
+                                para dentro aproxima menos e vale mais.
+
+                                A escala do ângulo é o `anguloMinimo` do remate
+                                (14 graus): ganhar um mínimo inteiro de baliza
+                                aberta vale o termo todo.
+                                */
+                                let ganhoAng = 0;
+                                if (typeof anguloDaBaliza === 'function' && typeof ShootingModel !== 'undefined') {
+                                    const larguraG = (typeof LARGURA_BALIZA !== 'undefined') ? LARGURA_BALIZA : 7.32;
+                                    const angMin = ShootingModel.anguloMinimo || (14 * Math.PI / 180);
+                                    const angAgora = anguloDaBaliza(px, pz, alvoBalizaZ, larguraG);
+                                    const angLa = anguloDaBaliza(tx, tz, alvoBalizaZ, larguraG);
+                                    ganhoAng = Math.max(0, Math.min(1, (angLa - angAgora) / angMin));
+                                }
+                                progressoNorm = 0.5 * ganhoDist + 0.5 * ganhoAng;
+                            } else {
+                                progressoNorm = Math.max(0, Math.min(1, ((tz - pz) * sentido) / visDist));
+                            }
                             // Se estiver na defesa com adversários perto à frente, reduz drasticamente o valor do avanço frontal
                             if ((pz * p.dirZ < 0 || p.role === 'def') && maisPerto < 16.0) {
                                 progressoNorm *= 0.2;
@@ -1532,8 +1579,19 @@ class PlayerFSM {
                 bola fora e dava pontapé de baliza ao adversário. Continua a
                 correr, mas com a bola no pé (ver pertoDaLinhaDeFundo).
                 */
+                /*
+                E NÃO SE ADIANTA A BOLA COM O GUARDA-REDES ADVERSÁRIO EM CIMA:
+                ver `semToqueComGkA` (CarryModel), que tem a medição do lance.
+                */
+                let gkAdversarioPerto = false;
+                if (typeof CarryModel.semToqueComGkA === 'number' && typeof Match !== 'undefined') {
+                    const listaAdv = (p.team === 'TeamA') ? Match.opponents : Match.players;
+                    const gkAdv = listaAdv && listaAdv.find(o => o.role === 'gk' && o.model);
+                    gkAdversarioPerto = !!gkAdv &&
+                        p.model.position.distanceTo(gkAdv.model.position) <= CarryModel.semToqueComGkA;
+                }
                 if (p.hasBall && p.velocity.lengthSq() > 2.0 && this.timer > CarryModel.touchCooldown
-                    && !pertoDaLinhaDeFundo(p) && !emZonaDeFinalizacao(p)
+                    && !pertoDaLinhaDeFundo(p) && !emZonaDeFinalizacao(p) && !gkAdversarioPerto
                     && p.gkEstado !== 'segurando') {
                     let forward = _v1.copy(p.velocity).normalize();
                     let allOpps = (p.team === 'TeamA') ? Match.opponents : Match.players;
@@ -2158,7 +2216,6 @@ class PlayerFSM {
                 break;
 
             case 'SHOOT':
-                p.velocity.multiplyScalar(0.95);
                 {
                     _v1.set(0, 0, p.targetGoalZ);
                     _v2.set(p.model.position.x * 2 - _v1.x, p.model.position.y, p.model.position.z * 2 - _v1.z);
@@ -2176,6 +2233,58 @@ class PlayerFSM {
                 if (p.actionState) {
                     const normR = p.actionState.update(dt, p);
                     p.aplicarFrameRemate(amostrarClipRemate(normR));
+
+                    /*
+                    A ÚLTIMA PASSADA. Até ao contacto o corpo vai colocar-se ao
+                    lado da bola; depois dele volta a travar como antes. Ver
+                    `ShotClip.plantar`, que tem a medição do defeito.
+
+                    Escreve-se VELOCIDADE e não posição: quem integra é o
+                    `player.update`, e escrever posição aqui deixava as duas
+                    coisas a discutir o mesmo corpo no mesmo frame.
+                    */
+                    const PL = (typeof ShotClip !== 'undefined') ? ShotClip.plantar : null;
+                    const fracContacto = (ShotClip.contactFrame - 1) / (ShotClip.frames.length - 1);
+                    if (PL && Match.ball && normR < fracContacto) {
+                        const restante = Math.max(0.02,
+                            (fracContacto - normR) * (p.actionState.duration || 0.5));
+                        // Frente do jogador e o lado do pé de apoio.
+                        _v1.set(0, 0, 1).applyQuaternion(p.model.quaternion);
+                        /*
+                        O corpo desvia-se para o lado do PÉ DE APOIO, que é o
+                        contrário do que bate. No rig, `criarPerna(+0.4)` é a
+                        esquerda e `criarPerna(-0.4)` a direita (pose.js): com
+                        a direita a bater, o apoio está em x positivo local.
+                        */
+                        const apoioR = (ShotClip.pernaChute !== 'r');   // canhoto apoia no direito
+                        _v2.set(_v1.z, 0, -_v1.x).multiplyScalar(apoioR ? -1 : 1);
+                        /*
+                        E MIRA ONDE A BOLA VAI ESTAR, não onde está.
+
+                        Com a bola parada dá no mesmo; a rolar, não: medido, o
+                        portador corria atrás dela à mesma velocidade e a
+                        distância ficava teimosamente nos 0.55 m até ao
+                        contacto. É o mesmo `preverBolaEm` que o guarda-redes
+                        usa para a leitura do remate.
+                        */
+                        const prev = (typeof preverBolaEm === 'function')
+                            ? preverBolaEm(restante) : null;
+                        if (prev) _v3.set(prev.x, Match.ball.position.y, prev.z);
+                        else _v3.copy(Match.ball.position).addScaledVector(Match.ballVel, restante);
+                        _v3.addScaledVector(_v2, PL.lateral)
+                            .addScaledVector(_v1, PL.avanco);
+                        _v3.y = p.model.position.y;
+                        _v3.sub(p.model.position);
+                        _v3.y = 0;
+                        const passo = _v3.length() / restante;
+                        if (passo > 0.01) {
+                            _v3.normalize().multiplyScalar(Math.min(passo, PL.velMax));
+                            p.velocity.x = _v3.x;
+                            p.velocity.z = _v3.z;
+                        }
+                    } else {
+                        p.velocity.multiplyScalar(0.95);
+                    }
                     if (p.actionState.isDone()) {
                         p.actionState = null;
                         p.resetBonesToDefault();
