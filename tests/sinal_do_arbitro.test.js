@@ -249,8 +249,13 @@ console.log(LF + '5 — o braço volta a cair');
         'do corpo, encostado à margem e não cruzado');
 
     /*
-    E com o alvo MESMO DE LADO a guinada acompanha-o: 90° e o braço direito,
-    que é o que fica do lado do alvo.
+    E com o alvo MESMO DE LADO a guinada acompanha-o: 90° e o braço
+    ESQUERDO, que é o que fica do lado do alvo.
+
+    O alvo está em x = +20 com o corpo a olhar para +Z, e com +Y para cima a
+    direita do modelo é -X: o alvo está à ESQUERDA dele. Este teste dizia
+    `rArm` e passava com o bug que punha o árbitro a apontar para a direita
+    com o braço esquerdo atravessado no peito.
     */
     const rigLado = {
         rArm: { rotation: { x: 0, y: 0, order: 'XYZ' } },
@@ -266,13 +271,13 @@ console.log(LF + '5 — o braço volta a cair');
         }
     };
     for (let n = 0; n < 30; n++) tick(selfLado, 0.016);
-    if (rigLado.rArm.rotation.order !== 'YXZ') {
-        erro('alvo à direita: devia sinalizar com o braço DIREITO, o mais ' +
-            'próximo do alvo — senão cruza o tronco');
-    } else if (Math.abs(rigLado.rArm.rotation.y - Math.PI / 2) > 0.05) {
+    if (rigLado.lArm.rotation.order !== 'YXZ') {
+        erro('alvo à esquerda do modelo: devia sinalizar com o braço ' +
+            'ESQUERDO, o mais próximo do alvo — senão cruza o tronco');
+    } else if (Math.abs(rigLado.lArm.rotation.y - Math.PI / 2) > 0.05) {
         erro(`alvo a 90°: a guinada devia acompanhar, é ` +
-            `${rigLado.rArm.rotation.y.toFixed(2)}`);
-    } else ok('alvo de lado: braço direito, guinada a acompanhar o alvo');
+            `${rigLado.lArm.rotation.y.toFixed(2)}`);
+    } else ok('alvo de lado: braço esquerdo, guinada a acompanhar o alvo');
 
     // A ordem das rotações tem de ser guinada-primeiro, senão a elevação
     // roda em torno do eixo errado e o braço acaba a apontar para o sítio errado.

@@ -55,8 +55,8 @@ function rodar(p, traj, match) {
     const env = `
         const ALTURA_BASE_Y = 0.0;
         const ALTURA_CABECA = 1.72;
-        const ALTURA_TESTA = 1.62;
-        const HeaderModel = { janelaContacto: 0.22 };
+        const ALTURA_TESTA = 1.74;
+        const HeaderModel = { janelaAbaixo: 0.34, janelaAcima: 0.16 };
         const BallControl = { reach: 1.2, easySpeed: 4.0 };
         const THREE = { MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } };
     `;

@@ -237,13 +237,28 @@ const ALTURA_CABECA = 1.72;
 /*
 ALTURA DA TESTA — onde a bola bate num cabeceio.
 
-Cabeça-se com a TESTA, um pouco abaixo do topo do crânio. `ALTURA_CABECA` é
-o topo: mirar aí punha a bola a raspar por cima, e o jogador a "cabecear" uma
-bola em que nunca tocava. Toda a decisão de cabeceio mede-se a partir daqui —
-sem salto, a testa está a esta altura; a saltar, a esta altura mais a subida
-do salto.
+Toda a decisão de cabeceio mede-se a partir daqui, e também a POSIÇÃO em que a
+bola é colada no frame do contacto (executeHeader, js/player.js): sem salto a
+testa está a esta altura; a saltar, a esta altura mais a subida do salto.
+
+MEDIDO NO RIG, e não deduzido de `ALTURA_CABECA`. Com o modelo de pé, os
+nós e as caixas do rig (criarModelo, js/pose.js) ficam assim acima dos pés:
+
+    pescoço (nó `neck`)   1.45
+    queixo (base do crânio) 1.47
+    centro da cabeça       1.63
+    olhos                  1.66 .. 1.71
+    TESTA                  1.71 .. 1.79   (entre os olhos e o cabelo)
+    topo do crânio         1.79
+
+Estava `ALTURA_CABECA - 0.10` = 1.62, na suposição de que 1.72 era o topo do
+crânio e a testa um pouco abaixo. 1.72 não é o topo (1.79 é), portanto 1.62
+caiu à altura da BOCA — e a janela de contacto, ± essa altura, descia até 1.40,
+por baixo do queixo. Relato: *"os jogadores estão a cabecear a bola no
+pescoço"*. Era literal: o `executeHeader` colava a bola a 1.62 sempre, dez
+centímetros abaixo dos olhos.
 */
-const ALTURA_TESTA = ALTURA_CABECA - 0.10;   // 1.62
+const ALTURA_TESTA = 1.74;
 const CAMPO_LARG = 68; const CAMPO_COMP = 106;
 const LINHA_FUNDO = CAMPO_COMP / 2;          // 53.0 m (distância do centro a cada linha de fundo)
 const MEIA_LARGURA_CAMPO = CAMPO_LARG / 2;   // 34.0 m (distância do centro a cada linha lateral)

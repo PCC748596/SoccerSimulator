@@ -45,7 +45,7 @@ else {
     const m = (f) => amostras.reduce((a, s) => a + (f(s) || 0), 0) / amostras.length;
     const alturas = amostras.map(s => s.alturaPes).sort((a, b) => a - b);
     console.log(amostras.length + ' cabeceios em ' + (segundos / 60).toFixed(0) + ' min');
-    console.log('  ALTURA_TESTA = ' + ALTURA_TESTA.toFixed(2) + ' m | janela +-' + HeaderModel.janelaContacto);
+    console.log('  ALTURA_TESTA = ' + ALTURA_TESTA.toFixed(2) + ' m | janela -' + HeaderModel.janelaAbaixo + ' +' + HeaderModel.janelaAcima);
     console.log('  altura do contacto (dos pes): media ' + m(s => s.alturaPes).toFixed(2) +
         ' | minimo ' + alturas[0].toFixed(2) + ' | mediana ' + alturas[Math.floor(alturas.length / 2)].toFixed(2) +
         ' | maximo ' + alturas[alturas.length - 1].toFixed(2));

@@ -40,7 +40,7 @@ const BallPhysics = {
 BallPhysics.kArrasto = 0.5 * BallPhysics.densidadeAr * BallPhysics.cd *
     (Math.PI * BallPhysics.raio ** 2) / BallPhysics.massa;
 
-const ALTURA_CABECA = 1.72, ALTURA_TESTA = ALTURA_CABECA - 0.10;
+const ALTURA_CABECA = 1.72, ALTURA_TESTA = 1.74;   // js/config/physics.js
 
 const velocidadeDeLancamento = new Function('BallPhysics',
     extrairFuncao(srcUtils,'velocidadeDeLancamento','js/utils.js')+'; return velocidadeDeLancamento;')(BallPhysics);
@@ -177,7 +177,8 @@ contacto do próprio cabeceador, OU fora da janela de altura do cabeceio.
 
         // Ele pode voltar a cabecear se a bola ainda estiver ao alcance E na
         // janela de altura da testa.
-        const naJanela = Math.abs(y - ALTURA_TESTA) <= HeaderModel.janelaContacto;
+        const naJanela = y >= ALTURA_TESTA - HeaderModel.janelaAbaixo &&
+            y <= ALTURA_TESTA + HeaderModel.janelaAcima;
         const aoAlcance = x <= alcanceContacto;
         const recabeceia = naJanela && aoAlcance;
         if (recabeceia) maus++;

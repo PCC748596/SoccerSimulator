@@ -758,7 +758,7 @@ const BallControl = {
     cabeça — que era o relato, *"cabeceiam de ombro"*, medido como zero
     contactos reais em 47 cabeceios.
 
-    A janela do cabeceio começa em `ALTURA_TESTA - janelaContacto` = 1.40. O
+    A janela do cabeceio começa em `ALTURA_TESTA - janelaAbaixo` = 1.40. O
     tecto do peito fica dois centímetros abaixo disso: cada bola tem um dono.
     */
     peitoAlturaLivre: 1.38,    // sem pressão, aceita a bola até esta altura

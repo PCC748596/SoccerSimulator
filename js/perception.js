@@ -214,9 +214,10 @@ const Perception = {
         ficar parado à espera que ela caia no chão.
         */
         const alturaTesta = ALTURA_TESTA;
-        const janelaCabeca = (typeof HeaderModel !== 'undefined' ? HeaderModel.janelaContacto : 0.22);
+        const janelaCabeca = (typeof HeaderModel !== 'undefined' ? HeaderModel.janelaAbaixo : 0.34);
+        const janelaAcimaCabeca = (typeof HeaderModel !== 'undefined' ? HeaderModel.janelaAcima : 0.16);
         const saltoMax = (typeof SaltoCabeceio !== 'undefined' ? SaltoCabeceio.alturaMax : 0.80);
-        const alturaMaxJogavel = alturaTesta + saltoMax + janelaCabeca;
+        const alturaMaxJogavel = alturaTesta + saltoMax + janelaAcimaCabeca;
 
         let melhor = null;
 
@@ -226,7 +227,7 @@ const Perception = {
             const prev = traj[a - 1], curr = traj[a];
             if (curr.y >= prev.y) continue;                 // só a descida
             if (prev.y < alturaTesta - janelaCabeca) break; // já desceu demasiado
-            if (curr.y > alturaTesta + saltoMax + janelaCabeca) continue;
+            if (curr.y > alturaTesta + saltoMax + janelaAcimaCabeca) continue;
 
             // Interpolação linear da altura para o instante exacto do contacto.
             const dy = prev.y - curr.y;

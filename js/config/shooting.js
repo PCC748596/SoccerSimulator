@@ -1552,11 +1552,26 @@ const HeaderModel = {
     velocidadeMax: 13.0,
 
     /*
-    Meia-largura, em metros, da faixa à volta de ALTURA_TESTA onde o contacto
-    conta como cabeceio. Abaixo dela é peito; acima, a bola passa por cima
+    A FAIXA DE ALTURA ONDE O CONTACTO CONTA COMO CABECEIO, em metros a contar
+    de ALTURA_TESTA (1.74). Abaixo dela é peito; acima, a bola passa por cima
     da cabeça e não há contacto nenhum.
+
+    E É ASSIMÉTRICA, porque a cabeça também é. Medido no rig (ver
+    ALTURA_TESTA, js/config/physics.js): da testa ao topo do crânio são 5 cm,
+    da testa ao queixo são 27. Uma bola que desce um palmo abaixo da testa
+    ainda é cabeceável — ele levanta o queixo —, e uma que passa um palmo
+    acima do crânio já não.
+
+    Era uma única `janelaContacto: 0.22` simétrica. Com a testa errada em 1.62
+    (a boca) dava a faixa 1.40 – 1.84: o fundo por baixo do queixo, o tecto a
+    raspar o crânio. Simétrica na testa certa daria 1.52 – 1.96 e abria um
+    buraco de 14 cm entre o tecto do peito (`peitoAlturaLivre` = 1.38) e o
+    fundo do cabeceio — bolas a 1.45 m dominadas com o PÉ. Os dois valores
+    abaixo mantêm o fundo em 1.40, encostado ao peito como estava, e trazem o
+    tecto para o crânio mais o raio da bola (1.79 + 0.11 = 1.90).
     */
-    janelaContacto: 0.22,
+    janelaAbaixo: 0.34,   // 1.74 - 0.34 = 1.40, o fundo, encostado ao peito
+    janelaAcima: 0.16,    // 1.74 + 0.16 = 1.90, o crânio mais o raio da bola
 
     /*
     E A BOLA TEM DE ESTAR AO ALCANCE DA TESTA.

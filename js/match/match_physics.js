@@ -704,7 +704,7 @@ Object.assign(Match, {
         }
 
         if ((bestAltura >= BallControl.peitoYMin && bestAltura <= tectoPeito && best.jumpTimer <= 0) ||
-            (atingiuLimiteCabeca && bestAltura <= (ALTURA_TESTA + HeaderModel.janelaContacto) && best.jumpTimer <= 0)) {
+            (atingiuLimiteCabeca && bestAltura <= (ALTURA_TESTA + HeaderModel.janelaAcima) && best.jumpTimer <= 0)) {
             /*
             LIMITE DE PEITOS SEGUIDOS. Sem ele, dois jogadores lado a lado
             matavam a bola no peito um ao outro indefinidamente: o
@@ -905,9 +905,12 @@ Object.assign(Match, {
         Agora a bola acima da janela da testa não é tocada por ninguém: cai, e
         quem estiver lá cabeceia-a quando ela chegar à altura certa.
         */
-        if (alturaRealDaBola > ALTURA_TESTA + HeaderModel.janelaContacto) return false;
+        if (alturaRealDaBola > ALTURA_TESTA + HeaderModel.janelaAcima) return false;
 
-        const naAlturaDaTesta = Math.abs(alturaRealDaBola - ALTURA_TESTA) <= HeaderModel.janelaContacto;
+        // A faixa é assimétrica: a cabeça alcança muito mais abaixo da testa
+        // (queixo) do que acima dela (crânio). Ver HeaderModel.janelaAbaixo.
+        const naAlturaDaTesta = alturaRealDaBola >= ALTURA_TESTA - HeaderModel.janelaAbaixo &&
+            alturaRealDaBola <= ALTURA_TESTA + HeaderModel.janelaAcima;
         const distHorizontal = Math.hypot(
             this.ball.position.x - best.model.position.x,
             this.ball.position.z - best.model.position.z);

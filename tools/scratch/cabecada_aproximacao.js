@@ -24,7 +24,8 @@ for (let i = 0; i < Math.round(segundos / dt); i++) {
     let melhor = Infinity, quem = null;
     for (const p of Match.players.concat(Match.opponents)) {
         const alturaPes = b.y - p.model.position.y;
-        if (Math.abs(alturaPes - ALTURA_TESTA) > HeaderModel.janelaContacto) continue;
+        if (alturaPes < ALTURA_TESTA - HeaderModel.janelaAbaixo ||
+            alturaPes > ALTURA_TESTA + HeaderModel.janelaAcima) continue;
         const d = Math.hypot(b.x - p.model.position.x, b.z - p.model.position.z);
         if (d < melhor) { melhor = d; quem = p; }
     }

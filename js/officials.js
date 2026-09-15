@@ -1145,10 +1145,22 @@ const Officials = {
             // quando o angulo passava por +/-PI.
             guinada = Math.atan2(Math.sin(guinada), Math.cos(guinada));
 
-            // Escolhe o braco que fica do lado da baliza apontada: direito se o
-            // alvo estiver a direita do corpo, esquerdo se estiver a esquerda.
-            // Assim o braco nao precisa de cruzar o tronco.
-            const useRight = guinada >= 0;
+            /*
+            Escolhe o braco que fica do lado da baliza apontada, para nao
+            cruzar o tronco: direito se o alvo estiver a direita do corpo,
+            esquerdo se estiver a esquerda.
+
+            E O SINAL DA GUINADA DIZ ESQUERDA, NAO DIREITA. O modelo olha
+            para +Z (ver a nota da elevacao aqui abaixo) com +Y para cima,
+            portanto a direita dele e -X: `rArm` nasce em x = -0.8 e `lArm`
+            em x = +0.8 (criarBraco, js/pose.js). Uma guinada POSITIVA roda
+            de +Z para +X, ou seja para o lado ESQUERDO do arbitro.
+
+            Estava `useRight = guinada >= 0` e via-se o arbitro a marcar a
+            falta para a direita com o braco esquerdo atravessado a frente do
+            peito — o gesto certo, no braco errado.
+            */
+            const useRight = guinada < 0;
             const signalArm = useRight ? rig.rArm : rig.lArm;
             const otherArm = useRight ? rig.lArm : rig.rArm;
 
@@ -1172,8 +1184,8 @@ const Officials = {
             */
             const margem = 0.35;
             signalArm.rotation.y = useRight
-                ? Math.min(Math.max(guinada, margem), Math.PI - margem)
-                : Math.max(Math.min(guinada, -margem), -Math.PI + margem);
+                ? Math.max(Math.min(guinada, -margem), -Math.PI + margem)
+                : Math.min(Math.max(guinada, margem), Math.PI - margem);
 
             // Infrações (falta livre) ficam paralelas ao chao.
             const ehHorizontal = ehFalta;
