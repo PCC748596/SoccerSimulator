@@ -257,6 +257,8 @@ const PlayingStyleTriggers = {
     // Central que sobe: último terço, e não quando já se ganha por 2+ (não
     // vale a pena expor a defesa nesse caso).
     extra_frontman: (p, bb, s) => {
+        // A perder nos últimos minutos sobe sempre — ver `aDesesperar`.
+        if (typeof aDesesperar === 'function' && aDesesperar(p)) return s.atacando;
         if (!s.atacando || !s.ultimoTerco) return false;
         const meus = (p.team === 'TeamA') ? Match.placarA : Match.placarB;
         const deles = (p.team === 'TeamA') ? Match.placarB : Match.placarA;
@@ -472,6 +474,28 @@ saber do outro, e batiam os dois no mesmo ponto.
 Veio do antigo nível 2, que só o tinha porque duas folhas o usavam. Quem o
 usa são os estilos, por isso vive aqui.
 */
+/*
+A PERDER NOS ÚLTIMOS MINUTOS — o "desespero", e é uma pergunta só, usada em
+dois sítios: liga o estilo do central que sobe (`extra_frontman`) e diz ao
+posicionamento quanto ele sobe. Ver PlayingStyleTuning.extraFrontman.
+
+Pedido: *"é o defensor que vai à frente em situações de falta com cruzamentos
+na área, corners para cabeceio, ou se o time está perdendo nos últimos minutos
+do jogo"*. As duas primeiras já existiam na ordenação da bola parada; esta
+terceira não existia de todo.
+*/
+function aDesesperar(p) {
+    if (typeof Match === 'undefined' || typeof Match.tempoDeJogo !== 'number') return false;
+    const E = (typeof PlayingStyleTuning !== 'undefined') ? PlayingStyleTuning.extraFrontman : null;
+    if (!E) return false;
+    const meus = (p.team === 'TeamA') ? Match.placarA : Match.placarB;
+    const deles = (p.team === 'TeamA') ? Match.placarB : Match.placarA;
+    if (meus >= deles) return false;
+    const total = (typeof MatchDuration !== 'undefined')
+        ? MatchDuration.halfGameMinutes * 2 * 60 : 5400;
+    return (total - Match.tempoDeJogo) <= E.minutosFinais * 60;
+}
+
 function melhorVaoX(p, bb, zAlvo, candidatosX, bonusDe) {
     /*
     Lado preferido: o da JOGADA (bola), não o lado onde o jogador já está.
@@ -674,6 +698,77 @@ function aplicarEstiloPosicional(p, bb, targetX, targetZ) {
             targetZ = zAtk * p.dirZ;
             targetX = melhorVaoX(p, bb, targetZ,
                 [-16, -12, -8, -4, 0, 4, 8, 12, 16]);
+        }
+
+        /*
+        `juntaSeAoAtaque` (Extra Frontman) A PERDER NOS ÚLTIMOS MINUTOS: sobe
+        mesmo, e não só na bola parada. Ver `aDesesperar` e
+        PlayingStyleTuning.extraFrontman — o estilo trazia `remate` e a
+        ordenação do canto, e mais nada: em jogo corrido ficava um central
+        normal até ao apito final, mesmo a perder.
+        */
+        if (est.juntaSeAoAtaque && typeof aDesesperar === 'function' && aDesesperar(p)) {
+            const E = PlayingStyleTuning.extraFrontman;
+            targetZ += E.avancoDesespero * p.dirZ;
+        }
+
+        /*
+        `entreLinhas` (Creative Playmaker): o buraco entre a defesa e o
+        meio-campo adversários, e dentro dele o VÃO entre adversarios — ver
+        PlayingStyleTuning.creativePlaymaker, que tem o pedido e as contas.
+        */
+        if (est.entreLinhas && bb && bb.isAttacking &&
+            bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
+            const C = (typeof PlayingStyleTuning !== 'undefined' && PlayingStyleTuning.creativePlaymaker)
+                ? PlayingStyleTuning.creativePlaymaker
+                : { atrasDaLinha: 9.0, minAtras: 4.0, candidatosX: [-14, -7, 0, 7, 14] };
+
+            let zAtk = bb.offsideLimitDir - C.atrasDaLinha;
+            // Não recua para trás do próprio posto: o estilo é procurar espaço
+            // à FRENTE, não fugir da jogada.
+            const zBaseEL = targetZ * p.dirZ;
+            if (zAtk < zBaseEL) zAtk = zBaseEL;
+            // Nem cola à linha: isso é o Goal Poacher, não é este.
+            const tectoEL = bb.offsideLimitDir - C.minAtras;
+            if (zAtk > tectoEL) zAtk = tectoEL;
+
+            targetZ = zAtk * p.dirZ;
+            targetX = melhorVaoX(p, bb, targetZ, C.candidatosX);
+        }
+
+        /*
+        `pivo` (Target Man): desce a dar o apoio com a bola atrás, rompe para o
+        ombro do último defensor com a bola perto — ver
+        PlayingStyleTuning.targetMan.
+        */
+        if (est.pivo && bb && bb.isAttacking) {
+            const T = (typeof PlayingStyleTuning !== 'undefined' && PlayingStyleTuning.targetMan)
+                ? PlayingStyleTuning.targetMan
+                : { descidaPivo: 7.0, distParaRomper: 22.0, ombro: 1.5 };
+
+            const meuAvancoTM = targetZ * p.dirZ;
+            const bolaAvancoTM = bb.ballZ * bb.dir;
+            const distBolaTM = meuAvancoTM - bolaAvancoTM;   // >0: a bola vem atrás
+
+            if (distBolaTM > 0 && distBolaTM <= T.distParaRomper) {
+                /*
+                A bola já está perto: vira-se e ataca as costas da defesa. O
+                ombro do último defensor é onde o lançamento o encontra.
+                */
+                if (bb.offsideLimitDir !== null && bb.offsideLimitDir !== undefined) {
+                    const zOmbro = bb.offsideLimitDir - T.ombro;
+                    if (zOmbro > meuAvancoTM) targetZ = zOmbro * p.dirZ;
+                }
+            } else if (distBolaTM > T.distParaRomper) {
+                /*
+                A bola ainda vem lá atrás: é o momento do pivô. Desce ao
+                encontro dela para receber de costas e descarregar em quem vem
+                a correr — e desce para o EIXO da bola, senão o apoio aparece
+                no lado errado do campo.
+                */
+                targetZ -= T.descidaPivo * p.dirZ;
+                targetX += (bb.ballX - targetX) * 0.35;
+            }
         }
 
         /*

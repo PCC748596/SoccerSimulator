@@ -991,6 +991,90 @@ segundos antes de a poder repetir.
 =============================================================================
 */
 const PlayingStyleTuning = {
+    /*
+    =========================================================================
+    CREATIVE PLAYMAKER — o jogador que procura o espaço ENTRE os adversarios
+    =========================================================================
+    Pedido: *"é o jogador que procura os espaços entre os jogadores
+    adversários; no meio de 3, no meio de 4; essa movimentação é fundamental
+    para a característica do jogador"*.
+
+    O estilo existia só como multiplicadores de decisão (driblar, passe,
+    lançar) e não deslocava o jogador um metro — a ficha do lote dizia-o com
+    todas as letras: `deslocamentoEstiloM: 0`, `semDeslocacaoPorDesenho: true`.
+    Era um número 10 que se posicionava como um médio qualquer.
+
+    A movimentação tem duas metades:
+
+      PROFUNDIDADE — no buraco entre a defesa e o meio-campo adversários, que
+      é `atrasDaLinha` metros aquém da última linha deles (a mesma linha que o
+      `offsideLimitDir` já publica). Não é ponta-de-lça: `minAtras` impede-o
+      de colar à linha, que é o que o Goal Poacher faz.
+
+      LARGURA — o VÃO, e não um x fixo: o `melhorVaoX` escolhe o ponto mais
+      longe de qualquer adversário àquela profundidade, que é exactamente
+      "no meio de 3, no meio de 4". O leque cobre o corredor central e os
+      meios-espaços, onde este jogador vive.
+    =========================================================================
+    */
+    creativePlaymaker: {
+        atrasDaLinha: 9.0,   // metros aquém da última linha adversária
+        minAtras: 4.0,       // e nunca mais perto dela do que isto
+        candidatosX: [-20, -14, -9, -4, 0, 4, 9, 14, 20]
+    },
+
+    /*
+    =========================================================================
+    TARGET MAN — a referência: recebe, protege, faz o pivô, e rompe
+    =========================================================================
+    Pedido: *"é o atacante que é a referência. Recebe a bola. Sabe proteger.
+    Faz o pivô pra quem vem de trás. Tabela e se infiltra para receber na
+    frente o lançamento"*.
+
+    O `seguraBola` já existia (é a parte do "sabe proteger", e vive na decisão
+    de não largar a bola à primeira). Faltava a MOVIMENTAÇÃO, e ela tem dois
+    tempos que se alternam consoante onde está a bola:
+
+      PIVÔ — com a bola atrás dele e a chegar, VEM AO ENCONTRO dela. É o que
+      dá saída a quem vem de trás: ele desce `descidaPivo` metros na direcção
+      do portador para receber de costas.
+
+      ROMPE — com a bola já perto (`distParaRomper`) ou com quem a tem de
+      cabeça levantada, vira-se e ataca o espaço: sobe para o ombro do último
+      defensor, `ombro` metros aquém da linha, para receber o lançamento.
+
+    A alternância é o estilo. Um target man que só desce nunca ameaça as
+    costas da defesa; um que só rompe deixa a equipa sem ponto de apoio.
+    =========================================================================
+    */
+    targetMan: {
+        descidaPivo: 7.0,      // metros que desce para receber de costas
+        distParaRomper: 22.0,  // com a bola a menos disto, vira-se e ataca
+        ombro: 1.5             // metros aquém da linha, ao romper
+    },
+
+    /*
+    =========================================================================
+    EXTRA FRONTMAN — e o central sobe também quando o tempo acaba
+    =========================================================================
+    Pedido: *"é o defensor que vai à frente em situações de falta com
+    cruzamentos na área, corners para cabeceio, OU SE O TIME ESTÁ PERDENDO NOS
+    ÚLTIMOS MINUTOS DO JOGO"*.
+
+    As duas primeiras já lá estavam (o `juntaSeAoAtaque` na ordenação da bola
+    parada). A terceira faltava por completo: em jogo corrido ele posicionava-se
+    como um central normal até ao apito final, mesmo a perder.
+
+    `minutosFinais` conta a partir do fim do jogo (`MatchDuration.halfGameMinutes`
+    vezes dois); `avancoDesespero` é o quanto sobe nesses minutos — muito, de
+    propósito: quem está a perder aos 85 não está a proteger resultado nenhum.
+    =========================================================================
+    */
+    extraFrontman: {
+        minutosFinais: 8,
+        avancoDesespero: 22.0
+    },
+
     foxInTheBox: {
         /*
         A ENTRADA DA ÁREA É AOS 36.5 (53 - 16.5), e este número dizia 30 —
@@ -1116,14 +1200,20 @@ const PlayingStyles = {
         nome: 'Target Man', posicoes: ['CF'],
         driblar: 0.5,
         passe: 1.25, conduzir: 0.6, cadencia: 1.6,
-        seguraBola: true
+        seguraBola: true,
+        // Pivô com a bola atrás, rompe com a bola perto — ver
+        // PlayingStyleTuning.targetMan e `pivo` em aplicarEstiloPosicional.
+        pivo: true
     },
 
     /* --- Criativos ------------------------------------------------------- */
     creative_playmaker: {
         nome: 'Creative Playmaker', posicoes: ['SS', 'LW', 'RW', 'AM', 'LM', 'RM'],
         driblar: 1.4,
-        passe: 1.3, lancar: 1.5, conduzir: 1.15, cadencia: 0.85
+        passe: 1.3, lancar: 1.5, conduzir: 1.15, cadencia: 0.85,
+        // Procura o vão entre as linhas adversárias — ver
+        // PlayingStyleTuning.creativePlaymaker.
+        entreLinhas: true
     },
     classic_no10: {
         nome: 'Classic No. 10', posicoes: ['SS', 'AM', 'CM'],
