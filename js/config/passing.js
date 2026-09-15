@@ -33,6 +33,39 @@ const PassLineModel = {
 };
 
 const PassModel = {
+
+    /*
+    =====================================================================
+    TECTO DA FORCA DO PASSE
+    =====================================================================
+    Relato: *"os lancamentos longos estao muito fortes. E de vez em quando um
+    lateral e um passe curto tambem saem com uma forca exagerada"*.
+
+    Medido com `tools/scratch/forca_dos_passes.js`, 649 passes em 40 min, pela
+    velocidade de SAIDA:
+
+        faixa      mediana   p95     maximo
+        0-8 m       10.0     11.2     15.5
+        8-15 m      12.5     16.8     20.4
+        15-25 m     18.7     28.3     31.5
+        25 m+       23.2     46.0     47.4   <-- mais rapido que um remate
+
+    As MEDIANAS estao certas -- e a calibracao pela velocidade de chegada a
+    funcionar. O que nao esta e a CAUDA: 46 m/s num lancamento e 20 m/s num
+    passe de 10 m nao sao passes, sao acidentes de solver.
+
+    Vem do `encontro` (bola e receptor no mesmo ponto ao mesmo tempo): quando o
+    tempo pedido e curto -- receptor perto, ou a correr para o sitio -- a
+    velocidade necessaria dispara sem limite. A solucao certa nao e adivinhar o
+    tempo: e dizer que ha uma forca que um pe humano nao da, e que acima disso
+    a bola chega tarde em vez de chegar impossivel.
+
+    30 m/s e a referencia do remate forte (`ShotModel.potenciaBase` anda por
+    ai). Um passe nao passa disso -- e um lancamento longo, que e batido com
+    tecnica e nao com forca, fica abaixo.
+    =====================================================================
+    */
+    velMaxSaida: 28.0,
     carryChance: 0.10,
     carryChanceShort: 0.05,
     carryChanceLong: 0.20,

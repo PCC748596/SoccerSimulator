@@ -222,6 +222,31 @@ const PlantarBola = {
 };
 if (typeof window !== 'undefined') window.PlantarBola = PlantarBola;
 
+/*
+=============================================================================
+O SEGUIMENTO DA PERNA ACOMPANHA A FORCA DO PASSE
+=============================================================================
+Relato: *"a perna esta a levantar muito depois do passe curto. Parece um passe
+longo ou um chute que nao deu certo"*.
+
+O `PassClip` e UM so, e o seguimento dele -- os keyframes 6 e 7, com a coxa a
+-0.62 e -0.32 -- foi desenhado para um passe a serio. Num toque de tres metros
+esse mesmo seguimento levanta a perna como se tivesse batido com tudo, e e
+isso que se ve: o gesto nao diz a mesma coisa que a bola.
+
+`PassFollowThrough` escala os canais da perna que bate DEPOIS do contacto, em
+funcao da distancia do passe: `curto` para um toque, 1.0 para um passe longo.
+Antes do contacto nada muda -- a armacao e a mesma, porque a preparacao de um
+passe curto tambem e curta e ja vem do proprio clip.
+=============================================================================
+*/
+const PassFollowThrough = {
+    distCurta: 8.0,     // ate aqui e toque: seguimento minimo
+    distLonga: 25.0,    // daqui para cima, o seguimento inteiro
+    fraccaoCurta: 0.35  // quanto sobra do seguimento num toque
+};
+if (typeof window !== 'undefined') window.PassFollowThrough = PassFollowThrough;
+
 const PassClip = {
     /*
     A perna é a direita, como no remate. Não é escolha: o `aplicarPoseRemate`

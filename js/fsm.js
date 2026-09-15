@@ -492,6 +492,22 @@ function executePassGameplay(p) {
         forcaPasse *= 1.0 + ((TeamSkills[p.team].mid - 50) / 100) * 0.4;
     }
 
+    /*
+    O TECTO, e e o ultimo a falar -- ver `PassModel.velMaxSaida`, que tem a
+    medicao. Aplica-se a velocidade TOTAL (horizontal mais vertical), porque e
+    ela que se ve: um lancamento a 46 m/s sai a 40 de horizontal e 20 de
+    vertical, e cortar so uma das componentes mudava a trajectoria em vez de a
+    travar. Escalam-se as duas pelo mesmo factor: a direccao fica, a forca cai.
+    */
+    if (typeof PassModel.velMaxSaida === 'number') {
+        const vTotal = Math.hypot(forcaPasse, Match.ballVel.y);
+        if (vTotal > PassModel.velMaxSaida) {
+            const k = PassModel.velMaxSaida / vTotal;
+            forcaPasse *= k;
+            Match.ballVel.y *= k;
+        }
+    }
+
     // `forcaPasse` é a componente HORIZONTAL; o y já foi posto acima.
     Match.ballVel.set(dirX * forcaPasse, Match.ballVel.y, dirZ * forcaPasse);
 
@@ -1969,7 +1985,24 @@ class PlayerFSM {
                     trás e levantar a bola) e merece clip próprio.
                     */
                     if (p.passeComClip && typeof amostrarClipPasse === 'function') {
-                        p.aplicarFramePasse(amostrarClipPasse(norm));
+                        const KP = amostrarClipPasse(norm);
+                        /*
+                        SEGUIMENTO A MEDIDA DO PASSE -- ver PassFollowThrough.
+                        So DEPOIS do contacto: a armacao fica como esta.
+                        */
+                        const FT = (typeof PassFollowThrough !== 'undefined') ? PassFollowThrough : null;
+                        if (FT && typeof p.passeDistancia === 'number') {
+                            const contacto = (PassClip.contactFrame - 1) / (PassClip.frames.length - 1);
+                            if (norm > contacto) {
+                                const d = p.passeDistancia;
+                                const u = Math.max(0, Math.min(1,
+                                    (d - FT.distCurta) / Math.max(0.001, FT.distLonga - FT.distCurta)));
+                                const k = FT.fraccaoCurta + (1 - FT.fraccaoCurta) * u;
+                                KP.coxaChute *= k;
+                                KP.joelhoChute *= k;
+                            }
+                        }
+                        p.aplicarFramePasse(KP);
                     }
 
                     if (p.actionState.isDone() || !p.hasBall) {

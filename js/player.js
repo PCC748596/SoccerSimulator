@@ -2833,6 +2833,17 @@ class FootballPlayer {
         // Não executa o passe aqui — só prepara. O efeito real (bola sai do
         // pé) dispara dentro do ActionState, sincronizado com a pose do
         // chute (ver ActionAnimClips.pass e executePassGameplay em fsm.js).
+        /*
+        A DISTANCIA DO PASSE, guardada para o gesto. E o que decide o tamanho
+        do seguimento da perna -- ver PassFollowThrough (config/animations.js).
+        */
+        {
+            const alvoFT = this.passTargetPos ||
+                (this.passTarget && this.passTarget.model && this.passTarget.model.position);
+            this.passeDistancia = alvoFT
+                ? Math.hypot(alvoFT.x - this.model.position.x, alvoFT.z - this.model.position.z)
+                : null;
+        }
         this.actionState = new ActionState('pass', {
             onContact: () => { if (this.hasBall && this.passTarget) executePassGameplay(this); }
         });
@@ -5962,25 +5973,34 @@ class FootballPlayer {
                 a passada por ciclo tem de vir do andamento, não de um 3.0/1.55
                 escritos à mão, senão o boneco desliza.
                 */
-                const P = G.andar;
+                /*
+                A MESMA CAMINHADA DE TODA A GENTE -- pedido: *"o guarda-redes
+                quando esta a caminhar para bater o tiro de meta esta com uma
+                animacao de caminhada diferente dos jogadores"*.
+
+                E estava: isto escrevia os ossos a mao, com `GoalkeeperPose.andar`
+                por cima do ciclo -- uma dobra de joelho propria (`kneeBase`),
+                uma abertura de bracos propria (`bracos`), o tronco inclinado, e
+                os bracos a 60% da amplitude na fase de caminhar. O ciclo era o
+                mesmo (`getGaitPose`), a ESCRITA e que era outra, e e a escrita
+                que se ve.
+
+                Quem desenha a passada de um jogador de campo e o
+                `aplicarPosePassada` (js/pose.js), partilhado com o editor de
+                animacao. O guarda-redes passa a usar o mesmo, com as mesmas
+                opcoes: nao ha "caminhada de guarda-redes", ha a caminhada.
+                */
                 const velPlanarTM = dt > 0.0001 ? Math.hypot(sxTM, szTM) / dt : 0;
                 const P0TM = getGaitPose(0, velPlanarTM);
                 this.animTimer += (velPlanarTM * dt) / P0TM.passada;
                 const tt = ((this.animTimer % 1.0) + 1.0) % 1.0;
                 const pose = getGaitPose(tt, velPlanarTM);
-                const amp = 1.0;
 
-                gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, pose.lHip * amp, 0.45);
-                gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, pose.rHip * amp, 0.45);
-                gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, P.kneeBase + pose.lKnee * amp, 0.45);
-                gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, P.kneeBase + pose.rKnee * amp, 0.45);
-                gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, pose.lArm * (this.gkTiroFase === 0 ? 0.6 : 1.0), 0.35);
-                gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, pose.rArm * (this.gkTiroFase === 0 ? 0.6 : 1.0), 0.35);
-                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, P.bracos, 0.2);
-                gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -P.bracos, 0.2);
-                gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, P.chest, 0.2);
-                gkRig.chest.rotation.z = lerpTo(gkRig.chest.rotation.z, 0, 0.2);
-                gkRig.pelvis.position.set(0, 3.02, 0);
+                aplicarPosePassada(gkRig, pose, tt, {
+                    amp: 1.0,
+                    // A velocidades baixas a pose entra por lerp, como no campo.
+                    suavizacao: Math.min(1, velPlanarTM / 2.0)
+                });
                 gkRig.pelvis.rotation.set(0, 0, 0);
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.3);
             }

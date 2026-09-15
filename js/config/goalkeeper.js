@@ -598,7 +598,7 @@ const GoalkeeperDive = {
     alvo (`espY > 1.2`).
     */
     tempoChaoAlto: 2.0,
-    tempoLevantar: 0.75,   // pôr-se de pé
+    tempoLevantar: 0.50,   // pôr-se de pé (pedido: 500 ms)
 
     /*
     E DEPOIS DE SE PÔR DE PÉ AINDA NÃO ARRANCA.

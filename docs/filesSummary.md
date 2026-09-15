@@ -5,6 +5,172 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 14-15 de Setembro de 2026 — o cara a cara, o cabeceio que não existia, e a calibração a chegar ao sítio
+
+Sessão longa, toda conduzida por relatos visuais e toda medida antes de mexer.
+As ferramentas de medição ficaram em `tools/scratch/` e estão citadas nos
+comentários do código que justificam.
+
+#### O cara a cara: três causas, nenhuma na decisão de rematar
+
+Relato: *"o jogador ou chuta antes de entrar na área ou não chuta; nem o
+guarda-redes pega a bola; fica um a tentar correr de frente para o outro"*.
+
+Seguido frame a frente com `cara_a_cara_timeline.js`:
+
+    1.5 s  entra na área, a 20 m da baliza
+    1.5 -> 2.5 s  atravessa-a com a bola 2 m à frente do pé
+    2.5 s  o guarda-redes sai e agarra-lha aos pés, a 13 m
+    2.8 s  ele entra em SHOOT -- a rematar uma bola que o outro já tem
+
+1. **O toque de condução.** Com a bola 0.6-0.8 m à frente, `hasBall` é falso na
+   maioria dos frames e o ramo `RecuperarControlo` ("a bola fugiu") está ACIMA
+   do `Rematar`: ganhava sempre. Agora não se adianta a bola com o guarda-redes
+   a menos de 25 m (`CarryModel.semToqueComGkA`). Com 20 m nada mudava — o
+   toque decisivo saía a 20.5 m.
+2. **Duas noções de zona de finalização desencontradas**: o `emZonaDeRemate`
+   diz "dentro da área remata-se", mas quem trava o toque é o
+   `emZonaDeFinalizacao`, que só conhecia o `shootingRange` (13 m contra 16.5
+   de área). Alinhadas.
+3. **O `frenteAFrente` era cego ao guarda-redes** — o corredor que mede exclui
+   o `gk`. Passou a receber a posição dele (`gkAoAlcance`).
+
+Resultado nos sete ângulos do lance: ângulo de baliza no remate de **2°-13°**
+(mínimo legal 14) para **31°-45°**, e o `|x|` máximo de 17-19 m para nunca
+passar de onde começou.
+
+#### O guarda-redes que se antecipava sem reagir
+
+Medido com `cara_a_cara_voo.js`: remate a 33 m/s a cruzar a linha 1.6 m ao lado
+dele; nos 0.30 s de voo ele percorria esse metro e meio **de pé, sem mergulhar**.
+A causa estava numa linha que mandava acompanhar o ponto de cruzamento *antes*
+de reagir. Com o tempo de reacção a valer, sobra-lhe metade do voo — e aí tem
+de se atirar.
+
+Na mesma zona: a âncora de posicionamento lia a posição ACTUAL da bola (com ela
+a voar para a baliza, seguir esse x é seguir o próprio remate) e passou a
+congelar no instante do remate.
+
+#### O cabeceio: em 47 cabeceios, zero contactos
+
+Relato: *"parecem estar a cabecear de ombro"*. Medido com
+`cabecada_altura.js`: a bola a **0.73 m** do eixo da cabeça e 0.40 m acima
+dela. Não era de ombro, era de ar. Três defeitos empilhados:
+
+1. **A altura era medida com clamp.** O `distanciaAoCorpo` limita o contacto ao
+   corpo: uma bola a três metros dava `alturaContacto` 1.72 (topo do crânio) e
+   passava a janela da testa. Tudo o que voava por cima contava como cabeceio.
+2. **O domínio no peito ia até 1.75 m** — acima da testa (1.62) e do próprio
+   crânio. Toda a bola à altura da cabeça era desviada para o ramo do peito
+   antes de chegar ao teste do cabeceio. Passou a 1.38.
+3. **O contacto era consumido acima da cabeça**: a menos de 0.9 m do eixo do
+   corpo o lance resolvia-se, e como não estava na janela da testa caía no ramo
+   de baixo — domínio com o PÉ, a 1.9 m de altura.
+
+Com isso, os cabeceios caíram de 47 para 16 — os 31 que desapareceram eram
+bolas a passar por cima. Depois entrou a peça que faltava.
+
+#### A leitura da trajectória, que só o guarda-redes tinha
+
+Pedido: *"os jogadores têm de saber a trajectória da bola para poderem saltar;
+é a mesma dinâmica do guarda-redes"*. O guarda-redes tinha três coisas — ponto
+de intercepção, erro de leitura que encolhe com o atributo, gesto lançado a
+tempo. Quem cabeceia tinha só a primeira, e usada como destino solto.
+
+`pontoDeCabeceio` (utils.js) dá as três a toda a gente: **onde** a bola desce
+pela altura da testa dele, **quando**, e **com que erro** (proporcional ao tempo
+de voo, inverso ao INTERCEPT). O ruído sorteia-se uma vez por voo.
+
+    a que distância alguém está quando a bola desce pela testa
+                  antes    depois
+    <= 0.32 m      3%       20%
+    <= 0.50 m     26%       40%
+
+Cabeceios: 16 -> **31**, com o desvio à testa a cair de 0.35 m para 0.13.
+
+**Fica por resolver:** a bola ainda passa a ~0.78 m ao lado da cabeça, porque
+ninguém se coloca debaixo dela com melhor do que 0.60 m de precisão. Apertar o
+raio de contacto sem resolver isso apaga o cabeceio do jogo — verificado: a
+0.45 m dá zero em 40 minutos.
+
+#### A matada no peito
+
+Três defeitos: o `quedaNoPeito` pedia a distância de aterragem e ignorava o
+ROLAMENTO (pedia 0.25 m, entregava 1.3); a bola ressaltava, anulando a conta; e
+— o grave — um jogador de campo matava no peito uma bola que o guarda-redes já
+tinha nas mãos. Ficar com a bola sem pressão subiu de 86% para **94%**, e a
+bola pousa a 0.52 m do pé e fica lá.
+
+#### A defesa: onde os golos pararam de subir
+
+O lote mostrava os golos a subir de 2.59 para 3.82 por 90 ao longo da sessão —
+cada correcção a montante empurrava mais bola boa para a área. Duas medidas
+puseram isso no sítio:
+
+1. **Um mínimo de xG para rematar** (`ShootingModel.xgMinimo`, o percentil 33
+   da distribuição medida). Remates 39.1 -> 33.9, xG por remate 0.100 -> 0.118.
+2. **Os defensores entram pelo lado de dentro** (`BloqueioRemate`): medido, 65%
+   dos remates na área não tinham NINGUÉM entre a bola e a baliza, com o mais
+   próximo a 2.12 m — perto, mas ao lado. Passou a 36%, e os defensores no
+   corredor de 0.65 para 1.29.
+
+O lote do utilizador (30 jogos de 20 min) fechou com **golos 2.44 (97% do
+alvo)** e **xG total 2.81 (99%)**.
+
+#### Guarda-redes, gestos
+
+- **lançamento com a mão**: o corpo olhava sempre para o meio do campo. Ângulo
+  entre a frente do corpo e a direcção do passe: **72° -> 1°**.
+- **mergulho**: no ar vai de lado (barriga em frente) e só vira para baixo nos
+  últimos 30% do voo — e a viragem é à volta do eixo LONGO do corpo, não do
+  +X, que depois do tombo ficou vertical.
+- **braços**: o sinal do `x` do ombro estava trocado no config do chão (no rig,
+  negativo é à frente). Mãos atrás do peito: 60% -> 4% no chão, 29% -> 3% no voo.
+- **mergulho completo**: seis de treze mergulhos eram cortados a meio do voo
+  pelo tiro de meta montado no mesmo frame. Agora 12 em 12 chegam ao chão.
+- **sai ao cruzamento** (`GkSaidaCruzamento`): se a projecção cair na pequena
+  área, sai; sem marcação agarra 95%/escapa 5%; com marcação soca na direcção
+  invertida com até 10° de desvio. Verificado em 400 lances de cada.
+- **remate forte e de perto não se segura** (`GkCatchModel.semAgarrar`): a 5 m
+  e 28 m/s, agarra 0%, espalma 85%.
+
+#### Modelo e animação
+
+- **ombros à altura do tórax**: a articulação estava 7.4 cm abaixo do topo da
+  caixa do peito, e a manga começa no ombro — sobrava um bloco de camisa por
+  cima dos ombros.
+- **passe com o lado do pé**: faltavam dois canais (`coxaChuteY`, `peChuteY`) e
+  o sinal deles esteve trocado à primeira — "face interna" era o +X e não o -X,
+  porque a perna direita vive em x negativo no rig.
+- **o pé de apoio ao lado da bola**: a causa não estava no clip. Enquanto ele
+  tem a bola, ela é colada a (0, 0, 0.6) — mesmo à frente do corpo. Com a bola
+  sempre meio metro em frente, nenhum pé de apoio lhe pode ficar ao lado. No
+  gesto ela desliza agora para junto do pé que bate (`PlantarBola`).
+- **seguimento da perna à medida do passe** (`PassFollowThrough`): num toque de
+  três metros sobra 35% do seguimento.
+- **caminhada do tiro de meta**: era escrita à mão com `GoalkeeperPose.andar`
+  por cima do ciclo. Passou a usar o `aplicarPosePassada`, o mesmo de toda a
+  gente.
+
+#### Regras e forças
+
+- **arrefecimento entre cortes** (`CorteModel`, 3-6 s sorteados): tentativas a
+  menos de 3 s de intervalo, 7% -> 0%.
+- **tecto da força do passe** (`PassModel.velMaxSaida`, 28 m/s): a cauda dos
+  lançamentos ia a **46 m/s**, mais do que um remate. As medianas estavam
+  certas; o que estava errado era o solver do encontro a pedir o impossível.
+- **replay**: o árbitro e os dois assistentes entraram no buffer (25 corpos em
+  vez de 22) e o pause passou a valer durante a repetição.
+
+#### Sementes reafinadas
+
+Quatro testes de medição estatística caíram por mudanças de comportamento
+legítimas e foram reafinados com a varredura escrita no cabeçalho de cada um.
+O `estilos_tres_pedidos.test.js` leva uma nota sobre a fragilidade desta
+família de testes e sobre a cura (medir várias sementes e afirmar sobre a
+média), com o preço em tempo de suite.
+
+
 ### Sessão de 11 de Setembro de 2026 (4) — o guarda-redes de cima a baixo, a stamina, e uma correcção que custou um golo por jogo
 
 Sessão longa, conduzida por relatos visuais. Três coisas ficaram provadas por
