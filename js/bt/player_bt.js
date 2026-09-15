@@ -2799,6 +2799,12 @@ function emZonaDeRemate(ctx) {
     campo aberto a 40 m não deixar de rematar de vez.
     */
     const FF = ShootingModel.frenteAFrente;
+    /*
+    Declaradas AQUI FORA porque o corte de xG mais abaixo também as lê: são as
+    duas situações em que o guarda-redes muda o valor da oportunidade e o xG
+    posicional não dá por isso.
+    */
+    let gkEmCima = false, gkSaiuDaBaliza = false;
     if (FF && typeof frenteAFrenteComGk === 'function') {
         const gkAdv = ctx.opponents.find(o => o.role === 'gk' && o.model);
         const ff = frenteAFrenteComGk({
@@ -2815,13 +2821,12 @@ function emZonaDeRemate(ctx) {
         mais um bocado" continuava a ser a resposta certa enquanto ele vinha a
         fechar. Ver `gkAoAlcance` no ShootingModel para a medição.
         */
-        const gkEmCima = ff.distGk <= (FF.gkAoAlcance || 0);
+        gkEmCima = ff.distGk <= (FF.gkAoAlcance || 0);
         /*
         E O GUARDA-REDES FORA DA BALIZA vale por si — ver `gkAdiantadoRemata`.
         O `gkEmCima` mede a distância entre os dois e chega tarde com um
         guarda-redes lançado; este mede quanto ele já saiu da linha.
         */
-        let gkSaiuDaBaliza = false;
         if (gkAdv && typeof FF.gkAdiantadoRemata === 'number') {
             const avancoGk = Math.abs(p.targetGoalZ) - Math.abs(gkAdv.model.position.z);
             gkSaiuDaBaliza = avancoGk >= FF.gkAdiantadoRemata;
@@ -2847,6 +2852,21 @@ function emZonaDeRemate(ctx) {
         // Guardado para o remate saber que é um frente-a-frente e tocar ao
         // canto em vez de bater (ver initiateShoot/tipoDeRemate).
         p.frenteAFrente = ff.livre && (ff.dist <= FF.distanciaIdeal || gkEmCima || gkSaiuDaBaliza);
+    }
+
+    /*
+    E HÁ UM MÍNIMO DE xG — ver `xgMinimo` no ShootingModel, com a distribuição
+    medida e a razão do valor.
+
+    Fica depois do frente-a-frente de propósito: as duas bandeiras dele
+    (`gkEmCima`, `gkSaiuDaBaliza`) são as excepções, porque o xG posicional não
+    sabe onde está o guarda-redes.
+    */
+    if (typeof ShootingModel.xgMinimo === 'number' && typeof xgDoRemate === 'function' &&
+        !gkEmCima && !gkSaiuDaBaliza) {
+        const xgAqui = xgDoRemate(p.model.position.x, p.model.position.z,
+            p.targetGoalZ, LARGURA_BALIZA, XGModel);
+        if (xgAqui < ShootingModel.xgMinimo) return false;
     }
 
     /*

@@ -159,6 +159,45 @@ const ShootingModel = {
                            normal, senão um avançado a 40 m com o campo aberto
                            deixava de rematar de vez.
     */
+    /*
+    =========================================================================
+    O MÍNIMO DE xG PARA VALER A PENA REMATAR
+    =========================================================================
+    O lote diz o mesmo desde o primeiro dia: remata-se 50% mais do que no
+    futebol real (39.1 por 90 contra 26.1). Enquanto cada remate valia metade
+    do que devia isso não dava golos a mais; agora que o `xG por remate` está
+    em 0.100 contra 0.109 do real, cada remate a mais é golo a mais — e os
+    golos foram de 2.59 a 3.82 por 90 ao longo da sessão.
+
+    A regra `dentroDaArea` é o buraco: "dentro da área remata-se, e mais nada
+    tem voto". Dentro da área cabe o bico da grande área a 16 m e 20 de lado,
+    de onde nenhum avançado remata.
+
+    Medido com `tools/scratch/remates_xg.js`, a distribuição do xG dos remates
+    de hoje:
+
+        p10 0.044   p25 0.049   mediana 0.059   p75 0.163
+
+        corte      remates cortados      xG médio dos que ficam
+        0.03              4%                    0.141
+        0.04              9%                    0.146
+        0.055            ~33%                   ~0.18
+        0.06             54%                    0.241
+
+    0.055 corta a terça parte, que é exactamente o excesso sobre o alvo. Não
+    é um número redondo: é o percentil 33 da distribuição medida.
+
+    EXCEPÇÃO, e é a que impede isto de desfazer o trabalho de ontem: o xG aqui
+    é POSICIONAL — sai de `xgDoRemate(x, z, ...)` e não sabe onde está o
+    guarda-redes. Um remate de 20 m com ele dez metros fora da baliza é uma
+    grande oportunidade e pontua baixo. Por isso o corte não se aplica quando
+    o guarda-redes saiu (`gkAdiantadoRemata`/`gkVelSaida`) nem quando está em
+    cima do avançado (`gkAoAlcance`): nesses casos quem decide é a regra do
+    frente-a-frente, que olha para ele.
+    =========================================================================
+    */
+    xgMinimo: 0.055,
+
     frenteAFrente: {
         corredorMeiaLargura: 4.0,
         recuoAtras: 2.0,
