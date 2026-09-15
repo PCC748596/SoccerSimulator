@@ -361,12 +361,24 @@ function registarToqueComPe(jogador, comPe) {
     */
     Match.ultimoToque = {
         team: jogador.team,
-        dirZ: jogador.dirZ,
-        // Onde a bola estava no toque. E contra este ponto que se mede se ela
-        // foi jogada para TRAS — a direccao so se conhece depois de ela andar,
-        // e por isso a decisao e refeita todos os frames (avaliarRecuoParaGR).
+        // O toque do PROPRIO guarda-redes tem saida: ver `avaliarRecuoParaGR`.
+        gk: jogador.role === 'gk',
+        x0: Match.ball ? Match.ball.position.x : 0,
         z0: Match.ball ? Match.ball.position.z : 0
     };
+    /*
+    E A MARCA FICA POSTA JA, no mesmo instante do toque.
+
+    O `avaliarRecuoParaGR` corre uma vez por frame, dentro do Match.update, e
+    DEPOIS do contacto com a bola. Enquanto a regra dependia de a bola andar um
+    metro, essa ordem nao se notava; agora que depende so do pe, notava-se
+    exactamente no caso mais comum — o defesa que toca a bola a dois metros do
+    guarda-redes e ele apanha-a no mesmo frame, com a marca ainda por escrever.
+
+    O recalculo por frame fica na mesma: e ele que a apaga quando o `ultimoToque`
+    e limpo por uma cabecada ou por um toque do adversario.
+    */
+    if (typeof avaliarRecuoParaGR === 'function') avaliarRecuoParaGR(Match);
 }
 
 /*
@@ -375,30 +387,61 @@ da regra que faz o companheiro pensar — nao pode passar-lhe a bola com o pe, m
 pode servi-la de cabeca.
 */
 function limparRecuoParaGR() {
-    if (typeof Match !== 'undefined') Match.ultimoToque = null;
+    if (typeof Match === 'undefined') return;
+    Match.ultimoToque = null;
+    // Pelo mesmo motivo do `registarToqueComPe`: sem esperar pelo frame
+    // seguinte, senao as maos ficavam proibidas mais um frame depois de a
+    // cabecada as ter devolvido.
+    if (typeof avaliarRecuoParaGR === 'function') avaliarRecuoParaGR(Match);
 }
 
 /*
-A DECISAO, REFEITA POR FRAME.
+A DECISAO: O PE DE UM COMPANHEIRO CHEGA, VENHA A BOLA DE ONDE VIER.
 
-Ha duas maneiras de a bola chegar atrasada ao guarda-redes: o passe (sabe-se
-logo para onde vai) e o toque que SOBRA — o defesa que domina, conduz e a deixa
-correr para tras. A segunda so se conhece vendo a bola andar, e por isso a
-marca nao pode ser posta uma vez no instante do toque: e recalculada aqui,
-contra o ponto onde o pe lhe tocou pela ultima vez.
+A Lei 12 fala do PE e nao da direccao — e por isso esta funcao nao mede
+distancia nenhuma. Quem tocou com o pe por ultimo foi `registarToqueComPe`; se
+foi companheiro do guarda-redes, as maos estao proibidas, e ponto.
 
-`atrasoMin` (GkRecuoModel) e a folga: meio metro para tras a proteger a bola
-nao e um recuo.
+ISTO JA TEVE UMA FOLGA DE DIRECCAO, e era ela o defeito. A marca so era posta
+com a bola jogada mais de `atrasoMin` (1 m) para TRAS, para nao apanhar "um
+toque de lado a proteger a bola". Relato: *"o goleiro nao pode pegar com a mao
+uma bola atrasada pelo jogador do proprio time com o pe"*. Medido em 30 min
+(`tools/scratch/_recuo_gk.js`): de 16 bolas agarradas com a mao, SETE vinham do
+pe de um companheiro — e todas passavam pela folga, com deslocamentos de -0.73
+a +3.23 m. A folga nao separava o recuo do toque de lado: separava o recuo
+longo do recuo curto, e o curto e o mais comum de todos, porque o defesa que
+devolve a bola ao guarda-redes esta a dois metros dele.
+
+O que devolve as maos continua a ser o que a regra diz e nao mudou: a cabeca, o
+peito e a coxa de um companheiro (`limparRecuoParaGR`) e qualquer toque de um
+adversario.
 */
 function avaliarRecuoParaGR(match) {
     const m = match || (typeof Match !== 'undefined' ? Match : null);
     if (!m) return;
     const t = m.ultimoToque;
-    if (!t || !m.ball) { m.recuoParaGR = null; return; }
-    const atrasoMin = (typeof GkRecuoModel !== 'undefined' && typeof GkRecuoModel.atrasoMin === 'number')
-        ? GkRecuoModel.atrasoMin : 1.0;
-    const avanco = (m.ball.position.z - t.z0) * t.dirZ;
-    m.recuoParaGR = (avanco < -atrasoMin) ? t.team : null;
+    if (!t) { m.recuoParaGR = null; return; }
+
+    /*
+    A UNICA DISTANCIA QUE SOBROU, e e so para o toque do PROPRIO guarda-redes.
+
+    Ele nao se absolve a si proprio — tocar a bola com o pe e agarra-la a
+    seguir era o buraco antigo, e por isso o toque dele marca como o de
+    qualquer outro. Mas quando a bola SAI mesmo dali, ele pos-a em jogo e a
+    fase acabou: sem esta saida ficava proibido para sempre, porque ja nao ha
+    direccao nenhuma a limpar a marca.
+
+    Para o toque de um companheiro nao ha distancia que valha: e o PE, e ponto
+    (Lei 12).
+    */
+    if (t.gk && m.ball) {
+        const liberta = (typeof GkRecuoModel !== 'undefined' &&
+            typeof GkRecuoModel.libertaComOPe === 'number') ? GkRecuoModel.libertaComOPe : 3.0;
+        const d = Math.hypot(m.ball.position.x - t.x0, m.ball.position.z - t.z0);
+        if (d > liberta) { m.recuoParaGR = null; m.ultimoToque = null; return; }
+    }
+
+    m.recuoParaGR = t.team;
 }
 /*
 ONDE SE POE UM COMPANHEIRO NUM LANCAMENTO LATERAL.

@@ -64,12 +64,32 @@ console.log('1 — quem marca o recuo é o passe com o pé');
         erro('`Match.recuoParaGR` voltou a ser escrito à mão em ' + escritas.join(', '));
     } else ok('a marca só se escreve pelas funções do utils.js');
 
-    // A bola atrasada é medida pela DIRECÇÃO, e a folga tem de existir.
+    /*
+    A REGRA É O PÉ, E NÃO A DIRECÇÃO.
+
+    Havia uma folga (`GkRecuoModel.atrasoMin`): a bola tinha de ser jogada mais
+    de 1 m para TRÁS para as mãos ficarem proibidas. Medido em 30 min
+    (`tools/scratch/_recuo_gk.js`), ela deixava passar sete recuos por meia
+    hora — todos CURTOS, que é o caso mais comum, porque quem devolve a bola ao
+    guarda-redes está a dois metros dele. Foi removida.
+
+    A única distância que sobra é a saída do toque do PRÓPRIO guarda-redes
+    (`libertaComOPe`): sem ela ficaria proibido para sempre.
+    */
     const gkSrc = ler('js/config/goalkeeper.js');
-    const mAtraso = gkSrc.match(/atrasoMin:\s*([\d.]+)/);
-    if (!mAtraso || Number(mAtraso[1]) <= 0 || Number(mAtraso[1]) > 5) {
-        erro('GkRecuoModel.atrasoMin fora do que separa um recuo de um toque de lado');
-    } else ok('atrasoMin = ' + mAtraso[1] + ' m');
+    const utilsRegra = ler('js/utils.js');
+    const corpoAvaliar = utilsRegra.slice(utilsRegra.indexOf('function avaliarRecuoParaGR'));
+    const corpoLimpo = corpoAvaliar.slice(0, 2000)
+        .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    if (/atrasoMin/.test(gkSrc.replace(/\/\*[\s\S]*?\*\//g, '')) ||
+        /atrasoMin/.test(corpoLimpo)) {
+        erro('a folga de direcção voltou: a regra é o PÉ, não quanto a bola recuou');
+    } else ok('sem folga de direcção: o pé de um companheiro chega');
+
+    const mLib = gkSrc.match(/libertaComOPe:\s*([\d.]+)/);
+    if (!mLib || Number(mLib[1]) <= 0 || Number(mLib[1]) > 10) {
+        erro('GkRecuoModel.libertaComOPe fora do que separa um toque de uma bola posta em jogo');
+    } else ok('libertaComOPe = ' + mLib[1] + ' m (só para o toque do próprio GR)');
 
     const headerSrc = ler('js/player.js');
     if (!/executeHeader[\s\S]{0,400}limparRecuoParaGR/.test(headerSrc)) {

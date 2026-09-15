@@ -697,6 +697,42 @@ const BallControl = {
     altura do contacto (ver peitoAlturaMinCola/MaxCola e colarBolaAoPeito) —, e
     por isso o piso pode descer sem a bola dar um salto no frame do toque.
     */
+    /*
+    =====================================================================
+    NÃO SE TIRA A BOLA A QUEM A TEM VINDO POR TRÁS
+    =====================================================================
+    Relato: *"os jogadores ainda estão roubando a bola por trás do jogador que
+    está carregando a bola"*.
+
+    O nó do desarme (`tentarDesarme`, js/bt/player_bt.js) já recusava o
+    carrinho pelas costas — mas não era por aí que a bola mudava de dono. O
+    `resolveBallContact` dá a bola a QUEM TIVER O CORPO MAIS PERTO dela, e mais
+    nada: não olha a quem a tem, nem de que lado vem o outro. Um adversário
+    colado às costas do portador fica a 0.9 m da bola e ganha-a sem gesto
+    nenhum.
+
+    Medido em 20 min (`tools/scratch/_roubo_angulo.js`), contando só as perdas
+    para um adversário que estava a menos de 3 m: 37 roubos, dos quais **12
+    (32%) por trás** — a 90 cm de distância e com o ladrão em MOVE_TO_POS,
+    CARRY ou BALL_CONTROL_RIGHT, ou seja sem sequer tentar desarmar.
+
+    `anguloCos` é o cosseno do ângulo entre a FRENTE do portador e a direcção
+    de onde vem o adversário: -0.5 são 120 graus, ou seja o terço de trás. Daí
+    para trás ele não tira a bola por proximidade — tem de a ir buscar pelo
+    lado, ou tentar o desarme e arriscar a falta, que é o que a regra do jogo
+    manda.
+
+    `bolaSolta` é a saída que impede isto de virar posse eterna: se a bola já
+    se afastou mais do que isto do portador, deixou de ser dele e volta a ser
+    de quem lá chegar primeiro, venha de onde vier. Sem esta saída, um
+    adversário atrás ficava impedido de a recolher mesmo depois de ela lhe
+    sobrar.
+    */
+    rouboPorTras: {
+        anguloCos: -0.5,   // cos(120°): daqui para trás não se rouba por contacto
+        bolaSolta: 1.6     // com a bola a mais disto do portador, ela é de quem chegar
+    },
+
     peitoYMin: 0.95,       // altura mínima do contacto para contar como peito
     peitoAlturaMinCola: 0.90,  // limites de corpo para a bola colada
     peitoAlturaMaxCola: 1.75,

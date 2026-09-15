@@ -46,7 +46,7 @@ function palco() {
         Float32Array, Math, console,
         document: {
             getElementById: (id) => botoes[id] || (botoes[id] = {
-                id: id, innerText: '', style: {},
+                id: id, innerText: '', style: {}, hidden: true,
                 classList: { toggle: () => { }, add: () => { }, remove: () => { } }
             })
         },
@@ -75,6 +75,26 @@ function bufferCheio(R, head) {
     R.count = REPLAY_FRAMES;
     R.head = head;
 }
+
+test('o aviso REPLAY acende enquanto a repetição corre, e apaga no fim', () => {
+    const { R, botoes } = palco();
+    bufferCheio(R, 900);
+    R.marcarGolo();
+    R.head = 900 + Math.round(4.5 * FPS);
+
+    // Começa apagado: o elemento nasce com `hidden` no index.html.
+    R.replayDoGolo();
+    assert.strictEqual(botoes['aviso-replay'].hidden, false, 'acende ao arrancar');
+
+    while (R.isReplaying) R.playFrame();
+    assert.strictEqual(botoes['aviso-replay'].hidden, true, 'e apaga quando acaba');
+
+    // E a manual acende-o também — é a mesma repetição para quem está a ver.
+    R.startReplay();
+    assert.strictEqual(botoes['aviso-replay'].hidden, false);
+    R.stopReplay();
+    assert.strictEqual(botoes['aviso-replay'].hidden, true);
+});
 
 test('liga por omissão, e o botão troca o estado', () => {
     const { R, botoes } = palco();

@@ -81,6 +81,21 @@ class ReplaySystem {
         return this.automatico;
     }
 
+    /*
+    O AVISO DE REPETIÇÃO ao lado do placar — pedido: *"quando o Replay estiver
+    rodando vamos colocar uma informação ao lado do placar. REPLAY com uma caixa
+    retangular com bordas arredondadas, fundo amarelo, letras pretas. Piscando
+    ao lado do placar"*.
+
+    O piscar é da folha de estilo (`piscar-replay`, css/styles.css); daqui só se
+    acende e se apaga. Serve as duas repetições, a manual e a do golo: o que se
+    quer saber ao olhar para o ecrã é que aquilo não é o jogo a sério.
+    */
+    actualizarAvisoDeReplay() {
+        const el = document.getElementById('aviso-replay');
+        if (el) el.hidden = !this.isReplaying;
+    }
+
     actualizarBotaoAutomatico() {
         const el = document.getElementById('btn-replay-auto');
         if (!el) return;
@@ -232,6 +247,7 @@ class ReplaySystem {
         `animate` (js/main.js), e o botão de pause volta a querer dizer só uma
         coisa: o utilizador mandou parar.
         */
+        this.actualizarAvisoDeReplay();
         if (typeof TouchControls !== 'undefined') TouchControls.updateButtonsState();
     }
     
@@ -246,14 +262,10 @@ class ReplaySystem {
         this.replayFim = null;
 
         /*
-        A REPETICAO AUTOMATICA DEVOLVE O QUE PEDIU EMPRESTADO: a camara de onde
-        se estava a ver, e o jogo a andar.
+        A REPETICAO AUTOMATICA DEVOLVE A CAMARA que pediu emprestada.
 
-        O `startReplay` poe em pausa e a repeticao manual fica assim de
-        proposito (quem carrega no botao quer olhar para o fim do lance). Esta
-        nao: ela existe para o jogo seguir sozinho a seguir, e e ela que segura
-        a saida de bola — deixa-la em pausa era deixar o jogo parado para
-        sempre.
+        A manual nao tem nada para devolver: ela corre de onde o utilizador
+        estiver a ver, e e por isso que so a automatica guarda o `camaraAnterior`.
         */
         if (this.eraAutomatico) {
             this.eraAutomatico = false;
@@ -269,6 +281,7 @@ class ReplaySystem {
             el.innerText = 'Replay (20s)';
             el.style.backgroundColor = '';
         }
+        this.actualizarAvisoDeReplay();
         if (typeof TouchControls !== 'undefined') TouchControls.updateButtonsState();
     }
 

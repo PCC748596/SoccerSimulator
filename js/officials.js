@@ -24,7 +24,7 @@ POSICIONAMENTO
 
   A diagonal é a do LATERAL DIREITO ao PONTA ESQUERDA do TeamB — de (+X, +Z) a
   (-X, -Z). O árbitro projecta a bola nela e depois AFASTA-SE ao longo dela até
-  ficar a `RefereeModel.distanciaBola` da bola (15 m).
+  ficar na coroa entre `RefereeModel.raioMin` e `raioMax` (20 a 25 m da bola).
 =============================================================================
 */
 const RefereeModel = {
@@ -43,12 +43,35 @@ const RefereeModel = {
     */
     diagonalX: 0.68,
     diagonalZ: 0.75,
-    distanciaBola: 15.0,     // afastamento à bola, em metros
+
+    /*
+    A COROA À VOLTA DA BOLA — entre que dois raios o árbitro vive.
+
+    Pedido: *"vamos criar um circulo de 25 metros de raio ao redor da bola e
+    outro de 20 metros. O juiz vai ficar correndo desse espaço entre os 2
+    circulos"*.
+
+    Era um número só, `distanciaBola: 15`, e um só número quer dizer uma
+    circunferência: qualquer metro a mais ou a menos era erro a corrigir, e ele
+    passava o jogo a corrigi-lo. Com dois raios há uma FAIXA, e dentro dela não
+    há nada a corrigir — o raio só se mexe quando ele sai dela (ver
+    `pontoDoArbitro`). É também o que lhe tira o vaivém: metade dos passos que
+    ele dava eram a apertar ou a largar centímetros.
+
+    O RUMO continua a ser a diagonal; a coroa manda só na DISTÂNCIA.
+    */
+    raioMin: 20.0,           // mais perto do que isto, afasta-se
+    raioMax: 25.0,           // mais longe do que isto, aproxima-se
+    /*
+    Folga até à linha, para o alvo da coroa nunca cair fora do campo: com a bola
+    encostada à linha de fundo, 20 m para o lado de lá sairia do relvado.
+    */
+    margemDoCampo: 1.5,
     /*
     Colocação inicial do árbitro: junto ao círculo central, do lado da sua
     diagonal — entre as duas linhas que se formam para o pontapé de saída. 12 m
     põe-no logo por fora do círculo (raio 9.15) sem ficar longe do lance.
-    Depois do arranque passa a mandar o `distanciaBola`.
+    Depois do arranque passa a mandar a coroa (`raioMin`/`raioMax`).
     */
     distanciaInicial: 12.0,
     raioCirculoCentral: 9.15,
@@ -93,6 +116,22 @@ const RefereeModel = {
 
     Mexer nestes dois numeros sem correr o teste e reintroduzir um dos dois.
     */
+    /*
+    EM QUANTO TEMPO ele quer fechar o que falta, em segundos. É isto que dá a
+    velocidade de cada frame: `d / tempoDeAjuste`, limitada a `velocidade`.
+
+    Serve duas coisas ao mesmo tempo, e é por isso que é um tempo e não uma
+    distância: ele TRAVA a chegar (em vez de ir a sete metros por segundo até
+    ao último centímetro e parar de repente) e a fronteira entre correr e dar
+    passo de lado passa a ser contínua — ela cai onde `d / tempoDeAjuste` vale
+    `LateralGait.velViragem`, ou seja a 3.1 m, e nesse ponto a velocidade é a
+    mesma dos dois lados.
+
+    Um corte seco pela distância (`d <= 3`) dava um degrau de 6.9 m/s num
+    frame, apanhado por tests/arbitro_passada.test.js — o árbitro arrancava e
+    parava de repente a seguir um alvo que anda sempre à mesma velocidade.
+    */
+    tempoDeAjuste: 0.85,
     paragemMax: 0.06,
     arranqueMin: 0.10,
     suavizacaoVel: 0.20,
@@ -732,8 +771,8 @@ const Officials = {
     },
 
     /*
-    Ponto da diagonal do árbitro mais próximo da bola, depois afastado ao longo
-    dela até `distanciaBola`. Devolve {x, z}.
+    Onde o árbitro quer estar: o RUMO sai da diagonal dele, a DISTÂNCIA sai da
+    coroa à volta da bola (`raioMin`/`raioMax`). Devolve {x, z}.
     */
     pontoDoArbitro: function (bola) {
         const R = RefereeModel;
@@ -759,26 +798,100 @@ const Officials = {
 
         const dx = bx - ax, dz = bz - az;
         const len2 = dx * dx + dz * dz;
-        const comprimento = Math.sqrt(len2);
 
         let t = ((bola.x - ax) * dx + (bola.z - az) * dz) / len2;
         t = THREE.MathUtils.clamp(t, 0, 1);
 
-        let px = ax + dx * t, pz = az + dz * t;
+        const px = ax + dx * t, pz = az + dz * t;
 
         /*
-        Afasta-se ao longo da diagonal até estar a `distanciaBola` da bola, e
-        para o lado de onde a jogada NÃO está — atravessar o meio do lance para
-        cumprir a distância seria pior do que não a cumprir.
+        =================================================================
+        ELE FICA NA DIAGONAL, À DISTÂNCIA DA COROA
+        =================================================================
+        Pedido: *"vamos criar um circulo de 25 metros de raio ao redor da bola
+        e outro de 20 metros. O juiz vai ficar correndo desse espaço entre os 2
+        circulos"*.
+
+        A diagonal continua a dizer POR ONDE ele anda — é o sistema de
+        arbitragem e é o que o mantém fora do meio do lance. A coroa diz A QUE
+        DISTÂNCIA. Cruzam-se resolvendo uma coisa só: qual é o ponto DA
+        DIAGONAL que fica a `raio` metros da bola.
+
+        Em contas: com `h` a distância da bola à diagonal (a perpendicular) e
+        `raio` a hipotenusa, o cateto que falta é `sqrt(raio² - h²)`, e é esse
+        o afastamento ao longo da diagonal a partir do pé da perpendicular.
+        Dois pontos servem, um para cada lado; fica o que está mais perto de
+        onde ele já está, senão atravessava o campo de cada vez que a bola
+        mudasse de metade.
+
+        O CASO SEM SOLUÇÃO é a bola mais longe da diagonal do que o próprio
+        raio (bola encostada à linha lateral): aí nenhum ponto da diagonal
+        serve, e o que manda é a coroa — ele sai da diagonal e vai direito à
+        distância certa. É o que um árbitro faz mesmo quando o jogo se encosta
+        à linha.
+
+        Uma tentativa anterior punha o alvo em `bola + direcção_da_diagonal *
+        raio`. Não serve: essa direcção é a PERPENDICULAR à diagonal, portanto
+        troca de sentido de repente sempre que a bola cruza a diagonal — e o
+        árbitro atravessava o campo a correr atrás dela.
         */
-        const dist = Math.hypot(px - bola.x, pz - bola.z);
-        if (dist < R.distanciaBola) {
-            const falta = (R.distanciaBola - dist) / comprimento;
-            const sentido = (bola.z >= 0) ? -1 : 1;
-            t = THREE.MathUtils.clamp(t + sentido * falta, 0, 1);
-            px = ax + dx * t; pz = az + dz * t;
+        const arb = this.arbitro;
+        const distActual = arb && arb.model
+            ? Math.hypot(arb.model.position.x - bola.x, arb.model.position.z - bola.z)
+            : (R.raioMin + R.raioMax) / 2;
+
+        /*
+        O RAIO PEDIDO, e é aqui que a faixa vale alguma coisa:
+
+            dentro da coroa   fica o raio que ele já tem, e o alvo só desliza
+                              AO LONGO dela — ele corre à volta do lance em vez
+                              de entrar e sair;
+            fora da coroa     volta ao MEIO da faixa, e não à borda que
+                              atravessou. Encostado à borda, o primeiro metro
+                              que a bola andasse na direcção dele punha-o fora
+                              outra vez; pelo meio ele tem 2.5 m de folga dos
+                              dois lados.
+        */
+        const raio = (distActual >= R.raioMin && distActual <= R.raioMax)
+            ? distActual
+            : (R.raioMin + R.raioMax) / 2;
+
+        const h = Math.hypot(px - bola.x, pz - bola.z);
+        const comprimento = Math.sqrt(len2) || 1;
+
+        let alvoX, alvoZ;
+        if (h >= raio) {
+            // Sem ponto na diagonal à distância certa: manda a coroa.
+            const k = (h > 0.001) ? raio / h : 0;
+            alvoX = bola.x + (px - bola.x) * k;
+            alvoZ = bola.z + (pz - bola.z) * k;
+        } else {
+            const cateto = Math.sqrt(raio * raio - h * h) / comprimento;   // em unidades de t
+            const t1 = THREE.MathUtils.clamp(t - cateto, 0, 1);
+            const t2 = THREE.MathUtils.clamp(t + cateto, 0, 1);
+            const p1x = ax + dx * t1, p1z = az + dz * t1;
+            const p2x = ax + dx * t2, p2z = az + dz * t2;
+
+            let usa1 = true;
+            if (arb && arb.model) {
+                const d1 = Math.hypot(p1x - arb.model.position.x, p1z - arb.model.position.z);
+                const d2 = Math.hypot(p2x - arb.model.position.x, p2z - arb.model.position.z);
+                usa1 = (d1 <= d2);
+            } else {
+                // No arranque não há "onde ele está": fica do lado de onde a
+                // jogada não está, como era antes.
+                usa1 = (bola.z >= 0);
+            }
+            alvoX = usa1 ? p1x : p2x;
+            alvoZ = usa1 ? p1z : p2z;
         }
-        return { x: px, z: pz };
+
+        const limX = CAMPO_LARG / 2 - R.margemDoCampo;
+        const limZ = CAMPO_COMP / 2 - R.margemDoCampo;
+        return {
+            x: THREE.MathUtils.clamp(alvoX, -limX, limX),
+            z: THREE.MathUtils.clamp(alvoZ, -limZ, limZ)
+        };
     },
 
     /*
@@ -837,15 +950,69 @@ const Officials = {
         }
 
         let lateralidade = 0, ladoMov = 0;
-        const velDesejada = o.paradoNoAlvo ? 0 : Math.min(velMax, d / Math.max(dt, 1e-4));
-        const emCorrida = !L || velDesejada > L.velViragem;
+
+        /*
+        =================================================================
+        O CORPO VAI PARA ONDE ELE ANDA MESMO
+        =================================================================
+        Relato: *"o juiz está correndo para um lado virado para o outro"*.
+        Medido em 10 min de jogo: em 21% dos frames em corrida a frente do
+        corpo estava a mais de 30° do caminho que ele percorria, e em 7% a mais
+        de 90° — de costas para onde ia.
+
+        Eram duas coisas, e as duas estão aqui:
+
+        1. O CORTE ERA NA DISTÂNCIA AO ALVO, e não no movimento. `d > 0.4`
+           existia para ele não fazer piruetas com alvo a tremer, mas a zona
+           morta do passo é `paragemMax` = 0.06: entre 0.06 e 0.40 ele DAVA
+           passo (a passada é `min(d, velMax*dt)` = 12.5 cm, ou seja velocidade
+           cheia) com o rumo do frame anterior. Instrumentado: 34% dos frames
+           em corrida caiam nessa faixa, e o alvo salta de lado para lado
+           dentro dela. Agora o corte é o mesmo do passo — se ele anda, vira-se.
+
+        2. A DECISÃO DE CORRIDA VINHA DE `d / dt`, que é a velocidade que ele
+           precisaria para chegar num frame: com dt = 1/60 isso dá 60x a
+           distância, portanto o teste era sempre `velMax > velViragem` e, com o
+           árbitro a 7.5 m/s, sempre verdadeiro. O passo lateral com a cara para
+           a bola — que é o que um árbitro faz a acompanhar — nunca chegava a
+           existir. Agora vem da velocidade JÁ FILTRADA (`velAnim`, a mesma que
+           alimenta o ciclo de passada), que é o que ele anda mesmo.
+        */
+        /*
+        CORRIDA OU AJUSTE, e o critério é a DISTÂNCIA que falta — não uma
+        velocidade.
+
+        Uma pessoa a dois metros do sítio dá passo de lado sem tirar os olhos
+        do jogo; a dez metros vira-se e corre. A fronteira sai da velocidade
+        que ele vai mesmo usar neste frame — `d / tempoDeAjuste`, limitada ao
+        máximo dele —, que é exacta e contínua: no ponto de troca a velocidade
+        é a mesma dos dois lados.
+
+        As duas tentativas que não servem, e porquê:
+
+          `d / dt`      a velocidade para lá chegar NUM frame. A 1/60 isso são
+                        60x a distância, portanto dava sempre `velMax` e o
+                        passo lateral nunca existia — era o que estava.
+          `velAnim`     a velocidade filtrada. Atrasa-se uns dez frames, e
+                        durante toda a arrancada ele já corria com o corpo
+                        ainda virado para a bola: medido, 91% dos frames em que
+                        ele ia de costas eram a mais de 3.6 m/s, ou seja em
+                        plena corrida.
+
+        E quem anda de lado anda devagar por construção: abaixo da fronteira a
+        velocidade JÁ é menor do que `velViragem`, senão ficava o passo lateral
+        a deslizar a 7.5 m/s — o defeito que a LateralGait existe para evitar.
+        */
+        velMax = Math.min(velMax, d / R.tempoDeAjuste);
+        const emCorrida = !L || velMax > L.velViragem;
+        const anda = !o.paradoNoAlvo && d > R.paragemMax;
 
         if (olharPara && !emCorrida) {
             const ox = olharPara.x - o.model.position.x;
             const oz = olharPara.z - o.model.position.z;
             if (Math.hypot(ox, oz) > 0.05) o.model.rotation.y = Math.atan2(ox, oz);
-        } else if (d > 0.4) {
-            // Vira-se para onde anda; quase parado, mantém a orientação.
+        } else if (anda) {
+            // Vira-se para onde anda; parado, mantém a orientação.
             o.model.rotation.y = Math.atan2(dx, dz);
         }
 

@@ -1046,20 +1046,30 @@ const GkRecuoModel = {
     distToque: 1.4,
 
     /*
-    QUANTOS METROS PARA TRÁS É QUE JÁ SÃO UMA BOLA ATRASADA.
+    AQUI VIVIA O `atrasoMin`, E FOI REMOVIDO.
 
-    A marca do recuo era posta só quando o passe ia ENDEREÇADO ao guarda-redes
-    (`passTarget.role === 'gk'`): um alívio para trás, ou um passe curto que
-    ninguém foi buscar, chegavam-lhe às mãos sem infracção nenhuma. Medido em
-    74 min, das 8 bolas que ele agarrou uma vinha do pé de um companheiro e
-    nenhuma estava marcada.
+    Era a folga de direcção: a bola tinha de ser jogada mais de 1 m para TRÁS
+    para as mãos ficarem proibidas. A ideia era não apanhar um toque de lado a
+    proteger a bola; o que ela apanhava era outra coisa — o recuo CURTO, que é
+    o mais comum, porque o defesa que devolve a bola ao guarda-redes está a
+    dois metros dele.
 
-    Agora conta a DIRECÇÃO: a bola jogada com o pé mais de `atrasoMin` metros
-    para trás proíbe-lhe as mãos, seja para quem for. Um toque de lado, ou meio
-    metro para trás a proteger a bola, não é um recuo — e por isso a folga
-    existe.
+    Medido em 30 min (`tools/scratch/_recuo_gk.js`): sete bolas agarradas com a
+    mão vinham do pé de um companheiro, todas dentro da folga, com
+    deslocamentos de -0.73 a +3.23 m. A Lei 12 fala do PÉ e não da direcção, e
+    é assim que a regra passou a ser lida — ver `avaliarRecuoParaGR`
+    (js/utils.js).
+
+    A única distância que sobrou é esta, e é só para o toque do PRÓPRIO
+    guarda-redes: ele não se absolve a si mesmo (tocar com o pé e agarrar a
+    seguir era o buraco original), mas quando a bola sai mesmo dali ele pô-la
+    em jogo e a fase acabou. Sem esta saída ficava proibido para sempre, porque
+    já não há direcção nenhuma a limpar a marca.
+
+    Três metros separam um toque de pé — que não põe nada em jogo — de uma bola
+    jogada para longe.
     */
-    atrasoMin: 1.0
+    libertaComOPe: 3.0
 };
 
 if (typeof window !== 'undefined') window.GkRecuoModel = GkRecuoModel;

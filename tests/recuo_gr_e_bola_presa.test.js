@@ -113,8 +113,16 @@ console.log(LF + '2 — onde a marca nasce e onde morre');
     } else ok('o peito não marca (a regra permite)');
 
     const srcUtilsRegra = ler('js/utils.js');
+    /*
+    Alguma coisa tem de LIMPAR a marca, senão ele ficava proibido para sempre.
+    São duas: o `limparRecuoParaGR` (cabeça, peito, toque do adversário) e a
+    saída do toque do próprio guarda-redes, quando a bola sai mesmo dali
+    (`GkRecuoModel.libertaComOPe`). Antes era a direcção da bola que a limpava,
+    e era essa mesma folga que deixava passar os recuos curtos.
+    */
     if (!/function avaliarRecuoParaGR/.test(srcUtilsRegra) ||
-        !/m\.recuoParaGR = \(avanco < -atrasoMin\)/.test(srcUtilsRegra)) {
+        !/m\.recuoParaGR = null/.test(srcUtilsRegra) ||
+        !/libertaComOPe/.test(srcUtilsRegra)) {
         erro('nada limpa o recuo — ficaria proibido para sempre');
     } else ok('morre quando a bola deixa de vir atrasada (avaliarRecuoParaGR)');
 }

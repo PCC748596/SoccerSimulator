@@ -675,6 +675,61 @@ Object.assign(Match, {
         if (!best || bestDist > BallControl.reach) return false;
 
         /*
+        O ADVERSÁRIO QUE VEM POR TRÁS NÃO LEVA A BOLA — ver
+        BallControl.rouboPorTras, que traz a medição e o porquê.
+
+        Aqui em cima ganha quem tem o corpo mais perto da bola, e mais nada.
+        Isso chega para as bolas soltas, mas não para uma bola que TEM DONO: o
+        portador leva-a à frente dos pés, e quem lhe corre às costas fica com o
+        corpo a 90 cm dela e tira-lha sem gesto nenhum.
+
+        Não é o desarme a falhar — o `tentarDesarme` já recusa o carrinho pelas
+        costas. É esta disputa, que não sabe que existe um portador.
+        */
+        /*
+        E O DONO NÃO É O `ballCarrier`, É QUEM LHE TOCOU POR ÚLTIMO.
+
+        O `ballCarrier` é apagado a cada toque de condução — o Match.update
+        larga-o assim que a bola passa dos 2 m dele (js/match/match_loop.js).
+        Medido: em 20% dos frames de condução não há `ballCarrier` nenhum, e é
+        precisamente nesses, com a bola lançada à frente, que o adversário de
+        trás a apanhava. Ancorar aqui no `ballCarrier` deixava o buraco aberto.
+
+        O `lastTouchedPlayer` não tem esse intervalo: é dele a bola até alguém
+        lhe tocar. E a distância abaixo trata do resto — passada a bola, ela
+        afasta-se e a protecção desliga-se sozinha.
+        */
+        const RT = BallControl.rouboPorTras;
+        const dono = this.ballCarrier || this.lastTouchedPlayer;
+        if (RT && dono && dono.model && best !== dono && best.team !== dono.team) {
+            const dBolaAoDono = Math.hypot(
+                this.ball.position.x - dono.model.position.x,
+                this.ball.position.z - dono.model.position.z);
+
+            // Bola já fugida do pé dele: deixou de ser dele, e é de quem chegar.
+            if (dBolaAoDono <= RT.bolaSolta) {
+                /*
+                A FRENTE do portador é para onde ele ANDA, e só com ele parado é
+                que vale a orientação do modelo — a mesma convenção do
+                `tentarDesarme`, para as duas regras não discordarem sobre o que
+                é "por trás".
+                */
+                let fx, fz;
+                if (dono.velocity && dono.velocity.lengthSq() > 0.1) {
+                    const n = Math.hypot(dono.velocity.x, dono.velocity.z) || 1;
+                    fx = dono.velocity.x / n; fz = dono.velocity.z / n;
+                } else {
+                    fx = Math.sin(dono.model.rotation.y); fz = Math.cos(dono.model.rotation.y);
+                }
+
+                const ax = best.model.position.x - dono.model.position.x;
+                const az = best.model.position.z - dono.model.position.z;
+                const da = Math.hypot(ax, az);
+                if (da > 0.001 && (fx * ax + fz * az) / da < RT.anguloCos) return false;
+            }
+        }
+
+        /*
         FORA-DE-JOGO. O envolvimento no jogo e o TOQUE, e este e o sitio por
         onde todos passam. Se quem chegou a bola estava em posicao de
         impedimento no instante do passe, a jogada acaba aqui e monta-se o

@@ -497,11 +497,57 @@ arrastar a câmara mesmo por cima dele).
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.45);
 }
 
-#placar {
+/* A linha do topo: o placar e, ao lado dele, o aviso de repetição. É esta que
+   está centrada — o placar deixou de se centrar a si próprio para o aviso poder
+   ficar colado a ele seja qual for a largura dos nomes. */
+#placar-linha {
     position: absolute;
     top: 20px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+}
+
+#aviso-replay {
+    background: #f1c40f;
+    color: #000;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 16px;
+    letter-spacing: 2px;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    /* Pisca em degraus e não em desvanecimento: é assim que se lê como um
+       indicador aceso e apagado, e não como uma animação. */
+    animation: piscar-replay 1s steps(1, end) infinite;
+}
+
+@keyframes piscar-replay {
+
+    0%,
+    50% {
+        opacity: 1;
+    }
+
+    50.01%,
+    100% {
+        opacity: 0.15;
+    }
+}
+
+/* Quem pede menos movimento fica com o aviso fixo — continua a ler-se. */
+@media (prefers-reduced-motion: reduce) {
+    #aviso-replay {
+        animation: none;
+    }
+}
+
+#placar {
     background: rgba(15, 23, 42, 0.95);
     color: #ecf0f1;
     padding: 10px 24px;
@@ -723,10 +769,20 @@ arrastar a câmara mesmo por cima dele).
    ========================================================================== */
 
 @media (max-width: 768px) {
-    #placar {
+    #placar-linha {
         top: 10px;
+        gap: 6px;
+    }
+
+    #placar {
         padding: 6px 14px;
         font-size: 13px;
+    }
+
+    #aviso-replay {
+        padding: 6px 10px;
+        font-size: 13px;
+        letter-spacing: 1px;
     }
 
     /* No telemóvel o minimapa sobe acima do HUD do jogador, e encolhe —
