@@ -833,7 +833,25 @@ function animate(time) {
         fpsLastTime = time;
     }
 
-    if (!window.isPaused) {
+    /*
+    O JOGO NÃO ANDA POR BAIXO DE UMA REPETIÇÃO.
+
+    Quem segurava o `Match.update` durante um replay era a PAUSA: o
+    `startReplay` chamava `Match.togglePause()`. Só que o `playFrame` também
+    pára em pausa (e com razão: o botão de pause tem de valer no replay), e as
+    duas coisas juntas davam uma repetição congelada no primeiro frame — para a
+    ver era preciso carregar em Continue, e aí a simulação corria POR BAIXO
+    dela, a escrever nos mesmos corpos que a repetição estava a repor.
+
+    Agora são dois travões separados e cada um com o seu dono: a repetição
+    segura a simulação (aqui), e a pausa segura as duas. É também isto que
+    prende a saída de bola até ao fim da repetição do golo (ver `replayDoGolo`,
+    js/match/match_replay.js): sem `Match.update`, a máquina de estados do golo
+    fica onde está.
+    */
+    const emRepeticao = !!(window.MatchReplay && window.MatchReplay.isReplaying);
+
+    if (!window.isPaused && !emRepeticao) {
         // GAME_SPEED é o ritmo base da partida (config.js); o speedMultiplier
         // continua a ser só o controlo 0.5x/1.0x/1.3x do painel.
         if (window.speedMultiplier === 'frame') {

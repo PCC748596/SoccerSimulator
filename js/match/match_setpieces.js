@@ -417,7 +417,10 @@ Object.assign(Match, {
             });
 
             this.lateralPendente = true;
-            this.lateralAtraso = ESPERA_APOS_REPOSICAO;
+            // O lateral espera mais do que as outras reposicoes -- ver
+            // ESPERA_COBRANCA_LATERAL (js/config/tactics.js).
+            this.lateralAtraso = (typeof ESPERA_COBRANCA_LATERAL === 'number')
+                ? ESPERA_COBRANCA_LATERAL : ESPERA_APOS_REPOSICAO;
 
         } else if (type === 'FREE_KICK') {
             /*
@@ -469,10 +472,27 @@ Object.assign(Match, {
                     ? decisaoDeFalta(bolaFK.x, bolaFK.z, attDir) : 'passe');
             const setorPreliminar = (typeof setorDaFalta === 'function')
                 ? setorDaFalta(bolaFK.x, bolaFK.z, attDir, decisaoFK) : 'meio_avancado';
-            const criterioFK = (F.batedorPorSetor && F.batedorPorSetor[setorPreliminar]) || 'naoDef';
+
+            /*
+            A FALTA PELA ALA TEM BATEDOR PRÓPRIO — ver FreeKickModel.
+            batedorPorSetorLateral e .corredorLateral.
+
+            O sector sai só do avanço em Z, portanto uma falta encostada à
+            linha e uma no eixo caem no mesmo sector. Quem bate é que não pode
+            ser o mesmo: no corredor bate o lateral daquele lado (e na ponta o
+            melhor técnico dos três do corredor), e é esse mapa que ganha
+            quando a bola está lá.
+            */
+            const naAlaFK = (typeof F.corredorLateral === 'number') &&
+                Math.abs(bolaFK.x) >= F.corredorLateral;
+            const criterioFK =
+                (naAlaFK && F.batedorPorSetorLateral && F.batedorPorSetorLateral[setorPreliminar]) ||
+                (F.batedorPorSetor && F.batedorPorSetor[setorPreliminar]) || 'naoDef';
+            const ladoBolaFK = (typeof ladoDaBola === 'function')
+                ? ladoDaBola(bolaFK.x, attDir) : null;
 
             const takerFK = (typeof batedorDaFalta === 'function')
-                ? batedorDaFalta(attackingPlayers, criterioFK, p => p.skillFor('TEC'))
+                ? batedorDaFalta(attackingPlayers, criterioFK, p => p.skillFor('TEC'), ladoBolaFK)
                 : null;
             this.setPieceTaker = takerFK || null;
 

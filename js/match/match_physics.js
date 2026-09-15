@@ -191,6 +191,13 @@ Object.assign(Match, {
                     this.mudarEstado('GOAL', 'goal_scored');
                     this.goalSequenceStage = 0;
                     this.tempoParada = 0;
+                    /*
+                    A ANCORA DA REPETICAO E AQUI, e nao no estagio que a manda
+                    tocar: a festa do golo continua a gravar por cima do
+                    buffer, e "os ultimos 15 s antes do golo" conta-se do golo.
+                    Ver REPLAY_GOLO em js/match/match_replay.js.
+                    */
+                    if (window.MatchReplay) window.MatchReplay.marcarGolo();
                     // Golo validado: o árbitro apita e aponta ao meio-campo.
                     if (typeof EfeitosSonoros !== 'undefined') EfeitosSonoros.apito(1.0);
                     
@@ -328,6 +335,20 @@ Object.assign(Match, {
                 if (this.tempoParada >= 4.5) {
                     this.tempoParada = 0;
                     this.goalSequenceStage = 1;
+
+                    /*
+                    A REPETICAO DO GOLO ENTRA AQUI, entre a festa e a saida de
+                    bola — pedido: *"a nova saida de bola so sera dada apos o
+                    replay automatico terminar, caso esteja ligado"*.
+
+                    Nao ha travao nenhum a seguir a esta linha porque nao e
+                    preciso: o `replayDoGolo` poe o jogo em pausa, e em pausa o
+                    `Match.update` nao corre — esta maquina de estados fica
+                    congelada no estagio 1 ate a repeticao acabar e o
+                    `stopReplay` devolver o jogo ao andamento. Desligado no
+                    painel, devolve false e o golo segue como sempre seguiu.
+                    */
+                    if (window.MatchReplay) window.MatchReplay.replayDoGolo();
 
                     // Oculta o aviso de golo antes de transitar a bola para o centro
                     const alerta = document.getElementById('alerta-golo');

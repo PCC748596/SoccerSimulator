@@ -62,6 +62,23 @@ const ESPERA_COBRANCA_CANTO = ESPERA_APOS_REPOSICAO + 2.0;
 if (typeof window !== 'undefined') window.ESPERA_COBRANCA_CANTO = ESPERA_COBRANCA_CANTO;
 
 /*
+E O LATERAL TAMBEM -- pedido: *"aumenta em 4s a espera para cobranca do lateral
+para dar tempo dos jogadores se posicionarem"*.
+
+O lateral e o lance que mais gente move sem que se veja porque: o batedor sai
+da ordem `ThrowInModel.ordemBatedor` e pode vir de 25 m, os apoios abrem
+(`apoioQuantos`/`apoioMin`/`apoioMax`) e os marcadores sobem
+(`avancoDosMarcadores`). Com a espera comum de 3 s a bola saia com meia equipa
+ainda a caminho do lugar.
+
+Sete segundos ainda cabem com folga na rede de seguranca (`SetPiecePrazos.
+lateral`, 15 s), que conta do mesmo instante e so existe para o caso de o gesto
+encravar.
+*/
+const ESPERA_COBRANCA_LATERAL = ESPERA_APOS_REPOSICAO + 4.0;
+if (typeof window !== 'undefined') window.ESPERA_COBRANCA_LATERAL = ESPERA_COBRANCA_LATERAL;
+
+/*
 Segundos entre o APITO do árbitro e a saída de bola. O apito autoriza a saída,
 portanto tem de vir ANTES dela — e perto: dado na montagem do kickoff ficava os
 3 s inteiros à frente do toque e lia-se como um apito solto, sem relação com o

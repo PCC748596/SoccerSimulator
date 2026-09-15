@@ -42,10 +42,10 @@ const FreeKickModel = extrairObjecto(srcCfg, 'FreeKickModel');
 const CAMPO_COMP = 106, CAMPO_LARG = 68, LARGURA_BALIZA = 7.32;
 
 const ambiente = { FreeKickModel, CAMPO_COMP, CAMPO_LARG, LARGURA_BALIZA };
-const codigo = ['decisaoDeFalta', 'setorDaFalta', 'grupoNaBolaParada',
-    'batedorDaFalta', 'lugaresDaFalta']
-    .map(n => extrairFuncao(srcUtils, n)).join(LF) + LF +
-    'return { decisaoDeFalta, setorDaFalta, grupoNaBolaParada, batedorDaFalta, lugaresDaFalta };';
+const nomesU = ['decisaoDeFalta', 'setorDaFalta', 'grupoNaBolaParada',
+    'ladoDaPosicao', 'ladoDaBola', 'batedorDaFalta', 'lugaresDaFalta'];
+const codigo = nomesU.map(n => extrairFuncao(srcUtils, n)).join(LF) + LF +
+    'return { ' + nomesU.join(', ') + ' };';
 const U = new Function(...Object.keys(ambiente), codigo)(...Object.values(ambiente));
 
 const dir = 1;
@@ -261,4 +261,155 @@ test('ninguém é colocado fora do campo', () => {
             }
         }
     }
+});
+
+/*
+=============================================================================
+A FALTA PELA ALA TEM BATEDOR PROPRIO
+=============================================================================
+Pedido: *"para faltas nas laterais na defesa quem bate e o Lateral. Para
+faltas na meia lateral tambem e o lateral para que o meia lateral possa se
+aprofundar na ponta ou area. Nas pontas: melhor tecnica entre o Lateral, meia
+lateral ou ponta"*.
+
+Antes o x da bola nao entrava em lado nenhum: o sector sai so do avanco em Z,
+portanto uma falta encostada a linha lateral tinha o mesmo batedor de uma no
+eixo - um central na propria defesa, o melhor tecnico nao-defensor no meio. E
+o criterio `lateral` escolhia por Tecnica pura, sem olhar ao LADO: com o RB
+melhor do que o LB, uma falta na ala esquerda saia batida pelo lateral direito.
+
+Ver FreeKickModel.corredorLateral / .batedorPorSetorLateral e `ladoDaBola`.
+*/
+
+// Um plantel com gente ESPALHADA, que e o que estes casos precisam: o lado da
+// bola e o lugar de cada um so se medem com x e z a serio.
+function plantelEspalhado() {
+    // Convencao das formacoes: os esquerdos (LB/LM/LW) em x positivo para
+    // quem ataca no sentido +z. Ver ladoDaBola e FormationsData.
+    const fazer = (pos, role, tec, x, z) => ({
+        pos: pos, role: role, skillFor: () => tec,
+        model: { position: { x: x, z: z } }
+    });
+    return [
+        fazer('CB', 'def', 74, -6, -30), fazer('CB', 'def', 70, 6, -30),
+        fazer('LB', 'def', 85, 24, -12), fazer('RB', 'def', 80, -24, -12),
+        fazer('DM', 'mid', 76, 0, -8), fazer('CM', 'mid', 88, 4, 0),
+        fazer('LM', 'mid', 92, 26, 4), fazer('RM', 'mid', 79, -26, 4),
+        fazer('CF', 'atk', 84, -5, 14), fazer('CF', 'atk', 81, 5, 14)
+    ];
+}
+
+// O que o `setupSetPiece` faz para escolher o criterio (js/match/match_setpieces.js).
+function criterioDe(bolaX, bolaZ, attDir) {
+    const dec = U.decisaoDeFalta(bolaX, bolaZ, attDir);
+    const setor = U.setorDaFalta(bolaX, bolaZ, attDir, dec);
+    const naAla = Math.abs(bolaX) >= FreeKickModel.corredorLateral;
+    return (naAla && FreeKickModel.batedorPorSetorLateral[setor]) ||
+        FreeKickModel.batedorPorSetor[setor];
+}
+function batedorEm(bolaX, avanco, attDir) {
+    const bolaZ = avanco * attDir;
+    const eq = plantelEspalhado();
+    // A equipa B e espelhada nos dois eixos (ver processTeam em match_setup.js).
+    if (attDir < 0) eq.forEach(p => { p.model.position.x *= -1; p.model.position.z *= -1; });
+    return U.batedorDaFalta(eq, criterioDe(bolaX, bolaZ, attDir),
+        p => p.skillFor('TEC'), U.ladoDaBola(bolaX, attDir));
+}
+
+test('na ala, da defesa ao meio-campo, bate o LATERAL daquele lado', () => {
+    // As duas direccoes de ataque: o lado sai de `x * attDir`, e sem isso uma
+    // das equipas teria sempre o lateral trocado.
+    for (const attDir of [1, -1]) {
+        for (const avanco of [-30, -8, 10]) {
+            const naEsquerda = batedorEm(26 * attDir, avanco, attDir);
+            assert.strictEqual(naEsquerda.pos, 'LB',
+                'attDir=' + attDir + ' avanco=' + avanco +
+                ': na ala esquerda bate o lateral esquerdo');
+
+            const naDireita = batedorEm(-26 * attDir, avanco, attDir);
+            assert.strictEqual(naDireita.pos, 'RB',
+                'attDir=' + attDir + ' avanco=' + avanco +
+                ': na ala direita bate o lateral direito');
+        }
+    }
+});
+
+test('e o lateral bate mesmo tendo menos Tecnica do que o do outro lado', () => {
+    // O RB tem 80 e o LB 85: por Tecnica pura a ala direita saia batida pelo
+    // esquerdo, que e o defeito que isto corrige.
+    const naDireita = batedorEm(-26, -30, 1);
+    assert.strictEqual(naDireita.pos, 'RB');
+    assert.strictEqual(naDireita.skillFor('TEC'), 80, 'o lado ganha a Tecnica');
+});
+
+test('pelo MEIO, no mesmo sector, o batedor continua a ser o de sempre', () => {
+    // O corredor e o que separa os dois mapas: sem ele isto seria o lateral.
+    assert.strictEqual(criterioDe(0, zDe(-30), dir), 'central');
+    assert.strictEqual(criterioDe(0, zDe(10), dir), 'naoDef');
+    // E mesmo na meia-esquerda, que ainda nao e ala.
+    assert.ok(FreeKickModel.corredorLateral > 12,
+        'a meia-esquerda nao pode contar como ala');
+    assert.strictEqual(criterioDe(12, zDe(10), dir), 'naoDef');
+});
+
+test('na PONTA bate o melhor Tecnico entre lateral, meia-lateral e ponta do lado', () => {
+    // Ala esquerda: LM(92) bate o LB(85) - e o RM(79)/RB(80) do outro lado nao
+    // entram na conta.
+    const esquerda = batedorEm(24, 40, 1);
+    assert.strictEqual(criterioDe(24, zDe(40), dir), 'alaDoLado');
+    assert.strictEqual(esquerda.pos, 'LM');
+
+    // Ala direita: o melhor dos dois daquele lado e o RB(80), nao o LM(92).
+    const direita = batedorEm(-24, 40, 1);
+    assert.strictEqual(direita.pos, 'RB');
+    assert.strictEqual(direita.skillFor('TEC'), 80);
+});
+
+test('o ponta (LW/RW) entra na conta da ponta, e o central nunca', () => {
+    const eq = plantelEspalhado().filter(p => p.pos !== 'LM');
+    eq.push({ pos: 'LW', role: 'atk', skillFor: () => 95,
+        model: { position: { x: 28, z: 20 } } });
+    const b = U.batedorDaFalta(eq, 'alaDoLado', p => p.skillFor('TEC'), 'L');
+    assert.strictEqual(b.pos, 'LW', 'o ponta e um dos tres homens do corredor');
+
+    const soCentrais = plantelEspalhado().filter(p => U.ladoDaPosicao(p.pos) === null);
+    const c = U.batedorDaFalta(soCentrais, 'alaDoLado', p => p.skillFor('TEC'), 'L');
+    assert.ok(c && c.role !== 'def',
+        'sem ninguem de ala a reserva e o melhor tecnico nao-defensor');
+});
+
+test('sem o lateral daquele lado desce-se, e nunca se fica sem batedor', () => {
+    const semLB = plantelEspalhado().filter(p => p.pos !== 'LB');
+    const b = U.batedorDaFalta(semLB, 'lateralDoLado', p => p.skillFor('TEC'), 'L');
+    assert.strictEqual(b.pos, 'RB', 'a primeira reserva do lateral e o outro lateral');
+
+    const semLaterais = plantelEspalhado().filter(p => U.grupoNaBolaParada(p.pos) !== 'lat');
+    const c = U.batedorDaFalta(semLaterais, 'lateralDoLado', p => p.skillFor('TEC'), 'L');
+    assert.strictEqual(c.role, 'def', 'e a seguir o defensor de melhor Tecnica');
+});
+
+/*
+E QUEM SOBRA NO GRUPO DO BATEDOR NAO TROCA DE LADO.
+
+O batedor sai da lista antes dos lugares serem distribuidos, portanto o grupo
+dele fica com menos um. O `lugaresDaFalta` dava o PRIMEIRO lugar da lista a
+quem sobrava (`xs[Math.min(i, n - 1)]` com i = 0), e o primeiro lugar e sempre
+o da esquerda: o lateral direito que sobrava atravessava o campo inteiro e
+deixava a ala dele vazia. Agora fica com o lugar mais perto de onde ja esta.
+*/
+test('o companheiro que sobra no grupo fica do SEU lado', () => {
+    const eq = plantelEspalhado();
+    const bat = eq.find(p => p.pos === 'LB');       // o esquerdo bate
+    const lug = U.lugaresDaFalta(26, zDe(10), dir,
+        eq.filter(p => p !== bat), 'meio_avancado');
+
+    const rb = lug.find(o => o.p.pos === 'RB');
+    assert.ok(rb, 'o lateral que sobra tem de ter lugar');
+    assert.ok(rb.x < 0,
+        'o RB estava em x=-24 e foi para x=' + rb.x.toFixed(1) + ' - atravessou o campo');
+
+    // E com o grupo completo nada muda: cada um no seu lado.
+    const completo = U.lugaresDaFalta(26, zDe(10), dir, plantelEspalhado(), 'meio_avancado');
+    assert.ok(completo.find(o => o.p.pos === 'LB').x > 0);
+    assert.ok(completo.find(o => o.p.pos === 'RB').x < 0);
 });

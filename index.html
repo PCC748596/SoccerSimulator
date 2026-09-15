@@ -31,6 +31,11 @@
                 <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-pause"
                     onclick="Match.togglePause()">Continue</button>
             </div>
+            <div style="display: flex; gap: 4px; margin-bottom: 4px;">
+                <button class="btn-action active" style="flex: 1; margin-top: 0;" id="btn-replay-auto"
+                    title="Ao golo, repete os últimos 15 s na Lateral TV antes da saída de bola"
+                    onclick="if(window.MatchReplay) window.MatchReplay.toggleAutomatico()">Replay Automático: ON</button>
+            </div>
             <div style="display: flex; gap: 4px; margin-bottom: 8px;">
                 <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.triggerGoalKick()">Tiro de
                     Meta</button>

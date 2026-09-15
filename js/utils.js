@@ -615,6 +615,34 @@ function grupoNaBolaParada(pos) {
 }
 
 /*
+O LADO DE UMA POSIÇÃO: 'L', 'R', ou null para quem joga por dentro.
+
+É a letra da sigla, e não o x onde ele está agora — um lateral esquerdo que
+subiu pelo meio continua a ser o lateral esquerdo.
+*/
+function ladoDaPosicao(pos) {
+    if (pos === 'LB' || pos === 'LM' || pos === 'LW') return 'L';
+    if (pos === 'RB' || pos === 'RM' || pos === 'RW') return 'R';
+    return null;
+}
+
+/*
+O LADO DO CAMPO ONDE A BOLA ESTÁ, visto por quem ATACA.
+
+A convenção das formações (FormationsData, js/config/tactics.js) põe os
+esquerdos em x positivo — mas só para a equipa A: o `processTeam`
+(js/match/match_setup.js) espelha a equipa B nos DOIS eixos, `x = -f.x` e
+`z = -f.z`. O espelho é uma meia-volta, portanto a relação que se mantém nas
+duas equipas é esta: a esquerda de quem ataca está em `x * attDir > 0`.
+
+Sem o `attDir` o lado sairia trocado para uma das equipas — o defeito que o
+`escolherBatedorDoLateral` (js/match/match_state.js) ainda tem no lateral.
+*/
+function ladoDaBola(bolaX, attDir) {
+    return (bolaX * (attDir || 1) >= 0) ? 'L' : 'R';
+}
+
+/*
 QUEM BATE A FALTA. Ver FreeKickModel.batedorPorSetor.
 
 Era o mais PERTO da bola, e por isso a cobrança calhava a quem a jogada tinha
@@ -622,9 +650,11 @@ deixado ali — um central a bater uma falta na entrada da área adversária. Ag
 sai do critério do sector, e o desempate é sempre a Técnica.
 
 `skillDe` é injectado (o `skillFor` do jogador) para a função ser testável sem
-o resto do jogo.
+o resto do jogo. `ladoBola` ('L' ou 'R', de `ladoDaBola`) só é lido pelos
+critérios de ala; sem ele eles caem no melhor técnico do grupo, seja de que
+lado for.
 */
-function batedorDaFalta(candidatos, criterio, skillDe) {
+function batedorDaFalta(candidatos, criterio, skillDe, ladoBola) {
     const tec = (p) => skillDe ? skillDe(p) : (p.skillFor ? p.skillFor('TEC') : 0);
     const melhorDe = (lista) => {
         let melhor = null, nota = -Infinity;
@@ -634,6 +664,11 @@ function batedorDaFalta(candidatos, criterio, skillDe) {
         }
         return melhor;
     };
+
+    // O melhor de uma lista, mas só entre os do lado da bola.
+    const doLado = (lista) => ladoBola
+        ? melhorDe(lista.filter(p => ladoDaPosicao(p.pos) === ladoBola))
+        : null;
 
     const semGk = candidatos.filter(p => p.role !== 'gk');
     if (!semGk.length) return null;
@@ -652,7 +687,39 @@ function batedorDaFalta(candidatos, criterio, skillDe) {
         // O lateral do LADO da bola bate primeiro; sem laterais, o melhor
         // técnico não-defensor, que é a regra geral do ataque.
         const laterais = semGk.filter(p => p.pos === 'LB' || p.pos === 'RB');
-        return melhorDe(laterais) ||
+        return doLado(laterais) || melhorDe(laterais) ||
+            melhorDe(semGk.filter(p => p.role !== 'def')) || melhorDe(semGk);
+    }
+    if (criterio === 'lateralDoLado') {
+        /*
+        A FALTA PELA ALA, DA DEFESA AO MEIO-CAMPO: bate o LATERAL desse lado.
+
+        Pedido: *"para faltas nas laterais na defesa quem bate é o Lateral.
+        Para faltas na meia lateral também é o lateral, para que o meia
+        lateral possa se aprofundar na ponta ou área"*. É o lateral que sai
+        do desenho sem custo — ele já é o homem de trás desse corredor —, e
+        quem fica livre para atacar o espaço é o meia-lateral.
+
+        Sem lateral desse lado (expulsão, formação sem laterais) desce-se: o
+        outro lateral, depois o defensor de melhor Técnica.
+        */
+        const laterais = semGk.filter(p => p.pos === 'LB' || p.pos === 'RB');
+        return doLado(laterais) || melhorDe(laterais) ||
+            melhorDe(semGk.filter(p => p.role === 'def')) || melhorDe(semGk);
+    }
+    if (criterio === 'alaDoLado') {
+        /*
+        NA PONTA: o melhor TÉCNICO entre o lateral, o meia-lateral e o ponta
+        DESSE lado — os três homens do corredor. Pedido, palavra por palavra:
+        *"nas pontas: melhor tecnica entre o Lateral, meia lateral ou ponta"*.
+
+        Aqui não se escolhe a posição, escolhe-se o pé: quem cruza é quem
+        cruza melhor dos que já estão naquele corredor. Sem ninguém desse
+        lado, o melhor dos mesmos três grupos do outro lado; e em último o
+        melhor técnico não-defensor.
+        */
+        const daAla = semGk.filter(p => ladoDaPosicao(p.pos) !== null);
+        return doLado(daAla) || melhorDe(daAla) ||
             melhorDe(semGk.filter(p => p.role !== 'def')) || melhorDe(semGk);
     }
     // 'naoDef'
@@ -699,6 +766,39 @@ function lugaresDaFalta(bolaX, bolaZ, attDir, jogadores, setor) {
         */
         const lista = grupos[g].slice().sort((a, b) => a.model.position.x - b.model.position.x);
 
+        /*
+        QUE LUGAR DO GRUPO É DE QUEM — e só importa quando o grupo vem
+        INCOMPLETO, que é o caso normal desde que o batedor sai do grupo dele.
+
+        Era `xs[Math.min(i, n - 1)]`: com um só homem no grupo, `i` = 0 e ele
+        ficava sempre com `xs[0]` — o primeiro lugar da lista, que em todos os
+        desenhos é o da ESQUERDA. Medido: falta no meio-campo batida pelo LM,
+        e o RM que estava em x = +26 era mandado para x = -27, atravessava o
+        campo inteiro e deixava a ala dele vazia. Com o lateral a bater (ver
+        `lateralDoLado`) o mesmo acontecia ao lateral que sobra.
+
+        Com o grupo completo nada muda: a lista vem ordenada por x e os `xs`
+        dos desenhos também estão por ordem, portanto é o mesmo mapeamento de
+        antes. Incompleto, cada um fica com o lugar mais perto de onde JÁ
+        está — quem está na direita fica na direita.
+        */
+        const xsCfg = cfg.xs || [0];
+        const nLugares = xsCfg.length;
+        let lugarDe;
+        if (lista.length >= nLugares) {
+            lugarDe = lista.map((_, i) => Math.min(i, nLugares - 1));
+        } else {
+            const livres = xsCfg.map((_, idx) => idx);
+            lugarDe = lista.map(p => {
+                let k = 0, melhorD = Infinity;
+                livres.forEach((idx, pos) => {
+                    const d = Math.abs(xsCfg[idx] - p.model.position.x);
+                    if (d < melhorD) { melhorD = d; k = pos; }
+                });
+                return livres.splice(k, 1)[0];
+            });
+        }
+
         lista.forEach((p, i) => {
             let x, z;
 
@@ -716,10 +816,8 @@ function lugaresDaFalta(bolaX, bolaZ, attDir, jogadores, setor) {
                 z = bolaZ + attDir * cfg.dz;
 
             } else {
-                const xs = cfg.xs || [0];
-                const n = xs.length;
-                const base = xs[Math.min(i, n - 1)];
-                const sobra = Math.max(0, i - (n - 1));
+                const base = xsCfg[lugarDe[i]];
+                const sobra = Math.max(0, i - (nLugares - 1));
                 x = base + sobra * extra * (base >= 0 ? 1 : -1);
                 z = bolaZ + attDir * cfg.avanco;
             }

@@ -910,23 +910,66 @@ const FreeKickModel = {
     /*
     QUEM BATE, por sector.
 
-      'central'  o ZAGUEIRO (CB) de melhor Técnica, com 'def' de reserva
-      'def'      o DEFENSOR de melhor Técnica (lateral incluído)
-      'naoDef'   o melhor Técnico que NÃO é defensor
-      'lateral'  o LATERAL de melhor Técnica (LB/RB), com `naoDef` de reserva
+      'central'       o ZAGUEIRO (CB) de melhor Técnica, com 'def' de reserva
+      'def'           o DEFENSOR de melhor Técnica (lateral incluído)
+      'naoDef'        o melhor Técnico que NÃO é defensor
+      'lateral'       o LATERAL (LB/RB), o do lado da bola primeiro
+      'lateralDoLado' o LATERAL DAQUELE lado, com o outro lateral de reserva
+      'alaDoLado'     o melhor Técnico entre lateral, meia-lateral e ponta
+                      DAQUELE lado — os três homens do corredor
 
-    O `lateral` é o do cruzamento pela ala: quem cruza de lá é o lateral que
-    subiu, e não o ponta-de-lança que se quer DENTRO da área a atacar a
-    bola. Um lateral é `role: 'def'`, portanto esta é a excepção à regra
-    geral — trocar para 'naoDef' aqui é uma linha, se preferires assim.
+    Este mapa é o da falta PELO MEIO. A falta pela ala tem o seu, o
+    `batedorPorSetorLateral` aqui a seguir.
     */
     batedorPorSetor: {
         defesa: 'central',
         meio_recuado: 'central',
         meio_avancado: 'naoDef',
-        ataque_lateral: 'lateral',
+        ataque_lateral: 'alaDoLado',
         ataque_entrada: 'naoDef'
     },
+
+    /*
+    E QUEM BATE QUANDO A FALTA É PELA ALA — `|x|` acima de `corredorLateral`.
+
+    Pedido: *"para faltas nas laterais na defesa quem bate é o Lateral. Para
+    faltas na meia lateral também é o lateral para que o meia lateral possa se
+    aprofundar na ponta ou área. Nas pontas: melhor técnica entre o Lateral,
+    meia lateral ou ponta"*.
+
+    A ala da DEFESA ao MEIO-CAMPO é do lateral, e a razão é o desenho e não o
+    pé: tirar o lateral do corredor custa pouco (ele é o homem de trás) e
+    deixa o meia-lateral livre para atacar a profundidade. Na PONTA
+    (`ataque_lateral`, que é o sector do cruzamento e por definição já é ala)
+    já não é o desenho que manda — é o pé que cruza melhor dos três do
+    corredor, e por isso esse critério vive no mapa de cima.
+
+    O `ataque_entrada` não aparece aqui de propósito: esse sector é a falta
+    que vai À BALIZA (`decisaoDeFalta` = 'remate'), e aí quem bate é quem
+    remata melhor, venha de onde vier no campo.
+
+    Um sector que falte neste mapa cai no `batedorPorSetor`.
+    */
+    batedorPorSetorLateral: {
+        defesa: 'lateralDoLado',
+        meio_recuado: 'lateralDoLado',
+        meio_avancado: 'lateralDoLado'
+    },
+
+    /*
+    A PARTIR DE QUE `|x|` a falta é "pela ala", em metros do eixo do campo.
+
+    O campo tem 68 m, portanto a linha lateral está a 34. O lateral de raiz
+    nasce a `0.7 * 34 * 0.8` = 19.0 m do eixo (FormationsData mais o
+    `compMult`, ver js/match/match_setup.js) e o central a 8.2. Quinze metros
+    fica entre os dois: é ala o que está do lateral para fora, e meio o que
+    está na meia-esquerda/meia-direita para dentro.
+
+    O `setorDaFalta` não pesa o x nenhum (só o avanço em Z), e por isso este
+    corredor é lido à parte, na escolha do batedor — o DESENHO da equipa
+    continua a ser o do sector.
+    */
+    corredorLateral: 15.0,
 
     /*
     O DESENHO. Cada grupo de posições recebe uma linha, em três modos:

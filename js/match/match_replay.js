@@ -21,13 +21,115 @@ no mesmo formato e pelo mesmo código. Custo: 3 x 49 floats por frame, ou seja
 const CORPOS_POR_FRAME = 25;   // 22 jogadores + árbitro + 2 assistentes
 const FLOATS_PER_FRAME = 7 + CORPOS_POR_FRAME * FLOATS_PER_PLAYER;
 
+/*
+=============================================================================
+O REPLAY AUTOMATICO DO GOLO
+=============================================================================
+Pedido: *"caso saia um gol, sera mostrado um replay na camera Lateral TV(7)
+dos ultimos 15s antes do gol. A nova saida de bola so sera dada apos o replay
+automatico terminar, caso esteja ligado"*.
+
+Tres numeros e nada mais:
+
+  `SEGUNDOS_ANTES`  quanto do lance se ve antes da bola entrar. Cabe no
+                    buffer, que guarda 20 s (REPLAY_FRAMES).
+  `SEGUNDOS_DEPOIS` e quanto se ve DEPOIS: sem isto a repeticao acabava no
+                    frame exacto em que a bola passa a linha, que e o unico
+                    frame que ninguem quer perder.
+  `CAMARA`          a Lateral TV, que e a vista de onde um golo se ve.
+
+Como se prende a saida de bola: enquanto `isReplaying` estiver de pe o
+`animate` (js/main.js) nao chama o `Match.update`, portanto a maquina de
+estados do golo (`goalSequenceStage`, js/match/match_physics.js) fica
+exactamente onde esta ate a repeticao acabar. Nao e preciso travao nenhum a
+mais — e o mesmo travao que impede a simulacao de escrever nos corpos que a
+repeticao esta a repor.
+=============================================================================
+*/
+const REPLAY_GOLO = {
+    SEGUNDOS_ANTES: 15.0,
+    SEGUNDOS_DEPOIS: 1.0,
+    CAMARA: 'lateraltv'
+};
+
 class ReplaySystem {
     constructor() {
         this.buffer = new Float32Array(REPLAY_FRAMES * FLOATS_PER_FRAME);
-        this.head = 0; 
-        this.count = 0; 
+        this.head = 0;
+        this.count = 0;
         this.isReplaying = false;
-        this.replayCursor = 0; 
+        this.replayCursor = 0;
+
+        // Ligado por omissao, como pedido.
+        this.automatico = true;
+        // O frame em que a bola entrou, e onde a repeticao do golo acaba.
+        this.marcaDoGolo = null;
+        this.replayFim = null;
+        // O que se devolve ao jogo quando a repeticao automatica acaba.
+        this.camaraAnterior = null;
+        this.eraAutomatico = false;
+    }
+
+    /*
+    O BOTAO DO PAINEL. Desligar a meio de uma repeticao automatica corta-a — e
+    o que o utilizador quer dizer com "off" enquanto esta a ver uma.
+    */
+    toggleAutomatico() {
+        this.automatico = !this.automatico;
+        if (!this.automatico && this.eraAutomatico) this.stopReplay();
+        this.actualizarBotaoAutomatico();
+        return this.automatico;
+    }
+
+    actualizarBotaoAutomatico() {
+        const el = document.getElementById('btn-replay-auto');
+        if (!el) return;
+        el.innerText = 'Replay Automático: ' + (this.automatico ? 'ON' : 'OFF');
+        el.classList.toggle('active', this.automatico);
+    }
+
+    /*
+    O INSTANTE DO GOLO, marcado por quem o valida (ver mudarEstado para 'GOAL',
+    js/match/match_physics.js). E o `head` e nao o `head - 1` de proposito: o
+    `head` e o proximo frame a gravar, portanto o ultimo JA gravado e o de
+    tras — a diferenca e um frame e a marca so serve de ancora.
+
+    Fica guardado porque a repeticao so arranca uns segundos depois (a festa do
+    golo continua a gravar por cima), e "os ultimos 15 s antes do golo" conta-se
+    do golo e nao de quando se carrega no play.
+    */
+    marcarGolo() {
+        this.marcaDoGolo = this.head;
+    }
+
+    /*
+    ARRANCA A REPETICAO DO GOLO. Devolve false se nao houver nada gravado ou se
+    o automatico estiver desligado — e ai o golo segue o seu caminho normal.
+    */
+    replayDoGolo() {
+        if (!this.automatico || this.count === 0 || this.marcaDoGolo === null) return false;
+
+        const fps = 60;
+        const antes = Math.round(REPLAY_GOLO.SEGUNDOS_ANTES * fps);
+        const depois = Math.round(REPLAY_GOLO.SEGUNDOS_DEPOIS * fps);
+
+        /*
+        Quantos frames ha mesmo para tras: nos primeiros segundos de jogo o
+        buffer ainda nao deu a volta, e pedir 15 s dava o lixo do outro lado.
+        */
+        const disponiveis = Math.min(this.count - 1, REPLAY_FRAMES - 1);
+        const recuo = Math.min(antes, disponiveis);
+        if (recuo < fps) return false;   // menos de um segundo nao e repeticao
+
+        this.camaraAnterior = (typeof window !== 'undefined') ? window.cameraMode : null;
+        this.eraAutomatico = true;
+        this.replayFim = (this.marcaDoGolo + depois) % REPLAY_FRAMES;
+        this.startReplay((this.marcaDoGolo - recuo + REPLAY_FRAMES) % REPLAY_FRAMES);
+
+        if (typeof Match !== 'undefined' && Match.setCameraMode) {
+            Match.setCameraMode(REPLAY_GOLO.CAMARA);
+        }
+        return true;
     }
 
     /*
@@ -104,10 +206,18 @@ class ReplaySystem {
         if (this.count < REPLAY_FRAMES) this.count++;
     }
     
-    startReplay() {
+    /*
+    `inicio` (opcional) e o frame gravado por onde comecar — e o que a
+    repeticao do golo usa para nao comecar no principio do buffer. Sem ele fica
+    tudo como estava: os 20 s desde o frame mais antigo.
+    */
+    startReplay(inicio) {
         if (this.count === 0) return;
         this.isReplaying = true;
-        this.replayCursor = (this.count < REPLAY_FRAMES) ? 0 : this.head;
+        this.replayCursor = (typeof inicio === 'number')
+            ? inicio
+            : ((this.count < REPLAY_FRAMES) ? 0 : this.head);
+        this._avancoPendente = 0;
         
         let el = document.getElementById('btn-replay');
         if (el) {
@@ -115,7 +225,13 @@ class ReplaySystem {
             el.style.backgroundColor = '#e74c3c';
         }
 
-        if (!window.isPaused) Match.togglePause();
+        /*
+        A PAUSA FICA DE FORA. Era aqui que o replay parava o jogo, e isso
+        contradizia o `playFrame`, que não avança em pausa — a repetição ficava
+        congelada. Quem segura a simulação agora é o próprio `isReplaying`, no
+        `animate` (js/main.js), e o botão de pause volta a querer dizer só uma
+        coisa: o utilizador mandou parar.
+        */
         if (typeof TouchControls !== 'undefined') TouchControls.updateButtonsState();
     }
     
@@ -127,6 +243,27 @@ class ReplaySystem {
             // Manually inline playFrame logic for one frame to restore state safely
             this.restoreFrame(this.replayCursor);
         }
+        this.replayFim = null;
+
+        /*
+        A REPETICAO AUTOMATICA DEVOLVE O QUE PEDIU EMPRESTADO: a camara de onde
+        se estava a ver, e o jogo a andar.
+
+        O `startReplay` poe em pausa e a repeticao manual fica assim de
+        proposito (quem carrega no botao quer olhar para o fim do lance). Esta
+        nao: ela existe para o jogo seguir sozinho a seguir, e e ela que segura
+        a saida de bola — deixa-la em pausa era deixar o jogo parado para
+        sempre.
+        */
+        if (this.eraAutomatico) {
+            this.eraAutomatico = false;
+            this.marcaDoGolo = null;
+            if (this.camaraAnterior && typeof Match !== 'undefined' && Match.setCameraMode) {
+                Match.setCameraMode(this.camaraAnterior);
+            }
+            this.camaraAnterior = null;
+        }
+
         let el = document.getElementById('btn-replay');
         if (el) {
             el.innerText = 'Replay (20s)';
@@ -250,7 +387,13 @@ class ReplaySystem {
 
         while (passos-- > 0) {
             this.replayCursor = (this.replayCursor + 1) % REPLAY_FRAMES;
-            if (this.replayCursor === this.head) {
+            /*
+            Duas linhas de meta: o fim do que esta gravado (o `head`, sempre) e
+            o fim PEDIDO, que a repeticao do golo poe a seguir a bola entrar —
+            senao ela seguia pela festa do golo adentro ate ao fim do buffer.
+            */
+            if (this.replayCursor === this.head ||
+                (this.replayFim !== null && this.replayCursor === this.replayFim)) {
                 this.stopReplay();
                 return;
             }
