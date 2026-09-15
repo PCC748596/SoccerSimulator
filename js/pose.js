@@ -182,8 +182,25 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
     const jointGeo = new THREE.SphereGeometry(u * 0.2, 16, 16); const smallJointGeo = new THREE.SphereGeometry(u * 0.15, 16, 16);
 
     function criarBraco(x) {
-        // 0.525 = 0.30 de antes + 0.225 da nova origem do tronco.
-        const grp = new THREE.Group(); grp.position.set(x, 0.525, 0);
+        /*
+        O OMBRO FICA À ALTURA DO TOPO DO TÓRAX — pedido, com fotografia.
+
+        Estava em 0.525, que era "0.30 de antes + 0.225 da nova origem do
+        tronco". Medido com `tools/scratch/ombro_altura.js`: isso deixava a
+        articulação **0.225 unidades (7.4 cm) ABAIXO** do topo da caixa do
+        peito — e como a manga começa no ombro, sobrava um bloco de tronco
+        acima dos ombros. Era o que se via: um boneco de ombros caídos com um
+        degrau de camisa por cima deles.
+
+        0.75 é exactamente a meia-altura da casca do peito (1.5 / 2), portanto
+        o ombro e o topo do tórax ficam à mesma altura e a manga fecha rente.
+
+        Isto sobe as mãos 7.4 cm em todas as poses — incluindo o alcance do IK
+        dos braços do guarda-redes, que mede a partir do ombro. É o que se
+        pretende: o ombro estava no sítio errado e tudo o que pende dele estava
+        com ele.
+        */
+        const grp = new THREE.Group(); grp.position.set(x, 0.75, 0);
         const up = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 1.0, u * 0.35), blockMat, true); up.position.y = -0.5;
         const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 0.5, u * 0.4), shirtMat); manga.position.y = 0.25; up.add(manga); grp.add(up);
         const elb = new THREE.Group(); elb.position.y = -1.0; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));

@@ -535,6 +535,23 @@ const GoalkeeperDive = {
     tempoLer: 0.05,        // reacção: transferência de peso antes de sair
     tempoImpulso: 0.12,    // agachar e estender as pernas
     tempoChao: 0.35,       // deslizar no relvado depois de aterrar
+
+    /*
+    E NO MERGULHO ALTO FICA LÁ uns segundos.
+
+    Pedido: *"depois que o guarda-redes cair após o pulo para a defesa no alto
+    e nos cantos, ele deve ficar uns 3 s no chão antes de levantar"*.
+
+    O `tempoChao` de 0.35 s é o deslize de um mergulho rasteiro — cai, escorrega
+    e já está de pé. Uma defesa no ângulo é outra coisa: sai de um salto alto,
+    aterra de lado com a bola no peito ou a escapar-se, e ninguém se levanta
+    dali em trinta e cinco centésimos.
+
+    Vale para o mergulho do tipo 'alto' e para qualquer mergulho num CANTO — as
+    duas situações do pedido. O tipo é escolhido em player.js pela altura do
+    alvo (`espY > 1.2`).
+    */
+    tempoChaoAlto: 3.0,
     tempoLevantar: 0.75,   // pôr-se de pé
 
     /*

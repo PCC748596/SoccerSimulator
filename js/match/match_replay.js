@@ -1,6 +1,25 @@
 const REPLAY_FRAMES = 1200; // 20s at 60fps
 const FLOATS_PER_PLAYER = 49;
-const FLOATS_PER_FRAME = 7 + 22 * FLOATS_PER_PLAYER;
+
+/*
+=============================================================================
+A ARBITRAGEM TAMBÉM ENTRA NO REPLAY
+=============================================================================
+Relato: *"o juiz e os bandeirinhas estão parados durante o replay"*.
+
+E estavam: o buffer guardava a bola e VINTE E DOIS corpos, e mais nada. Durante
+a repetição o `Match.update` não corre — é disso que vive o replay —, portanto
+ninguém mexia o árbitro nem os assistentes: ficavam congelados na pose e no
+sítio onde o jogo os deixou, no meio de vinte e dois bonecos a jogar.
+
+São mais três corpos com o mesmo esqueleto dos jogadores (o `criarCorpo` dos
+árbitros devolve um FootballPlayer inteiro, ver officials.js), portanto entram
+no mesmo formato e pelo mesmo código. Custo: 3 x 49 floats por frame, ou seja
+0.7 MB no buffer de 20 s.
+=============================================================================
+*/
+const CORPOS_POR_FRAME = 25;   // 22 jogadores + árbitro + 2 assistentes
+const FLOATS_PER_FRAME = 7 + CORPOS_POR_FRAME * FLOATS_PER_PLAYER;
 
 class ReplaySystem {
     constructor() {
@@ -9,6 +28,22 @@ class ReplaySystem {
         this.count = 0; 
         this.isReplaying = false;
         this.replayCursor = 0; 
+    }
+
+    /*
+    Os corpos do frame, SEMPRE na mesma ordem: 22 jogadores e depois a
+    arbitragem. A ordem é o formato do buffer — mudar aqui é mudar o formato.
+    Entradas em falta vêm a null e o gravador salta o espaço delas, para o
+    índice nunca depender de quem existe.
+    */
+    corposDoFrame() {
+        const lista = Match.players.concat(Match.opponents).slice(0, 22);
+        while (lista.length < 22) lista.push(null);
+        const O = (typeof Officials !== 'undefined') ? Officials : null;
+        lista.push(O ? O.arbitro : null);
+        lista.push(O && O.assistentes ? O.assistentes[0] : null);
+        lista.push(O && O.assistentes ? O.assistentes[1] : null);
+        return lista;
     }
 
     recordFrame() {
@@ -25,9 +60,9 @@ class ReplaySystem {
         this.buffer[pIdx++] = Match.ball.quaternion.z;
         this.buffer[pIdx++] = Match.ball.quaternion.w;
 
-        const allPlayers = Match.players.concat(Match.opponents);
-        for(let i = 0; i < 22; i++) {
-            let p = allPlayers[i];
+        const corpos = this.corposDoFrame();
+        for(let i = 0; i < CORPOS_POR_FRAME; i++) {
+            let p = corpos[i];
             if (!p || !p.model || !p.rig) {
                 pIdx += FLOATS_PER_PLAYER;
                 continue;
@@ -108,9 +143,9 @@ class ReplaySystem {
         Match.ball.position.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
         Match.ball.quaternion.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
 
-        const allPlayers = Match.players.concat(Match.opponents);
-        for(let i = 0; i < 22; i++) {
-            let p = allPlayers[i];
+        const corpos = this.corposDoFrame();
+        for(let i = 0; i < CORPOS_POR_FRAME; i++) {
+            let p = corpos[i];
             if (!p || !p.model || !p.rig) {
                 pIdx += FLOATS_PER_PLAYER;
                 continue;
@@ -186,7 +221,17 @@ class ReplaySystem {
     playFrame() {
         if (!this.isReplaying || this.count === 0) return;
 
+        /*
+        O PAUSE TAMBÉM VALE NO REPLAY — pedido: *"tem que ter o pause no replay
+        também"*.
+
+        O botão só travava o jogo: durante a repetição o `animate` chamava este
+        método sem olhar ao `isPaused`, e a repetição corria na mesma. Agora
+        pára no frame onde está — e repor esse frame continua a acontecer, senão
+        os corpos ficavam com a pose do jogo por baixo da repetição parada.
+        */
         this.restoreFrame(this.replayCursor);
+        if (typeof window !== 'undefined' && window.isPaused) return;
 
         /*
         A fraccao acumula-se entre frames: a 0.6x, tres frames desenhados

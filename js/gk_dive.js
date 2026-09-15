@@ -82,6 +82,15 @@ const GkDive = {
             tVoo: D.vooMax,
             ang: 0,
             angMax: D.anguloMax[tipo] || D.anguloMax.meio,
+            /*
+            QUANTO TEMPO FICA NO CHÃO — decidido aqui, uma vez, porque é do
+            LANÇE e não do frame: um mergulho alto ou num canto deixa-o lá uns
+            segundos; um rasteiro é só o deslize. Ver `tempoChaoAlto`.
+            */
+            tempoChao: ((tipo === 'alto') ||
+                (typeof Match !== 'undefined' && Match.state === 'CORNER_KICK'))
+                ? (typeof D.tempoChaoAlto === 'number' ? D.tempoChaoAlto : D.tempoChao)
+                : D.tempoChao,
             qFacing: corpo.quaternion.clone(),
             tocou: false,
             agarrou: false
@@ -340,7 +349,9 @@ const GkDive = {
                 this.poseBracosChao(rig, d);
                 this.torcerTronco(rig, d, 'chao');
 
-                if (d.t >= D.tempoChao) { d.fase = 'levantar'; d.t = 0; }
+                // O prazo é o do lance, escrito no `iniciar` — ver `tempoChaoAlto`.
+                const prazoChao = (typeof d.tempoChao === 'number') ? d.tempoChao : D.tempoChao;
+                if (d.t >= prazoChao) { d.fase = 'levantar'; d.t = 0; }
                 break;
             }
 

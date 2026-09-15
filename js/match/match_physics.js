@@ -503,6 +503,18 @@ Object.assign(Match, {
         for (const gk of gks) {
             if (!gk || gk.role !== 'gk' || gk.touchLock > 0) continue;
             if (this.state !== 'PLAY') continue;
+            /*
+            A MEIO DE UM MERGULHO, QUEM TRATA DO CONTACTO É O MERGULHO.
+
+            Este ramo mede a distância ao EIXO do corpo (até 1.3 m) e o
+            `GkDive.defender` mede a mão a sério, depois do IK. Com os dois a
+            correr, um guarda-redes caído recolhia do chão bolas a quase um
+            metro do corpo — e passou a notar-se quando ele passou a ficar três
+            segundos no chão depois de uma defesa no alto (ver `tempoChaoAlto`):
+            oito vezes mais tempo deitado é oito vezes mais bolas a passar-lhe
+            ao lado enquanto este ramo as puxava.
+            */
+            if (gk.gkEstado === 'mergulho' && gk.dive) continue;
             
             // CCD
             let d;
