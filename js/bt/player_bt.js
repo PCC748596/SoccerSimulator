@@ -2019,6 +2019,28 @@ function actChaseBall(ctx) {
 
     Sem cruzar a altura da testa (bola baixa), fica o comportamento de sempre.
     */
+    /*
+    PERTO DA PRÓPRIA BALIZA, ENTRA-SE PELO LADO DE DENTRO — ver BloqueioRemate
+    (config/defense.js), que tem a medição.
+
+    Só com um portador ADVERSÁRIO: numa bola solta o certo é ir a ela.
+    */
+    const portadorAdv = Match.ballCarrier && Match.ballCarrier.team !== p.team
+        ? Match.ballCarrier : null;
+    if (portadorAdv && typeof BloqueioRemate !== 'undefined' && typeof p.ownGoalZ === 'number') {
+        const bx = portadorAdv.model.position.x, bz = portadorAdv.model.position.z;
+        const distBaliza = Math.hypot(bx, p.ownGoalZ - bz);
+        if (distBaliza <= BloqueioRemate.aplicaAte) {
+            // Ponto na recta portador -> própria baliza, a `distancia` dele.
+            const ux = (0 - bx) / Math.max(0.01, distBaliza);
+            const uz = (p.ownGoalZ - bz) / Math.max(0.01, distBaliza);
+            p.dynamicTarget.set(bx + ux * BloqueioRemate.distancia, ALTURA_BASE_Y,
+                bz + uz * BloqueioRemate.distancia);
+            p.fsm.changeState('MOVE_TO_POS');
+            return;
+        }
+    }
+
     const noArChase = Match.ball.position.y > BallPhysics.raio + 0.35 &&
         Match.ballVel.lengthSq() > 1.0;
     const alvoAereo = noArChase ? alvoAereoDoJogador(p) : null;

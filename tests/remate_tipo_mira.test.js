@@ -250,10 +250,24 @@ remates no alvo que o LOTE mede (21-23%) já está abaixo dos ~33% reais, e cada
 subida desta escala afasta-a mais. As faixas deste teste medem o PONTO VISADO
 com um rematador médio isolado, e não o mesmo que a ficha do jogo conta — por
 isso passam enquanto o número do lote piora, e por isso este comentário existe.
+
+TECTO A 1.60 quando a escala foi a 1.56 (quarto pedido no mesmo sentido:
+"aumenta o erro em 15%"). Remedido, que é o que este guarda existe para
+obrigar:
+
+     6 m: 66% no alvo    (faixa 55-75)
+    12 m: 50%            (faixa 44-64)
+    18 m: 36%            (faixa 33-53)
+    25 m: 23%            (faixa 22-42)
+
+Passam todas, mas a de 25 m está a UM ponto do chão da faixa. Da próxima vez
+que isto subir, ela cai — e cair significa que um rematador médio acerta na
+moldura menos de um quinto das vezes de 25 m, que já não é futebol. Fica dito
+aqui e não na mensagem de erro, porque quem lê o teste é quem vai decidir.
 */
 test('a escala global fica dentro do intervalo calibrado', () => {
     const e = ShotModel.erro.escalaGlobal;
-    assert.ok(e >= 0.95 && e <= 1.40,
+    assert.ok(e >= 0.95 && e <= 1.60,
         `escala global em ${e}: fora do intervalo em que as faixas de precisão ` +
         'acima foram medidas — remede-as antes de a deixar aqui');
 });

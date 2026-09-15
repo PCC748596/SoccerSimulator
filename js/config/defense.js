@@ -135,6 +135,36 @@ e não precisa de cortar nada; quem falha é que fica fora do lance, que é
 precisamente o que a espera representa.
 =============================================================================
 */
+/*
+=============================================================================
+QUEM VAI À BOLA PERTO DA PRÓPRIA BALIZA VAI PELO LADO DE DENTRO
+=============================================================================
+Medido com `tools/scratch/bloco_no_remate.js`, no instante de cada remate:
+
+    dentro da área   65% dos remates SEM NINGUÉM entre a bola e a baliza
+                     0.65 defensores no corredor, em média
+                     o mais próximo a 2.12 m — perto, mas ao lado
+    fora da área     29% sem ninguém pela frente, o mais próximo a 1.14 m
+
+Dentro da área há sempre alguém a dois metros do rematador e quase nunca
+alguém à frente dele. Não é falta de defensores: é o ângulo por que chegam.
+
+O `actChaseBall` manda-os à POSIÇÃO DA BOLA, e quem persegue a bola por fora
+chega ao lado do portador — nunca entre ele e a baliza. Perto da própria
+baliza isso é o contrário do que se faz: fecha-se a linha de remate primeiro,
+a bola depois.
+
+`distancia` é a que distância do portador se fica, sobre a recta até à própria
+baliza; `aplicaAte` é até que distância da própria baliza a regra vale (fora
+disso, perseguir por fora é o certo — é pressão, não é defesa de área).
+=============================================================================
+*/
+const BloqueioRemate = {
+    distancia: 1.3,
+    aplicaAte: 30.0
+};
+if (typeof window !== 'undefined') window.BloqueioRemate = BloqueioRemate;
+
 const CorteModel = {
     arrefecimentoMin: 3.0,
     arrefecimentoMax: 6.0

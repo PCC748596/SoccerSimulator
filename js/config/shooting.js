@@ -558,8 +558,18 @@ const ShotModel = {
         o lote deu 21-23% dos remates no alvo contra os ~33% reais, e isto
         baixa mais. É a terceira vez que o pedido vai neste sentido, portanto
         fica a decisão e fica o custo escrito.
+
+        E 1.36 -> 1.56, mais 15%, a pedido (*"aumenta o erro em 15%"*). Quarta
+        vez no mesmo sentido; o custo continua a ser o mesmo e agora com o
+        número de hoje: o lote anterior a esta linha deu **25.9%** dos remates
+        no alvo, contra os ~33% do futebol real. Subir o erro de EXECUÇÃO
+        afasta mais desse número — o que sai da moldura não dá defesa nem
+        canto, dá pontapé de baliza.
+
+        A manípula que aperta a pontaria SEM mandar bolas para as bancadas
+        continua a ser a `fraccaoCanto` (a ambição da colocação), lá em cima.
         */
-        escalaGlobal: 1.36
+        escalaGlobal: 1.56
     }
 };
 
