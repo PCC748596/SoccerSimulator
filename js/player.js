@@ -6613,6 +6613,19 @@ class FootballPlayer {
                         typeof GkThrowModel.distanciaPorCima === 'number')
                         ? GkThrowModel.distanciaPorCima : 30.0;
                     this.gkLancaPorCima = (dLanc > limPorCima);
+                    /*
+                    O ALVO FICA GUARDADO NO JOGADOR, e não só dentro do closure
+                    do `onContact`.
+
+                    Relato: *"quando o guarda-redes for arremessar a bola com a
+                    mão tem que se virar para a direcção do passe, senão a bola
+                    passa por baixo das pernas dele"*. E era isso mesmo: o
+                    `gkThrowTarget` era posto a null duas linhas abaixo, o gesto
+                    corria sem saber para onde ia a bola, e o corpo ficava
+                    virado para o meio do campo enquanto o braço largava a bola
+                    para o lado. Ver a rotação no ramo 'lancando'.
+                    */
+                    this.gkAlvoLancamento = alvoLancamento;
                     this.gkKickAction = new ActionState(
                         this.gkLancaPorCima ? 'gkThrow' : 'gkThrowBaixo', {
                         onContact: () => {
@@ -6713,9 +6726,26 @@ class FootballPlayer {
                 gkCorpo.position.y = ALTURA_BASE_Y + K.altura;
             }
 
-            // Continua virado para o campo durante todo o gesto
-            _v1.set(gkCorpo.position.x, gkCorpo.position.y, gkCorpo.position.z + this.dirZ * 10);
-            lookAtBola(gkCorpo, _v1);
+            /*
+            VIRADO PARA ONDE A BOLA VAI.
+
+            Isto olhava sempre para o meio do campo (`dirZ * 10`), fosse qual
+            fosse o destino. Num lançamento para um lateral — que é o caso
+            normal, o `acharLateralParaSaida` escolhe um defesa aberto — o
+            corpo ficava de frente e a bola saía de lado: via-se a passar por
+            baixo das pernas dele.
+
+            No lançamento o alvo é o companheiro (`gkAlvoLancamento`); no
+            chutão e no tiro de meta continua a ser o campo à frente, que é para
+            onde a bola vai mesmo.
+            */
+            let olharPara = _v1.set(gkCorpo.position.x, gkCorpo.position.y,
+                gkCorpo.position.z + this.dirZ * 10);
+            if (isThrow && this.gkAlvoLancamento && this.gkAlvoLancamento.model) {
+                olharPara = _v1.set(this.gkAlvoLancamento.model.position.x, gkCorpo.position.y,
+                    this.gkAlvoLancamento.model.position.z);
+            }
+            lookAtBola(gkCorpo, olharPara);
 
             /*
             Na entrada do chute do chão a orientação também não muda de golpe:
@@ -6731,6 +6761,8 @@ class FootballPlayer {
 
             if (!this.gkKickAction || this.gkKickAction.isDone()) {
                 this.gkKickAction = null;
+                // O alvo morre com o gesto: ver a nota da rotação acima.
+                this.gkAlvoLancamento = null;
                 this.gkKickBlend = null;
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
