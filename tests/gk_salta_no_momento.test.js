@@ -53,13 +53,24 @@ GkDive.iniciar = function (p, alvoX, alvoY, tipo, dirX) {
     if (Math.abs(Match.ballVel.z) > 0.5 && aproxima) {
         saltos.push({
             t: Math.abs(p.model.position.z - Match.ball.position.z) / Math.abs(Match.ballVel.z),
-            d: p.model.position.distanceTo(Match.ball.position)
+            d: p.model.position.distanceTo(Match.ball.position),
+            // A defesa desenhada (penalti, falta directa) nao passa pela regra
+            // do alcance: ali o desfecho foi sorteado e o gesto e para se ver.
+            desenhado: !!p.isPenaltyDive
         });
     }
     return origIniciar(p, alvoX, alvoY, tipo, dirX);
 };
 
-for (let i = 0; i < Math.round(1800 / dt); i++) Match.update(dt);
+/*
+TRINTA MINUTOS DEIXARAM DE CHEGAR PARA A AMOSTRA, e a razao e uma correccao:
+o `GoalkeeperDive.distanciaMaxParaMergulhar` tirou-lhe os mergulhos que ele
+fazia com a bola ainda a caminho (medido: 92% arrancavam a mais de 5 m dela, o
+pior a 20.5 m). Sao esses que desapareceram — 13 mergulhos em 30 min passaram a
+8 —, e e isso que este teste queria. Sobe-se o tempo de jogo para a amostra
+voltar a dar dez.
+*/
+for (let i = 0; i < Math.round(2700 / dt); i++) Match.update(dt);
 
 const mediana = a => { const o = a.slice().sort((x, y) => x - y); return o.length ? o[Math.floor(o.length / 2)] : NaN; };
 const med = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN;
@@ -107,4 +118,32 @@ test('ninguem se atira com a bola ainda longe', () => {
     assert.ok(fora.length <= limiteFora,
         `${fora.length} de ${ts.length} mergulhos com mais de ${(tecto + 0.15).toFixed(2)} s ` +
         `por chegar (o pior a ${Math.max(...ts).toFixed(2)} s) — tolerado ${limiteFora}`);
+});
+
+/*
+E EM METROS, que e como o relato veio: *"o goleiro esta pulando na bola mesmo
+com a bola a mais de uns 5 metros dele"*.
+
+O teste acima mede o TEMPO que falta a bola, e o tempo sozinho nao apanha o que
+se ve: num remate a 25 m/s os 0.4 s do gesto sao dez metros de bola. Este mede
+a distancia, e o tecto e o da configuracao — ver
+GoalkeeperDive.distanciaMaxParaMergulhar, que traz a medicao (92% dos mergulhos
+arrancavam a mais de 5 m, o pior a 20.5).
+
+A defesa DESENHADA (penalti, falta directa) esta de fora da regra, e por isso
+os mergulhos dela nao sao contados aqui.
+*/
+test('nem com a bola a metros de distancia', () => {
+    assert.strictEqual(typeof GoalkeeperDive.distanciaMaxParaMergulhar, 'number',
+        'GoalkeeperDive.distanciaMaxParaMergulhar desapareceu');
+
+    const livres = saltos.filter(s => !s.desenhado);
+    const ds = livres.map(s => s.d);
+    console.log(`  ${livres.length} mergulhos de jogo corrido | distancia a bola: ` +
+        `mediana ${mediana(ds).toFixed(1)} m, pior ${Math.max(...ds).toFixed(1)} m`);
+    const tecto = GoalkeeperDive.distanciaMaxParaMergulhar;
+    const fora = ds.filter(d => d > tecto + 0.5);   // meio metro de folga: a bola anda no frame
+    assert.strictEqual(fora.length, 0,
+        `${fora.length} mergulhos com a bola a mais de ${tecto} m (o pior a ` +
+        `${Math.max(...ds).toFixed(1)} m)`);
 });

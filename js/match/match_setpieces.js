@@ -579,6 +579,31 @@ Object.assign(Match, {
                 p.fsm.changeState('SET_PIECE_WAIT');
             });
 
+            /*
+            A ROTINA SORTEADA DA INTERMEDIÁRIA — ver
+            FreeKickModel.rotinasDaIntermediaria, que traz os quatro diagramas.
+
+            Sorteia-se ANTES de a defesa ser montada, e não junto ao desenho do
+            ataque lá em baixo: a `formaDaDefesaNoLivre` (a linha seguinte) lê a
+            rotina para saber a que distância se arma, e um sorteio depois dela
+            chegava tarde para metade do pedido.
+
+            Uma só por lance, e as duas equipas leem a MESMA — o ataque monta o
+            desenho dela, a defesa responde-lhe. Fora dos sectores da
+            intermediária não há rotina e tudo fica como estava.
+
+            O sector usado é o `setorPreliminar`, que é o mesmo que o
+            `setorDaFalta` devolve lá em baixo (a decisão da bola já está
+            calculada): a diferença entre os dois seria só a ordem das linhas.
+            */
+            const setoresRotina = F.setoresComRotina || [];
+            const rotinas = F.rotinasDaIntermediaria || [];
+            this.rotinaDaFalta = (rotinas.length && !indirecta &&
+                setoresRotina.indexOf(setorPreliminar) >= 0)
+                ? rotinas[Math.floor(Math.random() * rotinas.length)]
+                : null;
+            this.rotinaDaFaltaActual = this.rotinaDaFalta ? this.rotinaDaFalta.nome : null;
+
             // E os que NÃO ficaram na barreira, que eram a metade sem dono.
             if (!indirecta) this.formaDaDefesaNoLivre(defendingPlayers, bolaFK, dirFK);
 
@@ -630,7 +655,8 @@ Object.assign(Match, {
             this.setorDaFaltaActual = setorFK;
 
             const restantes = attackingPlayers.filter(p => p !== takerFK && p.role !== 'gk');
-            const lugares = lugaresDaFalta(bolaFK.x, bolaFK.z, attDir, restantes, setorFK);
+            const lugares = lugaresDaFalta(bolaFK.x, bolaFK.z, attDir, restantes, setorFK,
+                this.rotinaDaFalta ? this.rotinaDaFalta.ataque : null);
 
             /*
             O CORREDOR DA COBRANÇA FICA LIVRE (ver FreeKickModel.corredorLivre).
@@ -1121,6 +1147,8 @@ Object.assign(Match, {
             this.ballCarrier = null;
             this.golKickProntos = false;
             this.golKickEspera = 0;
+            // O relógio do tecto de espera é deste lance e de mais nenhum.
+            this.golKickEsperaPeloBloco = 0;
             this.golKickAlvoEspera = 0; // Removida a espera (sem parada)
             this.golKickPendente = true;
             this.golKickAtrasoInicio = ESPERA_APOS_REPOSICAO;
@@ -1480,8 +1508,20 @@ Object.assign(Match, {
     Lei 13 que manda nela.
     */
     formaDaDefesaNoLivre: function (defensores, bolaFK, dirFK) {
-        const S = (typeof FreeKickShape !== 'undefined') ? FreeKickShape
+        const base = (typeof FreeKickShape !== 'undefined') ? FreeKickShape
             : { de: 9.15, ate: 34.0 };
+        /*
+        A ROTINA SORTEADA TAMBÉM MANDA NA DEFESA — é a outra metade do pedido.
+        Ela só traz `de` e `ate` (o homem mais adiantado e o mais recuado do
+        bloco); o resto da conta, incluindo o encolhimento da faixa quando não
+        há campo, é o mesmo para todas. Ver FreeKickModel.rotinasDaIntermediaria.
+        */
+        const R = this.rotinaDaFalta ? this.rotinaDaFalta.defesa : null;
+        const S = R ? {
+            de: Math.max(base.de, R.de),      // a Lei 13 manda sempre
+            ate: R.ate,
+            margemDaPropriaBaliza: base.margemDaPropriaBaliza
+        } : base;
         const campo = defensores.filter(p =>
             p && p.role !== 'gk' && !p.naBarreiraFalta && p.model);
         if (!campo.length) return;

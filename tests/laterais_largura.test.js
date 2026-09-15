@@ -76,12 +76,29 @@ test('o alvo do lateral fica na banda, não no corredor central', () => {
 });
 
 test('e quase nunca fica por dentro dos dois centrais', () => {
+    // O número é impresso como nas outras medições: sem ele, calibrar o tecto
+    // obriga a instrumentar o teste de fora cada vez que a dispersão muda.
+    console.log(`  por dentro do central mais interior: ${pctDentro.toFixed(1)}% de ` +
+        `${amostras} leituras`);
     /*
-    Medido: 12.7% antes, 0.4-4.4% depois conforme a semente. Não é zero de
-    propósito — recuar para dentro dos centrais a tapar um cruzamento, ou a
-    fechar uma bola dentro da área, é jogo e acontece. O que o teste apanha é a
-    outra coisa: o lateral a VIVER lá, que é o que dava 12.7%.
+    Medido: 12.7% antes de existir a regra da largura. Não é zero de propósito
+    — recuar para dentro dos centrais a tapar um cruzamento, ou a fechar uma
+    bola dentro da área, é jogo e acontece. O que o teste apanha é a outra
+    coisa: o lateral a VIVER lá, que é o que dava 12.7%.
+
+    O TECTO FOI REMEDIDO em Setembro de 2026. Era 7.0, calibrado sobre uma
+    dispersão de 0.4-4.4%; com o bónus do um-dois (PassModel.bonusTocaECorre) e
+    o tecto do mergulho do guarda-redes, as posses passaram a correr por
+    caminhos diferentes e a dispersão subiu. Seis sementes, com o resto igual:
+
+        semente    1000   1001   1002   1003   1004   1005
+        % dentro    7.0    2.2    3.1    5.2    4.3    2.0
+
+    A mediana é 3.7 e o pior caso 7.0 — o tecto ficava debaixo da dispersão e
+    reprovava uma semente em seis sem nada ter piorado no posicionamento. A 9.0
+    continua a apanhar o que o teste existe para apanhar (os 12.7% de um lateral
+    que vive entre os centrais), com folga para a semente pior.
     */
-    assert.ok(pctDentro < 7.0,
+    assert.ok(pctDentro < 9.0,
         `lateral por dentro do central mais interior em ${pctDentro.toFixed(1)}% das leituras`);
 });

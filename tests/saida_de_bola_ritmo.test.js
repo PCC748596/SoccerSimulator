@@ -129,8 +129,23 @@ test('ninguem com caminho a fazer anda enquanto ele segura a bola', () => {
     o que este teste existe para apanhar: antes do corte por episodio, uma
     posse encravada dava 16%, e gente a ANDAR (abaixo de 1.9 m/s) daria muito
     mais do que isso.
+
+    E FOI REMEDIDO em Setembro de 2026, quando o tiro de meta passou a esperar
+    que a equipa chegue ao lugar antes de ser batido (GoalKickShape.
+    esperaMaxPelaEquipa). O guarda-redes segura a bola mais tempo de propósito,
+    portanto ha mais frames da equipa a acabar a caminhada — e o fim de uma
+    caminhada e, por construcao, a travagem de quem esta a chegar. Cinco
+    sementes depois da mudanca:
+
+        semente     7     8     9    10    11
+        % lentos   10%   10%    8%    9%    7%
+
+    O tecto de 10 passou a ficar EM CIMA do pior caso. A 12 mantem a margem que
+    tinha (dois pontos acima da semente pior), e a outra metade do teste — a
+    velocidade MEDIA acima de 4.5 m/s — continua a ser o que garante que
+    ninguem anda: essa nao se mexeu.
     */
-    assert.ok(pct < 10,
+    assert.ok(pct < 12,
         `${pct.toFixed(0)}% das leituras abaixo de 3 m/s com caminho por fazer`);
     assert.ok(soma / Math.max(1, leituras) > 4.5,
         `velocidade media de ${(soma / Math.max(1, leituras)).toFixed(2)} m/s a sair a jogar`);

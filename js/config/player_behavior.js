@@ -960,7 +960,33 @@ const GoalKickShape = {
     a ser garantida à parte, e é ela que manda em último lugar.
     */
     frenteDoBloco: 38.0,
-    blocoAdversario: 26.0       // profundidade do bloco, dessa linha para trás
+    blocoAdversario: 26.0,      // profundidade do bloco, dessa linha para trás
+
+    /*
+    =====================================================================
+    E ELE ESPERA QUE A EQUIPA CHEGUE ANTES DE BATER
+    =====================================================================
+    Relato, com captura: *"os jogadores do time com a bola ainda não estão se
+    posicionando corretamente no tiro de meta"*.
+
+    O desenho estava certo e nunca chegava a acontecer. Medido em 6 tiros de
+    meta (`tools/headless/tiro_de_meta.js`), no instante em que o guarda-redes
+    bate: o alvo médio da equipa dele era -20.8 m, e faltavam-lhe andar **17 a
+    23 metros**, com metade dela ainda em MOVE_TO_POS. Aonde a bola caía,
+    caía num campo a meio de uma mudança de posições — que é a captura.
+
+    A causa: a cobrança era disparada só pelo relógio (`golKickAtrasoInicio`,
+    3 s, em js/match/match_loop.js). O `golKickProntos` — a bandeira que o
+    `updateGoalKickWait` levanta quando a equipa toda chegou ao lugar — não era
+    LIDA por ninguém: calculava-se e morria ali.
+
+    Agora o relógio só começa a andar depois de ela chegar, e este é o tecto
+    para o caso de alguém ficar preso: ao fim dele bate-se de qualquer maneira.
+    Oito segundos cabem com folga no prazo de segurança do lance
+    (`SetPiecePrazos.tiroDeMeta`, 20 s), que é o que repõe o jogo se nada disto
+    acontecer.
+    */
+    esperaMaxPelaEquipa: 8.0
 };
 
 /*

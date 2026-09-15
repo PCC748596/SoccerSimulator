@@ -93,13 +93,28 @@ test('bola do ADVERSÁRIO: pode agarrar', () => {
     assert.ok(gk.grabBall() !== false, 'não deixou agarrar uma bola do adversário');
 });
 
-test('bola jogada para a FRENTE não é bola atrasada', () => {
+test('a DIRECÇÃO não conta: o que proíbe as mãos é o pé', () => {
+    /*
+    Este teste dizia o contrário — "bola jogada para a FRENTE não é bola
+    atrasada" — e era essa a folga (`GkRecuoModel.atrasoMin`) que deixava
+    passar os recuos que o relato apanhou: *"o goleiro não pode pegar com a mão
+    uma bola atrasada pelo jogador do próprio time com o pé"*.
+
+    Medido em 30 min (`tools/scratch/_recuo_gk.js`): sete bolas agarradas com a
+    mão vinham do pé de um companheiro, TODAS dentro da folga, com
+    deslocamentos de -0.73 a +3.23 m. A folga não separava o recuo do toque de
+    lado — separava o recuo longo do curto, e o curto é o mais comum, porque
+    quem devolve a bola ao guarda-redes está a dois metros dele.
+
+    A Lei 12 fala do PÉ. Quem devolve as mãos é a cabeça, o peito ou um toque
+    do adversário, e isso continua a ser testado aqui em cima.
+    */
     montarRecuo();
-    // Mesmo toque do companheiro, mas a bola vai para a frente.
-    Match.ball.position.z = -22;
+    Match.ball.position.z = -22;      // a bola foi para a FRENTE
     avaliarRecuoParaGR(Match);
-    assert.strictEqual(Match.recuoParaGR, null,
-        'um passe para a frente não pode proibir as mãos do guarda-redes');
+    assert.strictEqual(Match.recuoParaGR, 'TeamA',
+        'o pé de um companheiro proíbe as mãos, venha a bola de onde vier');
+    assert.strictEqual(gk.grabBall(), false, 'e o guarda-redes não a pode agarrar');
 });
 
 test('o guarda-redes não se absolve a si próprio tocando com o pé', () => {

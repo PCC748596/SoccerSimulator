@@ -124,6 +124,38 @@ const PassModel = {
     bonusInfiltracao: 700,
 
     /*
+    =====================================================================
+    TOCA E CORRE — quem acabou de passar e arranca para a frente
+    =====================================================================
+    Pedido: *"se o jogador que tocou a bola para um companheiro correr para
+    frente e estiver sem nenhum jogador a sua frente a uma distância de 5
+    metros ele vai ganhar mais 100 pontos para receber passe no vazio ou em
+    profundidade"*.
+
+    É a tabela de um-dois. O `bonusInfiltracao` já premia quem rompe em
+    RUN_INTO_SPACE, mas quem toca e arranca não muda de estado — continua no
+    estado de apoio em que estava, e por isso nunca era preferido a ninguém.
+
+    As três condições são as do pedido, e todas se medem no referencial de
+    ataque dele:
+
+      . foi ELE que fez o passe anterior (`Match.ultimoPassador`);
+      . está a ANDAR PARA A FRENTE (`tocaECorreAvancoMin`, para um passe para
+        trás não contar como arranque);
+      . não tem ninguém à frente dentro de `tocaECorreRaio`, medido no cone
+        para a frente — um adversário ao LADO dele não lhe fecha nada.
+    */
+    bonusTocaECorre: 100,
+    tocaECorreRaio: 5.0,        // metros à frente que têm de estar livres
+    tocaECorreAvancoMin: 0.8,   // m/s de avanço para contar como "a correr"
+
+    /*
+    Quanto tempo depois do passe é que ele ainda é "quem acabou de tocar".
+    Passado isto a jogada é outra, e o um-dois deixou de estar em cima da mesa.
+    */
+    tocaECorreDuracao: 3.0,
+
+    /*
     Caminho fechado à frente: com este número de adversários no corredor de
     progressão, o portador deixa de tentar passar para a frente (ou driblar)
     e joga para o LADO ou para TRÁS.

@@ -991,6 +991,131 @@ const FreeKickModel = {
     */
     espacamentoExtra: 4.5,
 
+    /*
+    =====================================================================
+    AS QUATRO ROTINAS DA FALTA NA INTERMEDIÁRIA
+    =====================================================================
+    Pedido, com quatro diagramas de treino: *"cria essas 4 opções de faltas no
+    ataque. Para o time atacante e para o time defensor. Vamos sortear uma
+    delas quando tiver uma falta na intermediária de ataque"*.
+
+    A `formacaoPorSetor` (aqui em baixo) é o desenho POR OMISSÃO de cada
+    sector, e continua a ser o que vale em todo o campo. Isto é outra coisa:
+    na intermediária de ataque — o sector `meio_avancado` e o `ataque_entrada`,
+    que juntos são a faixa de onde estes lances se batem — sorteia-se UMA das
+    quatro e é ela que manda, nas duas equipas.
+
+    Cada rotina tem as duas metades, como pedido:
+
+        `ataque`  o desenho de quem cobra, no mesmo esquema da
+                  `formacaoPorSetor` (modos 'bola', 'baliza' e 'apoio'), para
+                  não haver dois vocabulários de posicionamento no ficheiro.
+        `defesa`  a resposta de quem defende, em dois números que o
+                  `formaDaDefesaNoLivre` lê: `de` é onde fica o homem mais
+                  adiantado (a Lei 13 nunca deixa passar dos 9.15) e `ate` o
+                  mais recuado. Uma defesa que espera a bola longa arma-se
+                  atrás; uma que espera o passe curto sobe.
+
+    Os diagramas, e o que cada um virou:
+
+      1. DEEP FREE KICK — a bola vem de longe para a área. "9,8 attempt to win
+         flick-on for strikers running onto ball", "best headers win the
+         challenge on edge of area", "4 waits for 2nd phase". Dois homens a
+         atacar a primeira bola à entrada da área, dois a atacar o que sobra
+         dela mais à frente, e um a segurar o ressalto atrás.
+
+      2. WIDE, 3 PELA LINHA — "3 looks to pull a defender out", e as duas
+         opções: "3 runs early and 7 plays 3 down the line to cross" ou "10
+         runs square to play ball into 3 or shoot". O desenho é o da primeira:
+         um homem aberto na linha, um apoio curto para lhe dar a bola, e o
+         resto a atacar a área à espera do cruzamento dele.
+
+      3. CENTRAL, OVER THE HILL — "7 or 10 chips the ball over the wall where 9
+         and 11 attempt to finish". Dois homens no limite do fora-de-jogo, em
+         cima da barreira, à espera da bola por cima dela; os médios no
+         ressalto e um homem aberto a esticar a defesa.
+
+      4. WIDE, OUT-SWINGING — "out swinging high ball to back of the 6yrd box
+         (By 3). 9 loops around as target", "4 looks for short kick to get a
+         direct shot". Quatro homens na segunda trave (é lá que a bola cai),
+         um a dar a volta por fora, e o apoio curto para a alternativa de
+         remate directo.
+
+    Quem sorteia é o `setupSetPiece`, e guarda o nome em
+    `Match.rotinaDaFaltaActual` — as duas equipas leem a MESMA, senão o ataque
+    montava uma coisa e a defesa respondia a outra.
+    */
+    rotinasDaIntermediaria: [
+        {
+            nome: 'deep_free_kick',
+            ataque: {
+                // Os dois melhores de cabeça na primeira bola, à entrada da área.
+                cb: { modo: 'baliza', slots: [{ relX: 2.0, dist: 17.0 }, { relX: -2.0, dist: 17.0 }] },
+                // E os pontas a atacar o que sobrar dela, mais perto da baliza.
+                ata: { modo: 'baliza', slots: [{ relX: 5.0, dist: 9.0 }, { relX: -5.0, dist: 9.0 }] },
+                ml: { modo: 'baliza', slots: [{ relX: 13.0, dist: 14.0 }, { relX: -13.0, dist: 14.0 }] },
+                // O 4 da segunda fase: fica atrás, para o que voltar.
+                mc: { modo: 'bola', avanco: 4.0, xs: [-7, 7] },
+                lat: { modo: 'bola', avanco: -6.0, xs: [-20, 20] }
+            },
+            // Ela espera a bola longa: arma-se atrás, a defender a área.
+            defesa: { de: 9.15, ate: 26.0 }
+        },
+        {
+            nome: 'wide_pela_linha',
+            ataque: {
+                // O homem aberto na linha, que "pulls a defender out".
+                ml: { modo: 'bola', avanco: 8.0, xs: [-30, 30] },
+                // O apoio curto que lhe dá a bola.
+                mc: { modo: 'apoio', dx: 6.0, dz: 1.0 },
+                // E a área ocupada à espera do cruzamento dele.
+                ata: { modo: 'baliza', slots: [{ relX: 4.0, dist: 6.0 }, { relX: -4.5, dist: 10.0 }] },
+                cb: { modo: 'baliza', slots: [{ relX: 0.0, dist: 13.0 }] },
+                lat: { modo: 'bola', avanco: -10.0, xs: [-18, 18] }
+            },
+            // Passe curto pela ala: a defesa sobe para o encurtar.
+            defesa: { de: 9.15, ate: 18.0 }
+        },
+        {
+            nome: 'central_over_the_hill',
+            ataque: {
+                // Os dois que atacam a bola por CIMA da barreira, no limite.
+                ata: { modo: 'bola', avanco: 12.0, xs: [-4, 4] },
+                // Os médios no ressalto, de onde sai o remate se ela sobrar.
+                mc: { modo: 'bola', avanco: -1.0, xs: [-8, 8] },
+                // Um homem bem aberto a esticar a linha deles.
+                ml: { modo: 'bola', avanco: 4.0, xs: [-28, 28] },
+                cb: { modo: 'bola', avanco: -14.0, xs: [-9, 9] },
+                lat: { modo: 'apoio', dx: 9.0, dz: -2.0 }
+            },
+            // Barreira e linha alta: o que se defende é a bola picada curta.
+            defesa: { de: 9.15, ate: 16.0 }
+        },
+        {
+            nome: 'wide_out_swinging',
+            ataque: {
+                // A bola cai na SEGUNDA trave: é lá que se junta a gente.
+                ata: { modo: 'baliza', slots: [{ relX: -4.0, dist: 5.5 }, { relX: -1.0, dist: 7.0 }] },
+                cb: { modo: 'baliza', slots: [{ relX: -6.5, dist: 6.0 }, { relX: 1.5, dist: 9.5 }] },
+                // O que dá a volta por fora, a chegar de trás.
+                ml: { modo: 'baliza', slots: [{ relX: 9.0, dist: 12.0 }, { relX: -12.0, dist: 13.0 }] },
+                // E o apoio curto: a alternativa do remate directo.
+                mc: { modo: 'apoio', dx: 5.0, dz: -1.0 },
+                lat: { modo: 'bola', avanco: -12.0, xs: [-17, 17] }
+            },
+            // Cruzamento alto à espera: bloco na área, sem subir.
+            defesa: { de: 9.15, ate: 24.0 }
+        }
+    ],
+
+    /*
+    E EM QUE SECTORES É QUE SE SORTEIA. A "intermediária de ataque" é a faixa de
+    onde estes quatro lances se batem: o meio-campo adversário e a entrada da
+    área. Na ala (`ataque_lateral`) manda o cruzamento, que tem desenho próprio,
+    e na defesa não há rotina nenhuma a montar.
+    */
+    setoresComRotina: ['meio_avancado', 'ataque_entrada'],
+
     formacaoPorSetor: {
         /*
         FALTA NA PRÓPRIA DEFESA (DEEP FREE KICK).
@@ -1898,6 +2023,26 @@ const DirectFreeKickModel = {
     falta directa ser diferente do penálti.
     */
     fraccaoAtrasoDefesa: 0.22,
+
+    /*
+    E QUANDO O DESFECHO NÃO É DEFESA, PARA QUE LADO É QUE ELE VAI?
+
+    Relato: *"o goleiro ainda está pulando para o lado contrário do
+    deslocamento da bola nas faltas e chutes"*.
+
+    Estava assim, e de propósito: `penaltyDiveX = defende ? alvo.x : -alvo.x`.
+    Espelhar o alvo garantia que um golo sorteado não era defendido por
+    acidente — mas garantia também que, em DEZ dos doze desfechos, ele se
+    atirava exactamente para o lado oposto ao da bola. Sempre. Um guarda-redes
+    engana-se no lado às vezes; não se engana todas as vezes.
+
+    Agora o lado é o CERTO, e o que o impede de defender é o que o impede na
+    realidade: parte tarde (o atraso cheio, sem o tecto do `fraccaoAtrasoDefesa`)
+    e não chega lá. Só nesta fracção dos casos é que ele lê mal e sai para o
+    outro lado — e aí vê-se um guarda-redes batido, que é uma coisa que
+    acontece, em vez de um que parece não estar a ver o jogo.
+    */
+    probLadoErrado: 0.25,
 
     /*
     E A DEFESA ACONTECE MESMO.

@@ -362,9 +362,7 @@ function registarToqueComPe(jogador, comPe) {
     Match.ultimoToque = {
         team: jogador.team,
         // O toque do PROPRIO guarda-redes tem saida: ver `avaliarRecuoParaGR`.
-        gk: jogador.role === 'gk',
-        x0: Match.ball ? Match.ball.position.x : 0,
-        z0: Match.ball ? Match.ball.position.z : 0
+        gk: (jogador.role === 'gk') ? jogador : null
     };
     /*
     E A MARCA FICA POSTA JA, no mesmo instante do toque.
@@ -427,17 +425,24 @@ function avaliarRecuoParaGR(match) {
 
     Ele nao se absolve a si proprio — tocar a bola com o pe e agarra-la a
     seguir era o buraco antigo, e por isso o toque dele marca como o de
-    qualquer outro. Mas quando a bola SAI mesmo dali, ele pos-a em jogo e a
-    fase acabou: sem esta saida ficava proibido para sempre, porque ja nao ha
-    direccao nenhuma a limpar a marca.
+    qualquer outro. Mas quando ele a PÕE EM JOGO, a fase acabou: sem esta
+    saida ficava proibido para sempre, porque ja nao ha direccao nenhuma a
+    limpar a marca.
+
+    E mede-se a distancia DELE a bola, e nao ao ponto do toque: um toque que
+    manda a bola seis metros para dentro da propria baliza nao poe nada em
+    jogo, e ele continua a nao a poder agarrar (e o caso que o
+    tests/bola_atrasada_maos.test.js prende). O que poe a bola em jogo e ela
+    ficar LONGE dele.
 
     Para o toque de um companheiro nao ha distancia que valha: e o PE, e ponto
     (Lei 12).
     */
-    if (t.gk && m.ball) {
+    if (t.gk && t.gk.model && m.ball) {
         const liberta = (typeof GkRecuoModel !== 'undefined' &&
-            typeof GkRecuoModel.libertaComOPe === 'number') ? GkRecuoModel.libertaComOPe : 3.0;
-        const d = Math.hypot(m.ball.position.x - t.x0, m.ball.position.z - t.z0);
+            typeof GkRecuoModel.libertaComOPe === 'number') ? GkRecuoModel.libertaComOPe : 8.0;
+        const d = Math.hypot(m.ball.position.x - t.gk.model.position.x,
+            m.ball.position.z - t.gk.model.position.z);
         if (d > liberta) { m.recuoParaGR = null; m.ultimoToque = null; return; }
     }
 
@@ -778,9 +783,16 @@ jogo inteiro.
 Devolve `[{ p, x, z }]`. Quem não tiver lugar no desenho do sector não vem na
 lista — o chamador deixa-o onde está.
 */
-function lugaresDaFalta(bolaX, bolaZ, attDir, jogadores, setor) {
+function lugaresDaFalta(bolaX, bolaZ, attDir, jogadores, setor, desenhoDado) {
     const F = FreeKickModel;
-    const desenho = F.formacaoPorSetor[setor];
+    /*
+    `desenhoDado` é o desenho de uma ROTINA sorteada (ver
+    FreeKickModel.rotinasDaIntermediaria). Quando vem, é ele que manda; sem
+    ele fica o desenho por omissão do sector, como sempre. O esquema é o mesmo
+    nos dois casos, de propósito: assim a rotina não precisa de código próprio
+    para ser colocada.
+    */
+    const desenho = desenhoDado || F.formacaoPorSetor[setor];
     if (!desenho) return [];
 
     const linhaFundo = attDir * (CAMPO_COMP / 2);
@@ -2127,6 +2139,58 @@ tempo de reação do GoalkeeperDive, 0.10 s a GK 100 e 0.46 s a GK 0, e mais
 nada.
 =============================================================================
 */
+/*
+QUANTOS CORPOS ESTÃO ENTRE A BOLA E O GUARDA-REDES.
+
+Serve o atraso da reacção (ver GoalkeeperDive.atrasoPorHomemNaVisao): a
+barreira de uma falta, ou o aglomerado de um remate de fora, tapam-lhe a bola e
+ele vê-a mais tarde.
+
+Mede um CORREDOR e não um raio: conta quem está entre os dois (projecção ao
+longo da linha bola->guarda-redes entre 0 e o comprimento dela) e a menos de
+`visaoLargura` de lado. Quem está atrás da bola, ou atrás dele, não tapa nada.
+
+O próprio guarda-redes não se conta, e os jogadores das duas equipas contam —
+um companheiro tapa a visão tal e qual como um adversário.
+
+Pura o suficiente para ser testada: recebe as listas e as posições.
+*/
+function homensNaVisaoDoGuardaRedes(gkPos, bolaPos, jogadores, gk, larguraMeia) {
+    if (!gkPos || !bolaPos || !jogadores) return 0;
+    const dx = gkPos.x - bolaPos.x, dz = gkPos.z - bolaPos.z;
+    const comp = Math.hypot(dx, dz);
+    if (comp < 0.5) return 0;                 // bola em cima dele: nada a tapar
+    const ux = dx / comp, uz = dz / comp;
+    const meia = (typeof larguraMeia === 'number') ? larguraMeia : 1.2;
+
+    let n = 0;
+    for (const p of jogadores) {
+        if (!p || !p.model || p === gk) continue;
+        const rx = p.model.position.x - bolaPos.x, rz = p.model.position.z - bolaPos.z;
+        const aoLongo = rx * ux + rz * uz;
+        if (aoLongo <= 0 || aoLongo >= comp) continue;      // atrás da bola, ou atrás dele
+        const lateral = Math.abs(rx * uz - rz * ux);
+        if (lateral <= meia) n++;
+    }
+    return n;
+}
+
+/*
+E o atraso que essa gente custa, em segundos. Fica junto à contagem para os
+dois sítios que o somam (o remate, aqui em baixo, e a falta directa em
+js/player.js) não poderem discordar.
+*/
+function atrasoPorVisaoTapada(gk) {
+    if (typeof Match === 'undefined' || !Match.ball || !gk || !gk.model) return 0;
+    const D = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
+    if (!D || typeof D.atrasoPorHomemNaVisao !== 'number') return 0;
+
+    const todos = (Match.players || []).concat(Match.opponents || []);
+    const n = homensNaVisaoDoGuardaRedes(gk.model.position, Match.ball.position,
+        todos, gk, D.visaoLargura);
+    return Math.min(D.atrasoVisaoMax || 0, n * D.atrasoPorHomemNaVisao);
+}
+
 function armarGuardaRedes(gk, skillGk, distRemate) {
     if (!gk) return;
     /*
@@ -2141,7 +2205,13 @@ function armarGuardaRedes(gk, skillGk, distRemate) {
     const base = (R && typeof R.reaccaoBase === 'number') ? R.reaccaoBase : 0.45;
     const amp = (R && typeof R.reaccaoPorSkill === 'number') ? R.reaccaoPorSkill : 0.35;
     const s = (typeof skillGk === 'number') ? skillGk : 50;
-    gk.gkDelayReacao = base - ((s - 50) / 50) * amp;
+    /*
+    E A GENTE À FRENTE SOMA-SE AO ATRASO — ver `atrasoPorVisaoTapada`. Isto é o
+    funil de TODOS os remates e cabeceios (ver a nota deste ficheiro), portanto
+    é aqui que a visão tapada tem de entrar para valer em todos.
+    */
+    const visao = (typeof atrasoPorVisaoTapada === 'function') ? atrasoPorVisaoTapada(gk) : 0;
+    gk.gkDelayReacao = base - ((s - 50) / 50) * amp + visao;
     gk.gkReagiu = false;
 }
 
@@ -4744,6 +4814,7 @@ if (typeof window !== 'undefined') {
         passaEntreAdversarios,
         maosProibidasNoRecuo, registarToqueComPe, limparRecuoParaGR, avaliarRecuoParaGR,
         distanciaEntreSegmentos,
-        pontoDeIntercepcaoGK, pontoDisputado, erroLeituraGK, parNormal, distanciaAoSegmento
+        pontoDeIntercepcaoGK, pontoDisputado, erroLeituraGK, parNormal, distanciaAoSegmento,
+        homensNaVisaoDoGuardaRedes, atrasoPorVisaoTapada
     });
 }

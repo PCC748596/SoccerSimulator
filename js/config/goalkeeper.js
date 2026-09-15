@@ -658,6 +658,84 @@ const GoalkeeperDive = {
     que e onde estao as defesas que faltavam.
     */
     alcanceBraco: 0.92,
+
+    /*
+    =====================================================================
+    ATÉ QUE DISTÂNCIA VALE A PENA ATIRAR-SE
+    =====================================================================
+    Relato: *"o goleiro está pulando na bola mesmo com a bola a mais de uns 5
+    metros dele. Isso não faz sentido. O goleiro só pula na bola se ele acha
+    que vai alcançar ela com as mãos. Contando a passada, o impulso e o pulo,
+    dificilmente um goleiro chega numa bola a mais de 5 metros"*.
+
+    O `horaDeMergulhar` decidia QUANDO se atirar e nunca SE valia a pena: com
+    `tVoo` limitado ao `vooMax`, uma bola a oito metros dava um gesto tão
+    pronto como uma a dois. Ele atirava-se, caía, e a bola entrava a metros
+    dele.
+
+    Agora há um alcance, e tem duas partes:
+
+      . o TEMPO que sobra. Descontado o `tempoLer` + `tempoImpulso` (0.17 s), o
+        que resta é voo, e o voo cobre `velLateral` metros por segundo. Uma
+        bola que chega em 0.4 s dá 0.23 s de voo, ou seja pouco mais de um
+        metro de lado: pedir-lhe mais do que isso é pedir-lhe que caia no
+        chão a ver a bola passar.
+
+      . o TECTO, que é o pedido: nem com todo o tempo do mundo se cobrem mais
+        de `alcanceLateralMax` metros. A parte de cima do alcance cinemático
+        (`alcanceBraco` + `velLateral` x `vooMax`, que a GK 100 dá 9.4 m) é um
+        artefacto do `vooMax` e não um salto que exista.
+
+    Quem está ACIMA do alcance não se atira: fica de pé e desloca-se para o
+    lado da bola, que é o que o `gkAlvoX` já faz.
+
+    A defesa DESENHADA (penálti, falta directa) não passa por aqui — nesses o
+    desfecho foi sorteado e o gesto é para se ver.
+    */
+    alcanceLateralMax: 5.0,
+
+    /*
+    E NÃO SE ATIRA COM A BOLA AINDA LONGE.
+
+    Medido antes disto (`tools/scratch/_gk_mergulho.js`, 30 min): **92% dos
+    mergulhos arrancavam com a bola a mais de 5 m dele** — mediana 9.9 m,
+    máximo 20.5. O `horaDeMergulhar` só olhava ao TEMPO, e num remate a 25 m/s
+    os 0.4 s do gesto são dez metros de bola: a conta está certa e o que se vê
+    é um guarda-redes a atirar-se ao chão para uma bola que ainda vem a meio
+    caminho. Com uma bola lenta era pior: 1.5 s de janela e ele já no chão.
+
+    Este tecto é a outra metade da decisão. Enquanto a bola estiver mais longe
+    do que isto ele fica DE PÉ a acompanhar (o `gkAlvoX` desloca-o para o lado
+    do remate), e só se atira quando ela entra na distância em que o gesto e a
+    bola se encontram.
+
+    Doze metros não é um número redondo por acaso: é o que um remate de 30 m/s
+    percorre no tempo do gesto inteiro (0.4 s), ou seja o ponto a partir do
+    qual esperar mais já custa a defesa. Abaixo dele manda o tempo, como antes.
+    */
+    distanciaMaxParaMergulhar: 12.0,
+
+    /*
+    =====================================================================
+    E ELE REAGE MAIS TARDE COM GENTE À FRENTE
+    =====================================================================
+    Pedido: *"nas faltas e chutes temos que adicionar um delay para a reação
+    dos goleiros em virtude dos jogadores a frente atrapalharem a visão dele"*.
+
+    O atraso base sai da habilidade (`reaccaoBase`/`reaccaoPorSkill`) e é o
+    mesmo com o campo limpo ou com seis corpos entre ele e a bola. A barreira
+    de uma falta é o caso óbvio, mas um remate de fora com dois defesas e dois
+    atacantes pelo meio é igual: ele vê a bola mais tarde.
+
+    Conta-se quem está no CORREDOR entre a bola e ele — `visaoLargura` de
+    meia-largura, e só quem está entre os dois, não quem está atrás da bola ou
+    atrás dele. Cada corpo soma `atrasoPorHomemNaVisao`, com tecto em
+    `atrasoVisaoMax`: a partir de um certo ponto já não vê nada, e mais um
+    homem não muda o problema.
+    */
+    atrasoPorHomemNaVisao: 0.05,   // s por corpo no corredor bola->guarda-redes
+    atrasoVisaoMax: 0.20,          // tecto do que a visão tapada pode custar
+    visaoLargura: 1.2,             // meia-largura do corredor, em metros
     /*
     ELE CAI DE FRENTE, E NAO SO DE LADO.
 
@@ -1066,10 +1144,12 @@ const GkRecuoModel = {
     em jogo e a fase acabou. Sem esta saída ficava proibido para sempre, porque
     já não há direcção nenhuma a limpar a marca.
 
-    Três metros separam um toque de pé — que não põe nada em jogo — de uma bola
-    jogada para longe.
+    Mede-se a distância DELE à bola, e não ao ponto do toque: um toque que manda
+    a bola seis metros para dentro da própria baliza não põe nada em jogo. O que
+    põe é ela ficar longe dele — oito metros são mais do que a área pequena
+    (5.5 m) e menos do que qualquer bola jogada para longe.
     */
-    libertaComOPe: 3.0
+    libertaComOPe: 8.0
 };
 
 if (typeof window !== 'undefined') window.GkRecuoModel = GkRecuoModel;

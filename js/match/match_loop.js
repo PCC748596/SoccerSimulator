@@ -611,7 +611,30 @@ Object.assign(Match, {
                 árbitro repor o lance.
                 */
                 const gkEspera = this.setPieceTaker;
-                if (!(gkEspera && gkEspera.gkTiroMetaPendente)) this.golKickAtrasoInicio -= dt;
+
+                /*
+                E SÓ SE BATE COM A EQUIPA NO LUGAR — ver
+                GoalKickShape.esperaMaxPelaEquipa.
+
+                O `golKickProntos` é levantado pelo `updateGoalKickWait` quando
+                todos os companheiros chegaram ao alvo (SET_PIECE_WAIT), e até
+                aqui ninguém o lia: batia-se aos 3 s com meia equipa a 20 m do
+                lugar dela. Agora o relógio dos 3 s só corre depois disso.
+
+                O `golKickEsperaPeloBloco` é o tecto: se alguém ficar preso, ao
+                fim dele bate-se de qualquer maneira — um lance parado para
+                sempre é pior do que um lance mal posicionado.
+                */
+                this.golKickEsperaPeloBloco = (this.golKickEsperaPeloBloco || 0) + dt;
+                const tectoEspera = (typeof GoalKickShape !== 'undefined' &&
+                    typeof GoalKickShape.esperaMaxPelaEquipa === 'number')
+                    ? GoalKickShape.esperaMaxPelaEquipa : 8.0;
+                const equipaNoLugar = this.golKickProntos ||
+                    this.golKickEsperaPeloBloco > tectoEspera;
+
+                if (!(gkEspera && gkEspera.gkTiroMetaPendente) && equipaNoLugar) {
+                    this.golKickAtrasoInicio -= dt;
+                }
                 if (this.golKickAtrasoInicio <= 0) {
                     this.golKickPendente = false;
                     const gkTM = this.setPieceTaker;
@@ -644,6 +667,12 @@ Object.assign(Match, {
             if (this.aerialHeaderTimer <= 0) {
                 this.aerialHeaderCount = 0;
             }
+        }
+
+        // O um-dois tem prazo: ver PassModel.tocaECorreDuracao.
+        if (this.ultimoPassadorTimer > 0) {
+            this.ultimoPassadorTimer -= dt;
+            if (this.ultimoPassadorTimer <= 0) this.ultimoPassador = null;
         }
 
         let isPassing = false;

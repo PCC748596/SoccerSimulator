@@ -523,9 +523,37 @@ Object.assign(Match, {
 
         const rows = 30;
 
+        /*
+        =================================================================
+        A QUE DISTÂNCIA DO CAMPO É QUE A BANCADA COMEÇA
+        =================================================================
+        Pedido: *"afasta as arquibancadas para 7 metros das linhas laterais"*.
+        Eram 4.5.
+
+        Os três números estavam escritos à mão nos sítios onde se constrói cada
+        bancada, e o das esquinas estava escrito DUAS vezes (no raio da primeira
+        fila e na âncora do arco). Mudar um sem os outros abre uma fenda na
+        esquina — é por isso que ficam aqui, com a relação entre eles explícita:
+
+            a primeira fila da lateral fica a `RECUO_LATERAL` da linha lateral;
+            a primeira fila do fundo   fica a `RECUO_FUNDO` da linha de fundo;
+            e o arco da esquina, de raio `RAIO_PRIMEIRA_FILA`, é ancorado de
+            modo a ENCOSTAR nos dois: o centro dele recua o raio para dentro,
+            em cada eixo.
+
+        Sem essa última conta, subir o recuo lateral empurrava a esquina para
+        fora também em Z e ela deixava de bater com a bancada de fundo.
+        */
+        const RECUO_LATERAL = 7.0;
+        const RECUO_FUNDO = 5.5;
+        const RAIO_PRIMEIRA_FILA = 6.5;
+
+        const BANCADA_X = CAMPO_LARG / 2 + RECUO_LATERAL;
+        const BANCADA_Z = CAMPO_COMP / 2 + RECUO_FUNDO;
+
         function buildCorner(cx, cz, startAngle) {
             for (let r = 0; r < rows; r++) {
-                const R = 6.5 + r * 1.2;
+                const R = RAIO_PRIMEIRA_FILA + r * 1.2;
                 const standY = 0.25 + (r * 0.5);
 
                 const numSteps = Math.max(4, Math.floor(R * (Math.PI / 2) / 2.5));
@@ -551,7 +579,7 @@ Object.assign(Match, {
 
         // Bancada Oeste (Esquerda)
         for (let r = 0; r < rows; r++) {
-            const standX = -(CAMPO_LARG / 2 + 4.5) - (r * 1.2);
+            const standX = -BANCADA_X - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
             addStepBox(1.2, 0.5, CAMPO_COMP + 2, standX, standY, 0, 0);
 
@@ -566,7 +594,7 @@ Object.assign(Match, {
 
         // Bancada Este (Direita)
         for (let r = 0; r < rows; r++) {
-            const standX = (CAMPO_LARG / 2 + 4.5) + (r * 1.2);
+            const standX = BANCADA_X + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
             addStepBox(1.2, 0.5, CAMPO_COMP + 2, standX, standY, 0, 0);
 
@@ -581,7 +609,7 @@ Object.assign(Match, {
 
         // Bancada Norte (Fundo)
         for (let r = 0; r < rows; r++) {
-            const standZ = (CAMPO_COMP / 2 + 5.5) + (r * 1.2);
+            const standZ = BANCADA_Z + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
             addStepBox(CAMPO_LARG - 4, 0.5, 1.2, 0, standY, standZ, 0);
 
@@ -598,7 +626,7 @@ Object.assign(Match, {
 
         // Bancada Sul (Fundo oposto)
         for (let r = 0; r < rows; r++) {
-            const standZ = -(CAMPO_COMP / 2 + 5.5) - (r * 1.2);
+            const standZ = -BANCADA_Z - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
             addStepBox(64, 0.5, 1.2, 0, standY, standZ, 0);
 
@@ -613,8 +641,10 @@ Object.assign(Match, {
             }
         }
 
-        let cornerX = (CAMPO_LARG / 2) - 2;
-        let cornerZ = (CAMPO_COMP / 2) - 1;
+        // O centro do arco recua o raio da primeira fila em cada eixo, para ela
+        // encostar na lateral e no fundo ao mesmo tempo. Ver os recuos acima.
+        let cornerX = BANCADA_X - RAIO_PRIMEIRA_FILA;
+        let cornerZ = BANCADA_Z - RAIO_PRIMEIRA_FILA;
         buildCorner(-cornerX, cornerZ, Math.PI / 2);
         buildCorner(cornerX, cornerZ, 0);
         buildCorner(-cornerX, -cornerZ, Math.PI);

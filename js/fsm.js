@@ -556,6 +556,18 @@ function executePassGameplay(p) {
     */
     if (typeof registarToqueComPe === 'function') registarToqueComPe(p, true);
 
+    /*
+    QUEM PASSOU FICA GUARDADO, para o um-dois: o companheiro que receber vai
+    preferi-lo se ele arrancar livre para a frente. Ver PassModel.
+    bonusTocaECorre e `bonusDoTocaECorre` (js/player.js).
+
+    O prazo consome-se no Match.update; sem ele, um passe dado há meio minuto
+    ainda dava prioridade a quem o deu.
+    */
+    Match.ultimoPassador = p;
+    Match.ultimoPassadorTimer = (typeof PassModel !== 'undefined' &&
+        typeof PassModel.tocaECorreDuracao === 'number') ? PassModel.tocaECorreDuracao : 3.0;
+
     Match.ballCarrier = null;
     Match.intendedReceiver = p.passTarget;
     if (Match.passTargetVisual) Match.passTargetVisual.visible = false;

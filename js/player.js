@@ -1275,9 +1275,13 @@ class FootballPlayer {
             /*
             O GUARDA-REDES. O atraso da reacção sai da habilidade dele — é a
             diferença para o penálti, onde é zero: ali ele parte com a bola,
-            aqui ela aparece-lhe por cima da barreira. O mergulho vai ao sítio
-            certo quando o desfecho é uma defesa; nos outros ele parte, mas
-            para o lado que o remate já não usa.
+            aqui ela aparece-lhe por cima da barreira. Ao atraso soma-se o que
+            a gente à frente lhe custa (ver `atrasoPorVisaoTapada`, utils.js):
+            numa falta é a barreira que lhe tapa a bola, e era o pedido.
+
+            E O LADO É O DA BOLA. Era `-alvo.x` em tudo o que não fosse defesa
+            — dez dos doze desfechos —, ou seja ele atirava-se sempre para o
+            lado contrário ao do remate. Ver DirectFreeKickModel.probLadoErrado.
             */
             if (gk) {
                 let atraso = THREE.MathUtils.clamp(
@@ -1309,11 +1313,22 @@ class FootballPlayer {
                     */
                     gk.touchLock = Math.max(gk.touchLock || 0, tempoVoo * 1.05 + 0.10);
                 }
+                if (typeof atrasoPorVisaoTapada === 'function') {
+                    atraso += atrasoPorVisaoTapada(gk);
+                }
                 gk.gkDelayReacao = atraso;
                 gk.gkReagiu = false;
                 gk.isPenaltyDive = true;
                 const defende = (desfecho === 'defesa' || desfecho === 'defesa_fora');
-                gk.penaltyDiveX = defende ? alvo.x : -alvo.x;
+                /*
+                Vai ao lado CERTO, e é o atraso que o impede de chegar lá. Só
+                na fracção `probLadoErrado` é que ele lê mal o lance e sai para
+                o outro lado — um guarda-redes batido, que acontece, em vez de
+                um que se atira ao contrário em todas as cobranças.
+                */
+                const pErrado = (typeof DF.probLadoErrado === 'number') ? DF.probLadoErrado : 0;
+                const leuMal = !defende && (Math.random() < pErrado);
+                gk.penaltyDiveX = leuMal ? -alvo.x : alvo.x;
                 gk.penaltyDiveY = alvo.y;
                 gk.faltaDirectaDefesaFora = (desfecho === 'defesa_fora');
             }
@@ -2391,6 +2406,10 @@ class FootballPlayer {
                     typeof PassModel.bonusInfiltracao === 'number')
                     ? PassModel.bonusInfiltracao : 400;
             }
+
+            // O UM-DOIS: quem me passou a bola e arrancou livre para a frente.
+            // Ver PassModel.bonusTocaECorre e `bonusDoTocaECorre` mais abaixo.
+            bonusInfiltracao += this.bonusDoTocaECorre(opt);
             const pRole = this.pos;
             const oRole = opt.pos;
             const pSideAtk = ownX * dirZ;
@@ -3092,6 +3111,45 @@ class FootballPlayer {
         this.actionCtx.fillText(text, 256, 64 + 1); 
         
         this.actionTex.needsUpdate = true;
+    }
+
+    /*
+    O UM-DOIS: quantos pontos leva, como opção de passe, quem acabou de me
+    passar a bola e arrancou para a frente sem ninguém à frente dele.
+
+    Pedido: *"se o jogador que tocou a bola para um companheiro correr para
+    frente e estiver sem nenhum jogador a sua frente a uma distância de 5
+    metros ele vai ganhar mais 100 pontos para receber passe no vazio ou em
+    profundidade"*. Os números estão no PassModel (`bonusTocaECorre`,
+    `tocaECorreRaio`, `tocaECorreAvancoMin`), com o porquê de cada um.
+
+    Fica num método com nome para o teste lhe poder chamar directamente
+    (tests/toca_e_corre.test.js) sem montar uma decisão de passe inteira.
+
+    O cone é medido no referencial de ATAQUE dele: um adversário ao lado, ou
+    atrás, não lhe fecha o caminho — e é caminho para a frente que se está a
+    premiar.
+    */
+    bonusDoTocaECorre(opt) {
+        if (typeof PassModel === 'undefined' ||
+            typeof PassModel.bonusTocaECorre !== 'number') return 0;
+        if (!opt || !opt.model || typeof Match === 'undefined') return 0;
+        if (Match.ultimoPassador !== opt || !(Match.ultimoPassadorTimer > 0)) return 0;
+
+        // A correr PARA A FRENTE, e não a andar de lado ou a recuar.
+        const avanco = (opt.velocity ? opt.velocity.z : 0) * opt.dirZ;
+        if (!(avanco >= PassModel.tocaECorreAvancoMin)) return 0;
+
+        const raio = PassModel.tocaECorreRaio;
+        const rivais = (opt.team === 'TeamA') ? Match.opponents : Match.players;
+        for (const o of rivais) {
+            if (!o || !o.model || o.role === 'gk') continue;
+            const dz = (o.model.position.z - opt.model.position.z) * opt.dirZ;
+            if (dz <= 0) continue;                       // está atrás dele
+            const dx = o.model.position.x - opt.model.position.x;
+            if (Math.hypot(dx, dz) <= raio) return 0;    // alguém à frente, dentro do raio
+        }
+        return PassModel.bonusTocaECorre;
     }
 
     executeHeader() {
@@ -4160,6 +4218,40 @@ class FootballPlayer {
     deles apenas foi exactamente o defeito medido: o outro arrancava cedo e o
     `GkDive.iniciar` congelava o alvo errado para o mergulho inteiro.
     */
+    /*
+    ATÉ QUE DISTÂNCIA DE LADO É QUE O MERGULHO AINDA CHEGA À BOLA.
+
+    Ver GoalkeeperDive.alcanceLateralMax, que traz o relato e o porquê dos dois
+    limites. São eles: o tempo que sobra depois de ler e de se impulsionar (e
+    que se converte em metros pela velocidade lateral dele), e o tecto absoluto
+    — nem com todo o tempo do mundo se cobrem mais do que isso.
+
+    O `alcanceBraco` entra porque a bola não tem de lhe chegar ao peito: chega
+    à mão.
+    */
+    alcanceDoMergulho(tempoAteChegar) {
+        const D = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
+        if (!D || typeof D.alcanceLateralMax !== 'number') return Infinity;
+
+        const velMax = D.velLateral + ((this.skillFor('GK') - 50) / 50) * D.velLateralSkill;
+        const tDisponivel = Math.max(0, (tempoAteChegar || 0) - D.tempoLer - D.tempoImpulso);
+        const tVoo = Math.min(D.vooMax, tDisponivel);
+        return Math.min(D.alcanceLateralMax, D.alcanceBraco + Math.max(0, velMax) * tVoo);
+    }
+
+    /*
+    A bola ainda está longe de mais para ele se atirar? Ver
+    GoalkeeperDive.distanciaMaxParaMergulhar, que traz a medição.
+    */
+    bolaLongeParaMergulhar() {
+        const D = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
+        if (!D || typeof D.distanciaMaxParaMergulhar !== 'number') return false;
+        if (typeof Match === 'undefined' || !Match.ball) return false;
+        const d = Math.hypot(Match.ball.position.x - this.model.position.x,
+            Match.ball.position.z - this.model.position.z);
+        return d > D.distanciaMaxParaMergulhar;
+    }
+
     horaDeMergulhar(lateral, tempoAteChegar) {
         const D = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
         if (!D) return true;
@@ -5277,6 +5369,19 @@ class FootballPlayer {
                         this.gkEstado = 'maos';
                     } else if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
                         this.gkEstado = 'maos';
+                    } else if (!this.isPenaltyDive && (
+                        Math.abs(lateral) > this.alcanceDoMergulho(tempoAteGolo) ||
+                        this.bolaLongeParaMergulhar())) {
+                        /*
+                        LONGE DE MAIS: não se atira. Ver `alcanceDoMergulho` e
+                        GoalkeeperDive.alcanceLateralMax — atirar-se a uma bola
+                        que passa a seis metros é cair no chão a vê-la entrar.
+                        Fica de pé e desloca-se, que é o que o `gkAlvoX` faz.
+
+                        A defesa DESENHADA (penálti, falta directa) está de
+                        fora: nessas o desfecho foi sorteado e o gesto é para
+                        se ver.
+                        */
                     } else if (!naHora) {
                         /*
                         Ainda ha tempo: acompanha de pe. Nao se escreve estado

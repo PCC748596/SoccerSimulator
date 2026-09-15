@@ -132,6 +132,28 @@ const RefereeModel = {
     parava de repente a seguir um alvo que anda sempre à mesma velocidade.
     */
     tempoDeAjuste: 0.85,
+
+    /*
+    E NUNCA DE COSTAS PARA A BOLA — em graus, o máximo que a frente dele pode
+    afastar-se da direcção da bola.
+
+    Relato: *"o juiz ainda está correndo de costas para a bola"*. É o preço da
+    correcção anterior: pô-lo a olhar para onde corre resolveu o deslize, e
+    trouxe isto — quando o alvo dele está do lado oposto ao do jogo, virar-se
+    para o alvo é virar as costas ao lance. Medido em 15 min: **19.5% dos
+    frames com a bola a mais de 90 graus da frente dele, e 11.8% a mais de
+    135** (de costas).
+
+    Um árbitro corre ABERTO: leva o corpo de lado, atravessado, e não perde a
+    bola de vista. 110 graus é esse limite — a bola fica na periferia, nunca
+    atrás. O que sobra do caminho faz-se de lado, e a `LateralGait` já trata
+    disso (a passada encolhe e a velocidade com ela, que é o que acontece a
+    quem corre atravessado).
+
+    Só vale para quem tem um ponto para vigiar (o árbitro, com a bola). Os
+    assistentes correm na linha e não recebem `olharPara`.
+    */
+    anguloMaxDaBola: 110 * Math.PI / 180,
     paragemMax: 0.06,
     arranqueMin: 0.10,
     suavizacaoVel: 0.20,
@@ -1014,6 +1036,28 @@ const Officials = {
         } else if (anda) {
             // Vira-se para onde anda; parado, mantém a orientação.
             o.model.rotation.y = Math.atan2(dx, dz);
+
+            /*
+            MAS NUNCA DE COSTAS PARA O QUE TEM DE VIGIAR — ver
+            RefereeModel.anguloMaxDaBola. Se o rumo o obrigasse a passar desse
+            limite, fica ENCOSTADO a ele, pelo lado por onde ia: corre
+            atravessado e mantém a bola na periferia, em vez de a perder de
+            vista. A passada de lado que isso implica é a da LateralGait, aqui
+            em baixo.
+            */
+            if (olharPara && typeof R.anguloMaxDaBola === 'number') {
+                const ox = olharPara.x - o.model.position.x;
+                const oz = olharPara.z - o.model.position.z;
+                if (Math.hypot(ox, oz) > 0.05) {
+                    const paraBola = Math.atan2(ox, oz);
+                    const desvio = Math.atan2(Math.sin(o.model.rotation.y - paraBola),
+                        Math.cos(o.model.rotation.y - paraBola));
+                    if (Math.abs(desvio) > R.anguloMaxDaBola) {
+                        o.model.rotation.y = paraBola +
+                            Math.sign(desvio) * R.anguloMaxDaBola;
+                    }
+                }
+            }
         }
 
         if (L && d > 0.0001) {
