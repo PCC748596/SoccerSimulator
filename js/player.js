@@ -5128,6 +5128,35 @@ class FootballPlayer {
             }
         }
 
+        /*
+        =============================================================
+        A SAIDA AO CRUZAMENTO RESOLVE-SE AQUI, e nao dentro do salto
+        =============================================================
+        A primeira versao pendurava isto no estado 'salto_alto', e medido em
+        40 minutos de jogo esse estado dispara UMA vez: exige a bola a menos
+        de 2.5 m E entre 1.2 e 3.2 m de altura, que e uma janela estreita
+        demais para servir de porta a um comportamento inteiro. Resultado:
+        113 cruzamentos, 19 deles a cair na pequena area, e zero saidas.
+
+        Agora o contacto e testado todos os frames enquanto a bandeira estiver
+        de pe -- como o `defender` faz no mergulho --, e a bandeira morre
+        quando o lance deixa de ser um cruzamento: bola ja no chao, ja com
+        dono, ou jogo parado. Sem isso ela ficava ligada o resto do jogo
+        (medido: 136583 frames de uma so activacao).
+        */
+        if (this.gkSaiuAoCruzamento) {
+            const S_SAI = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
+            const bolaMorreu = !S_SAI || Match.state !== 'PLAY' || !!Match.ballCarrier ||
+                Match.ball.position.y < S_SAI.alturaMin;
+            if (bolaMorreu) {
+                this.gkSaiuAoCruzamento = false;
+            } else if (gkCorpo.position.distanceTo(Match.ball.position) <= S_SAI.alcanceSaida) {
+                if (this.resolverSaidaAoCruzamento()) {
+                    this.gkSaiuAoCruzamento = false;
+                }
+            }
+        }
+
         if (this.gkEstado === 'idle') {
             /*
             NA FALTA ELE ESPERA NA LINHA, COMO NUM PENÁLTI.
@@ -5361,6 +5390,34 @@ class FootballPlayer {
                     alvoGkZ = ownGoalZCenter(this.team) + (Match.ball.position.z - ownGoalZCenter(this.team)) * 0.55;
                     alvoGkX = Match.ball.position.x * 0.65;
                     speedLerp = 4.0;
+
+                    /*
+                    A BOLA VAI CAIR NA PEQUENA AREA? Entao e dele: sai.
+
+                    Ver GkSaidaCruzamento (config/goalkeeper.js), que tem o
+                    pedido escrito. O gatilho e a PROJECCAO do voo
+                    (`preverQuedaDaBola`, fisica real), e nao a posicao actual
+                    da bola: um cruzamento a meio do voo esta sempre longe, e
+                    quem espera por ele chega tarde.
+
+                    Fora da pequena area nao sai: fica o posicionamento de
+                    sempre, que e acompanhar a bola a meio caminho da linha.
+                    */
+                    const S_CRUZ = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
+                    if (S_CRUZ && typeof preverQuedaDaBola === 'function' && typeof Area !== 'undefined') {
+                        const quedaCruz = preverQuedaDaBola();
+                        const linhaZCruz = this.ownGoalZ;
+                        const dentroPequena = quedaCruz &&
+                            Math.abs(quedaCruz.x) <= Area.pequenaMeiaLargura &&
+                            Math.abs(linhaZCruz - quedaCruz.z) <= Area.pequenaProfundidade &&
+                            (Math.sign(quedaCruz.z) === Math.sign(linhaZCruz));
+                        if (dentroPequena) {
+                            alvoGkX = quedaCruz.x;
+                            alvoGkZ = quedaCruz.z;
+                            speedLerp = 6.0;
+                            this.gkSaiuAoCruzamento = true;
+                        }
+                    }
 
                     let distToBall = gkCorpo.position.distanceTo(Match.ball.position);
                     if (distToBall < 2.5 && Match.ball.position.y > 1.2 && Match.ball.position.y < 3.2) {
@@ -6383,8 +6440,18 @@ class FootballPlayer {
             
             const jaEntrouSalto = (Match.state !== 'PLAY');
             if (!jaEntrouSalto && t < 0.7 && distMaoSalto < 1.4 && Match.ballVel.lengthSq() > 0) {
-                // No ar, a agarrar por cima: ver resolverDefesaComMaos.
-                this.resolverDefesaComMaos('salto', distMaoSalto / 1.4);
+                /*
+                SAIDA AO CRUZAMENTO: agarra ou soca, e quem decide e a
+                MARCACAO -- ver `resolverSaidaAoCruzamento` e
+                GkSaidaCruzamento. Fora desse caso, a defesa no ar e a de
+                sempre.
+                */
+                if (this.gkSaiuAoCruzamento && this.resolverSaidaAoCruzamento()) {
+                    this.gkSaiuAoCruzamento = false;
+                } else {
+                    // No ar, a agarrar por cima: ver resolverDefesaComMaos.
+                    this.resolverDefesaComMaos('salto', distMaoSalto / 1.4);
+                }
             }
         } else if (this.gkEstado === 'apanhar') {
             // Bola mansa/rolando: pára, agacha e apanha — sem deslizar.
@@ -6810,6 +6877,77 @@ class FootballPlayer {
 
     `extensao` 0..1: 0 com a bola no meio das luvas, 1 no limite do alcance.
     */
+    /*
+    =====================================================================
+    A SAIDA AO CRUZAMENTO -- agarrar com espaco, socar com gente em cima
+    =====================================================================
+    Devolve `true` se resolveu o lance (e ai quem chama nao faz mais nada).
+
+    As regras sao as do pedido e os numeros estao em GkSaidaCruzamento:
+
+      SEM MARCACAO (ninguem a menos de `raioSemMarcacao`): agarra em 95% das
+      vezes; nos outros 5% a bola bate-lhe na mao e SEGUE o trajecto, so mais
+      lenta -- nao muda de direccao, que e o que "escapar" quer dizer.
+
+      COM MARCACAO: soco. A direccao e a da trajectoria INVERTIDA -- a bola
+      volta por onde veio -- com um desvio sorteado ate `anguloSocoGraus` para
+      cada lado, e uma componente para cima que a tira da area.
+    =====================================================================
+    */
+    resolverSaidaAoCruzamento() {
+        const S = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
+        if (!S || typeof Match === 'undefined' || !Match.ball) return false;
+        if (Match.ball.position.y < S.alturaMin) return false;
+
+        const adversarios = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        let marcado = false;
+        for (const o of adversarios) {
+            if (!o || !o.model || o.role === 'gk') continue;
+            if (o.model.position.distanceTo(this.model.position) <= S.raioSemMarcacao) {
+                marcado = true;
+                break;
+            }
+        }
+
+        Match.lastTouchedPlayer = this;
+        Match.lastTouchedTeam = this.team;
+        if (typeof MatchStats !== 'undefined' && MatchStats.registarDefesa) {
+            MatchStats.registarDefesa(this.team);
+        }
+        if (typeof MatchStats !== 'undefined' && MatchStats[this.team] &&
+            typeof MatchStats[this.team].cruzamentosCortadosGK === 'number') {
+            MatchStats[this.team].cruzamentosCortadosGK++;
+        }
+
+        if (!marcado) {
+            if (Math.random() < S.chanceSegurar) {
+                this.grabBall();
+                return true;
+            }
+            // Escapou-lhe: bate na mao e segue viagem, so mais devagar.
+            Match.ballVel.multiplyScalar(S.travagemEscape);
+            return true;
+        }
+
+        // SOCO. A bola volta por onde veio, com o desvio do pedido.
+        const vx = Match.ballVel.x, vz = Match.ballVel.z;
+        const v = Math.hypot(vx, vz);
+        let dirX, dirZ;
+        if (v > 0.01) { dirX = -vx / v; dirZ = -vz / v; }
+        else { dirX = 0; dirZ = this.dirZ; }
+
+        const desvio = (Math.random() * 2 - 1) * (S.anguloSocoGraus * Math.PI / 180);
+        const cosD = Math.cos(desvio), sinD = Math.sin(desvio);
+        const rx = dirX * cosD - dirZ * sinD;
+        const rz = dirX * sinD + dirZ * cosD;
+
+        const vel = S.velocidadeSoco;
+        Match.ballVel.set(rx * vel, vel * S.elevacaoSoco, rz * vel);
+        this.hasBall = false;
+        Match.ballCarrier = null;
+        return true;
+    }
+
     resolverDefesaComMaos(tipo, extensao) {
         /*
         NUMA FALTA COM DESFECHO DE DEFESA, quem resolve e o PLANO.
@@ -6834,7 +6972,9 @@ class FootballPlayer {
             tec: this.skillFor('TEC'),
             vChegada: Match.ballVel.length(),
             extensao: extensao,
-            altura: Math.max(0, Match.ball.position.y - GkCatchModel.alturaPeito)
+            altura: Math.max(0, Match.ball.position.y - GkCatchModel.alturaPeito),
+            // De onde saiu o remate -- ver `semAgarrar` no GkCatchModel.
+            dist: this.gkDistRemate
         });
 
         Match.lastTouchedPlayer = this;

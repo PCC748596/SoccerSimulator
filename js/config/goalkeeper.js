@@ -433,6 +433,52 @@ profundidade de quem cruza. Junto à linha de fundo continua quase garantido.
 Valores no referencial de ataque.
 */
 
+/*
+=============================================================================
+SAIR AO CRUZAMENTO — agarrar ou socar
+=============================================================================
+Pedido: *"quando a projecção do cruzamento for dentro da pequena área o
+guarda-redes pode tentar sair para segurar a bola ou dar um soco na bola para
+longe. Se ele estiver sem marcação num raio de 2 metros vai tentar segurar:
+95% de hipótese de segurar e 5% da bola escapar e continuar o trajecto. Se
+tiver marcação, o guarda-redes vai dar um soco na bola na direcção oposta à
+que a bola está vindo, num ângulo de até 10 graus para cada lado da
+trajectória"*.
+
+O gatilho é a PROJECÇÃO, e não a posição da bola: o `preverQuedaDaBola`
+simula o voo com a física real e diz onde ela vai cair. Cair dentro da pequena
+área é a definição de "bola dele" — fora dela, sair é aventura e o lugar é na
+linha.
+
+A marcação decide o GESTO, como no pedido: com espaço agarra-se, com gente em
+cima soca-se. E o soco vai por onde a bola veio, que é o único sítio para onde
+ela pode ir com força sem ficar na área: devolve-se o cruzamento ao campo, e
+não à pequena área.
+=============================================================================
+*/
+const GkSaidaCruzamento = {
+    raioSemMarcacao: 2.0,    // adversário mais perto do que isto = marcado
+    chanceSegurar: 0.95,     // sem marcação, agarra; nos outros 5% escapa-lhe
+    anguloSocoGraus: 10,     // o soco abre até isto para cada lado da trajectória
+    velocidadeSoco: 16.0,    // m/s à saída do punho
+    elevacaoSoco: 0.35,      // fraccão da velocidade que vai para cima
+    alturaMin: 1.20,         // só bolas altas: abaixo disto é defesa normal
+    /*
+    A que distância da bola ele lhe chega com as mãos no alto. É mais do que o
+    alcance de pé (`GkCatchModel.alcanceContacto`, 0.55) porque isto é um
+    guarda-redes a saltar com os braços esticados — e menos do que a soma
+    ingenua braço+salto, que lhe daria dois metros de íman.
+    */
+    alcanceSaida: 1.60,
+    /*
+    A bola que ESCAPA (os 5%) não muda de direcção: bate na mão e segue. Só
+    perde um pouco de velocidade, para o toque contar e para o lance continuar
+    disputável — é exactamente o que o pedido descreve.
+    */
+    travagemEscape: 0.85
+};
+if (typeof window !== 'undefined') window.GkSaidaCruzamento = GkSaidaCruzamento;
+
 const GoalkeeperDive = {
     /*
     TEMPO DE REACÇÃO A UM REMATE, em segundos, antes de o gesto sequer começar.
@@ -551,7 +597,7 @@ const GoalkeeperDive = {
     duas situações do pedido. O tipo é escolhido em player.js pela altura do
     alvo (`espY > 1.2`).
     */
-    tempoChaoAlto: 3.0,
+    tempoChaoAlto: 2.0,
     tempoLevantar: 0.75,   // pôr-se de pé
 
     /*
@@ -634,6 +680,49 @@ const GoalkeeperDive = {
     rolamento puro de antes; a 1 cairia a 45 graus entre os dois.
     */
     pesoQuedaFrente: 0.55,
+
+    /*
+    =========================================================================
+    DE LADO NO AR, DE BRUCOS SO NO FIM
+    =========================================================================
+    Relato, com quatro fotografias: *"o guarda-redes esta a saltar para o lado
+    virado com a barriga para baixo. Nao e isso. O correcto e ele saltar para o
+    lado com o corpo de lado (barriga para a frente) e virar para baixo somente
+    no final, para ter apoio para retornar a posicao de pe"*.
+
+    O `pesoQuedaFrente` metia 0.55 de picada para a frente no EIXO da queda, e
+    um eixo e o mesmo do principio ao fim: ele saia do chao ja a rodar para a
+    barriga, e voava de brucos. As fotografias mostram o contrario -- no ar o
+    corpo esta de lado, de perfil para a baliza, e so ao aterrar e que a
+    barriga vira para o relvado para as maos poderem empurrar.
+
+    Agora sao duas rotacoes com tempos diferentes:
+
+      LADO    -- a volta do +Z local, do principio ao fim. E o tombo.
+      FRENTE  -- a volta do +X local, e SO a partir de `fracFrente` do voo,
+                 crescendo ate `anguloFrente` no instante em que toca no chao.
+
+    `fracFrente` 0.70 quer dizer: os primeiros 70% do voo sao de lado puro, o
+    resto e a viragem. No chao fica completa; ao levantar desfaz-se com o
+    tombo, pelo mesmo factor.
+    =========================================================================
+    */
+    fracFrente: 0.70,
+    anguloFrente: 0.62,
+
+    /*
+    A viragem é à volta do eixo LONGO do corpo (o +Y local, da cabeça aos
+    pés), e não à volta do +X. Quem está deitado de lado vira a barriga para
+    baixo rolando sobre si próprio — rodar o +X depois de o corpo já estar
+    tombado 90 graus é um eixo que ficou VERTICAL, e isso não vira barriga
+    nenhuma: gira o boneco no chão.
+
+    Medido com `tools/scratch/gk_barriga.js` (ângulo entre a frente do corpo e
+    o plano do relvado, 0 = de lado, 90 = de bruços):
+
+        pelo +X   voo 0°, chão -5°     (a viragem não acontecia)
+        pelo +Y   voo 0° no início e no meio, 17° no fim, chão 35°
+    */
 
     /*
     Raio, em metros, dentro do qual os bracos continuam a ir a bola por IK
@@ -976,6 +1065,26 @@ const GkRecuoModel = {
 if (typeof window !== 'undefined') window.GkRecuoModel = GkRecuoModel;
 
 const GkCatchModel = {
+
+    /*
+    =====================================================================
+    REMATE FORTE E DE PERTO NAO SE SEGURA
+    =====================================================================
+    Pedido: *"um chute forte muito proximo do guarda-redes nao pode ter defesa
+    e o guarda-redes ficar com a bola. Ele pode defender mas tem que colocar a
+    bola para fora"*.
+
+    E o que a fisica manda: a bola chega com energia a mais e sem tempo para
+    fechar as maos a volta dela. Um guarda-redes defende, mas o que faz e
+    desviar -- para o canto, para a lateral, ou para a frente com a bola a
+    ficar viva.
+
+    Dentro de `distMax` metros do rematador e acima de `velMin`, a hipotese de
+    AGARRAR passa a zero. O resto da decisao fica como estava: o rocar continua
+    a depender da velocidade e da extensao, e o que sobra e espalmada.
+    =====================================================================
+    */
+    semAgarrar: { distMax: 8.0, velMin: 22.0 },
     /*
     Probabilidade base por TIPO de defesa, a v = vRef e extensão 0. É a mesma
     estrutura que as quatro fórmulas antigas tinham, agora explícita e com o

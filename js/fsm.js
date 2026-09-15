@@ -1060,7 +1060,14 @@ class PlayerFSM {
                 a rolar para trás da baliza (ver cantoBolaAlvo em match.js), e
                 cruzar dali era cruzar de um sítio onde ela não está.
                 */
-                if (Match.setPieceTimer > ESPERA_APOS_REPOSICAO && !Match.cantoBolaAlvo) {
+                /*
+                O canto espera mais do que as outras reposicoes -- ver
+                ESPERA_COBRANCA_CANTO (config/tactics.js).
+                */
+                const esperaCobranca = (Match.state === 'CORNER_KICK' &&
+                    typeof ESPERA_COBRANCA_CANTO === 'number')
+                    ? ESPERA_COBRANCA_CANTO : ESPERA_APOS_REPOSICAO;
+                if (Match.setPieceTimer > esperaCobranca && !Match.cantoBolaAlvo) {
                     if (Match.state === 'CORNER_KICK') {
                         const lado = Math.sign(Match.ball.position.x) || 1;
                         const teammates = (p.team === 'TeamA') ? Match.players : Match.opponents;

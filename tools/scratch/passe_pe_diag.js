@@ -15,7 +15,9 @@ for (const [nome, norm] of [['armacao', (3) / 7], ['contacto', contacto], ['pos-
     const lado = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
     // Angulo entre a NORMAL da face interna do pe direito (o seu -X) e o eixo
     // de ataque do corpo (+Z). 0 grau = a face interna aponta para onde a bola vai.
-    const interna = lado.clone().multiplyScalar(-1);
+    // A perna que bate vive em x NEGATIVO no rig, portanto a face virada para
+    // o eixo do corpo -- a que bate na bola -- e o +X do pe.
+    const interna = lado.clone();
     const angInterna = Math.acos(THREE.MathUtils.clamp(interna.dot(new THREE.Vector3(0, 0, 1)), -1, 1)) * 180 / Math.PI;
     const angBico = Math.acos(THREE.MathUtils.clamp(frente.dot(new THREE.Vector3(0, 0, 1)), -1, 1)) * 180 / Math.PI;
     console.log(nome.padEnd(12) + ' face interna a ' + angInterna.toFixed(0).padStart(3) +

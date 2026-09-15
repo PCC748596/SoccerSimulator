@@ -40,6 +40,9 @@ const GkDive = {
     _cima: new THREE.Vector3(0, 1, 0),
     _eixoZ: new THREE.Vector3(0, 0, 1),
     _qTilt: new THREE.Quaternion(),
+    // A viragem da barriga, que entra por cima do tombo no fim do voo.
+    _qFrente: new THREE.Quaternion(),
+    _eixoY: new THREE.Vector3(0, 1, 0),
     // Eixo da queda, montado uma vez por mergulho no `iniciar`.
     _eixoQueda: new THREE.Vector3(),
 
@@ -118,9 +121,12 @@ const GkDive = {
 
         Ver GoalkeeperDive.pesoQuedaFrente para o porque do numero.
         */
-        const pesoFrente = (typeof GoalkeeperDive.pesoQuedaFrente === 'number')
-            ? GoalkeeperDive.pesoQuedaFrente : 0;
-        p.dive.eixoQueda = new THREE.Vector3(pesoFrente, 0, -p.dive.ladoLocal).normalize();
+        /*
+        O eixo do TOMBO e so o lateral. A picada para a frente deixou de viver
+        aqui: ela entra por cima, e so no fim do voo -- ver `fracFrente` e
+        `anguloFrente` no GoalkeeperDive, com o pedido e as fotografias.
+        */
+        p.dive.eixoQueda = new THREE.Vector3(0, 0, -p.dive.ladoLocal).normalize();
     },
 
     /*
@@ -395,6 +401,29 @@ const GkDive = {
         */
         const eixo = d.eixoQueda || this._eixoQueda.set(0, 0, -d.ladoLocal);
         this._qTilt.setFromAxisAngle(eixo, d.ang);
+
+        /*
+        E A BARRIGA VIRA-SE PARA BAIXO SO NO FIM -- ver `fracFrente` no
+        GoalkeeperDive. No voo e de lado; a picada entra nos ultimos 30% e
+        completa-se ao tocar no relvado, que e o que lhe da apoio para se
+        levantar. Ao levantar desfaz-se com o tombo, pelo mesmo factor.
+        */
+        let fracFrente = 0;
+        const FF = (typeof D.fracFrente === 'number') ? D.fracFrente : 0.7;
+        if (d.fase === 'voo') {
+            const kf = Math.min(1, d.t / Math.max(0.001, d.tVoo));
+            fracFrente = Math.max(0, (kf - FF) / Math.max(0.001, 1 - FF));
+        } else if (d.fase === 'chao') {
+            fracFrente = 1;
+        } else if (d.fase === 'levantar') {
+            fracFrente = (d.angMax > 0) ? Math.max(0, Math.min(1, d.ang / d.angMax)) : 0;
+        }
+        if (fracFrente > 0) {
+            const angF = fracFrente * ((typeof D.anguloFrente === 'number') ? D.anguloFrente : 0.62);
+            this._qFrente.setFromAxisAngle(this._eixoY, angF * d.ladoLocal);
+            this._qTilt.multiply(this._qFrente);
+        }
+
         corpo.quaternion.copy(d.qFacing).multiply(this._qTilt);
 
         /*
@@ -603,7 +632,9 @@ const GkDive = {
             tec: p.skillFor('TEC'),
             vChegada: Match.ballVel.length(),
             extensao: extensao,
-            altura: Math.max(0, Match.ball.position.y - GkCatchModel.alturaPeito)
+            altura: Math.max(0, Match.ball.position.y - GkCatchModel.alturaPeito),
+            // De onde saiu o remate -- ver `semAgarrar` no GkCatchModel.
+            dist: p.gkDistRemate
         });
 
         Match.lastTouchedPlayer = p;

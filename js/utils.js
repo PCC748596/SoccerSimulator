@@ -2972,6 +2972,16 @@ function resolverDefesaGK(o) {
     pAgarra = Math.max(M.minAgarra, Math.min(M.maxAgarra, pAgarra));
 
     /*
+    REMATE FORTE E DE PERTO: defende-se, mas nao se segura. Ver
+    `GkCatchModel.semAgarrar`, que tem o pedido e a razao. `o.dist` e a
+    distancia a que o remate saiu -- quem chama passa o `gkDistRemate`.
+    */
+    const SA = M.semAgarrar;
+    if (SA && typeof o.dist === 'number' && o.dist <= SA.distMax && v >= SA.velMin) {
+        pAgarra = 0;
+    }
+
+    /*
     ROÇAR: só em bolas rápidas e esticadas. O `rocarPesoExt` reparte a culpa
     entre a velocidade e a extensão — uma bola a 26 m/s ao peito ainda se
     espalma; a mesma bola na ponta dos dedos é que passa.

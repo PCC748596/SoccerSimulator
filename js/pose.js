@@ -431,14 +431,23 @@ function aplicarPoseRemate(rig, K) {
     passe está sendo dado de bico e não com o lado do pé"*. Abrindo a anca, a
     perna roda para fora e quem fica virado para a bola é a face interna.
 
-    O sinal segue a perna e sai da MEDIÇÃO, não da intuição: neste rig um `y`
-    positivo roda a perna direita de modo a pôr a face interna do pé virada
-    para a frente (ver tools/scratch/passe_pe_diag.js, que mede o ângulo entre
-    essa face e a direcção do passe). Com o sinal trocado dá o contrário —
-    medido, a ponta do pé a 40 graus do alvo e a face interna a 128.
+    O SINAL ESTEVE TROCADO, e o relato apanhou-o: *"na hora do passe os
+    jogadores estão a dobrar o pé para dentro e não para fora; o ângulo do pé
+    tem de ser a SAIR do corpo, na direcção contrária da perna oposta"*.
+
+    A medição que o escolheu estava certa na conta e errada na PREMISSA: eu
+    tinha chamado "face interna" ao lado -X do pé, e neste rig a perna direita
+    vive em x NEGATIVO (`criarPerna(-0.4)`), portanto a face virada para o eixo
+    do corpo — a que bate na bola num passe de trivela interior — é o +X. Com
+    o sinal antigo, quem ficava virada para o alvo era a face de FORA e a ponta
+    do pé rodava para dentro, contra a perna de apoio: medido com
+    `tools/scratch/passe_pe_lado.js`, ponta a x=+0.98 no contacto.
+
+    Invertido, a anca e o pé abrem para FORA: a ponta sai do corpo e quem
+    chega à bola é a face interna, que é o gesto do pedido.
     */
     const abrirAnca = K.coxaChuteY || 0;
-    pernaC.rotation.set(K.coxaChute, chuteR ? abrirAnca : -abrirAnca, 0);
+    pernaC.rotation.set(K.coxaChute, chuteR ? -abrirAnca : abrirAnca, 0);
     joelhoC.rotation.set(K.joelhoChute, 0, 0);
     pernaA.rotation.set(K.coxaApoio, 0, 0);
     joelhoA.rotation.set(K.joelhoApoio, 0, 0);
@@ -454,8 +463,8 @@ function aplicarPoseRemate(rig, K) {
     lado do pé; o remate não traz o canal e fica com a postura de sempre.
     */
     const abrirPe = K.peChuteY || 0;
-    rig.lFoot.rotation.set(0, (Math.PI / 16) - (chuteR ? 0 : abrirPe), 0);
-    rig.rFoot.rotation.set(0, -(Math.PI / 16) + (chuteR ? abrirPe : 0), 0);
+    rig.lFoot.rotation.set(0, (Math.PI / 16) + (chuteR ? 0 : abrirPe), 0);
+    rig.rFoot.rotation.set(0, -(Math.PI / 16) - (chuteR ? abrirPe : 0), 0);
 
     aplicarPesECabeca(rig, K);
 }

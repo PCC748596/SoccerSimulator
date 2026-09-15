@@ -51,6 +51,17 @@ não terminou.
 const ESPERA_APOS_REPOSICAO = 3.0;
 
 /*
+O CANTO LEVA MAIS TEMPO A SER COBRADO -- pedido: *"aumenta o tempo de cobranca
+do escanteio em 2 segundos"*.
+
+Um canto nao e uma reposicao qualquer: a area tem de se compor dos dois lados,
+e quem bate ainda vai a pe ate a bandeirola. Os outros lances continuam com a
+espera comum (`ESPERA_APOS_REPOSICAO`); este tem a sua.
+*/
+const ESPERA_COBRANCA_CANTO = ESPERA_APOS_REPOSICAO + 2.0;
+if (typeof window !== 'undefined') window.ESPERA_COBRANCA_CANTO = ESPERA_COBRANCA_CANTO;
+
+/*
 Segundos entre o APITO do árbitro e a saída de bola. O apito autoriza a saída,
 portanto tem de vir ANTES dela — e perto: dado na montagem do kickoff ficava os
 3 s inteiros à frente do toque e lia-se como um apito solto, sem relação com o
