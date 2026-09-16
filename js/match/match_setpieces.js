@@ -1797,30 +1797,35 @@ Object.assign(Match, {
 
         const team = this.setPieceTaker ? this.setPieceTaker.team : null;
         const bate = (team === 'TeamA') ? this.players : this.opponents;
-        const recebe = (team === 'TeamA') ? this.opponents : this.players;
 
         if (team) this.formaDoTiroDeMeta(team, false);
 
         if (!this.golKickProntos) {
             /*
-            AS DUAS EQUIPAS, e nao so a que bate.
+            SO SE ESPERA POR QUEM BATE, e isso esta MEDIDO.
 
-            Esta bandeira nasceu de um relato sobre quem BATE ("os jogadores do
-            time com a bola ainda nao estao se posicionando") e ficou a
-            percorrer so essa metade. A outra metade tem o problema pior: acaba
-            de atacar, esta amontoada na area, e tem 25-30 m para recuar ate ao
-            bloco -- mais do dobro do caminho de quem bate. Ninguem esperava por
-            ela, e o lance era batido com a equipa que recebe ainda em
-            movimento. E a captura do relato.
+            Relato: a equipa que recebe fica amontoada na area e nao se poe no
+            bloco. E verdade, e ela tem 25-30 m para recuar contra os 10-17 de
+            quem bate. A correccao obvia era esperar tambem por ela aqui.
+            Tentou-se, mediu-se, e nao comprou nada:
 
-            O TECTO CONTINUA A MANDAR: o `golKickEsperaPeloBloco` do
-            match_loop.js bate na mesma ao fim de `esperaMaxPelaEquipa` (8 s),
-            portanto ninguem pode congelar o lance por ficar preso -- agora sao
-            22 jogadores a poder ficar presos em vez de 11, e e exactamente por
-            isso que o tecto existe.
+                                     espera pelas 2      so por quem bate
+                quem recebe aos 5 s       2.5 m               2.5 m
+                cobranca                 11.1 s               7.4 s
+                agarradas em 20 min          4                   8
+
+            Posicionamento IGUAL, 3.7 s a mais por lance, e metade das
+            recuperacoes do guarda-redes por jogo — o `gk_agarra_com_a_mao`
+            reprovava com 4 agarradas contra as 5 que exige.
+
+            O ganho todo estava noutro sitio: no RITMO a que quem recebe anda
+            (ver `escrever` no formaDoTiroDeMeta, que passou do `4.0` fixo para
+            o `RepositionPace.cruzeiro`). Com eles a correr a serio chegam ao
+            lugar dentro dos segundos que o lance ja tinha, sem ninguem ter de
+            os esperar.
             */
             const noLugar = (p) => p.role === 'gk' || p.fsm.currentState === 'SET_PIECE_WAIT';
-            if (bate.every(noLugar) && recebe.every(noLugar)) this.golKickProntos = true;
+            if (bate.every(noLugar)) this.golKickProntos = true;
         } else {
             this.golKickEspera += dt;
         }
