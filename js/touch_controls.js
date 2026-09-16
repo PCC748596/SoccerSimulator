@@ -352,7 +352,9 @@ const TouchControls = {
         if (typeof orbitControls !== 'undefined' && orbitControls && window.cameraMode === 'orbit') {
             orbitControls.zoomBy(delta);
         } else {
-            window.cameraZoom = THREE.MathUtils.clamp((window.cameraZoom || 1.0) + delta, 0.24, 2.5);
+            window.cameraZoom = THREE.MathUtils.clamp((window.cameraZoom || 1.0) + delta,
+                (typeof CameraZoom !== 'undefined') ? CameraZoom.min : 0.24,
+                (typeof CameraZoom !== 'undefined') ? CameraZoom.max : 2.5);
             if (typeof orbitControls !== 'undefined' && orbitControls) {
                 orbitControls.radius = 80 * window.cameraZoom;
             }

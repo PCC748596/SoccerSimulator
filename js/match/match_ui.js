@@ -275,6 +275,37 @@ Object.assign(Match, {
         }
 
         /*
+        E NÃO SE CHEGA A MENOS DE `distanciaMinima` DO QUE SE ESTÁ A VER.
+
+        Pedido: *"ajusta o zoom in máximo para uma distância de 5 metros dos
+        jogadores"*. O `cameraZoom` multiplica a posição inteira, e cada vista
+        parte de uma distância diferente (70 m na TV Centro, 38 na Lateral
+        Móvel, 57 na Lateral TV, 94 na Tática Cima), portanto o mesmo
+        multiplicador dá quatro aproximações diferentes — e um piso no
+        multiplicador não é um limite em metros.
+
+        O limite é aplicado aqui, à distância já calculada e antes da
+        suavização: se o zoom a levou para dentro dos 5 m, ela é empurrada de
+        volta ao longo da MESMA direcção, que é o que mantém o enquadramento da
+        vista (o ângulo não muda, só a aproximação pára). Ver CameraZoom
+        (config/tactics.js).
+        */
+        {
+            const Z = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
+            const minDist = Z ? Z.distanciaMinima : 5.0;
+            const dx = targetPos.x - lookTarget.x;
+            const dy = targetPos.y - lookTarget.y;
+            const dz = targetPos.z - lookTarget.z;
+            const d = Math.hypot(dx, dy, dz);
+            if (d > 1e-4 && d < minDist) {
+                const k = minDist / d;
+                targetPos.set(lookTarget.x + dx * k,
+                    lookTarget.y + dy * k,
+                    lookTarget.z + dz * k);
+            }
+        }
+
+        /*
         Interpolação de posição e de foco, AO TEMPO e não ao frame.
 
         Era `lerp(alvo, 0.05)` por frame: 5% de cada vez, quantas vezes o

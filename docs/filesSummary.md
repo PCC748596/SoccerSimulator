@@ -275,15 +275,32 @@ desapareceram — 13 por 30 min passaram a 8. A defesa DESENHADA (penálti, falt
 directa) está de fora das duas regras: ali o desfecho foi sorteado e o gesto é
 para se ver.
 
-#### As bancadas a 7 metros
+#### As bancadas a 12 metros
 
-Pedido: afastar as arquibancadas para 7 m das linhas laterais (eram 4.5). Os
-três recuos estavam escritos à mão nos sítios onde se constrói cada bancada, e o
-das esquinas **duas vezes** — no raio da primeira fila e na âncora do arco.
-Passaram a constantes com a relação explícita, porque o arco da esquina tem de
-encostar na lateral e no fundo ao mesmo tempo: subir só o recuo lateral abria
-uma fenda na esquina. Medido depois: primeira fila lateral a **7.00 m**, fundo
-intacto a 5.50.
+Pedido, em dois passos: primeiro 7 m nas laterais (eram 4.5), depois **12 m nas
+laterais E nos fundos** (o fundo estava em 5.5). Os três recuos estavam escritos
+à mão nos sítios onde se constrói cada bancada, e o das esquinas **duas vezes** —
+no raio da primeira fila e na âncora do arco. Passaram a constantes
+(`RECUO_LATERAL`, `RECUO_FUNDO`, `RAIO_PRIMEIRA_FILA`, em match_setup.js) com a
+relação explícita, porque o arco da esquina tem de encostar na lateral e no
+fundo ao mesmo tempo: subir só o recuo lateral abria uma fenda na esquina. Foi
+essa arrumação que fez o segundo pedido ser duas linhas. Medido: primeira fila a
+**12.00 m** dos dois lados.
+
+#### O zoom pára a 5 metros
+
+Pedido: *"ajusta o zoom in máximo para uma distância de 5 metros dos
+jogadores"*. O `cameraZoom` multiplica a POSIÇÃO inteira da câmara, e cada vista
+parte de uma distância diferente — 70 m na TV Centro, 38 na Lateral Móvel, 57 na
+Lateral TV, 105 na Tática Cima —, portanto um piso no multiplicador daria quatro
+aproximações diferentes e não um limite em metros. O limite (`CameraZoom.
+distanciaMinima`) é aplicado à distância JÁ CALCULADA, empurrando a câmara de
+volta ao longo da mesma direcção: o ângulo da vista não muda, só a aproximação
+pára. O piso do multiplicador passou a existir apenas para os 5 m serem
+ALCANÇÁVEIS na vista mais afastada — 0.05 não chegava (parava a 5.25 m na Tática
+Cima), ficou 0.04. Os quatro números repetidos pelos dois ficheiros de controlos
+passaram a sair do `CameraZoom`. Medido nas quatro vistas com
+`tools/scratch/zoom_distancia.js`: **5.00 m** em todas.
 
 #### Três testes recalibrados, e a razão de cada um
 
@@ -9246,6 +9263,7 @@ padrão de fluxograma pro PositionBT/PlayerBT.
 | Tempo de espera do lateral / do canto | `config/tactics.js` → `ESPERA_COBRANCA_LATERAL` / `ESPERA_COBRANCA_CANTO` / `ESPERA_APOS_REPOSICAO` |
 | O replay automático do golo (duração, câmara, ON/OFF) | `match_replay.js` → `REPLAY_GOLO` e `replayDoGolo`; botão `#btn-replay-auto` no painel direito |
 | Distância das bancadas às linhas | `match_setup.js` → `RECUO_LATERAL` / `RECUO_FUNDO` / `RAIO_PRIMEIRA_FILA` (o arco da esquina depende dos três) |
+| Quão perto a câmara chega, e os limites do zoom | `config.js` → `CameraZoom.distanciaMinima` / `.min` / `.max`; o limite é aplicado no `updateCamera` (`match_ui.js`) |
 | Os limites das zonas da falta (defesa/meio/ataque) | `config.js` → `FreeKickModel.setores`; `utils.js` → `setorDaFalta` |
 | Alvos e altura do cruzamento da falta lateral | `config.js` → `FreeKickModel.cruzamentos`; `utils.js` → `cruzamentoDeFalta` |
 | De que distância se bate directo à baliza | `config.js` → `FreeKickModel.remateDistMax` e `.remateAnguloTrave` |

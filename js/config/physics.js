@@ -451,6 +451,28 @@ Começa só pelo PASS; os valores replicam exactamente o timing antigo
 (this.timer<0.08 / >=0.2) para não mudar o "feel" ao migrar de arquitectura.
 */
 
+/*
+=============================================================================
+AS DUAS CORES DO RELVADO
+=============================================================================
+As faixas do corte alternam entre estes dois tons — `clara` é a faixa que o
+rolo deixou a favor da luz, `escura` a do sentido contrário. Estavam escritas à
+mão dentro do `createField` (match_setup.js), a meio da construção da textura, e
+eram dois `#hex` soltos que ninguém encontrava sem saber onde procurar.
+
+TROCAR O VERDE É TROCAR ESTAS DUAS LINHAS. A textura é gerada num canvas de
+16x512 e o resto (o número de faixas, a largura de cada uma, a repetição)
+não depende da cor.
+
+Os valores actuais vieram de duas amostras dadas pelo utilizador. Se o tom não
+bater certo com a amostra, é aqui — e só aqui.
+*/
+const RelvaCores = {
+    clara: '#6E9B37',    // a faixa a favor do corte
+    escura: '#4E8F3C'    // a do sentido contrário
+};
+if (typeof window !== 'undefined') window.RelvaCores = RelvaCores;
+
 const CornerFlag = {
     raioArco: 1.0,        // regulamento
     alturaPoste: 1.5,     // regulamento: minimo 1.5 m

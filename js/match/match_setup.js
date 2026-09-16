@@ -172,7 +172,8 @@ Object.assign(Match, {
             let nextY = currentY + stripeHeights[i];
             let yStartPix = Math.round((currentY / gramaComp) * 512);
             let yEndPix = Math.round((nextY / gramaComp) * 512);
-            ctxR.fillStyle = (i % 2 === 0) ? '#4B8B3B' : '#428032';
+            // As duas cores vivem no config: ver RelvaCores (config/physics.js).
+            ctxR.fillStyle = (i % 2 === 0) ? RelvaCores.clara : RelvaCores.escura;
             ctxR.fillRect(0, yStartPix, 16, yEndPix - yStartPix);
             currentY = nextY;
         }
@@ -527,8 +528,9 @@ Object.assign(Match, {
         =================================================================
         A QUE DISTÂNCIA DO CAMPO É QUE A BANCADA COMEÇA
         =================================================================
-        Pedido: *"afasta as arquibancadas para 7 metros das linhas laterais"*.
-        Eram 4.5.
+        Pedido: *"ajusta as arquibancadas para 12 metros das linhas laterais e de
+        fundo do campo"*. Eram 4.5 na lateral e 5.5 no fundo; passaram por 7.0 na
+        lateral (primeiro pedido) e estão agora nos 12 nos dois lados.
 
         Os três números estavam escritos à mão nos sítios onde se constrói cada
         bancada, e o das esquinas estava escrito DUAS vezes (no raio da primeira
@@ -544,8 +546,8 @@ Object.assign(Match, {
         Sem essa última conta, subir o recuo lateral empurrava a esquina para
         fora também em Z e ela deixava de bater com a bancada de fundo.
         */
-        const RECUO_LATERAL = 7.0;
-        const RECUO_FUNDO = 5.5;
+        const RECUO_LATERAL = 12.0;
+        const RECUO_FUNDO = 12.0;
         const RAIO_PRIMEIRA_FILA = 6.5;
 
         const BANCADA_X = CAMPO_LARG / 2 + RECUO_LATERAL;

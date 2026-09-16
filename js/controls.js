@@ -91,7 +91,11 @@ class SimpleOrbitControls {
     }
 
     onWheel(e) {
-        window.cameraZoom = THREE.MathUtils.clamp((window.cameraZoom || 1.0) + e.deltaY * 0.001, 0.24, 2.5);
+        const Z = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
+        const passo = Z ? Z.passoRoda : 0.001;
+        window.cameraZoom = THREE.MathUtils.clamp(
+            (window.cameraZoom || 1.0) + e.deltaY * passo,
+            Z ? Z.min : 0.24, Z ? Z.max : 2.5);
         this.radius = 80 * window.cameraZoom;
         e.preventDefault();
     }
@@ -150,7 +154,9 @@ class SimpleOrbitControls {
             const currentDistance = this.getPinchDistance(e);
             if (currentDistance > 0 && this.initialPinchDistance > 0) {
                 const scale = this.initialPinchDistance / currentDistance;
-                window.cameraZoom = THREE.MathUtils.clamp(this.initialZoom * scale, 0.24, 2.5);
+                window.cameraZoom = THREE.MathUtils.clamp(this.initialZoom * scale,
+                    (typeof CameraZoom !== 'undefined') ? CameraZoom.min : 0.24,
+                    (typeof CameraZoom !== 'undefined') ? CameraZoom.max : 2.5);
                 this.radius = 80 * window.cameraZoom;
             }
 
@@ -223,7 +229,9 @@ class SimpleOrbitControls {
     }
 
     zoomBy(delta) {
-        window.cameraZoom = THREE.MathUtils.clamp((window.cameraZoom || 1.0) + delta, 0.24, 2.5);
+        window.cameraZoom = THREE.MathUtils.clamp((window.cameraZoom || 1.0) + delta,
+            (typeof CameraZoom !== 'undefined') ? CameraZoom.min : 0.24,
+            (typeof CameraZoom !== 'undefined') ? CameraZoom.max : 2.5);
         this.radius = 80 * window.cameraZoom;
         this.updateCameraPosition();
     }

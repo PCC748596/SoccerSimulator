@@ -196,6 +196,42 @@ const MatchDuration = {
 
 window.cameraMode = 'lateraltv';
 window.cameraZoom = 1.0;
+
+/*
+=============================================================================
+OS LIMITES DO ZOOM
+=============================================================================
+O `cameraZoom` multiplica a POSIÇÃO inteira da câmara (ver `updateCamera`,
+match_ui.js), portanto a distância ao que se está a ver escala com ele — e
+escala de forma DIFERENTE em cada vista, porque cada uma parte de um sítio:
+
+    vista          distância a zoom 1
+    TV Centro           70 m
+    Lateral Móvel       38 m
+    Lateral TV          57 m
+    Tática Cima        105 m     (depende do rácio do ecrã)
+
+Por isso o piso do zoom não pode ser a resposta ao pedido *"ajusta o zoom in
+máximo para uma distância de 5 metros dos jogadores"*: um piso só dava cinco
+distâncias diferentes. O piso existe para o zoom não ir a zero (e com ele a
+posição colapsar para dentro do alvo, que é onde a projecção deixa de ter
+sentido); quem manda nos cinco metros é o `distanciaMinima`, aplicado à
+distância JÁ CALCULADA, seja qual for a vista.
+
+O `min` é escolhido para os 5 m serem ALCANÇÁVEIS na vista mais afastada: a
+Tática Cima precisa de 5/105 = 0.048, e por isso 0.05 não chegava — parava a
+5.25 m. Medido nas quatro vistas com `tools/scratch/zoom_distancia.js`.
+
+`distanciaMinima` fica acima do `near` da câmara (0.1 m, ver main.js), portanto
+não há nada a ser cortado pelo plano de recorte.
+*/
+const CameraZoom = {
+    min: 0.04,              // piso do multiplicador; os 5 m vêm do de baixo
+    max: 2.5,
+    distanciaMinima: 5.0,   // metros, o mais perto que a câmara chega do alvo
+    passoRoda: 0.001        // por unidade de `deltaY` da roda do rato
+};
+if (typeof window !== 'undefined') window.CameraZoom = CameraZoom;
 /*
 Arranca EM PAUSA (pedido): o jogo abre parado e só corre quando se carrega
 em Continue / ▶. Antes começava a jogar sozinho enquanto ainda se estavam a
