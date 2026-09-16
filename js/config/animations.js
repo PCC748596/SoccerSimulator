@@ -59,7 +59,38 @@ const ActionAnimClips = {
     // Domínio de bola orientado pela direita (ver BallControlRightClip)
     // Contacto e toque de saída no frame 5 de 8 (t = 4/7 ≈ 0.57)
     ballControlRight: { duration: 0.36, contactTime: 4 / 7 },
-    ball_control_right: { duration: 0.36, contactTime: 4 / 7 }
+    ball_control_right: { duration: 0.36, contactTime: 4 / 7 },
+    /*
+    CHUTE DE BOLA PARADA (ver PlayerKickClip) — tiro de meta, falta e penálti.
+
+    O contacto é o ÚLTIMO keyframe, portanto `contactTime` é 1: são 4 frames e
+    o quarto é a batida. Não há follow-through, a bola sai quando o gesto
+    acaba. O ActionState aceita-o — o `norm < contactTime` do update falha
+    quando `norm` chega a 1 e o contacto dispara nesse frame.
+
+    A DURAÇÃO É UM TECTO MEDIDO, e não um gosto. Era 0.25 s no clip antigo do
+    guarda-redes; quanto mais longo, melhor se lê a armação, mas cada tiro de
+    meta atrasa o jogo todo. Varrido contra os dois testes de medição que
+    apanham isso — `saida_de_bola_ritmo` (tecto 12% de leituras abaixo de
+    3 m/s enquanto o guarda-redes segura) e `gk_agarra_com_a_mao` (mínimo 5
+    agarradas em 20 min de jogo):
+
+        duracao   abaixo de 3 m/s   agarradas
+        0.25 s          5%             10
+        0.35 s          8%              9
+        0.45 s         10%              7
+        0.55 s          8%             10     <- escolhido
+        0.70 s         14%  REPROVA     4  REPROVA
+
+    NÃO É MONÓTONO: 0.55 mede melhor que 0.45. A simulação é caótica e uma
+    leitura por semente vale pouco sozinha — é a mesma fragilidade que está
+    escrita no cabeçalho desses dois testes. O que não é ruído é o 0.70 falhar
+    os DOIS ao mesmo tempo, e por larga margem.
+
+    0.55 s dá aos 4 keyframes 0.183 s entre cada um. Quem quiser o gesto mais
+    lento mexe aqui, e volta a correr os dois testes.
+    */
+    playerKick: { duration: 0.55, contactTime: 1 }
 };
 
 /*
@@ -432,6 +463,68 @@ const GoalkeeperGroundKickClip = {
 };
 
 
+
+/*
+=============================================================================
+PLAYER_KICK_CLIP — chute de bola parada, 4 keyframes
+=============================================================================
+UMA animação para todos os chutes de bola parada. Não partilha nada com o
+ShotClip (o remate de jogo corrido) nem com o GoalkeeperGroundKickClip: tem
+keyframes próprios, função de pose própria e amostrador próprio.
+
+Os 4 keyframes SÃO as 4 imagens de referência, uma a uma, sem frames
+intermédios inventados:
+
+    0  GoalKick1   aproximação: corpo baixo e inclinado sobre o apoio,
+                   cabeça na bola, perna de chute a começar a recuar
+    1  GoalKick2   passada: perna de chute atrás e levantada, joelho a
+                   ~85°, braços abertos a equilibrar
+    2  GoalKick3   armação máxima: coxa atrás, joelho fechado com o
+                   calcanhar junto ao glúteo, tronco à frente
+    3  GoalKick4   CONTACTO: perna de chute à frente e BAIXA (o pé está à
+                   altura da bola, não no ar), perna de apoio atrás e no ar,
+                   braços na horizontal, corpo projectado
+
+A PERNA DE CHUTE É SEMPRE A MESMA — a direita, nos quatro keyframes. O
+`coxaChute` faz 0.45 -> 0.65 -> 0.95 -> -0.70: recua de forma monótona e
+depois vem à frente uma vez só. Nada nesta tabela troca de perna, e é de
+propósito: o que se via antes era o ciclo de corrida a escrever as pernas por
+cima do clip, com a passada a alternar por baixo do gesto.
+
+CONTACTO NO ÚLTIMO KEYFRAME (`contactFrame: 4`, t = 1.0). São 4 frames e o
+quarto é o contacto, portanto não há follow-through nenhum — a bola sai no
+instante em que o gesto acaba.
+
+Convenção de sinais (factos do rig, ver buildBody em player.js):
+    coxaChute   > 0  perna para TRÁS      < 0  para a FRENTE
+    joelhoChute > 0  joelho dobra, calcanhar sobe
+    chest       > 0  tronco para a FRENTE
+    leanZ       < 0  corpo inclina sobre o pé de apoio
+    bracoLz     > 0  abre o braço esquerdo   bracoRz < 0  abre o direito
+    altura           deslocação vertical do corpo, em metros
+=============================================================================
+*/
+const PlayerKickClip = {
+    pernaChute: 'r',
+    contactFrame: 4,
+    frames: [
+        // 0 — GoalKick1. Corpo baixo (`altura` -0.08) e muito inclinado sobre
+        // o apoio, joelho de apoio dobrado, cabeça a olhar a bola no chão.
+        { leanZ: -0.30, pitchX: -0.10, chest: 0.35, coxaChute: 0.45, joelhoChute: 0.80, coxaChuteZ: -0.05, coxaApoio: -0.25, joelhoApoio: 0.40, bracoLx: -0.30, bracoLz: 0.70, bracoRx: 0.20, bracoRz: -0.60, cotoveloL: -0.60, cotoveloR: -0.50, peRx: -0.10, peLx: 0.10, cabecaX: -0.45, altura: -0.08 },
+        // 1 — GoalKick2. A passada: o corpo levanta-se do agachamento, a perna
+        // de chute sobe atrás com o joelho a fechar, os braços abrem.
+        { leanZ: -0.15, pitchX: -0.05, chest: 0.18, coxaChute: 0.65, joelhoChute: 1.45, coxaChuteZ: -0.10, coxaApoio: -0.30, joelhoApoio: 0.25, bracoLx: -0.50, bracoLz: 1.15, bracoRx: 0.40, bracoRz: -1.05, cotoveloL: -0.40, cotoveloR: -0.35, peRx: -0.25, peLx: 0.05, cabecaX: -0.35, altura: -0.02 },
+        // 2 — GoalKick3. Armação máxima. `joelhoChute` 2.20 são 126°, o
+        // calcanhar junto ao glúteo que a imagem mostra; o tecto anatómico do
+        // joelho são 145° (JointLimits.knee.x).
+        { leanZ: -0.20, pitchX: -0.22, chest: 0.40, coxaChute: 0.95, joelhoChute: 2.20, coxaChuteZ: -0.18, coxaApoio: -0.05, joelhoApoio: 0.15, bracoLx: -0.65, bracoLz: 1.30, bracoRx: 0.55, bracoRz: -1.20, cotoveloL: -0.30, cotoveloR: -0.25, peRx: -0.40, peLx: 0.00, cabecaX: -0.40, altura: 0.00 },
+        // 3 — GoalKick4. CONTACTO. A abertura das pernas é `coxaChute` -0.70
+        // (40° à frente) contra `coxaApoio` 0.75 (43° atrás), 83° no total — é
+        // a abertura grande da imagem. O tronco ABRE para trás (`chest`
+        // negativo) e o corpo sobe 0.18 m: na imagem os dois pés estão no ar.
+        { leanZ: -0.10, pitchX: 0.15, chest: -0.10, coxaChute: -0.70, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 0.75, joelhoApoio: 0.45, bracoLx: 0.00, bracoLz: 1.55, bracoRx: -0.10, bracoRz: -1.55, cotoveloL: -0.05, cotoveloR: -0.05, peRx: -0.25, peLx: -0.35, cabecaX: -0.20, altura: 0.18 }
+    ]
+};
 
 /*
 =============================================================================

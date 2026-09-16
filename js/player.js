@@ -359,21 +359,21 @@ class FootballPlayer {
     }
 
     /*
-    Captura a pose e a pose de corpo com que a corrida de aproximação termina,
-    para o clip de chute do chão entrar por mistura em vez de corte seco.
+    Captura a POSICAO e a ORIENTACAO com que a corrida de aproximacao termina,
+    para o corpo deslizar ate ao lado da bola em vez de la teleportar.
 
-    Guarda-se: a pose das articulações que o clip escreve, a posição/rotação da
-    bacia (o clip translada-a para pivotar no pé de apoio), a posição planar do
-    corpo (que tem de deslizar até plantX/plantZ, não teleportar) e o
-    quaternião (a corrida olha para a bola, o chute olha campo adentro).
+    JA NAO CAPTURA A POSE DAS ARTICULACOES. Capturava-a, e o ramo do tiro de
+    meta misturava-a canal a canal com o keyframe do clip: duas animacoes a
+    escrever o mesmo esqueleto no mesmo frame. Como a pose capturada vinha do
+    ciclo de corrida, que alterna as pernas, o chute trocava de perna a meio.
+
+    A aproximacao passou a ser parte do proprio clip (PlayerKickClip,
+    keyframes 0 e 1), portanto nao ha nada de onde misturar o esqueleto. O que
+    resta aqui e so o corpo: a posicao planar, que desliza ate plantX/plantZ, e
+    o quaterniao, porque a corrida olha para a BOLA e o gesto olha campo
+    adentro.
     */
     iniciarBlendChuteChao(gkCorpo, gkRig, plantX, plantZ) {
-        const chuteR = (GoalkeeperGroundKickClip.pernaChute === 'r');
-        const pernaC = chuteR ? gkRig.rLeg : gkRig.lLeg;
-        const joelhoC = chuteR ? gkRig.rKnee : gkRig.lKnee;
-        const pernaA = chuteR ? gkRig.lLeg : gkRig.rLeg;
-        const joelhoA = chuteR ? gkRig.lKnee : gkRig.rKnee;
-
         this.gkKickBlend = {
             t: 0,
             w: 0,
@@ -382,26 +382,7 @@ class FootballPlayer {
             origemX: gkCorpo.position.x,
             origemZ: gkCorpo.position.z,
             quatOrigem: gkCorpo.quaternion.clone(),
-            quatAlvo: null,
-            pose: {
-                pelvisPx: gkRig.pelvis.position.x,
-                pelvisPy: gkRig.pelvis.position.y,
-                pelvisRx: gkRig.pelvis.rotation.x,
-                pelvisRz: gkRig.pelvis.rotation.z,
-                chest: gkRig.chest.rotation.x,
-                coxaC: pernaC.rotation.x,
-                coxaCz: pernaC.rotation.z,
-                joelhoC: joelhoC.rotation.x,
-                coxaA: pernaA.rotation.x,
-                joelhoA: joelhoA.rotation.x,
-                bracoLx: gkRig.lArm.rotation.x,
-                bracoLz: gkRig.lArm.rotation.z,
-                bracoRx: gkRig.rArm.rotation.x,
-                bracoRz: gkRig.rArm.rotation.z,
-                cotoveloL: gkRig.lElbow.rotation.x,
-                cotoveloR: gkRig.rElbow.rotation.x,
-                corpoY: gkCorpo.position.y
-            }
+            quatAlvo: null
         };
     }
 
@@ -487,7 +468,8 @@ class FootballPlayer {
         if (this.role === 'gk') return;
         if (this.jumpTimer > 0) return;                    // o cabeceio escreve a cabeça
         const st = this.fsm ? this.fsm.currentState : null;
-        if (st === 'SHOOT' || st === 'LATERAL' || st === 'SLIDE_TACKLE' ||
+        if (st === 'SHOOT' || st === 'SET_PIECE_KICK' || st === 'LATERAL' ||
+            st === 'SLIDE_TACKLE' ||
             st === 'CHEST_CONTROL' || st === 'BALL_CONTROL_RIGHT') return;
 
         const neck = this.rig.neck;
@@ -981,6 +963,17 @@ class FootballPlayer {
     }
 
     /*
+    O FRAME DO CHUTE DE BOLA PARADA. Desenhador PRÓPRIO, e não uma passagem
+    pelo `aplicarFrameRemate`: o PlayerKickClip tem canais que o ShotClip não
+    tem (`leanZ`, `coxaApoio`, `peLx`) e o pivô no pé de apoio, e delegar no
+    remate deixava-os por escrever.
+    */
+    aplicarFramePlayerKick(K) {
+        if (!this.rig) return;
+        aplicarPosePlayerKick(this.rig, K, this.model);
+    }
+
+    /*
     O FRAME DO PASSE. Delega no mesmo desenhador do remate — os campos do
     PassClip são os do ShotClip precisamente para isto. Existe à parte para o
     gesto ser endereçável pelo nome, como os outros, e para o assento no chão
@@ -1071,16 +1064,15 @@ class FootballPlayer {
         no `contactTime` do clip, é que a joga. O `Match.state` só passa a
         'PLAY' nesse instante: até lá é bola parada, e ninguém lhe toca.
 
-        A CORRIDA usa sempre o clip e o estado do REMATE, mesmo quando a falta
-        vai acabar em passe curto. Não é preguiça: o `case 'PASS'` da FSM mata o
-        gesto no primeiro frame em que `!p.hasBall` — e durante a corrida o
-        batedor não tem a bola, ela está parada no relvado. Medido: 13 de 14
-        cobranças nunca chegavam ao contacto.
+        A CORRIDA usa sempre o clip e o estado do CHUTE DE BOLA PARADA, mesmo
+        quando a falta vai acabar em passe curto. Não é preguiça: o
+        `case 'PASS'` da FSM mata o gesto no primeiro frame em que `!p.hasBall`
+        — e durante a corrida o batedor não tem a bola, ela está parada no
+        relvado. Medido: 13 de 14 cobranças nunca chegavam ao contacto.
 
-        O gesto do passe continua a existir; é o `initiatePass`, disparado no
-        contacto, que o cria com o seu próprio ActionState.
+        Era o `'shot'` (remate de jogo corrido); ver PlayerKickClip.
         */
-        const clip = 'shot';
+        const clip = 'playerKick';
         const dur = ActionAnimClips[clip] ? ActionAnimClips[clip].contactTime : (7 / 11);
 
         const paragem = FreeKickModel.paragemNoContacto;
@@ -1094,6 +1086,10 @@ class FootballPlayer {
             z: bolaFalta.z - (dz / distCorrida) * paragem
         };
 
+        // Velocidade a zero: quem move o corpo daqui para a frente e o
+        // `onPrepare`. Ver a nota igual no penalti.
+        this.velocity.set(0, 0, 0);
+
         this.actionState = new ActionState(clip, {
             onPrepare: (ctx, norm) => {
                 const k = Math.min(1, norm / dur);
@@ -1105,7 +1101,7 @@ class FootballPlayer {
                 this.executarFalta(decisao);
             }
         });
-        this.fsm.changeState('SHOOT');
+        this.fsm.changeState('SET_PIECE_KICK');
     }
 
     /*
@@ -1449,7 +1445,7 @@ class FootballPlayer {
     */
     baterPenalti() {
         const shotDuration = ShotClip.duration;
-        const contactTime = ActionAnimClips['shot'] ? ActionAnimClips['shot'].contactTime : (7 / 11);
+        const contactTime = ActionAnimClips['playerKick'] ? ActionAnimClips['playerKick'].contactTime : 1;
         
         /*
         A ÚLTIMA PASSADA, e só ela. Os primeiros metros são ANDADOS durante a
@@ -1481,11 +1477,18 @@ class FootballPlayer {
         debaixo de um ciclo de corrida.
 
         Com a velocidade a zero nenhum dos dois ramos do `animateBones` toca nas
-        pernas em SHOOT (ver as guardas `!== 'SHOOT'`), e o gesto fica visível.
+        pernas em SET_PIECE_KICK (ver `temGestoComClip`), e o gesto fica
+        visivel.
         */
         this.velocity.set(0, 0, 0);
 
-        this.actionState = new ActionState('shot', {
+        /*
+        ERA O `'shot'`, o clip do remate de jogo corrido. O penalti e bola
+        parada e passou a usar o gesto unico de bola parada -- ver
+        PlayerKickClip. O penalti COLOCADO ainda nao tem gesto proprio: ate
+        la sai com esta pancada.
+        */
+        this.actionState = new ActionState('playerKick', {
             onPrepare: (ctx, norm) => {
                 const progress = Math.min(1, norm / contactTime);
                 this.model.position.x = inicioPen.x + (fimPen.x - inicioPen.x) * progress;
@@ -1666,7 +1669,7 @@ class FootballPlayer {
                 if (typeof EventBus !== 'undefined') EventBus.emit('PENALTY_TAKEN', { team: this.team, p: this });
             }
         });
-        this.fsm.changeState('SHOOT');
+        this.fsm.changeState('SET_PIECE_KICK');
     }
 
     resetBonesToDefault() {
@@ -3659,7 +3662,8 @@ class FootballPlayer {
                 é a direita, ver pose.js), por isso o lado sai com sinal.
                 */
                 let avancoPe = 0.6, ladoPe = 0;
-                const gesto = this.fsm && (this.fsm.currentState === 'SHOOT' || this.fsm.currentState === 'PASS');
+                const gesto = this.fsm && (this.fsm.currentState === 'SHOOT' ||
+                    this.fsm.currentState === 'SET_PIECE_KICK' || this.fsm.currentState === 'PASS');
                 if (gesto && this.actionState && typeof PlantarBola !== 'undefined') {
                     const cont = this.actionState.contactTime || 0.6;
                     const u = THREE.MathUtils.clamp(
@@ -3729,6 +3733,7 @@ class FootballPlayer {
         if ((this.role === 'gk' && Match.state !== 'CORNER_KICK') ||
             this.fsm.currentState === 'LATERAL' ||
             (this.fsm.currentState === 'SHOOT' && this.actionState) ||
+            (this.fsm.currentState === 'SET_PIECE_KICK' && this.actionState) ||
             (this.fsm.currentState === 'PASS' && this.actionState && this.passeComClip) ||
             (this.fsm.currentState === 'BALL_CONTROL_RIGHT' && this.actionState)) {
         } else {
@@ -3942,7 +3947,8 @@ class FootballPlayer {
         if (this.jumpCooldown > 0) this.jumpCooldown -= dt;
 
         const s = this.fsm ? this.fsm.currentState : '';
-        const gestoComClip = (s === 'LATERAL' || s === 'SHOOT' || s === 'CROSS' ||
+        const gestoComClip = (s === 'LATERAL' || s === 'SHOOT' || s === 'SET_PIECE_KICK' ||
+            s === 'CROSS' ||
             s === 'BALL_CONTROL_RIGHT' || s === 'SET_PIECE_TAKER');
         if (!gestoComClip && typeof preverBolaEm === 'function' && typeof SaltoCabeceio !== 'undefined') {
 
@@ -4455,7 +4461,7 @@ class FootballPlayer {
         if (s === 'BALL_CONTROL_RIGHT') {
             return;
         }
-        if (s !== 'TACKLE' && s !== 'SLIDE_TACKLE' && s !== 'SHOOT' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
+        if (s !== 'TACKLE' && s !== 'SLIDE_TACKLE' && s !== 'SHOOT' && s !== 'SET_PIECE_KICK' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
             rig.pelvis.rotation.x = lerpTo(rig.pelvis.rotation.x, 0, 0.25);
             rig.pelvis.rotation.y = lerpTo(rig.pelvis.rotation.y, 0, 0.25);
             rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, 0, 0.25);
@@ -4678,7 +4684,7 @@ class FootballPlayer {
         o jogador deitado no chão. Aqui entra sempre em modo neutro (lerp),
         e a camada do peito continua a desenhar por cima como já fazia.
         */
-        if ((speed < 0.1 || this.fsm.currentState === 'CHEST_CONTROL') && this.fsm.currentState !== 'PASS' && this.fsm.currentState !== 'SHOOT' && this.fsm.currentState !== 'BALL_CONTROL_RIGHT') {
+        if ((speed < 0.1 || this.fsm.currentState === 'CHEST_CONTROL') && this.fsm.currentState !== 'PASS' && this.fsm.currentState !== 'SHOOT' && this.fsm.currentState !== 'SET_PIECE_KICK' && this.fsm.currentState !== 'BALL_CONTROL_RIGHT') {
             // O salto leve da matada no peito escreve position.y no próprio
             // fsm.js (case CHEST_CONTROL), que corre antes disto — não pisar.
             if (!(this.fsm.currentState === 'CHEST_CONTROL' && this.peitoHopTimer > 0)) {
@@ -4754,7 +4760,27 @@ class FootballPlayer {
             this.assentarNoChao();
             return;
         }
-        if (speed >= 0.1) {
+        /*
+        O RAMO DA PASSADA NAO TINHA GUARDA DE ESTADO NENHUMA.
+
+        Escrevia `aplicarPosePassada` -- a perna INTEIRA, por atribuicao
+        directa e sem lerp -- sempre que `speed >= 0.1`, fosse qual fosse o
+        estado. O remate e o passe escapavam por acidente e nao por desenho:
+        os dois fazem `velocity.set(0,0,0)` antes de entrar no gesto, portanto
+        `speed` ja vinha a zero e o ramo nunca corria.
+
+        Quem entrasse num gesto com clip ainda em andamento levava o ciclo de
+        corrida por cima do clip durante os ~20 frames que a velocidade demora
+        a decair -- e como o ciclo de corrida ALTERNA as pernas, o que se via
+        era o chute a trocar de perna a meio.
+
+        A guarda e por estado, que e a condicao verdadeira: enquanto houver um
+        gesto com clip a correr, o ciclo de corrida nao escreve pernas.
+        */
+        const gestoComClipAgora = (typeof temGestoComClip === 'function')
+            ? temGestoComClip(this.fsm ? this.fsm.currentState : '')
+            : false;
+        if (speed >= 0.1 && !gestoComClipAgora) {
             let movingBackwards = false;
             let fwd = _v2.set(0, 0, 1).applyQuaternion(this.model.quaternion).normalize();
             let velDir = _v1.copy(this.velocity).normalize();
@@ -5501,7 +5527,7 @@ class FootballPlayer {
                                 this.gkKickTipo = 'chao';
                                 this.gkTempoMergulho = 0;
                                 this.gkKickNorm = 0;
-                                this.gkKickAction = new ActionState('gkPuntChao', {
+                                this.gkKickAction = new ActionState('playerKick', {
                                     onContact: () => this.aliviarForaDaArea()
                                 });
                             } else if (!maosProibidas) {
@@ -6142,7 +6168,7 @@ class FootballPlayer {
                 this.gkKickTipo = 'chao';
                 this.gkTempoMergulho = 0;
                 this.gkKickNorm = 0;
-                this.gkKickAction = new ActionState('gkPuntChao', {
+                this.gkKickAction = new ActionState('playerKick', {
                     onContact: () => {
                         this.kickFromGround();
                         if (typeof EventBus !== 'undefined') {
@@ -6894,45 +6920,36 @@ class FootballPlayer {
                     this.colarBolaAMao(clipLanc.bracoLancamento);
                 }
             } else if (isGroundKick) {
-                // TIRO DE META / BOLA PARADA DO CHÃO (12 frames com pivô no pé de apoio)
-                const K = amostrarClipChuteChaoGR(normK);
-
                 /*
-                MISTURA DE ENTRADA (corrida -> chute).
-                Durante os primeiros GK_GROUND_KICK_BLEND segundos, cada canal
-                sai da pose com que a corrida acabou e vai até ao valor do clip.
-                O peso usa smoothstep para não haver descontinuidade de
-                velocidade em nenhum dos extremos.
+                TIRO DE META — o MESMO gesto de bola parada da falta e do
+                penalti (PlayerKickClip, 4 keyframes das imagens de
+                referencia). Era o GoalkeeperGroundKickClip, exclusivo do
+                guarda-redes, com a pose da corrida misturada por cima durante
+                os primeiros GK_GROUND_KICK_BLEND segundos.
+
+                A MISTURA DA POSE MORREU AQUI. Eram duas animacoes a escrever o
+                mesmo esqueleto no mesmo frame -- o clip e a pose com que a
+                corrida de aproximacao acabou -- e a corrida alterna as pernas.
+                A aproximacao passou a ser parte do proprio clip (keyframes 0 e
+                1), portanto nao ha nada de onde misturar.
+
+                O `gkKickBlend` SOBREVIVE, mas so para o corpo: o pe de apoio
+                nao pode teleportar para o lado da bola, e a orientacao tambem
+                nao muda de golpe (ver o slerp mais abaixo). Deslocacao e
+                rotacao, nunca ossos.
                 */
+                const K = amostrarClipPlayerKick(normK);
+
                 const B = this.gkKickBlend;
                 if (B) {
                     B.t += dt;
                     const u = Math.min(1, B.t / B.dur);
                     B.w = u * u * (3 - 2 * u);
-                    if (u >= 1) this.gkKickBlend = null;
-                }
-                const wB = B ? B.w : 1;
-
-                /*
-                O pé de apoio também não teleporta para o lado da bola: o corpo
-                desliza da posição de chegada da corrida até plantX/plantZ ao
-                mesmo ritmo da mistura da pose.
-                */
-                if (B) {
-                    gkCorpo.position.x = B.origemX + (B.plantX - B.origemX) * wB;
-                    gkCorpo.position.z = B.origemZ + (B.plantZ - B.origemZ) * wB;
+                    gkCorpo.position.x = B.origemX + (B.plantX - B.origemX) * B.w;
+                    gkCorpo.position.z = B.origemZ + (B.plantZ - B.origemZ) * B.w;
                 }
 
-                /*
-                A pose vive no `aplicarPoseChuteChaoGR` do js/pose.js — o pivô
-                no pé de apoio e todos os canais. A mistura vai como argumento
-                para o editor de animação poder chamar a MESMA função sem ter
-                corrida nenhuma de onde vir.
-                */
-                aplicarPoseChuteChaoGR(gkRig, K, gkCorpo, {
-                    poseAnterior: B ? B.pose : null,
-                    peso: wB
-                });
+                aplicarPosePlayerKick(gkRig, K, gkCorpo);
             } else {
                 // CHUTÃO DAS MÃOS (Punt em jogo corrido)
                 const K = amostrarClipChuteGR(normK);
@@ -6967,7 +6984,7 @@ class FootballPlayer {
             a corrida acaba virada para a BOLA, o gesto quer o corpo virado
             campo adentro. Slerp entre as duas com o mesmo peso da pose.
             */
-            if (isGroundKick && this.gkKickBlend) {
+            if (isGroundKick && this.gkKickBlend && this.gkKickBlend.w < 1) {
                 const BQ = this.gkKickBlend;
                 if (!BQ.quatAlvo) BQ.quatAlvo = gkCorpo.quaternion.clone();
                 else BQ.quatAlvo.copy(gkCorpo.quaternion);
@@ -7294,7 +7311,7 @@ class FootballPlayer {
     /*
     CHUTAO DE URGENCIA NUM RECUO COM O PE.
 
-    Mesmo gesto e mesma resolucao do tiro de meta (`gkPuntChao` +
+    Mesmo gesto e mesma resolucao do tiro de meta (`playerKick` +
     `kickFromGround`): a bola sai para a frente, longe. O que muda e so o
     gatilho — aqui nao ha bola parada nem tempo, ha um adversario a chegar e as
     maos proibidas pela Lei 12.
@@ -7309,7 +7326,7 @@ class FootballPlayer {
         this.gkKickTipo = 'chao';
         this.gkTempoMergulho = 0;
         this.gkKickNorm = 0;
-        this.gkKickAction = new ActionState('gkPuntChao', {
+        this.gkKickAction = new ActionState('playerKick', {
             onContact: () => {
                 this.kickFromGround();
                 /*

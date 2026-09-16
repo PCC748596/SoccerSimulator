@@ -820,13 +820,40 @@ function executeShotGameplay(p) {
     }
 }
 
+/*
+ESTE JOGADOR ESTÁ A MEIO DE UM GESTO COM CLIP?
+
+Havia oito sítios espalhados por `player.js` e por este ficheiro a perguntar
+isto com uma cadeia de `=== 'SHOOT' || === 'PASS' || ...`, cada um com a sua
+lista. Quando o `SET_PIECE_KICK` apareceu, acrescentá-lo a oito cadeias à mão
+era garantir que se falhava uma — e falhar uma significa o ciclo de corrida a
+escrever as pernas por cima do clip nesse caminho, que é exactamente o defeito
+que o clip novo existe para corrigir.
+
+As listas não eram idênticas e continuam a não ser: quem tem excepções
+próprias (o salto de cabeceio exclui o `TACKLE`, o reset de ossos inclui o
+`SLIDE_TACKLE`) continua a escrevê-las ao lado desta chamada.
+
+O que este predicado quer dizer, ao certo, é "este estado CONSOME o
+`p.actionState`". O `LATERAL` fica de fora de propósito: o arremesso tem campo
+próprio (`lateralAction`), e deixá-lo aqui mantinha um `actionState` de outro
+gesto vivo ao entrar no lateral — o pendurado que o comentário do `changeState`
+descreve.
+*/
+function temGestoComClip(estado) {
+    return estado === 'SHOOT' || estado === 'SET_PIECE_KICK' || estado === 'PASS' ||
+        estado === 'CROSS' || estado === 'BALL_CONTROL_RIGHT';
+}
+
 class PlayerFSM {
     constructor(player) {
         this.p = player; this.currentState = 'IDLE'; this.timer = 0;
     }
     changeState(newState) {
         if (this.currentState === newState) return;
-        if (this.currentState === 'SLIDE_TACKLE' || this.currentState === 'TACKLE' || this.currentState === 'SHOOT' || this.currentState === 'PASS') {
+        if (this.currentState === 'SLIDE_TACKLE' || this.currentState === 'TACKLE' ||
+            this.currentState === 'SHOOT' || this.currentState === 'SET_PIECE_KICK' ||
+            this.currentState === 'PASS') {
             this.p.resetBonesToDefault();
         }
         /*
@@ -849,8 +876,16 @@ class PlayerFSM {
         limpeza: o `initiatePass`/`initiateShoot` criam o ActionState ANTES de
         chamar o changeState, e limpa-lo aqui apagava-o no mesmo instante.
         */
+        /*
+        A lista fica AQUI, escrita por extenso, e nao numa chamada ao
+        `temGestoComClip`. O `changeState` e extraido do texto deste ficheiro e
+        avaliado isolado pelo tests/actionstate_pendurado.test.js, com um
+        ambiente fixo: qualquer nome livre que este corpo passe a usar rebenta
+        la com `is not defined`. O metodo tem de se bastar a si proprio.
+        */
         if (this.p.actionState &&
-            newState !== 'PASS' && newState !== 'SHOOT' && newState !== 'CROSS' && newState !== 'BALL_CONTROL_RIGHT') {
+            newState !== 'PASS' && newState !== 'SHOOT' && newState !== 'SET_PIECE_KICK' &&
+            newState !== 'CROSS' && newState !== 'BALL_CONTROL_RIGHT') {
             this.p.actionState = null;
         }
 
@@ -2346,6 +2381,56 @@ class PlayerFSM {
                     this.changeState('IDLE');
                 }
                 break;
+
+            /*
+            CHUTE DE BOLA PARADA — tiro de meta, falta e penálti.
+
+            Estado próprio, e não um ramo dentro do `SHOOT`, por uma razão
+            mecânica: oito sítios do motor perguntam "este está a meio de um
+            gesto com clip?" para NÃO escreverem as pernas por cima. Um estado
+            com nome próprio entra nessas oito perguntas (ver
+            `temGestoComClip`); um ramo dentro do `SHOOT` não seria distinguível
+            de um remate para o resto do código.
+
+            A POSE INTEIRA vem do PlayerKickClip, os 4 keyframes das imagens de
+            referência. Nada mais escreve o esqueleto durante este estado: não
+            há ciclo de corrida por baixo, não há mistura de entrada, não há
+            ShotClip. Era a soma dessas coisas que fazia a passada alternar de
+            perna a meio do chute.
+
+            O CORPO NÃO É CONDUZIDO AQUI. Quem o desloca até junto da bola é o
+            `onPrepare` do ActionState, que cada lance escreve à sua maneira (a
+            falta desliza do ponto de espera até `paragemNoContacto`, o penálti
+            até à marca). Aqui só se trava a velocidade residual, para o
+            `player.update` não continuar a integrar a corrida anterior por
+            baixo do gesto.
+            */
+            case 'SET_PIECE_KICK':
+                {
+                    // Virado para a baliza adversária, como no remate.
+                    _v1.set(0, 0, p.targetGoalZ);
+                    _v2.set(p.model.position.x * 2 - _v1.x, p.model.position.y,
+                        p.model.position.z * 2 - _v1.z);
+                    _m1.lookAt(p.model.position, _v2, p.model.up);
+                    _q1.setFromRotationMatrix(_m1);
+                    p.model.quaternion.slerp(_q1, Math.min(1.0, 15.0 * dt));
+                }
+
+                p.velocity.multiplyScalar(0.85);
+
+                if (p.actionState) {
+                    const normPK = p.actionState.update(dt, p);
+                    p.aplicarFramePlayerKick(amostrarClipPlayerKick(normPK));
+                    if (p.actionState.isDone()) {
+                        p.actionState = null;
+                        p.resetBonesToDefault();
+                        this.changeState('IDLE');
+                    }
+                } else {
+                    this.changeState('IDLE');
+                }
+                break;
+
             case 'BALL_CONTROL_RIGHT':
                 p.velocity.multiplyScalar(0.85);
                 if (p.actionState) {

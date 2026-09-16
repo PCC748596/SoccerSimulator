@@ -90,8 +90,26 @@ const CLIPS = {
         },
         amostrar: (t) => amostrarClipChuteGR(t)
     },
+    /*
+    O GESTO ÚNICO DE BOLA PARADA. Tiro de meta, falta e penálti passam todos
+    por aqui — 4 keyframes, um por imagem de referência (GoalKick1 a 4).
+
+    A entrada antiga (`GoalkeeperGroundKickClip`, logo abaixo) fica na lista de
+    propósito: serve para comparar os dois lado a lado no editor. Já não há
+    ninguém no jogo a chamá-la.
+    */
+    PlayerKickClip: {
+        rotulo: 'Chute de bola parada (GoalKick 1-4)',
+        clip: () => PlayerKickClip,
+        duracao: () => ActionAnimClips.playerKick.duration,
+        aplicar: (rig, corpo, K) => {
+            aplicarPosePlayerKick(rig, K, corpo);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipPlayerKick(t)
+    },
     GoalkeeperGroundKickClip: {
-        rotulo: 'Tiro de meta (bola no chão)',
+        rotulo: 'Tiro de meta ANTIGO (sem uso, só comparação)',
         clip: () => GoalkeeperGroundKickClip,
         duracao: () => ActionAnimClips.gkPuntChao.duration,
         // Sem `poseAnterior`: no editor não há corrida de onde misturar, o que
@@ -945,10 +963,12 @@ const Editor = {
         const frenteR = (typeof LateralPose !== 'undefined' && LateralPose.peFrente === 'r');
 
         const perna = (lado) => {
-            if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' || c === 'GoalkeeperKickClip') {
+            if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' ||
+                c === 'PlayerKickClip' || c === 'GoalkeeperKickClip') {
                 const ehChute = (lado === 'r') === chuteR;
+                const temZ = (c === 'GoalkeeperGroundKickClip' || c === 'PlayerKickClip');
                 return ehChute
-                    ? { x: 'coxaChute', z: (c === 'GoalkeeperGroundKickClip' ? 'coxaChuteZ' : null) }
+                    ? { x: 'coxaChute', z: (temZ ? 'coxaChuteZ' : null) }
                     : { x: 'coxaApoio' };
             }
             if (c === 'ThrowInClip') {
@@ -959,7 +979,8 @@ const Editor = {
             return null;
         };
         const joelho = (lado) => {
-            if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' || c === 'GoalkeeperKickClip') {
+            if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' ||
+                c === 'PlayerKickClip' || c === 'GoalkeeperKickClip') {
                 return ((lado === 'r') === chuteR) ? { x: 'joelhoChute' } : { x: 'joelhoApoio' };
             }
             if (c === 'ThrowInClip') {
@@ -981,7 +1002,7 @@ const Editor = {
         switch (nomeJunta) {
             case 'pelvis':
                 if (c === 'ShotClip' || c === 'PassClip' || c === 'BallControlRightClip') return { y: 'pelvisY', z: 'leanZ', posY: 'altura' };
-                if (c === 'GoalkeeperGroundKickClip') return { x: 'pitchX', z: 'leanZ', posY: 'altura' };
+                if (c === 'GoalkeeperGroundKickClip' || c === 'PlayerKickClip') return { x: 'pitchX', z: 'leanZ', posY: 'altura' };
                 if (c === 'ThrowInClip') return { x: 'pelvisX', posY: 'altura' };
                 return { posY: 'altura' };
             case 'chest':

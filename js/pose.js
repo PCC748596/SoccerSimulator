@@ -673,6 +673,83 @@ function aplicarPoseChuteChaoGR(rig, K, corpo, opts) {
 }
 
 /*
+POSE DO CHUTE DE BOLA PARADA — PlayerKickClip.
+
+A ÚNICA pose de chute de bola parada: tiro de meta, falta e penálti passam
+todos por aqui. Não chama nem é chamada por `aplicarPoseRemate` (o remate de
+jogo corrido) nem por `aplicarPoseChuteChaoGR` (o clip antigo do guarda-redes).
+
+ESCREVE O ESQUELETO INTEIRO, sempre, a partir do keyframe. Não há
+`poseAnterior` nem `peso` como no `aplicarPoseChuteChaoGR`: a aproximação é
+parte do clip, portanto não há segunda animação de onde misturar. Era essa
+mistura que punha o ciclo de corrida a escrever as pernas por baixo do gesto,
+com a passada a alternar de perna enquanto o chute decorria.
+
+PERNA DE CHUTE FIXA. `PlayerKickClip.pernaChute` é lido UMA vez aqui e vale
+para os quatro keyframes. Não há ramo nenhum que troque de perna a meio.
+
+PIVÔ NO PÉ DE APOIO: o pé de apoio está em x = ±0.4 no espaço local da bacia
+(geometria do rig, ver buildBody em player.js), e o `leanZ` roda o corpo em
+bloco à volta dele — a bacia desloca-se em vez de só rodar, que é o que se lê
+nas imagens 1 e 3, com o corpo inclinado sobre a perna plantada.
+
+`corpo` é o Group do jogador, para a altura; pode vir a nulo (o editor de
+animação posiciona o corpo por fora).
+*/
+function aplicarPosePlayerKick(rig, K, corpo) {
+    if (!rig || !K) return;
+
+    const chuteR = (PlayerKickClip.pernaChute === 'r');
+    const pernaC = chuteR ? rig.rLeg : rig.lLeg;
+    const joelhoC = chuteR ? rig.rKnee : rig.lKnee;
+    const pernaA = chuteR ? rig.lLeg : rig.rLeg;
+    const joelhoA = chuteR ? rig.lKnee : rig.rKnee;
+
+    const pivotX = chuteR ? 0.4 : -0.4;
+    const leanZ = K.leanZ || 0;
+    const cosL = Math.cos(leanZ);
+    const sinL = Math.sin(leanZ);
+
+    rig.pelvis.position.x = pivotX * (1 - cosL) - 2.6 * sinL;
+    rig.pelvis.position.y = 2.6 * cosL - pivotX * sinL;
+    rig.pelvis.position.z = 0;
+
+    rig.pelvis.rotation.z = leanZ;
+    rig.pelvis.rotation.x = K.pitchX || 0;
+    rig.pelvis.rotation.y = 0;
+
+    rig.chest.rotation.x = K.chest || 0;
+    rig.chest.rotation.y = 0;
+    rig.chest.rotation.z = 0;
+
+    pernaA.rotation.x = K.coxaApoio || 0;
+    pernaA.rotation.y = 0;
+    pernaA.rotation.z = 0;
+    joelhoA.rotation.x = K.joelhoApoio || 0;
+    joelhoA.rotation.y = 0;
+    joelhoA.rotation.z = 0;
+
+    pernaC.rotation.x = K.coxaChute || 0;
+    pernaC.rotation.y = 0;
+    pernaC.rotation.z = K.coxaChuteZ || 0;
+    joelhoC.rotation.x = K.joelhoChute || 0;
+    joelhoC.rotation.y = 0;
+    joelhoC.rotation.z = 0;
+
+    rig.lArm.rotation.x = K.bracoLx || 0;
+    rig.lArm.rotation.z = K.bracoLz || 0;
+    rig.rArm.rotation.x = K.bracoRx || 0;
+    rig.rArm.rotation.z = K.bracoRz || 0;
+
+    rig.lElbow.rotation.x = K.cotoveloL || 0;
+    rig.rElbow.rotation.x = K.cotoveloR || 0;
+
+    aplicarPesECabeca(rig, K);
+
+    if (corpo) corpo.position.y = ALTURA_BASE_Y + (K.altura || 0);
+}
+
+/*
 =============================================================================
 AMOSTRAGEM DOS CLIPS
 =============================================================================
@@ -740,6 +817,49 @@ function amostrarClipChuteChaoGR(norm) {
         bracoRz: mix('bracoRz'),
         cotoveloL: mix('cotoveloL'),
         cotoveloR: mix('cotoveloR'),
+        altura: mix('altura')
+    };
+}
+
+/*
+Amostra o PlayerKickClip — o chute de bola parada — num tempo normalizado
+0..1. São 4 keyframes, portanto `pos = norm * 3` e a interpolação linear
+percorre 0->1, 1->2 e 2->3 em terços iguais do gesto.
+
+Amostrador PRÓPRIO, e não uma chamada ao do clip antigo: os dois clips não têm
+de continuar a ter os mesmos canais, e partilhar o amostrador era garantir que
+qualquer canal novo aqui tinha de ser acrescentado lá também.
+*/
+function amostrarClipPlayerKick(norm) {
+    const fr = PlayerKickClip.frames;
+    const n = fr.length;
+    const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
+    const i = Math.min(n - 2, Math.floor(pos));
+    const u = pos - i;
+    const a = fr[i], b = fr[i + 1];
+    const mix = (k) => {
+        const va = (a[k] !== undefined) ? a[k] : 0;
+        const vb = (b[k] !== undefined) ? b[k] : 0;
+        return va + (vb - va) * u;
+    };
+    return {
+        leanZ: mix('leanZ'),
+        pitchX: mix('pitchX'),
+        chest: mix('chest'),
+        coxaChute: mix('coxaChute'),
+        joelhoChute: mix('joelhoChute'),
+        coxaChuteZ: mix('coxaChuteZ'),
+        coxaApoio: mix('coxaApoio'),
+        joelhoApoio: mix('joelhoApoio'),
+        bracoLx: mix('bracoLx'),
+        bracoLz: mix('bracoLz'),
+        bracoRx: mix('bracoRx'),
+        bracoRz: mix('bracoRz'),
+        cotoveloL: mix('cotoveloL'),
+        cotoveloR: mix('cotoveloR'),
+        peRx: mix('peRx'),
+        peLx: mix('peLx'),
+        cabecaX: mix('cabecaX'),
         altura: mix('altura')
     };
 }

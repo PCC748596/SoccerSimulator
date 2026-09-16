@@ -29,7 +29,7 @@ O `ShotClip` continua a servir o remate de jogo corrido, que não é bola parada
 
 Dentro:
 
-- `PlayerKickClip` com 8 keyframes, quatro deles âncoras lidas das imagens de referência GoalKick1 a GoalKick4
+- `PlayerKickClip` com 4 keyframes, um por imagem de referência (GoalKick1 a GoalKick4)
 - função de pose e amostrador próprios
 - estado de FSM próprio, `SET_PIECE_KICK`
 - ligação a `GOAL_KICK`, `FREE_KICK` e `PENALTY`
@@ -55,22 +55,42 @@ O gesto mais visível na referência é a abertura dos braços, que cresce de fo
 
 ## Estrutura do clip
 
-Oito keyframes: quatro âncoras e quatro interpolações.
+Quatro keyframes, um por imagem. Sem frames intermédios: a versão anterior
+deste documento propunha oito, com quatro âncoras e quatro interpolações, e foi
+recusada — "usa só 4 frames mesmo".
 
 | índice | t | papel | fonte |
 |---|---|---|---|
-| 0 | 0.000 | âncora — aproximação, apoio a plantar | GoalKick1 |
-| 1 | 0.143 | interpolação — recuo a acelerar | — |
-| 2 | 0.286 | âncora — última passada, joelho a fechar | GoalKick2 |
-| 3 | 0.429 | interpolação — coxa e calcanhar a subir | — |
-| 4 | 0.571 | âncora — armação máxima | GoalKick3 |
-| 5 | 0.714 | interpolação — o chicote, perna passa a vertical | — |
-| 6 | 0.857 | âncora — IMPACTO | GoalKick4 |
-| 7 | 1.000 | interpolação — follow-through e descida | — |
+| 0 | 0.000 | aproximação, apoio a plantar | GoalKick1 |
+| 1 | 0.333 | última passada, joelho a fechar | GoalKick2 |
+| 2 | 0.667 | armação máxima, calcanhar alto | GoalKick3 |
+| 3 | 1.000 | IMPACTO | GoalKick4 |
 
-`contactFrame: 7` (índice 6). Com `duration: 0.70` a bola sai aos 0.60 s.
+`contactFrame: 4` (índice 3), `contactTime: 1`. O contacto é o último
+keyframe, portanto não há follow-through: a bola sai no instante em que o
+gesto acaba. O `ActionState` aceita-o — o `norm < contactTime` do `update`
+falha quando `norm` chega a 1, e o contacto dispara nesse frame, antes de o
+`isDone()` limpar o estado.
 
-As interpolações não são médias aritméticas dos vizinhos — a interpolação linear do amostrador já daria isso e os frames não acrescentariam nada. São enviesadas: o índice 1 e o 3 puxam para a armação (o recuo acelera, não é uniforme), e o índice 5 é o chicote, com a perna já muito à frente do ponto médio e o joelho a abrir.
+### A duração é um tecto medido
+
+Varrida contra os dois testes de medição que apanham o custo de atrasar a bola
+parada — `saida_de_bola_ritmo` (tecto de 12% de leituras abaixo de 3 m/s
+enquanto o guarda-redes segura) e `gk_agarra_com_a_mao` (mínimo de 5 agarradas
+em 20 minutos de jogo):
+
+| duração | abaixo de 3 m/s | agarradas |
+|---|---|---|
+| 0.25 s | 5% | 10 |
+| 0.35 s | 8% | 9 |
+| 0.45 s | 10% | 7 |
+| **0.55 s** | **8%** | **10** |
+| 0.70 s | 14% reprova | 4 reprova |
+
+Não é monótono: 0.55 mede melhor que 0.45. A simulação é caótica e uma leitura
+por semente vale pouco sozinha, que é a mesma fragilidade escrita no cabeçalho
+desses dois testes. O que não é ruído é o 0.70 reprovar os dois ao mesmo tempo
+e por larga margem. Ficou 0.55, o mais longo testado que passa com folga.
 
 ## Convenção de sinais
 
@@ -92,45 +112,35 @@ altura            deslocação vertical do corpo, em metros
 
 `pernaChute: 'r'`. O pé de apoio é o esquerdo, em x = -0.4 no espaço local da bacia, e o `leanZ` roda o corpo em bloco à volta dele.
 
-## Os 8 keyframes
+## Os 4 keyframes
 
-```js
-const PlayerKickClip = {
-    pernaChute: 'r',
-    contactFrame: 7,
-    frames: [
-        // 0 — GoalKick1: aproximação, pé de apoio a plantar, perna de chute a recuar
-        { leanZ: -0.20, pitchX: -0.14, chest: 0.12, coxaChute: 0.50, joelhoChute: 0.95, coxaChuteZ: -0.05, coxaApoio: -0.10, joelhoApoio: 0.28, bracoLx: -0.40, bracoLz: 0.95, bracoRx: 0.30, bracoRz: -0.80, cotoveloL: -0.35, cotoveloR: -0.45, peRx: -0.08, peLx: 0.06, cabecaX: -0.25, altura: -0.01 },
-        // 1 — o recuo acelera; enviesado para a armação, não é o ponto médio
-        { leanZ: -0.25, pitchX: -0.18, chest: 0.15, coxaChute: 0.68, joelhoChute: 1.30, coxaChuteZ: -0.08, coxaApoio: -0.05, joelhoApoio: 0.30, bracoLx: -0.49, bracoLz: 1.01, bracoRx: 0.39, bracoRz: -0.89, cotoveloL: -0.32, cotoveloR: -0.51, peRx: -0.15, peLx: 0.04, cabecaX: -0.28, altura: -0.02 },
-        // 2 — GoalKick2: última passada, perna atrás, joelho a fechar
-        { leanZ: -0.28, pitchX: -0.21, chest: 0.17, coxaChute: 0.82, joelhoChute: 1.58, coxaChuteZ: -0.11, coxaApoio: -0.01, joelhoApoio: 0.32, bracoLx: -0.56, bracoLz: 1.06, bracoRx: 0.46, bracoRz: -0.96, cotoveloL: -0.30, cotoveloR: -0.56, peRx: -0.22, peLx: 0.02, cabecaX: -0.30, altura: -0.02 },
-        // 3 — coxa e calcanhar a subir para a armação
-        { leanZ: -0.32, pitchX: -0.24, chest: 0.20, coxaChute: 0.93, joelhoChute: 1.88, coxaChuteZ: -0.14, coxaApoio: 0.02, joelhoApoio: 0.34, bracoLx: -0.60, bracoLz: 1.15, bracoRx: 0.51, bracoRz: -1.04, cotoveloL: -0.27, cotoveloR: -0.64, peRx: -0.30, peLx: 0.01, cabecaX: -0.33, altura: -0.03 },
-        // 4 — GoalKick3: armação máxima, calcanhar alto, tronco à frente
-        { leanZ: -0.34, pitchX: -0.26, chest: 0.22, coxaChute: 1.00, joelhoChute: 2.10, coxaChuteZ: -0.16, coxaApoio: 0.04, joelhoApoio: 0.36, bracoLx: -0.62, bracoLz: 1.22, bracoRx: 0.55, bracoRz: -1.10, cotoveloL: -0.25, cotoveloR: -0.70, peRx: -0.35, peLx: 0.00, cabecaX: -0.35, altura: -0.03 },
-        // 5 — o chicote: perna já muito à frente do ponto médio, joelho a abrir
-        { leanZ: -0.24, pitchX: -0.10, chest: 0.16, coxaChute: 0.10, joelhoChute: 1.05, coxaChuteZ: -0.07, coxaApoio: 0.16, joelhoApoio: 0.24, bracoLx: -0.30, bracoLz: 1.36, bracoRx: 0.14, bracoRz: -1.30, cotoveloL: -0.18, cotoveloR: -0.44, peRx: -0.34, peLx: -0.06, cabecaX: -0.26, altura: 0.02 },
-        // 6 — GoalKick4: IMPACTO. Abertura total, braços horizontais, corpo projetado
-        { leanZ: -0.12, pitchX: 0.10, chest: 0.05, coxaChute: -0.95, joelhoChute: 0.08, coxaChuteZ: 0.02, coxaApoio: 0.30, joelhoApoio: 0.10, bracoLx: 0.05, bracoLz: 1.50, bracoRx: -0.30, bracoRz: -1.50, cotoveloL: -0.10, cotoveloR: -0.15, peRx: -0.30, peLx: -0.15, cabecaX: -0.15, altura: 0.10 },
-        // 7 — follow-through: perna continua e desce, corpo assenta
-        { leanZ: -0.05, pitchX: 0.06, chest: 0.02, coxaChute: -0.55, joelhoChute: 0.30, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.16, bracoLx: 0.02, bracoLz: 0.85, bracoRx: -0.10, bracoRz: -0.85, cotoveloL: -0.08, cotoveloR: -0.10, peRx: -0.12, peLx: -0.04, cabecaX: -0.08, altura: 0.03 }
-    ]
-};
-```
+Os valores estão em `js/config/animations.js`, em `PlayerKickClip`. O que os
+governa:
 
-Abertura das pernas no impacto: `coxaChute -0.95` (54° à frente) contra `coxaApoio 0.30` (17° atrás), cerca de 71° de abertura, com `altura 0.10` para o corpo projetado que a imagem mostra.
+- **A perna de chute é sempre a mesma.** `coxaChute` faz
+  `0.45 -> 0.65 -> 0.95 -> -0.70`: recua de forma monótona nos três primeiros
+  e vem à frente uma única vez, no impacto. Não há ramo nenhum que troque de
+  perna a meio.
+- **A abertura dos braços é o gesto mais visível da referência**, e cresce de
+  forma monótona: `bracoLz` de 0.70 (40°) na imagem 1 até 1.55 (89°, a
+  horizontal) na imagem 4.
+- **A armação** é `joelhoChute 2.20`, 126° — o calcanhar junto ao glúteo que a
+  imagem 3 mostra, dentro do tecto de 145° do `JointLimits.knee.x`.
+- **O impacto** abre as pernas em `coxaChute -0.70` (40° à frente) contra
+  `coxaApoio 0.75` (43° atrás), 83° no total, com o tronco a abrir para trás
+  (`chest` negativo) e o corpo 0.18 m mais alto: na imagem 4 os dois pés estão
+  no ar.
 
 ### Desvio conhecido aos limites anatómicos
 
-`joelhoChute 2.10` são 120°, dentro do `JointLimits.knee.x` máximo de 145°. Mas `coxaChute 1.00` na armação são 57° de extensão da anca, e o `JointLimits.hip.x` mínimo são -30°. O `JointLimits` não está ligado ao código de animação (diz-se no cabeçalho do próprio ficheiro), e os clips existentes têm o mesmo exagero — o `GoalkeeperGroundKickClip` vai a 0.96. Fica registado como desvio deliberado, para não ser lido como erro quando o `JointLimits` for ligado.
+`joelhoChute 2.20` são 126°, dentro do `JointLimits.knee.x` máximo de 145°. Mas `coxaChute 0.95` na armação são 54° de extensão da anca, e o `JointLimits.hip.x` mínimo são -30°. O `JointLimits` não está ligado ao código de animação (diz-se no cabeçalho do próprio ficheiro), e os clips existentes têm o mesmo exagero — o `GoalkeeperGroundKickClip` vai a 0.96. Fica registado como desvio deliberado, para não ser lido como erro quando o `JointLimits` for ligado.
 
 ## Arquitectura
 
 ```
 js/config/animations.js
     const PlayerKickClip = {...}                  novo
-    ActionAnimClips.playerKick = { duration: 0.70, contactTime: 6 / 7 }
+    ActionAnimClips.playerKick = { duration: 0.55, contactTime: 1 }
 
 js/pose.js
     aplicarPosePlayerKick(rig, K, corpo)          nova, própria
@@ -148,17 +158,52 @@ js/animEditor.js
 
 O pivô no pé de apoio mantém-se — a bacia desloca-se em vez de só rodar, o que é o que se lê nas imagens 1 e 3, com o corpo inclinado em bloco sobre a perna plantada.
 
-## O estado de FSM e os oito guardas
+## O estado de FSM e os guardas
 
-O gesto precisa de estado próprio. Sem ele o ciclo de corrida escreve as pernas por cima do clip no mesmo frame — o defeito exacto que este trabalho corrige.
+O gesto precisa de estado próprio. Sem ele o ciclo de corrida escreve as pernas
+por cima do clip no mesmo frame — o defeito exacto que este trabalho corrige.
 
-Hoje há oito sítios que testam `'SHOOT'` só para dizer "este está a meio de um gesto com clip":
+### A causa real, encontrada na implementação
 
-`js/player.js:490`, `:3662`, `:3731`, `:3945`, `:4458`, `:4681`, `js/fsm.js:829`, `js/fsm.js:853`
+O desenho dizia "há oito sítios que testam `'SHOOT'` e falta acrescentar o
+estado novo a todos". Ao implementar apareceu um nono, e é o que importa: **o
+ramo do ciclo de corrida não tinha guarda de estado nenhuma.**
 
-As listas não são idênticas — o `4458` exclui `TACKLE`, o `829` inclui `SLIDE_TACKLE` — portanto não se substituem por uma constante única. Extrai-se o predicado e cada sítio passa a chamá-lo mantendo as suas próprias excepções, em vez de se acrescentar `|| s === 'SET_PIECE_KICK'` oito vezes e se falhar num.
+```js
+// js/player.js, animateBones — antes
+if (speed >= 0.1) {
+    ...
+    aplicarPosePassada(rig, P, t, {...});   // a perna INTEIRA, por atribuição
+}
+```
 
-Falhar um guarda é o risco principal deste trabalho, e é verificável: depois da alteração, nenhum dos oito pode continuar a testar `'SHOOT'` por igualdade directa para este efeito.
+Escrevia a perna toda sempre que `speed >= 0.1`, fosse qual fosse o estado. O
+remate e o passe escapavam **por acidente e não por desenho**: os dois fazem
+`velocity.set(0, 0, 0)` antes de entrar no gesto, portanto `speed` já vinha a
+zero e o ramo nunca corria. Quem entrasse num gesto com clip ainda em
+andamento levava o ciclo de corrida por cima durante os ~20 frames que a
+velocidade demora a decair — e o ciclo de corrida **alterna as pernas**. É esta
+a origem de "o chute troca de perna a meio".
+
+A guarda passou a ser por estado, que é a condição verdadeira, e o `baterFalta`
+ganhou o mesmo `velocity.set(0, 0, 0)` que o penálti já tinha.
+
+### O predicado e os seus limites
+
+`temGestoComClip(estado)` vive no `js/fsm.js` e diz "este estado consome o
+`p.actionState`". O `LATERAL` fica de fora: o arremesso tem campo próprio
+(`lateralAction`), e incluí-lo mantinha vivo um `actionState` de outro gesto ao
+entrar no lateral — o pendurado que o `tests/actionstate_pendurado.test.js`
+existe para apanhar.
+
+O `changeState` **não** chama o predicado, e escreve a lista por extenso. Não é
+inconsistência: esse método é extraído do texto do ficheiro e avaliado isolado
+por esse mesmo teste, com um ambiente fixo, e qualquer nome livre rebenta lá
+com `is not defined`. Está escrito no comentário, junto ao código.
+
+Os restantes sítios (`js/player.js:490`, `:3683`, `:3752`, `:3966`, `:4479`,
+`:4702`) mantêm as suas listas, que nunca foram idênticas — o `4479` exclui
+`TACKLE`, o `829` do fsm inclui `SLIDE_TACKLE`.
 
 ## Ligação aos lances
 
@@ -166,14 +211,27 @@ Falhar um guarda é o risco principal deste trabalho, e é verificável: depois 
 
 O tiro de meta do guarda-redes (`js/player.js:6896`) passa a amostrar o clip novo. O `gkKickBlend` deixa de escrever esqueleto e passa a transladar apenas o corpo até `plantX`/`plantZ`, que é a única coisa que ainda tem de fazer.
 
-## Custo medido e não medido
+## Custo medido
 
-A bola sai 0.35 s mais tarde na falta e no penálti (`shot` tem `duration 0.50` e `contactTime 7/11`, ou seja contacto aos 0.318 s; o novo contacta aos 0.60 s) e 0.45 s mais tarde no tiro de meta (era `duration 0.25`). `SetPiecePrazos.tiroDeMeta` são 20 s e o `FREE_KICK` tem 15 s, portanto nenhum prazo fica apertado. Em bola parada ninguém pressiona o batedor, logo não há custo táctico — ao contrário do que aconteceu quando o passe ganhou gesto.
+A bola sai mais tarde em todos os lances: o `shot` contactava aos 0.318 s
+(`duration 0.50` × `contactTime 7/11`) e o novo contacta aos 0.55 s; o tiro de
+meta era 0.25 s inteiros. `SetPiecePrazos.tiroDeMeta` são 20 s e o `FREE_KICK`
+tem 15 s, portanto nenhum prazo fica apertado, e em bola parada ninguém
+pressiona o batedor.
 
-O que não está medido é a leitura do follow-through. Com 8 frames sobra um único frame depois do impacto, 0.10 s para levar a perna da abertura total até ao chão, e é provável que se leia seco. É aceite para arrancar; a decisão de crescer para 10 ou 12 frames toma-se depois de ver o gesto no editor.
+O que **não** é de graça é o ritmo do jogo, e está medido na tabela da secção
+da duração: a 0.70 s o jogo perdia 60% das recuperações do guarda-redes por
+20 minutos e os colegas passavam a andar durante a saída de bola. Foi por isso
+que a duração ficou em 0.55 s e não nos 0.70 s inicialmente escolhidos.
+
+Não medido: a leitura do gesto sem follow-through. São 4 frames e o quarto é o
+contacto, portanto a perna fica na extensão máxima quando o estado acaba e o
+`resetBonesToDefault` a traz de volta. Se isso se ler seco no ecrã, a saída é
+acrescentar um quinto keyframe de recuperação — não mexer nos quatro.
 
 ## Verificação
 
 - `tests/pose_partilhada.test.js:48` e `:248` e `tests/anim_editor_export.test.js:57` têm listas de clips; o clip novo entra nelas e passa a ser exercitado pelos testes que já existem
-- os oito guardas, confirmados um a um depois da alteração
+- os guardas, confirmados um a um por `grep` depois da alteração
+- a suite completa: 145 de 145 testes a passar
 - o gesto visto no editor de animação, com a entrada antiga ao lado para comparação

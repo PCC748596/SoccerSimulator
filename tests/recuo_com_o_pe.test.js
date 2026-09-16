@@ -177,8 +177,8 @@ console.log('2 — recuo com o pé e adversário perto: chuta como no tiro de me
         // E o chute: mesmo gesto do tiro de meta, e o recuo acaba no contacto.
         Match.opponents = [jogador('TeamB', 0, 47)];
         gk.chutarRecuoDeUrgencia();
-        if (chamadas[0] !== 'gkPuntChao') {
-            erro('devia usar o clip do tiro de meta (gkPuntChao), usou ' + chamadas[0]);
+        if (chamadas[0] !== 'playerKick') {
+            erro('devia usar o clip do tiro de meta (playerKick), usou ' + chamadas[0]);
         } else ok('usa o gesto do tiro de meta');
         if (gk.gkEstado !== 'chutando') erro('devia ficar no estado chutando');
         else ok('estado chutando');

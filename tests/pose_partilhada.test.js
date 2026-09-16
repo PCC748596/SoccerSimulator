@@ -44,8 +44,10 @@ const mod = new Function(...Object.keys(amb),
      return { construirCorpo, escolherAparencia,
               aplicarPoseRemate, aplicarPoseLateral, aplicarPoseChutaoGR,
               aplicarPoseChuteChaoGR, aplicarPoseLancamentoGR, aplicarPoseDominioDireito,
+              aplicarPosePlayerKick,
               ShotClip, ThrowInClip, GoalkeeperKickClip,
               GoalkeeperGroundKickClip, GoalkeeperThrowClip, BallControlRightClip,
+              PlayerKickClip,
               ESCALA_CORPO };`)(...Object.values(amb));
 const { construirCorpo, escolherAparencia, ESCALA_CORPO } = mod;
 
@@ -244,8 +246,10 @@ console.log(String.fromCharCode(10) + '6 — as poses dos clips');
     const {
         aplicarPoseRemate, aplicarPoseLateral, aplicarPoseChutaoGR,
         aplicarPoseChuteChaoGR, aplicarPoseLancamentoGR, aplicarPoseDominioDireito,
+        aplicarPosePlayerKick,
         ShotClip, ThrowInClip, GoalkeeperKickClip,
-        GoalkeeperGroundKickClip, GoalkeeperThrowClip, BallControlRightClip
+        GoalkeeperGroundKickClip, GoalkeeperThrowClip, BallControlRightClip,
+        PlayerKickClip
     } = mod;
 
     // Um rig novo por pose: assim uma pose não herda o que a anterior escreveu.
@@ -257,7 +261,8 @@ console.log(String.fromCharCode(10) + '6 — as poses dos clips');
         ['chutão GR', GoalkeeperKickClip, (rig, K) => aplicarPoseChutaoGR(rig, K, 0.5)],
         ['tiro de meta', GoalkeeperGroundKickClip, (rig, K) => aplicarPoseChuteChaoGR(rig, K, null, {})],
         ['lançamento GR', GoalkeeperThrowClip, (rig, K) => aplicarPoseLancamentoGR(rig, K)],
-        ['domínio de bola (direita)', BallControlRightClip, (rig, K) => aplicarPoseDominioDireito(rig, K)]
+        ['domínio de bola (direita)', BallControlRightClip, (rig, K) => aplicarPoseDominioDireito(rig, K)],
+        ['chute de bola parada', PlayerKickClip, (rig, K) => aplicarPosePlayerKick(rig, K, null)]
     ];
 
     for (const [nome, clip, aplicar] of casos) {

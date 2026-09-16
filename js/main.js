@@ -1110,6 +1110,7 @@ function validarModelosDoJogo() {
         ['ShotClip', typeof ShotClip !== 'undefined'],
         ['GoalkeeperKickClip', typeof GoalkeeperKickClip !== 'undefined'],
         ['GoalkeeperGroundKickClip', typeof GoalkeeperGroundKickClip !== 'undefined'],
+        ['PlayerKickClip', typeof PlayerKickClip !== 'undefined'],
         ['GoalkeeperThrowClip', typeof GoalkeeperThrowClip !== 'undefined'],
         ['ThrowInClip', typeof ThrowInClip !== 'undefined'],
         ['Match', typeof Match !== 'undefined']
