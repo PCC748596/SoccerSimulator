@@ -471,11 +471,83 @@ button.btn-action:active {
 }
 
 
-#placar {
+/*
+Minimapa: canto inferior esquerdo, por cima da cena e fora do caminho do rato
+(o orbit control da câmara apanha o canvas todo — `pointer-events: none` deixa
+arrastar a câmara mesmo por cima dele).
+*/
+#minimapa {
+    position: absolute;
+    /* A regra genérica `canvas` (a do renderer) põe top/left a 0 e 100vw/100vh.
+       Sem anular o `top` aqui, ele ganha ao `bottom` e o minimapa colava-se ao
+       topo do ecrã. As medidas em si vêm inline, do Minimap.init. */
+    top: auto;
+    right: auto;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    /* A mesma regra genérica pinta o canvas de azul-céu (fundo do renderer).
+       Aqui tem de ser transparente, senão a relva a 30% fica por cima de um
+       fundo opaco e o minimapa sai azulado em vez de deixar ver o jogo. */
+    background-color: transparent;
+    pointer-events: none;
+    border-radius: 6px;
+    border: 1px solid rgba(236, 240, 241, 0.35);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.45);
+}
+
+/* A linha do topo: o placar e, ao lado dele, o aviso de repetição. É esta que
+   está centrada — o placar deixou de se centrar a si próprio para o aviso poder
+   ficar colado a ele seja qual for a largura dos nomes. */
+#placar-linha {
     position: absolute;
     top: 20px;
     left: 50%;
     transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+}
+
+#aviso-replay {
+    background: #f1c40f;
+    color: #000;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 16px;
+    letter-spacing: 2px;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    /* Pisca em degraus e não em desvanecimento: é assim que se lê como um
+       indicador aceso e apagado, e não como uma animação. */
+    animation: piscar-replay 1s steps(1, end) infinite;
+}
+
+@keyframes piscar-replay {
+
+    0%,
+    50% {
+        opacity: 1;
+    }
+
+    50.01%,
+    100% {
+        opacity: 0.15;
+    }
+}
+
+/* Quem pede menos movimento fica com o aviso fixo — continua a ler-se. */
+@media (prefers-reduced-motion: reduce) {
+    #aviso-replay {
+        animation: none;
+    }
+}
+
+#placar {
     background: rgba(15, 23, 42, 0.95);
     color: #ecf0f1;
     padding: 10px 24px;
@@ -697,10 +769,28 @@ button.btn-action:active {
    ========================================================================== */
 
 @media (max-width: 768px) {
-    #placar {
+    #placar-linha {
         top: 10px;
+        gap: 6px;
+    }
+
+    #placar {
         padding: 6px 14px;
         font-size: 13px;
+    }
+
+    #aviso-replay {
+        padding: 6px 10px;
+        font-size: 13px;
+        letter-spacing: 1px;
+    }
+
+    /* No telemóvel o minimapa sobe acima do HUD do jogador, e encolhe —
+       a translação de -50% tem de vir ANTES da escala para o centro se
+       manter depois de encolher. */
+    #minimapa {
+        bottom: 140px;
+        transform: translateX(-50%) scale(0.8);
     }
 
     #hud-jogador-esq, #hud-jogador-dir {
@@ -771,3 +861,56 @@ button.btn-action:active {
 
 }
 
+
+/*
+PAINEL DE ESTATÍSTICA POR JOGO (esquerda, abaixo do RED AVERAGE).
+
+Tabela apertada de propósito: são doze linhas num painel lateral estreito, e
+o que se lê é a coluna do meio contra a da direita. A cor da linha diz o
+desvio ao alvo — verde dentro de 15%, amarelo até 40%, vermelho acima disso
+(ver classificarDesvio em main.js).
+*/
+#estat-relogio {
+    font-size: 10px;
+    color: #7f8c8d;
+    margin: 4px 0 6px 0;
+}
+
+#estat-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+#estat-tabela th {
+    text-align: left;
+    font-weight: 600;
+    color: #7f8c8d;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 3px;
+    border-bottom: 1px solid #34495e;
+}
+
+#estat-tabela th:nth-child(2),
+#estat-tabela th:nth-child(3),
+#estat-tabela td:nth-child(2),
+#estat-tabela td:nth-child(3) {
+    text-align: right;
+    /* Alinha as casas decimais: sem isto, 176,63 e 2,52 dançam na coluna. */
+    font-variant-numeric: tabular-nums;
+}
+
+#estat-tabela td {
+    padding: 2px 3px;
+    border-bottom: 1px solid rgba(52, 73, 94, 0.4);
+    color: #bdc3c7;
+}
+
+#estat-tabela td:nth-child(3) { color: #7f8c8d; }
+
+#estat-tabela tr.estat-ok      td:nth-child(2) { color: #2ecc71; }
+#estat-tabela tr.estat-perto   td:nth-child(2) { color: #f1c40f; }
+#estat-tabela tr.estat-longe   td:nth-child(2) { color: #e74c3c; }
+#estat-tabela tr.estat-semdado td { color: #7f8c8d; font-style: italic; }

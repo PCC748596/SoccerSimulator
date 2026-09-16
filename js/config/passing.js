@@ -1,0 +1,1502 @@
+/*
+=============================================================================
+CONFIG: MODELOS DE PASSE E APOIO
+=============================================================================
+Linhas de passe, tipos de passe, jogadas combinadas (tabelinhas/overlap) e apoios.
+=============================================================================
+*/
+
+const PassLineModel = {
+    bloqueioDuro: 0.9,       // metros: abaixo disto a bola não passa, ponto final
+    corredorBase: 3.0,       // largura do corredor de ameaça num passe curto
+    corredorPorMetro: 0.06,  // e quanto cresce por metro de passe
+    corredorMax: 7.0,
+    pesoLinha: 300,          // mesma escala do bónus de receptor livre
+    pesoCorpo: 60,           // por adversário dentro do corredor
+    factorOrquestrador: 0.4, // "vê através" — sofre menos com linhas apertadas
+
+    /*
+    Perto da baliza a conta muda: a área é o sítio mais congestionado do campo,
+    e exigir linha limpa ali é exigir que nunca se jogue para dentro dela. Um
+    passe de risco à entrada da área vale muito mais do que um passe seguro no
+    meio-campo, porque o que está do outro lado é um remate.
+
+    Sem isto — medido depois de a linha passar a peso — os ataques morriam à
+    entrada do último terço: ninguém entrava a passar (tráfego) nem a conduzir
+    (orçamento de condução), e deixava de haver remates.
+
+    Aplica-se ao DESTINO do passe, não a quem passa: é entrar na zona que
+    justifica o risco.
+    */
+    factorUltimoTerco: 0.45,
+    ultimoTercoZ: 17.0       // mesma fronteira do bolaNoUltimoTerco do TeamBT
+};
+
+const PassModel = {
+
+    /*
+    =====================================================================
+    TECTO DA FORCA DO PASSE
+    =====================================================================
+    Relato: *"os lancamentos longos estao muito fortes. E de vez em quando um
+    lateral e um passe curto tambem saem com uma forca exagerada"*.
+
+    Medido com `tools/scratch/forca_dos_passes.js`, 649 passes em 40 min, pela
+    velocidade de SAIDA:
+
+        faixa      mediana   p95     maximo
+        0-8 m       10.0     11.2     15.5
+        8-15 m      12.5     16.8     20.4
+        15-25 m     18.7     28.3     31.5
+        25 m+       23.2     46.0     47.4   <-- mais rapido que um remate
+
+    As MEDIANAS estao certas -- e a calibracao pela velocidade de chegada a
+    funcionar. O que nao esta e a CAUDA: 46 m/s num lancamento e 20 m/s num
+    passe de 10 m nao sao passes, sao acidentes de solver.
+
+    Vem do `encontro` (bola e receptor no mesmo ponto ao mesmo tempo): quando o
+    tempo pedido e curto -- receptor perto, ou a correr para o sitio -- a
+    velocidade necessaria dispara sem limite. A solucao certa nao e adivinhar o
+    tempo: e dizer que ha uma forca que um pe humano nao da, e que acima disso
+    a bola chega tarde em vez de chegar impossivel.
+
+    30 m/s e a referencia do remate forte (`ShotModel.potenciaBase` anda por
+    ai). Um passe nao passa disso -- e um lancamento longo, que e batido com
+    tecnica e nao com forca, fica abaixo.
+    =====================================================================
+    */
+    velMaxSaida: 28.0,
+    carryChance: 0.10,
+    carryChanceShort: 0.05,
+    carryChanceLong: 0.20,
+
+    preferenceBonus: 8.0,       // empurrão para a função preferida da posição
+
+    /*
+    ATÉ QUE ÂNGULO SE PASSA SEM RODAR O CORPO.
+
+    Pedido: "os passes até 70 graus para cada lado da linha de deslocamento
+    podem ser feitos sem que o jogador tenha que girar para a trajectória do
+    passe; além disso, o jogador terá que girar até que a linha de passe fique
+    no limite dos 70 graus".
+
+    O que havia eram duas coisas, e nenhuma era esta: o `turnForPass`
+    (initiatePass, player.js) só ligava acima dos **90** graus, e quando ligava
+    o `case 'PASS'` (fsm.js) rodava o corpo até ficar de frente PARA O ALVO —
+    zero graus. Ou seja: entre 70 e 90 passava-se torto sem corrigir nada, e
+    acima de 90 corrigia-se a mais.
+
+    Agora é um limite só, lido dos dois sítios: abaixo dele não se roda nada;
+    acima, roda-se o MÍNIMO que põe a linha de passe exactamente no limite.
+    A geometria está no `direccaoDoCorpoNoPasse` (utils.js).
+
+    A referência é a linha de DESLOCAMENTO quando ele corre (é o que o pedido
+    diz) e a frente do corpo quando está parado.
+    */
+    anguloLivreGraus: 70,
+
+    /*
+    QUANTO VALE UM COMPANHEIRO EM CORRIDA DE INFILTRACAO na escolha do passe.
+
+    O numero (400) ja existia dentro do `findPassTarget`, com o comentario
+    "bonus MASSIVO", e nao valia nada: era somado ao mesmo `priorityBonus` que
+    a tabela de pares de posicoes logo a seguir ATRIBUI (`priorityBonus = 40`),
+    e essa tabela apanha a maioria dos pares. Medido antes
+    (`tools/headless/passe_para_quem_infiltra.js`, 600 s): havia um infiltrado
+    ao alcance em 75.8% das escolhas e ele era o escolhido em 13.8% delas —
+    com dois ou tres em corrida entre dez companheiros, isso e nao ter
+    prioridade nenhuma.
+
+    Fica aqui, e chega a nota por um caminho proprio, para nao voltar a ser
+    apagado por quem mexer na tabela.
+
+    Varrido depois de arranjado, em 2 sementes de 600 s:
+
+        bonus   infiltrado escolhido   passes que lhe saem mesmo
+          400        25%                     32%
+          700        42-44%                  33%
+         1000        56-61%                  28-36%
+
+    Os passes que lhe saem MESMO saturam num terco: entre a escolha e o
+    contacto ele deixa muitas vezes de estar em corrida. Acima dos 700 sobe a
+    intencao e nao sobe a entrega, portanto fica nos 700.
+    */
+    bonusInfiltracao: 700,
+
+    /*
+    =====================================================================
+    TOCA E CORRE — quem acabou de passar e arranca para a frente
+    =====================================================================
+    Pedido: *"se o jogador que tocou a bola para um companheiro correr para
+    frente e estiver sem nenhum jogador a sua frente a uma distância de 5
+    metros ele vai ganhar mais 100 pontos para receber passe no vazio ou em
+    profundidade"*.
+
+    É a tabela de um-dois. O `bonusInfiltracao` já premia quem rompe em
+    RUN_INTO_SPACE, mas quem toca e arranca não muda de estado — continua no
+    estado de apoio em que estava, e por isso nunca era preferido a ninguém.
+
+    As três condições são as do pedido, e todas se medem no referencial de
+    ataque dele:
+
+      . foi ELE que fez o passe anterior (`Match.ultimoPassador`);
+      . está a ANDAR PARA A FRENTE (`tocaECorreAvancoMin`, para um passe para
+        trás não contar como arranque);
+      . não tem ninguém à frente dentro de `tocaECorreRaio`, medido no cone
+        para a frente — um adversário ao LADO dele não lhe fecha nada.
+    */
+    bonusTocaECorre: 100,
+    tocaECorreRaio: 5.0,        // metros à frente que têm de estar livres
+    tocaECorreAvancoMin: 0.8,   // m/s de avanço para contar como "a correr"
+
+    /*
+    Quanto tempo depois do passe é que ele ainda é "quem acabou de tocar".
+    Passado isto a jogada é outra, e o um-dois deixou de estar em cima da mesa.
+    */
+    tocaECorreDuracao: 3.0,
+
+    /*
+    Caminho fechado à frente: com este número de adversários no corredor de
+    progressão, o portador deixa de tentar passar para a frente (ou driblar)
+    e joga para o LADO ou para TRÁS.
+
+    Sem isto a árvore tentava sempre a frente primeiro: com dois adversários
+    entre ele e o colega, o passe ou era interceptado ou obrigava o receptor
+    a recebê-la de costas com marcador em cima. Sair pelo lado é a jogada
+    óbvia e não existia como decisão.
+
+    O corredor é medido à FRENTE dele no referencial de ataque, dentro de
+    `bloqueioLargura` metros para cada lado — não é um raio à volta do
+    jogador: um adversário ao lado dele não fecha caminho nenhum.
+    */
+    bloqueioMin: 2,             // quantos adversários fecham o caminho
+    bloqueioDist: 14.0,         // até que distância à frente conta
+    bloqueioLargura: 6.0,       // meia-largura do corredor
+
+    throughBallGap: 14.0,       // quão atrás da linha o colega pode estar
+    throughBallDepth: 9.0,      // metros além da linha onde se põe a bola
+    /*
+    Baixou de 45: com o alvo posto `throughBallDepth` ALÉM do companheiro, um
+    limite de 45 m dava lançamentos medidos de 58 m — distância de pontapé de
+    baliza, não de passe em profundidade.
+    */
+    throughBallMaxDist: 38.0,
+    // Nem sempre que há espaço se lança: senão o jogo torna-se todo directo.
+    throughBallChance: 0.675, // 0.30 -> 0.45 -> 0.675 (+50% duas vezes)
+
+    /*
+    Conversão de distância em força — OBSOLETA. Vinha do modelo de arrasto
+    antigo ("a bola perde 0.22 × 0.85 da velocidade por segundo"), que já não
+    existe. A força é agora resolvida a partir do alcance pretendido, em
+    velocidadeParaAlcance/velocidadeRasteiraPara (utils.js). Mantida só para
+    não partir quem ainda lhe chame.
+    */
+    forceForDistance: 1.68,
+
+    /*
+    --- Balística do passe (ver executePassGameplay em fsm.js) --------------
+
+    Acima de `distAereo` o passe vai pelo ar e ATERRA no alvo. A elevação
+    desce com a distância: um passe de 25 m sobe mais para passar por cima de
+    quem está no meio; um de 60 m vai mais raso para chegar depressa.
+    */
+    /*
+    Passe/lançamento longo só para alvos a MAIS de 30 m (pedido). Abaixo
+    disso é passe rasteiro normal — uma bola pelo ar para um colega a 12 m
+    só complica a recepção sem ganhar nada.
+    */
+    /*
+    O QUE E UM LANCAMENTO, e o que nao e.
+
+    Um lancamento e uma bola LONGA (>= `distMinLonga`) que RASGA a linha —
+    sai por entre dois adversarios. Uma bola a frente do companheiro, para
+    espaco livre, e um passe no espaco: pode ter 2 m e nao passa por entre
+    ninguem.
+
+    `throughBallCorredorLargura` e a que distancia da linha do passe um
+    adversario ainda conta como estando la; `throughBallVaoMax` e o vao
+    maximo entre os dois — acima disso nao e um corredor, e campo aberto.
+    Ver `passaEntreAdversarios` (utils.js).
+    */
+    /*
+    BONUS DE PASSE PARA OS SECTORES ACTIVOS (pedido).
+
+    Os botoes Left / Center / Right do painel (`Tatics.setores`) ja pesavam
+    no posicionamento e na nota do passe, mas so por uma parcela fixa de
+    ~40 pontos — que nao se ve ao lado de bonus de 300 e 500. Este e
+    MULTIPLICATIVO sobre a nota inteira do candidato: quem esta num sector
+    ligado vale mais 20%.
+
+    Aplica-se so a notas positivas (ver findPassTarget): um bonus nao pode
+    afundar quem ja estava em negativo.
+    */
+    bonusSectorActivo: 0.20,
+
+    distMinLonga: 30.0,
+    throughBallCorredorLargura: 7.0,
+    throughBallVaoMax: 13.0,
+    distAereo: 30.0,
+    elevacaoCurta: 24 * Math.PI / 180,
+    elevacaoLonga: 25 * Math.PI / 180,
+    elevacaoCruzamento: 22 * Math.PI / 180,
+    // Recurso do lançamento alto quando o resolverElevacaoPasse não dá ângulo:
+    // dentro da mesma faixa de 25°-35° (ver passeArco).
+    elevacaoLancamento: 25 * Math.PI / 180,
+
+    /*
+    --- Os três tipos de bola alta ------------------------------------------
+    A elevação passa por cima dos marcadores nos três; o que os distingue é o
+    PONTO DE MIRA:
+
+    1. PASSE pelo alto      aterra um pouco ANTES do companheiro, para lhe
+                            morrer à frente ou no peito. `recuoPasseAlto` é
+                            esse encurtamento, em metros.
+    2. LANÇAMENTO pelo alto aterra À FRENTE dele, no espaço para onde corre.
+                            O alvo já é o espaço (ver findThroughBall), por
+                            isso aqui só se pede que aterre lá.
+    3. CRUZAMENTO alto      chega à altura da CABEÇA dele, ainda no ar, para
+                            cabecear. Não aterra no ponto — passa por ele a
+                            `alturaCruzamento` do chão.
+    */
+    recuoPasseAlto: 1.5,
+    alturaCruzamento: ALTURA_CABECA,
+    // Adversários a esta distância transversal da linha do passe (à distância do travês da bola) bloqueiam a linha / obrigam a levantar a bola.
+    corredorBloqueio: 1.0,
+
+    /*
+    --- Arco do passe normal por faixa de distância (pedido explícito) -----
+
+    <=15m sempre rasteiro. 15-30m pode sair rasteiro OU com um arco raso, com
+    TECTO de altura por faixa — só sobe o necessário para passar por cima de
+    quem estiver no meio, nunca um lançamento. >=30m é sempre pelo alto, com
+    ângulo entre 30° (mais raso, mais rápido) e 45° (mais alto), calculado
+    para o alcance pedido.
+
+    `rasteiroMax` era 5m, e por isso um passe curto de 8 ou 12m era levantado
+    metade das vezes sem ganhar nada: à distância a que o companheiro está
+    livre, a bola no chão chega antes e é mais fácil de dominar. Levantar só
+    faz sentido quando há mesmo gente no caminho — e essa decisão já é tomada
+    à parte, no ramo de linha bloqueada.
+
+    `chanceArco`: acima de `rasteiroMax`, chance de sair com arco em vez de
+    rasteiro — o mesmo passe de 20m tanto pode ser jogado no chão como
+    levantado.
+    */
+    passeArco: {
+        rasteiroMax: 15.0,
+        chanceArco: 0.5,
+
+        /*
+        ABAIXO DOS 30 m A BOLA NÃO PASSA DA ALTURA DO PEITO.
+
+        Pedido explícito: passe PELO ALTO só acima dos 30 m. Até lá a bola pode
+        levantar-se — é preciso, para passar por cima de quem está na linha —
+        mas o tecto é o mesmo ponto onde o companheiro a mata no peito
+        (o `BallControl.peitoAltura`, 1.20 m — o número está aqui à mão porque o
+        player_behavior.js carrega depois deste ficheiro). A banda dos 20-30 m
+        estava em 4.2 m,
+        que é a parábola de um lançamento e não de um passe: chegava por cima
+        da cabeça de quem a esperava.
+
+        Continua a ser um TECTO e não um alvo: um passe de 16 m com o caminho
+        limpo sai rasteiro na mesma (o sorteio do `chanceArco` não mudou).
+        */
+        bandas: [
+            { max: 10.0, alturaMax: 1.0 },
+            { max: 20.0, alturaMax: 1.20 },
+            { max: 30.0, alturaMax: 1.20 }
+        ],
+
+        /*
+        FAIXA DE ELEVAÇÃO DE TODO O PASSE PELO ALTO — 25° a 35°.
+
+        Um passe pelo alto é um passe: sai do peito do pé com o corpo por cima
+        da bola. Acima dos ~35° já é um pontapé de recurso, e era isso que se
+        via — passes com a mesma parábola de um chutão de guarda-redes.
+
+        Havia três caminhos a escolher elevação e nenhum tinha esta faixa:
+
+          bandas (<=30 m)   `atan(4·alturaMax/dist)` com tecto de 60°. Um
+                            passe de 21 m pela banda dos 4.2 m dava 38.7°.
+          longo (>30 m)     interpolava entre 42° e 32°.
+          encontro          o `elevacaoParaTempoDeVoo` (utils.js) tinha
+                            limites próprios de 12° a 55°, e quando o receptor
+                            demorava a chegar ele ia buscar os 55° para
+                            atrasar a bola. É o mais alto dos três.
+
+        Agora os três apertam-se aqui. O tempo do encontro continua a resolver-
+        se pelo ângulo — só que dentro da faixa de um passe, e o que não couber
+        resolve-se onde deve, na força.
+        */
+        /*
+        TECTO DE ALTURA DO PASSE, POR DISTANCIA (pedido).
+
+        Abaixo de `distanciaAlto` (35 m) a bola pode sair do chao — e
+        preciso, para passar por cima de quem esta na linha — mas nao passa
+        de `apexMaxCurto`, que e a altura do PEITO: dali para baixo o
+        companheiro mata-a no peito em vez de a ver passar por cima da
+        cabeca. Acima dos 35 m vale o tecto normal (`apexMax`).
+
+        Os quatro campos existiam e foram apagados num refactor; o
+        `executePassGameplay` continuou a le-los, e como `distanciaAlto`
+        vinha `undefined` o teste `alcance < undefined` dava sempre false —
+        ou seja, TODOS os passes usavam o tecto dos 7 m. Era esse o "passe
+        pelo alto num passe de 2 m".
+
+        `elevMinCurto` e o piso de angulo que este tecto precisa: 1.3 m de
+        apex a 25 m sai a ~11.8 graus, e o piso dos longos nao deixaria la
+        chegar.
+        */
+        apexMaxCurto: 1.30,
+        distanciaAlto: 35.0,
+        elevMinCurto: 4 * Math.PI / 180,
+        elevMin: 25 * Math.PI / 180,
+        elevMax: 35 * Math.PI / 180,
+
+        /*
+        PISO PRÓPRIO PARA QUEM ESTÁ DEBAIXO DO TECTO DO PEITO.
+
+        O `elevMin` de 25° é a faixa de um passe pelo alto de verdade, e a
+        clamp para cima ANULAVA o tecto da banda: um passe de 20 m com tecto de
+        1.20 m pede 13.5°, era subido para 25°, e o apex saía a 2.33 m — o dobro
+        do que o tecto dizia. Abaixo dos 30 m o que manda é a altura, portanto o
+        piso tem de ser baixo o suficiente para a bola poder sair rasante.
+        */
+        elevMinBaixa: 5 * Math.PI / 180,
+
+        /*
+        TECTO DE ALTURA, em metros. A faixa de ângulos descreve o gesto e é a
+        mesma a 18 m e a 55 m — mas o apex cresce com a VELOCIDADE, que cresce
+        com a distância. Medido: um lançamento de 54.9 m a 35° saía com
+        vy = 18.5 e subia 17 m. Ângulo legal, bola de guarda-redes.
+
+        Ver `elevacaoComTectoDeApex` (utils.js): acima disto a elevação baixa
+        até caber.
+        */
+        apexMax: 7.0,
+
+        /*
+        E quando nem no mínimo da faixa o apex cabe — um passe de 55 m a 25°
+        ainda sobe 11 m — a bola sai MAIS TENSA do que a faixa do gesto
+        permite. É o que um jogador faz mesmo: a alternativa a um passe longo
+        tenso não é um passe longo alto, é não dar o passe.
+
+        A faixa de 25°-35° continua a mandar em tudo o resto; isto é só o piso
+        do tecto de altura.
+        */
+        elevMinLonga: 15 * Math.PI / 180,
+
+        anguloLongoMin: 25 * Math.PI / 180,
+        anguloLongoMax: 35 * Math.PI / 180
+    },
+
+    /*
+    Com que velocidade a bola CHEGA ao alvo num passe rasteiro.
+
+    É esta a manípula do RITMO do passe: a velocidade de saída é consequência
+    dela e da distância (ver velocidadeRasteiraPara), portanto subir isto
+    acelera a bola toda sem mexer na física.
+
+    Esteve a 2.8, e a esse valor um passe de 10 m demorava 1.57 s a chegar —
+    "câmara lenta", e com razão: no jogo real um passe rasteiro de 10 m anda
+    à volta de 1 s. A 6.0 o mesmo passe leva 1.12 s e sai a 11.8 m/s em vez
+    de 9.9.
+
+    Subiu 25% (6.0 -> 7.5, e 2.8 -> 3.5 nos outros dois) e posteriormente +10%
+    (7.5 -> 8.25) para um ritmo mais ágil e veloz de circulação — e passou do
+    ponto. Relato: "alguns passes directos estão muito fortes".
+
+    Medido em jogo, por faixa de distância (velocidade de CHEGADA, mediana):
+
+        vChegada/taxa    0-5m   5-8m   8-12m   12-15m   certo 0-12m
+        8.25 / 0.18       9.9    9.0     8.9      9.0      86-88%
+        6.50 / 0.10       7.3    7.4     7.7      7.8      85-100%
+        5.50 / 0.08       6.5    6.7     6.9      8.2      80-86%
+
+    Um passe de 4 m a chegar a 9.9 m/s é um tiro aos pés, e era o que se via.
+    A 5.5 a bola fica lenta o suficiente para ser cortada (18% de cortes na
+    faixa dos 5-8 m, contra 7-11% nas outras duas). 6.5 tira o tiro sem
+    perder o passe.
+
+    E O `BallControl.easySpeed` DESCE COM ELE (10.66 -> 8.5). Ele tinha sido
+    subido "na mesma proporção" precisamente para o domínio aguentar estas
+    chegadas; com o passe a chegar a 7.5 em vez de 9.9, um limiar de 10.66
+    tornava todo o domínio garantido e as bolas altas (que chegam a 11-16)
+    deixavam de ser difíceis. Os dois números andam juntos, sempre.
+    */
+    vChegadaRasteira: 6.5,
+
+    /*
+    O REFORCO DO PASSE CURTO, que estava escrito a mao no utils.js.
+
+    Uma bola de 3 m com a mesma chegada de uma de 20 sai a passo e parece que
+    o jogador nao quis passar — dai o reforco. Mas a taxa de 0.18 por metro
+    somava ate +2.16 m/s, e era ela que punha um passe de 4 m a chegar a 10.1
+    m/s (medido em jogo). E por isso que esta aqui e nao la dentro: e uma
+    manipula de ritmo, nao uma constante da fisica.
+    */
+    reforcoCurtoDist: 12.0,
+    reforcoCurtoTaxa: 0.10,
+    vChegadaCruzamento: 3.85,
+    /*
+    O lancamento chega mais manso do que o passe aos pes, e de proposito: o
+    alvo dele e um PONTO a frente de quem corre, nao o pe de ninguem.
+    */
+    vChegadaLancamento: 2.75,
+
+    /*
+    FRACÇÃO DO ALCANCE RASTEIRO ACIMA DA QUAL O LANÇAMENTO VAI PELO AR.
+
+    O rasteiro tem um tecto físico de ~28.8 m (ver alcanceRasteiroMaximo,
+    utils.js): pedir mais do que isso não dá erro nenhum, dá uma bola que morre
+    a meio caminho. Medido em 1200 s de jogo, 13 dos 167 lançamentos rasteiros
+    pediam mais de 28 m e ficaram em média 21.7 m aquém do ponto.
+
+    0.92 e não 1.0 porque na fronteira a bola chega ao ponto praticamente
+    parada — tecnicamente lá, inútil na prática.
+    */
+    fraccaoAlcanceRasteiro: 0.92,
+
+    /*
+    PASSE DE ENCONTRO — ver `passeDeEncontro` em utils.js.
+
+    O `vChegadaLancamento` acima resolve a força SÓ pela distância: "quero que
+    a bola chegue ali a 2.75 m/s". Não sabe quando é que o companheiro lá chega,
+    e é essa a falha que se via — o passe aos pés certo, o passe no espaço e o
+    lançamento sempre errados. A bola chegava ao ponto mais de um segundo antes
+    dele e ficava lá parada, ou chegava viva e passava-lhe pela frente.
+
+    Aqui pede-se as duas coisas ao mesmo tempo:
+
+      TEMPO      a bola chega ao ponto `folgaTempo` DEPOIS dele — ele chega
+                 primeiro, não trava à espera dela.
+      CHEGADA    e chega a `fracVelReceptor` da velocidade a que ele corre. Uma
+                 bola que aterra a 14 m/s à frente de quem corre a 7 é
+                 impossível de aceitar por muito bem sincronizada que esteja.
+
+    Quando as duas se mordem manda a chegada: mais vale a bola esperar por ele
+    do que fugir-lhe.
+    */
+    encontro: {
+        folgaTempo: 0.15,       // s que a bola chega depois dele
+        fracVelReceptor: 0.85,  // chegada, em fracção da velocidade dele
+        vChegadaMin: 3.3,       // piso: não morrer antes do ponto
+        vChegadaMax: 12.1,      // tecto absoluto, mesmo com um receptor rápido
+        vSaidaMax: 20.35,       // o mesmo tecto do velocidadeRasteiraPara
+        /*
+        Só entra quando o alvo está mesmo À FRENTE do companheiro. Abaixo
+        disto o passe é aos pés, e aí o alvo é ele: sincronizar não muda nada
+        e só arriscava mexer no que já estava certo.
+        */
+        distMinAlvo: 3.0,
+
+        /*
+        Limites da elevação quando o passe vai pelo alto e o tempo é resolvido
+        pelo ângulo (ver elevacaoParaTempoDeVoo). Abaixo de 12° já é um passe
+        rasteiro com pretensões; acima de 55° é uma bola que fica no ar tanto
+        tempo que qualquer defesa lá chega.
+        */
+        /*
+        A faixa é a MESMA do resto dos passes pelo alto (passeArco.elevMin/Max,
+        25°-35°). Estava em 12°-55°, e era o pior dos três caminhos: quando o
+        receptor demorava a chegar, o encontro ia buscar os 55° para atrasar a
+        bola — o passe saía com a parábola de um chutão de guarda-redes. Dentro
+        da faixa o ângulo ainda ajusta o tempo; o que não couber resolve-se na
+        força, onde deve.
+        */
+        elevMin: 25 * Math.PI / 180,
+        elevMax: 35 * Math.PI / 180
+    },
+
+    /*
+    RECEPÇÃO NO ESPAÇO — ver o ramo novo do `actReceivePass` (player_bt.js).
+
+    O destinatário preferia SEMPRE o `interceptionPoint` (perception.js), que é
+    o primeiro ponto da trajectória a que ele chega — para uma bola que vem na
+    direcção dele, isso fica ATRÁS do sítio para onde o passe foi dado. Num
+    passe no espaço ele dava meia-volta e ia buscar a bola em vez de correr
+    para o espaço. Medido: meio segundo depois do passe, 56% dos lançamentos
+    tinham o destinatário MAIS LONGE do ponto (8.9 m -> 10.7 m).
+
+    `distEspaco`: acima desta distância ao ponto, o passe é para o ESPAÇO e não
+    para os pés — e aí corre-se para o ponto, desde que se lá chegue a tempo.
+    `folgaTempo`: quanto pode chegar depois da bola e ainda valer a pena (ela
+    continua a rolar).
+    */
+    /*
+    PASSE DIRECTO AOS PÉS: espera-se QUIETO, virado para a bola.
+
+    Relato: "os jogadores estão a tremer na posição quando estão a aguardar o
+    passe chegar". Não era animação — era o alvo a mexer-se. O destinatário
+    seguia o `interceptionPoint`, que a percepção recalcula a cada frame e que
+    ANDA na direcção dele à medida que a bola rola; a histerese de 0.8 m não
+    chegava, porque o alvo vinha ao encontro dele e voltava a passar o limite
+    frame sim frame não. Resultado: micro-arranques em ping-pong, com o corpo a
+    rodar para o alvo novo de cada vez.
+
+    Num passe que vem MESMO na direcção dele não há nada a corrigir: espera-se
+    parado, de frente para a bola, e só se inicia o movimento quando ela já
+    está perto — que é quando se dá o passo para a dominar.
+
+    `desvioDirecto`         meia-largura do corredor, em metros: a que distância
+                            da linha da bola ele ainda está "no caminho dela".
+                            Uma passada lateral — mais do que isto e há mesmo
+                            que ir buscá-la.
+    `distIniciaMovimento`   a que distância da bola ele deixa de esperar e
+                            começa a mexer-se.
+    `velMinDirecto`         abaixo desta velocidade a bola já não vem a
+                            caminho de ninguém: é bola morta, vai-se buscá-la.
+    */
+    recepcao: {
+        distEspaco: 2.5,
+        folgaTempo: 0.35,
+        desvioDirecto: 1.0,
+        distIniciaMovimento: 2.5,
+        velMinDirecto: 1.5
+    },
+
+    /*
+    Erro máximo no PESO da bola, para skill de passe 0. Escala com
+    (1 - PASS/100): a 80 de PASS o erro é ±3.6%, a 40 é ±10.8%. Substitui o
+    antigo `passBoost`, que aumentava a força em vez da precisão — e com a
+    balística resolvida isso só voltava a pôr a bola longe do alvo.
+    */
+    // Reduzido 25% a pedido (era 0.162): a 80 de PASS o erro passa de +-3.6%
+    // para +-2.7%. Ver a nota do lote no docs/filesSummary.md.
+    erroPesoMax: 0.1215,
+
+    /*
+    --- Percepção e margem de segurança de limites de campo (Linhas Laterais / Fundo) ---
+    */
+    margemSegurancaLinha: 3.2,     // Margem de segurança básica em metros
+    margemSegurancaLinhaMin: 1.5,  // Menor margem admissível para jogadores excepcionais
+    penalidadeBordaMax: 120        // Penalidade máxima na nota do passe por proximidade perigosa da linha
+};
+
+/*
+ERRO DE EXECUCAO DO PASSE — a dispersao angular.
+
+O `PassModel.erroPesoMax` ja tratava do PESO (chegar curto ou comprido). O
+que faltava era a DIRECCAO: o passe saia sempre na linha exacta do alvo, e
+por isso nenhuma bola se perdia por ter saido torta. As perdas de posse
+vinham so de decisao ma ou de dominio falhado.
+
+    sigmaMax        dispersao (rad) de um jogador com 0 de skill
+    sigmaMin        piso: nem o melhor passador do mundo e exacto
+    pesoTecnica     quanto a TEC conta face ao PASS (0..1)
+    raioPressao     a que distancia um adversario comeca a estorvar
+    pressaoMult     multiplicador de sigma com um adversario em cima
+    costasMult      multiplicador quando passa de costas para o alvo
+    forcaMinPressao fraccao da forca que sobra num passe apertado
+    sigmaTecto      tecto duro depois de aplicados pressaoMult e costasMult —
+                     sem ele o pior caso empilhado (sigmaMax * pressaoMult *
+                     costasMult) passa dos 30°, muito acima do "~9.2 graus"
+                     documentado para sigmaMax sozinho
+*/
+/*
+A DEVOLUCAO DO GUARDA-REDES COM A MAO.
+
+Ela ia pelo caminho do passe normal (`executePassGameplay`, TIPO 1), e o passe
+normal sorteia arco por faixa de distancia: media a 15.8 m, o lancamento subia
+a **2.27 m de apex** e chegava a 3.27 no pior caso — uma bola por cima da
+cabeca, que ninguem devolve com o pe.
+
+Um guarda-redes que entrega com a mao ou ROLA a bola pelo chao ou atira-a rente
+— nunca a lobe. Por isso a entrega tem balistica propria:
+
+    ate `rasteiraMax`   rola pelo chao, com `vChegada` de ritmo de chegada
+    dai para a frente   a trajectoria mais BAIXA que la chega, com o apex
+                        travado em `apexMax` (a altura do peito)
+
+Se nem com o tecto ha solucao, rola: uma bola no chao a 30 m e feia, uma bola
+a 4 m de altura e impossivel de dominar.
+*/
+const GkThrowModel = {
+    /*
+    QUAL DOS DOIS GESTOS. Pedido, com fotografias: o lancamento por cima e
+    "para alvos a mais de 30 metros"; abaixo disso e o rolamento, com a mao a
+    passar rente ao chao (ver GoalkeeperUnderarmThrowClip em
+    config/animations.js). Ate aqui havia um gesto so — o de cima — e a bola
+    rolada era largada no alto e teletransportada para o relvado.
+    */
+    distanciaPorCima: 30.0,
+
+    rasteiraMax: 18.0,    // ate aqui vai sempre pelo chao
+    vChegada: 7.5,        // m/s de chegada da bola rolada
+    /*
+    O tecto e ABSOLUTO, medido do chao — e a bola parte da MAO, a ~1.1 m.
+    Medir o apex a partir do ponto de largada deixava-a subir 1.2 m acima da
+    mao, ou seja 2.3 m do chao: a altura da cabeca, que e o que se via.
+    */
+    apexMax: 1.40,        // altura do PEITO, medida do CHAO: o tecto do voo
+    /*
+    E ha um tecto de FORCA. Uma bola rolada a 32 m pede 44 m/s para chegar
+    com ritmo — isso nao e uma entrega, e um tiro. Acima de `vMax` a bola sai
+    a `vMax` e chega mais lenta; quem entrega tao longe e o pe, nao a mao.
+    */
+    vMax: 22.0,           // m/s a saida, no maximo
+    elevMin: 4 * Math.PI / 180,
+    elevMax: 20 * Math.PI / 180
+};
+
+if (typeof window !== 'undefined') window.GkThrowModel = GkThrowModel;
+
+const PassErrorModel = {
+    sigmaMax: 0.0878,      // ~5.0 graus (reduzido 10% e depois 25%)
+    sigmaMin: 0.0061,      // ~0.35 graus (reduzido 10% e depois 25%)
+    pesoTecnica: 0.35,
+    raioPressao: 3.5,
+    pressaoMult: 1.55,
+    costasMult: 2.0,
+    forcaMinPressao: 0.85,
+    sigmaTecto: 0.1755     // reduzido 10% e depois 25%
+};
+
+/*
+Carrinho (SLIDE_TACKLE).
+
+A animação era `applyKeyframeAnimation("Soccer Tackle")` — dados pré-gravados de
+outro esqueleto, com as pernas a ±3.0 rad de rotação.z (172°, praticamente
+invertidas). Foi substituída por uma pose procedural: deslizar sobre uma anca,
+uma perna esticada para a bola, a outra dobrada por baixo, tronco erguido e
+apoiado no braço de trás.
+
+Fases, em segundos desde o início:
+    0 → lancamento   atira-se ao chão
+      → deslize      desliza; a velocidade cai a zero no fim desta fase
+      → paragem      fica caído (é o preço de ter feito o carrinho)
+      → levantar     põe-se de pé e volta ao MOVE_TO_POS
+*/
+
+const SupportModel = {
+    /*
+    Apoio de CIRCULACAO — camada a distancia de passe (ver atribuirApoios).
+    */
+    circulacao: {
+        maxApoios: 3,
+        raioMin: 10.0,
+        raioMax: 18.0,
+        desvioMax: 8.0,
+        margemLinha: 2.0,
+        margemAdversario: 3.0,
+
+        pesoFolgaLinha: 1.2,
+        pesoFolgaPonto: 1.0,
+        pesoCusto: 0.5,
+        folgaCap: 8.0
+    }
+};
+
+
+/*
+=============================================================================
+Tipos de passe — que PONTO a bola mira, e com que frequência
+=============================================================================
+Três formas de entregar a bola ao mesmo companheiro:
+
+    direct   aos pés dele (o comportamento de sempre, via alvoDePasse)
+    space    o ponto MEDIANO em profundidade do leque do PlayerPassTarget:
+             metade dos pontos vivos está mais perto dele, metade mais longe
+    leading  o ponto vivo do leque MAIS PERTO da baliza adversária
+
+`space` e `leading` saem os dois do mesmo leque de candidatos
+(pass_candidates.js), já filtrado de adversários e linhas tapadas — por isso
+mirar um deles é mirar espaço jogável, não uma coordenada qualquer.
+
+A mistura depende de DE ONDE para ONDE vai o passe. Sector = terço do campo
+no referencial de ataque (def/mid/atk); corredor = centro (|x| < larguraCentro)
+ou lado. As regras são testadas por ordem — a primeira que casa manda.
+*/
+const PassTypeModel = {
+    larguraCentro: 10.0,   // |x| abaixo disto conta como corredor central
+
+    /*
+    Recuo: quantos metros o destino tem de estar ATRÁS da origem para o passe
+    contar como para trás. Sem esta margem, um passe lateral com meio metro de
+    diferença virava recuo e ia aos pés.
+    */
+    margemRecuo: 2.0,
+
+    /*
+    LEADING CURTO — o passe à frente que não precisa do leque de candidatos.
+
+    Quando nenhum ponto do PlayerPassTarget é validado (adversário a menos de
+    2 m, linha de passe tapada, ponto a mais de 30 m da bola), o passe caía aos
+    pés. Num bloco compacto isso é a maior parte das vezes, e era daí que vinha
+    a sensação de jogo travado.
+
+    `liderancaCurta` é a distância cheia à frente do companheiro; perante um
+    adversário encurta-se de `liderancaPasso` de cada vez, até `liderancaMin`.
+    */
+    liderancaCurta: 4.0,
+    liderancaPasso: 1.0,
+    liderancaMin: 1.5,
+
+    /*
+    Ordem importa. `recuo` vem primeiro: um passe para trás é para segurar a
+    bola, e jogá-lo no espaço à frente de quem recebe manda-o correr para longe
+    da linha que veio dar. `defParaAtk` tem de ser vista antes de `origemAtaque`,
+    senão um passe longo de trás cairia na regra do ataque.
+
+    A tabela foi invertida: dava 80% de bola aos pés na misturaPadrao — a regra
+    que apanha a maioria dos passes — e `leading` só aparecia em duas regras
+    estreitas. O jogo travava a cada passe.
+    */
+    regras: [
+        // Passe para trás: aos pés, para segurar.
+        {
+            nome: 'recuo', quando: (o, d) => d.avanco < o.avanco - PassTypeModel.margemRecuo,
+            mistura: { direct: 0.85, space: 0.15 }
+        },
+
+        // Defesa a saltar o meio-campo, directo para o ataque.
+        {
+            nome: 'defParaAtk', quando: (o, d) => o.sector === 'def' && d.sector === 'atk',
+            mistura: { space: 0.5, leading: 0.5 }
+        },
+
+        /*
+        SAÍDA DE TRÁS: aos pés.
+
+        Relato: "os zagueiros estão chutando longos lançamentos para frente na
+        mentalidade equilibrada com vários jogadores de meio, meio pela lateral
+        e laterais para sair jogando".
+
+        Não havia regra nenhuma para a origem no terço defensivo: a saída de
+        trás caía no `centroParaCentro` ou na `misturaPadrao`, ambas com 0.30
+        de bola aos pés — 70% no espaço. Medido em 20 minutos, o central jogava
+        57% das bolas para o espaço, com média de 21.4 m e 33% delas acima de
+        25 m; o lateral 67%.
+
+        Aquelas duas misturas foram afinadas para a progressão no meio-campo,
+        onde quem recebe já vai em movimento. Atrás é outra coisa: o receptor
+        está parado, de frente para o jogo e sem ninguém em cima — joga-se ao
+        pé dele, que é como se sai a jogar.
+
+        Vem DEPOIS do `defParaAtk` de propósito. Um central que salta o
+        meio-campo inteiro está a fazer uma bola longa deliberada, e essa não
+        se joga aos pés a 40 m; o que esta regra apanha é o resto — def->def e
+        def->mid, a saída propriamente dita.
+
+        Não é 0.85 como o recuo: sobra espaço para o passe que quebra a linha
+        quando o médio já arrancou, senão trocava-se a bola comprida a mais
+        pela saída sempre lateral, que é o mesmo defeito ao contrário.
+
+        E A MENTALIDADE MANDA AQUI — ver `porAgressao` logo abaixo. Era o outro
+        buraco do mesmo relato: a Mentalidade tocava nesta decisão num sítio só
+        (o `aggression` dentro do bónus de progressão, player.js), e só para a
+        AUMENTAR. Não havia caminho por onde Equilibrada ou Defesa pedissem
+        menos bola para a frente do que Ataque.
+        */
+        {
+            nome: 'saidaDeTras', quando: (o) => o.sector === 'def',
+
+            // Equilibrada (agressao 0.50). É o que `porAgressao` devolve lá,
+            // e o que vale quando não há blackboard nenhum a consultar.
+            mistura: { direct: 0.7, space: 0.2, leading: 0.1 },
+
+            /*
+            `agressao` é 0..1 do MentalidadeModel (0.20 Muito Defensiva, 0.35
+            Defesa, 0.50 Equilibrada, 0.65 Ataque, 0.80 Muito Ofensiva),
+            temperado pelo momento do jogo no `computeAggression`.
+
+            Uma equipa que se põe atrás sai a jogar curto porque não tem
+            ninguém lá à frente para receber; uma que ataca arrisca a bola que
+            salta uma linha. O declive é suave de propósito: mesmo em Muito
+            Ofensiva o central joga mais aos pés do que ao espaço — quem manda
+            a bola longa é o meio-campo, não ele.
+
+            O espaço que sobra reparte-se 2:1 entre `space` e `leading`, que é
+            a proporção da linha de cima.
+            */
+            porAgressao: function (agressao) {
+                const a = Math.max(0, Math.min(1, (typeof agressao === 'number') ? agressao : 0.5));
+                const direct = 0.9 - 0.4 * a;
+                const resto = 1 - direct;
+                return { direct: direct, space: resto * (2 / 3), leading: resto * (1 / 3) };
+            }
+        },
+
+        // Já no ataque: lá dentro ou a abrir nas pontas.
+        {
+            nome: 'origemAtaque', quando: (o) => o.sector === 'atk',
+            mistura: { direct: 0.25, space: 0.45, leading: 0.3 }
+        },
+
+        // Progressão pelo centro a abrir para o lado (def->mid, mid->atk).
+        {
+            nome: 'centroParaLado',
+            quando: (o, d) => o.corredor === 'centro' && d.corredor === 'lado' &&
+                ((o.sector === 'def' && d.sector === 'mid') ||
+                    (o.sector === 'mid' && d.sector === 'atk')),
+            mistura: { direct: 0.1, space: 0.55, leading: 0.35 }
+        },
+
+        // Dentro do corredor central, em qualquer sector.
+        {
+            nome: 'centroParaCentro',
+            quando: (o, d) => o.corredor === 'centro' && d.corredor === 'centro',
+            mistura: { direct: 0.3, space: 0.35, leading: 0.35 }
+        }
+    ],
+
+    // Tudo o resto (passes laterais dentro do mesmo sector, etc.).
+    misturaPadrao: { direct: 0.3, space: 0.35, leading: 0.35 },
+
+    /*
+    Pesos da escolha do RECEPTOR. O tipo de passe não decide só onde a bola
+    cai — também mexe em quem a recebe: num passe para o espaço vale mais o
+    companheiro que TEM espaço à frente (pontos vivos no leque) do que o que
+    está mais bem colocado agora.
+
+    `bonusSugerido` mantém o BT no comando: a escolha dele só é trocada por
+    uma alternativa claramente melhor, não por um empate técnico.
+    */
+    escolha: {
+        /*
+        Os três termos chegam normalizados a 0..1 (ver notaCandidato em
+        pass_types.js), por isso estes pesos são comparáveis entre si.
+
+        Os antigos pesoProgresso/pesoEspaco/pesoDistancia multiplicavam
+        grandezas em escalas diferentes, e o do espaço era a CONTAGEM de pontos
+        vivos do leque — até 49, contra um progresso que raramente passava de
+        40. Um companheiro isolado na lateral tinha o leque quase todo vivo e
+        ganhava a escolha por estar isolado: 37 pontos contra 22 de quem estava
+        bem colocado à frente. Daí o passe eterno para a lateral.
+        */
+        bonusSugerido: 0.5,      // vantagem de partida do alvo que o BT propôs
+        progressoRef: 30.0,      // metros ganhos que valem 1.0 de progresso
+        distanciaMax: 45.0,      // acima disto nem é candidato
+
+        /*
+        Os pesos variam com a PRESSÃO sobre o portador: livre, procura quem
+        progride; com um adversário em cima, procura quem está livre. É o que
+        torna o passe lateral para o isolado a jogada certa quando é mesmo a
+        única, em vez de ser a regra.
+        */
+        raioPressao: 8.0,
+        pesosSemPressao: { progresso: 1.0, espaco: 0.30, distancia: 0.35, linha: 1.10 },
+        pesosSobPressao: { progresso: 0.45, espaco: 1.00, distancia: 0.20, linha: 1.10 },
+
+        /*
+        `linha` é a FOLGA da linha de passe até ao ponto de mira, normalizada
+        pela geometria do PassLineModel (corredor que cresce com a distância,
+        `bloqueioDuro` como piso). Ver notaCandidato/escolher em pass_types.js.
+
+        Não existia, e era esse o furo: o `findPassTarget` media a linha e
+        rejeitava quem tinha alguém em cima da recta, mas quem DECIDE é o
+        `escolher`, e a nota dele só tinha progresso, espaço e distância. O
+        alvo com a linha medida entrava aqui como sugestão e valia
+        `bonusSugerido`. Medido: um companheiro 30 m à frente com um
+        adversário em cima da linha (folga 0,00 m) e o leque de candidatos
+        vazio ganhava 0,767 contra 0,539 do companheiro a 12 m com 14,8 m de
+        folga — e daí vinham os 53% de passes cortados acima dos 25 m.
+
+        1.10 e não menos: tem de bater o progresso (peso 1.0) sozinho, senão
+        a distância continua a pagar a linha fechada. Igual com e sem pressão
+        de propósito — um passe para dentro de alguém é ainda pior com um
+        adversário em cima de quem passa, porque a perda é logo ali.
+        */
+
+        /*
+        Abaixo desta nota não vale a pena passar a ninguém: o actPass desce a
+        cascata driblar -> atrasar a alguém perto -> conduzir para trás.
+        `tecnicaDrible` é o mesmo 75 que o podeDriblar já usa.
+        */
+        /*
+        A CORRIDA AO PONTO DE QUEDA (ver pontoDisputado, utils.js).
+
+        A folga da linha responde a "alguem corta isto a meio?". Falta a outra
+        metade: no sitio onde a bola vai cair, quem la chega primeiro? Medido em
+        600 s, o passe em profundidade (`leading`) e o que mais se perde — 22%
+        cortados — e **os cortes acontecem a 98% do percurso**: nao e a linha, e
+        o ponto de queda. No mapa das posses, o passe cortado e 40% de todas as
+        mortes de sequencia.
+
+        Com o ponto disputado, o candidato nao e descartado: **desce a passe
+        DIRECTO ao homem**. O passe existe na mesma, deixa de ser um passe para
+        a corrida do adversario.
+
+        `velAdversario` e generosa de proposito (o topo da corrida sem bola),
+        pela mesma razao do toque de conducao: errar por prudencia custa um
+        passe curto, errar por optimismo custa a posse.
+        */
+        disputaDoPonto: {
+            velReceptor: 6.5,
+            velAdversario: 7.0,
+            margem: 0.15
+        },
+
+        notaMinima: 1.45,
+        tecnicaDrible: 75,
+
+        /*
+        1.45 e não 0.35 porque a nota mudou de escala quando o termo `linha`
+        entrou: um passe de linha limpa ganha os 1.10 do peso, e com o limiar
+        antigo passava a bastar ter linha para o passe valer a pena — a cascata
+        (atrasar / conduzir) deixava de disparar.
+
+        1.45 = 0.35 + 1.10, de propósito: para uma linha COMPLETAMENTE limpa o
+        limiar é exactamente o de antes, e o que mudou é só que a linha suja
+        passa a ter de pagar a diferença em progresso. É a alteração mínima —
+        não se aproveitou o fix para reafinar quanto se passa.
+        */
+
+        /*
+        Até onde se atrasa a bola. Sem este limite, um médio sob pressão
+        atrasava para o guarda-redes a quarenta metros — isso não é reiniciar a
+        jogada, é fugir dela.
+        */
+        raioRecuo: 18.0
+    }
+};
+
+/*
+Saída de bola do guarda-redes.
+
+Sorteado UMA vez por posse (não a cada frame, senão ele mudava de ideias
+enquanto segurava a bola e o resultado seria a média das duas opções em vez
+de 80/20).
+
+`laterais`: sai a jogar curto, e o destinatário é um LATERAL (LB/RB) — é a
+saída construída, por fora, longe do miolo onde a perda custa golo.
+`chuteFrente`: chutão para o espaço à frente (puntBall).
+
+Sem lateral disponível a tempo, cai no chutão: melhor a bola longe do que
+uma saída curta forçada para dentro.
+*/
+/*
+=============================================================================
+FALTA (livre directo/indirecto)
+=============================================================================
+A bola fica ONDE ESTÁ, quem sofreu a falta cobra, e a defesa monta barreira à
+distância regulamentar. Se o ponto estiver dentro do alcance de remate de quem
+bate, ele remata; senão, joga em passe.
+=============================================================================
+*/
+/*
+=============================================================================
+REMATE — potência
+=============================================================================
+Estava escrito à mão dentro do `executeShotGameplay` (fsm.js):
+
+    pow = (22.0 + ((TEC - 50) / 50) * 16.0) * 0.8
+
+que dava 4.8 m/s a TEC 0, **9.9 m/s a TEC 20** e 17.6 a TEC 50. Um remate de
+futebol anda nos 25-35 m/s (90-125 km/h); 9.9 m/s é um passe fraco.
+
+O que isso fazia, medido em tests/remate_mira.test.js: a TEC 50 o alcance útil
+era **23.5 m** — mais longe do que isso a `elevacaoParaAlvo` não encontrava
+ângulo nenhum e devolvia `null`, e o remate saía nos **36° fixos** do ramo de
+recurso. Um balão para o ar, de qualquer posição além dos 23 m. E mesmo dentro
+do alcance a mira ficava alta de mais: a 22 m precisava de 32° de elevação só
+para chegar ao canto rasteiro.
+
+Com estes valores a mesma mira a 22 m sai a ~13°, que é a trajectória tensa de
+um remate a sério.
+=============================================================================
+*/
+/*
+=============================================================================
+JOGO DE PRIMEIRA — tocar sem dominar
+=============================================================================
+Um jogador de técnica alta com um adversário em cima não precisa de parar a
+bola: toca de primeira. Até aqui isso não existia — TODA a gente dominava
+sempre, e a seguir esperava a cadência do `Dominar` (CadenceModel.posseBase)
+antes de decidir o que fazer.
+
+Três condições, e a terceira é o que faz disto uma possibilidade e não uma
+regra:
+
+    TÉCNICA      >= `tecMin`. Abaixo disso não se joga de primeira, domina-se.
+    PRESSÃO      adversário a <= `distAdversario`. Sem ninguém por perto não
+                 há razão nenhuma para não dominar — e o primeiro toque com
+                 espaço é sempre a melhor opção.
+    SORTEIO      `chanceMin`..`chanceMax` conforme a técnica. PODE tocar de
+                 primeira, não TEM de: um TEC 100 fá-lo em `chanceMax` das
+                 vezes, e nas outras baixa a bola como toda a gente.
+
+O que muda quando sai: não há gesto de domínio (`iniciarDominioDireito`) nem
+espera de cadência — ele decide no mesmo frame em que a bola lhe chega, e o
+que sair daí é o passe ou o remate normal.
+=============================================================================
+*/
+const FirstTouchModel = {
+    tecMin: 85,             // técnica a partir da qual é opção
+    distAdversario: 4.0,    // e só com alguém a esta distância ou menos
+
+    // Probabilidade, interpolada entre `tecMin` e 100 de técnica.
+    chanceMin: 0.45,
+    chanceMax: 0.80
+};
+
+/*
+=============================================================================
+JOGADAS COMBINADAS — o que tem prioridade sobre o passe normal
+=============================================================================
+O `PassTypes.escolher` pontua todos os companheiros por uma nota dominada pelo
+progresso para a baliza. Nessa nota, três jogadas que decidem jogos ou não
+existiam, ou saíam por acidente:
+
+  CARA A CARA   o passe que isola um companheiro com o guarda-redes. Na nota
+                normal vale tanto como qualquer outro passe para a frente.
+  TABELINHA     dar e receber de volta no espaço que se abre ao arrancar. Não
+                existia de todo — não há memória entre o passe e a devolução.
+  OVERLAP       correr por fora de quem tem a bola. Existiu e foi DESLIGADO
+                (`overlapTimer = 0` no player.js, "Disparadas / Overlap
+                pós-passe desativadas").
+
+Nenhuma delas se resolve com um bónus na nota: um bónus continua a competir com
+o progresso, e é isso que as faz perder. São um RAMO próprio, testado antes do
+passe normal, por esta ordem — cara a cara primeiro porque é a que acaba a
+jogada.
+=============================================================================
+*/
+const JogadasCombinadas = {
+    caraACara: {
+        // O companheiro tem de estar dentro desta distância à baliza para o
+        // passe valer a pena — de 45 m ninguém fica "isolado com o guarda-redes".
+        distBalizaMax: 34.0,
+        // Corredor entre ele e a baliza livre de defensores, com esta
+        // meia-largura.
+        corredorMeiaLargura: 3.5,
+        /*
+        A JANELA DO LANCAMENTO — quantos metros AQUEM do ultimo defensor o
+        companheiro tem de estar quando a bola sai do pe.
+
+        Pedido: "o lancamento tem que ser antes do jogador ficar impedido; o
+        jogador sai correndo uns 3 ou 4 metros antes do zagueiro com o braco
+        levantado pedindo bola".
+
+        Estava ao contrario: exigia-se que ele ja estivesse EM LINHA com o
+        ultimo defensor (`margemUltimoDefensor` 0.5), o que e pedir o passe
+        tarde de mais — no instante em que ele emparelha com a defesa ja nao
+        ha lance, ha um duelo. E era tambem a razao de o ramo quase nunca
+        disparar: 22 caras-a-cara em 30 jogos, e 7 depois de as corridas
+        passarem a respeitar a linha.
+
+        A posicao legal julga-se no instante do PASSE: ele esta onside quando
+        a bola sai e passa a linha a correr atras dela, que e o lance a
+        serio. O ponto do passe (`avancoDoPasse`) e que fica alem dela.
+        */
+        janelaAtrasDaLinha: 4.0,
+
+        // E tem de estar LANCADO: parado a espera nao e este lance.
+        velMinDoArranque: 2.0,
+        // Ponto do passe: metros à frente dele, na direcção da baliza.
+        avancoDoPasse: 7.0
+    },
+
+    tabelinha: {
+        // Só sob pressão: sem ninguém em cima não há razão para dar e receber.
+        distAdversario: 4.5,
+        // O parceiro tem de estar nesta faixa: perto que chegue para devolver
+        // de primeira, longe que chegue para a bola sair do aperto.
+        distParceiroMin: 5.0,
+        distParceiroMax: 16.0,
+        // Espaço à frente de quem inicia, para haver para onde arrancar.
+        espacoAFrente: 6.0,
+        // Quanto tempo o pedido fica de pé, e onde a devolução é posta.
+        duracaoPedido: 2.5,
+        avancoDaDevolucao: 8.0,
+        // Velocidade de quem arranca para receber a devolução.
+        velocidadeArranque: 7.9
+    },
+
+    /*
+    PASSE PARA QUEM INFILTRA — a jogada que não existia.
+
+    Medido: 1053 infiltrações por 90 min e 2% delas com um passe endereçado; o
+    `caraACara` das fichas dá 1 em 40 jogos. Quem corre para o espaço não é
+    servido, e por isso o simulador não tem a jogada que produz a chance
+    limpa — daí o xG por remate a um terço do real.
+
+    O overlap já tinha um ramo próprio no `tratarJogadaCombinada` (o
+    `overlapTimer` diz ao portador "sou opção"); a infiltração não tinha
+    nenhum. Este é o irmão dele:
+
+    `avancoDoPasse`   metros à frente do corredor, na direcção da corrida — a
+                      bola vai para onde ele VAI, não para onde está.
+    `distMin/Max`     a que distância do portador vale a pena servi-lo.
+    `margemLinha`     folga que a bola precisa para passar pelos adversários.
+    */
+    infiltracao: {
+        avancoDoPasse: 6.0,
+        distMin: 8.0,
+        distMax: 34.0,
+        margemLinha: 1.6,
+
+        /*
+        E TEM DE SER UMA JOGADA, NÃO O PASSE DE SEMPRE.
+
+        Com o ramo só na linha de passe, medido: 78% de TODOS os passes iam
+        para quem corria — a jogada excepcional virou a regra e a construção
+        desaparecia. Três filtros põem-na no sítio:
+
+        `ganhoMin`      metros que o corredor tem de estar À FRENTE de quem
+                        passa: servir alguém que corre ao lado não é romper
+                        linha nenhuma.
+        `avancoMin`     ele tem de estar no campo adversário (referencial de
+                        ataque), que é onde as costas da defesa existem.
+        `timerMin`      segundos de corrida que ainda faltam: passar para uma
+                        corrida que acaba no frame seguinte é perder a bola.
+        */
+        ganhoMin: 6.0,
+        avancoMin: 0.0,
+        timerMin: 1.0
+    },
+
+    overlap: {
+        // Quem passa por dentro corre por fora se o corredor do seu lado
+        // estiver livre até esta distância.
+        corredorLivre: 12.0,
+        // Só a partir do meio-campo: um overlap na própria defesa é um risco
+        // sem prémio.
+        avancoMin: -5.0,
+        duracao: 5.0,
+        // Metros à frente do portador, na linha lateral do lado dele.
+        avancoDaCorrida: 12.0,
+        larguraDoCorredor: 21.0,
+        velocidade: 7.9,
+        // Enquanto corre, o passe para ele vale isto a mais na nota.
+        bonusNota: 220
+    }
+};
+
+/*
+Atribuição de apoios (atribuirApoios) foi movida para js/utils.js (ver docs/auditoria_config_match.md item 5).
+*/
+
+/*
+CORRIDA AO ESPACO (RUN_INTO_SPACE) — o movimento sem bola que faz a troca de
+passes existir.
+
+Medido antes de isto existir: no momento de cada passe havia em media 3.6
+colegas a 10-22 m do portador e so 1.7 com linha de passe livre. Nao faltava
+criterio na escolha do passe — faltava quem se oferecesse. A cadeia normal de
+circulacao (RB -> CB -> CB -> LB -> CM ...) precisa de tres ou quatro linhas
+abertas ao mesmo tempo, e elas nao existiam.
+
+    distMin/distMax   a que distancia do portador vale a pena arrancar. Perto
+                      demais nao abre linha nenhuma; longe demais e um passe
+                      que ja nao esta ao alcance de ninguem.
+    maxCorrida        comprimento maximo da corrida, em metros
+    passeMin/Max      a que distancia do PORTADOR o destino tem de ficar: e
+                      preciso que ele consiga la por a bola
+    margemDestino     adversario mais perto do destino do que isto = nao esta
+                      livre
+    margemLinha       folga que a bola precisa para passar ao lado de alguem
+                      na linha portador -> destino
+    duracao           tecto de tempo; a corrida acaba antes se houver passe
+                      (ver o case RUN_INTO_SPACE na fsm.js)
+    arrefecimento     tempo minimo entre duas corridas do mesmo jogador
+    ocupacaoMax       acima disto a celula nao esta livre, esta so menos cheia
+*/
+const RunIntoSpaceModel = {
+    distMin: 8.0,
+    distMax: 32.0,
+    maxCorrida: 18.0,
+
+    // O destino tem de ser SERVIVEL, e nao so vazio: a que distancia do
+    // portador ele fica, e que folga a bola precisa para la chegar.
+    passeMin: 10.0,
+    passeMax: 22.0,
+    margemDestino: 4.0,
+    margemLinha: 2.0,
+    duracao: 4.0,
+    arrefecimento: 3.0,
+    ocupacaoMax: 0.35,
+
+    /*
+    QUANTO É QUE UMA CORRIDA ARRISCA ALÉM DA LINHA, em metros.
+
+    O alvo da infiltração ignorava a linha de fora-de-jogo por completo, e
+    medido no lote de 30 jogos ficava 7 a 24 m além dela: 8.27 impedimentos
+    por jogo contra os 3.20 do alvo. Passar a cortar o alvo na linha que ele
+    lê resolveu-o de mais — 0.37 por jogo — porque acabou com a jogada que
+    produz o fora-de-jogo real: o avançado arranca ANTES do passe e aposta
+    que a bola sai a tempo.
+
+    Esta margem é essa aposta. Zero é o avançado que nunca arrisca (e nunca
+    é apanhado); alto de mais é a corrida cega que se acabou de corrigir. O
+    corte da `avancoLegalDeCorrida` desconta-lhe 0.5 m, portanto o avanço
+    real além da linha lida é `riscoAlemDaLinha - 0.5`.
+
+    Sensível: o erro de leitura (OffsideModel.erroMax) quase não mexe no
+    número — 1.4, 2.4 e 3.6 deram 0.37, 0.36 e 0.72 impedimentos por 90 —
+    porque o alvo converge para a linha LIDA e o erro só conta no instante
+    do passe. É esta margem que decide a frequência.
+
+    Varrido em corridas headless de 123 a 148 min de relogio (impedimentos
+    por equipa por 90, alvo 3.20; o lote do browser da ~1.9x o headless):
+
+        0.0   0.37      a corrida nunca arrisca
+        1.5   0.36
+        3.0   0.73
+        4.5   2.42 e 2.11   <- era aqui
+        6.0   4.27
+        9.0   4.55      volta a ser a corrida cega
+
+    E VOLTOU A SER VARRIDO a 11 de Setembro, porque o mundo à volta mudou: o
+    `PassModel.bonusInfiltracao` passou a existir a sério (era apagado pela
+    tabela de pares de posições) e o portador dá agora a bola a quem rompe em
+    39% das oportunidades em vez de 13.8%. Quem rompe vive na linha, e o lote
+    de 40 jogos do browser respondeu com **8.85 impedimentos por jogo contra
+    os 3.20 do alvo (276%)**, de 5.89 no lote anterior.
+
+    A causa mediu-se, em 8 sementes de 1080 s (impedimentos por 90, as duas
+    equipas):
+
+        bonusInfiltracao   700 -> 9.36    400 -> 6.22    0 -> 5.70
+
+    Matar o bónus desfazia o pedido ("os jogadores infiltrando não estão com
+    nenhuma prioridade"). Arranja-se do outro lado — o infiltrado passa a
+    temporizar a corrida — e com o bónus nos 700:
+
+        risco   4.5 -> 9.36    3.0 -> 6.97    2.0 -> 5.81    1.5 -> 6.06
+                1.0 -> 3.93   <- entregue
+
+    E a prioridade sobrevive: com risco 1.0 o infiltrado continua a ser
+    escolhido em 47.6% das oportunidades e leva 37.2% dos passes executados
+    (eram 39% e 33% com risco 4.5).
+    */
+    riscoAlemDaLinha: 1.0,
+
+    /*
+    INFILTRAR É PARA A FRENTE, E MAIS NADA.
+
+    Relato: "infiltração é somente o movimento para frente em direção ao gol
+    adversário; não existe infiltração em movimento para trás em direção ao
+    próprio gol".
+
+    O `destinoDeCorrida` (utils.js) já exigia isso — mas o `actInfiltrar` e o
+    `actOverlap` calculam o alvo deles à mão, e os dois podiam pô-lo ATRÁS do
+    jogador por duas vias:
+
+      1. o tecto do campo: `min(CAMPO_COMP/2 - 2, avanço + 20)` devolve um
+         ponto atrás de quem já está a menos de 2 m da linha de fundo;
+      2. o tecto do fora-de-jogo: quem está em posição irregular tem
+         `offsideLimitDir - 0.5` ATRÁS de si, e o alvo saía para lá.
+
+    Nos dois casos o jogador entrava em RUN_INTO_SPACE — com o banner
+    "INFILTRA" e tudo — a correr na direcção da PRÓPRIA baliza.
+
+    `ganhoMinimo` é o que a corrida tem de ganhar em direcção à baliza
+    adversária para ser uma infiltração. Não chegando lá, não há corrida: o
+    jogador fica no posicionamento normal, que é o que ele deve fazer quando
+    não há espaço à frente para atacar.
+    */
+    ganhoMinimo: 4.0
+};
+
+/*
+Fecho do sector (fechoDoSector) foi movido para js/utils.js (ver docs/auditoria_config_match.md item 5).
+*/
+
+/*
+=============================================================================
+QUANDO É QUE O LANÇAMENTO GANHA AO PASSE CURTO
+=============================================================================
+Relato: "os zagueiros estão chutando longos lançamentos para frente na
+mentalidade equilibrada com vários jogadores de meio, meio pela lateral e
+laterais para sair jogando".
+
+O `findBestPassAnywhere` (js/bt/player_bt.js) devolvia o lançamento ANTES de
+calcular o passe normal, e a única pergunta que fazia era se o portador estava
+sob pressão. Fora de pressão — que é o estado normal de quem sai a jogar de
+trás — o lançamento ganhava por não haver ninguém na votação.
+
+Medido, 20 minutos de jogo em Equilibrada / Positional:
+
+    lançamentos                     71   100% fora de pressão
+                                         100% com passe curto disponível
+    passes dos defesas             100   79% para a frente, 6% lado, 15% trás
+    desses, >= 22 m                 33   em 100% havia opção de lado ou de trás
+    destino dos longos                   CF 16, RM 8, LM 4, CM 3, LB 2
+
+Um lançamento é uma decisão de RISCO: entrega a bola a 30-38 m por entre a
+linha adversária. Vale a pena quando é isso que ele é — alguém a romper por
+trás da defesa — ou quando a alternativa curta não existe. O que não faz
+sentido é ser a primeira escolha de um central sem pressão com meio campo
+para tocar.
+
+As três portas, e o porquê de cada uma:
+
+`semAlternativa`      não havendo passe curto nenhum, o lançamento é o que há.
+                      Esta porta vem primeiro: sem ela, apertar as outras duas
+                      trocava a bola comprida a mais pela bola presa.
+
+`receptorEmRuptura`   o companheiro já vai lançado em RUN_INTO_SPACE. É o
+                      lançamento verdadeiro, o que rasga a linha, e esse é bom
+                      em qualquer mentalidade — é para isso que ele corre.
+
+`agressaoMinima`      sem ruptura, é uma bola comprida para o espaço. Passa a
+                      depender da MENTALIDADE, que até aqui não tinha palavra
+                      nenhuma nesta escolha: Equilibrada vale 0.50 e não chega,
+                      Ataque 0.65 e Muito Ofensiva 0.80 chegam. Ver
+                      MentalidadeModel.agressao (config/tactics.js).
+
+E uma trava por cima das duas últimas: um DEFESA no PRÓPRIO TERÇO com passe
+curto disponível não lança. Sair a jogar é a função dele ali, e a bola
+comprida perdida à entrada do meio-campo devolve a posse no pior sítio.
+=============================================================================
+*/
+const LancamentoDecisao = {
+    agressaoMinima: 0.60,
+
+    /*
+    `estado` é o que o ramo sabe no instante da decisão:
+
+        temPasseCurto         o findPassTarget devolveu alguém
+        receptorEmRuptura     o destinatário está em RUN_INTO_SPACE
+        agressao              0..1, do blackboard da equipa (computeAggression)
+        defesaNoProprioTerco  o portador é defesa e está no seu terço
+    */
+    aceita: function (estado) {
+        const e = estado || {};
+        if (!e.temPasseCurto) return true;
+        if (e.defesaNoProprioTerco) return false;
+        if (e.receptorEmRuptura) return true;
+        const agressao = (typeof e.agressao === 'number') ? e.agressao : 0.5;
+        return agressao >= this.agressaoMinima;
+    }
+};
+if (typeof window !== 'undefined') window.LancamentoDecisao = LancamentoDecisao;
+
+/*
+=============================================================================
+QUANTO VALE UM COMPANHEIRO LIVRE — DEPENDE DE A BOLA LÁ CHEGAR
+=============================================================================
+O bónus de receptor desmarcado (`findPassTarget`, js/player.js) é uma escada
+fixa: +500 acima de 5 m de marcador, +300 acima de 3.5, +200 acima de 2.5. É a
+parcela mais pesada da nota inteira — e não olhava à DISTÂNCIA do passe. Um
+ponta-de-lança livre a 30 m valia exactamente o mesmo que um central livre a
+8 m, e a seguir os bónus de progressão (+60), de tendência e de ângulo visual
+(+80) desempatavam sempre para a frente.
+
+Daí a leitura dos defesas, medida em 20 minutos: 79% dos passes para a frente
+contra 6% de lado, média de 18.9 m no central e 21.9 m no lateral, e 33% dos
+seus passes acima de 22 m — com opção de lado ou de trás disponível em 100%
+desses casos.
+
+"Livre" não é a mesma coisa a 8 m e a 30 m: a 30 m a bola tem de sobreviver ao
+caminho. As taxas são as do próprio simulador, do lote de 60 jogos
+(`passes` por faixa):
+
+    0-8 m     84% certos
+    8-15 m    83%
+    15-25 m   63%
+    25 m+     44%
+
+O bónus passa a ser pesado por esta curva. Não proíbe o passe longo — um
+avançado livre a 30 m continua a valer 44% de 500 mais tudo o resto, e ganha
+quando não há nada melhor. Deixa é de valer o mesmo que o toque curto.
+
+A curva é contínua de propósito: em degraus o portador mudava de ideias ao
+atravessar a fronteira de uma faixa, e isso já se pagou noutros sítios (ver a
+histerese do OlharModel).
+=============================================================================
+*/
+const FiabilidadePasse = {
+    // Distância (m) -> fracção que chega. Pontos no MEIO de cada faixa medida.
+    pontos: [[4, 0.84], [11.5, 0.83], [20, 0.63], [32, 0.44]],
+    minima: 0.30,   // muito longe continua a valer alguma coisa, não zero
+
+    fiabilidade: function (dist) {
+        const d = Math.max(0, dist);
+        const P = this.pontos;
+        if (d <= P[0][0]) return P[0][1];
+        for (let i = 1; i < P.length; i++) {
+            if (d <= P[i][0]) {
+                const t = (d - P[i - 1][0]) / (P[i][0] - P[i - 1][0]);
+                return P[i - 1][1] + (P[i][1] - P[i - 1][1]) * t;
+            }
+        }
+        // Para lá do último ponto continua a descer, com chão.
+        const ultimo = P[P.length - 1];
+        const anterior = P[P.length - 2];
+        const declive = (ultimo[1] - anterior[1]) / (ultimo[0] - anterior[0]);
+        return Math.max(this.minima, ultimo[1] + declive * (d - ultimo[0]));
+    }
+};
+if (typeof window !== 'undefined') window.FiabilidadePasse = FiabilidadePasse;
+
+/*
+=============================================================================
+SAIR A JOGAR — O PESO DA OPÇÃO CURTA NO DEFESA SEM PRESSÃO
+=============================================================================
+A regra `saidaDeTras` (PassTypeModel, acima) corrigiu o COMO: o central deixou
+de pôr a bola no espaço à frente de quem recebe e passa a jogá-la ao pé.
+Medido em 60 minutos, A/B no mesmo binário:
+
+    defesas com a bola no espaço     61% -> 46%
+    central                          65% -> 44%
+
+Mas não corrigiu o QUANTO LONGE, e o relato falava das duas coisas:
+
+    distância real média dos defesas   20.1 m -> 20.2 m
+    passes de defesa >= 25 m              30% -> 31%
+
+Porque o COMO e o QUEM são decisões separadas: continua a ganhar a votação um
+companheiro distante. O pódio de uma dessas decisões, medido no instante em
+que ela é tomada (e não no instante do passe — a decisão fica em cache até
+~3 s, ver `_notasPasse` em player.js):
+
+    LB escolheu CF a 24.9 m
+    CF 1274 (24.9 m) | CB 1224 (15.7 m) | LM 1048 (8.7 m) | CB 998 (26 m)
+
+Cinquenta pontos em mil e duzentos — 4%. Não é um erro grosseiro na nota, é um
+empate técnico que se resolve sempre para o mesmo lado, porque os termos que
+premeiam a frente (progressão, tendência de posição, ângulo visual) somam-se
+todos ao mesmo candidato.
+
+O que falta na nota é a ideia de SAIR A JOGAR: um defesa no seu terço, sem
+ninguém em cima, tem por função pôr a bola a andar em segurança, e o toque de
+15 m vale-lhe mais do que a bola de 25. Isso é uma regra de função e de zona,
+não um ajuste de pesos — e é aqui.
+
+Sem pressão de propósito: com um adversário em cima, o defesa tem de tirar a
+bola dali e o passe longo volta a ser a opção certa.
+
+A MENTALIDADE tempera a força disto (ver `factorMental`): uma equipa que ataca
+aceita mais risco na saída, uma que se defende menos.
+=============================================================================
+*/
+const SaidaDeJogo = {
+    curta: 18.0,         // até aqui é toque de saída
+    longa: 25.0,         // daqui para cima é bola comprida
+    bonusCurto: 0.12,    // quanto vale a mais o toque curto
+    penalLongo: 0.15,    // quanto vale a menos a bola comprida
+    raioPressao: 3.5,    // o mesmo do `underPressure` da árvore (player_bt.js)
+
+    /*
+    A mentalidade em torno de Equilibrada (0.50): Muito Ofensiva (0.80) fica
+    com 70% do efeito, Muito Defensiva (0.20) com 130%.
+    */
+    factorMental: function (agressao) {
+        const a = (typeof agressao === 'number') ? agressao : 0.5;
+        return Math.max(0, 1 + (0.5 - a));
+    },
+
+    /*
+    Multiplicador da nota de um candidato. 1.0 quando não se aplica — nem a
+    função, nem a zona, nem a ausência de pressão.
+
+        aplicavel   o portador é defesa, no próprio terço, sem ninguém em cima
+        dist        distância do passe ao ponto de mira
+        agressao    0..1 do blackboard da equipa
+
+    Em rampa entre `curta` e `longa`, e não em degrau: com um corte seco o
+    portador muda de ideias ao atravessar a fronteira, e isso já se pagou
+    noutros sítios (ver a histerese do OlharModel).
+    */
+    factor: function (aplicavel, dist, agressao) {
+        if (!aplicavel) return 1.0;
+        const m = this.factorMental(agressao);
+        if (dist <= this.curta) return 1 + this.bonusCurto * m;
+        if (dist >= this.longa) return 1 - this.penalLongo * m;
+        const t = (dist - this.curta) / (this.longa - this.curta);
+        return (1 + this.bonusCurto * m) * (1 - t) + (1 - this.penalLongo * m) * t;
+    }
+};
+if (typeof window !== 'undefined') window.SaidaDeJogo = SaidaDeJogo;

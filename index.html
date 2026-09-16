@@ -12,16 +12,66 @@
 <body>
     <div id="painel-comandos">
         <div id="painel-cabecalho">
-            <h2 id="app-title" style="font-size: 0.85em; font-weight: bold; margin: 0; padding: 0;">SOCCER SIM | FPS: --
-            </h2>
+            <div style="flex: 1;">
+                <h2 id="app-title" style="font-size: 0.85em; font-weight: bold; margin: 0; padding: 0;">SOCCER SIM |
+                    FPS: --
+                </h2>
+                <div id="app-version" style="font-size: 0.70em; font-weight: normal; color: #aaa;">v 0.0638</div>
+            </div>
             <button type="button" id="btn-painel" title="Minimizar / maximizar (X) — Shift: todos"
                 onclick="togglePainel(undefined, event)">&minus;</button>
         </div>
 
         <div id="painel-conteudo">
+            <div style="display: flex; gap: 4px; margin-bottom: 4px;">
+                <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.resetPlay()">Reset
+                    KickOff</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-replay"
+                    onclick="if(window.MatchReplay) window.MatchReplay.toggleReplay()">Replay (20s)</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-pause"
+                    onclick="Match.togglePause()">Continue</button>
+            </div>
             <div style="display: flex; gap: 4px; margin-bottom: 8px;">
-                <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.resetPlay()">Reset KickOff</button>
-                <button class="btn-action" style="flex: 1; margin-top: 0;" id="btn-pause" onclick="Match.togglePause()">Continue</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.triggerGoalKick()">Tiro de
+                    Meta</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;"
+                    onclick="Match.triggerCornerKick()">Corner</button>
+            </div>
+            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <button class="btn-action" style="flex: 1; margin-top: 0;"
+                    onclick="Match.triggerFreeKick()">Falta</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;"
+                    onclick="Match.triggerPenalty()">Pênalti</button>
+            </div>
+            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <button class="btn-action" style="flex: 1; margin-top: 0;"
+                    onclick="Match.triggerThrowIn()">Lateral</button>
+                <button class="btn-action" style="flex: 1; margin-top: 0;" onclick="Match.triggerDirectFreeKick()">Falta
+                    Direta</button>
+            </div>
+            <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <!-- Laboratório do duelo: avançado a 25 m do centro da baliza,
+                     a 45 graus, a correr para ela. O lado alterna a cada
+                     clique — ver Match.triggerCaraACara. -->
+                <button class="btn-action" style="flex: 1; margin-top: 0;"
+                    title="Avançado a 25 m da baliza, a 45 graus, a correr para ela — o lado alterna a cada clique"
+                    onclick="Match.triggerCaraACara()">Cara a cara</button>
+            </div>
+
+            <!-- Planteis reais (data/squads.js). A lista é preenchida no
+                 arranque por preencherSelectoresDeEquipa() em js/main.js; sem
+                 o ficheiro carregado, os dois selectores ficam escondidos e o
+                 jogo usa as equipas genéricas de sempre. -->
+            <div id="bloco-equipas" style="display: none;">
+                <label>Equipa A</label>
+                <select id="t-equipa-A" onchange="trocarEquipaDoPainel()">
+                    <option value="">— genérica (Blue) —</option>
+                </select>
+
+                <label>Equipa B</label>
+                <select id="t-equipa-B" onchange="trocarEquipaDoPainel()">
+                    <option value="">— genérica (Red) —</option>
+                </select>
             </div>
 
             <label>Formation Team A</label>
@@ -67,16 +117,19 @@
 
             <label>Width Compactness</label>
             <select id="t-compactness" onchange="Tatics.update()">
-                <option value="large">Large (90%)</option>
-                <option value="median" selected>Medium (80%)</option>
-                <option value="short">Small (70%)</option>
+                <option value="large">Large (80%)</option>
+                <option value="median" selected>Medium (70%)</option>
+                <option value="short">Small (60%)</option>
             </select>
 
-            <label>Length Compactness</label>
+            <label title="Comprimento do bloco COM bola. A defender o bloco é sempre curto (30 m), por fase.">Length
+                Compactness (com bola)</label>
             <select id="t-length-compactness" onchange="Tatics.update()">
-                <option value="large">Large (40m)</option>
-                <option value="median" selected>Medium (30m)</option>
-                <option value="short">Small (20m)</option>
+                <option value="large">Large (70m)</option>
+                <option value="mediumLarge">Medium-Large (60m)</option>
+                <option value="median" selected>Medium (50m)</option>
+                <option value="mediumSmall">Medium-Small (40m)</option>
+                <option value="short">Small (30m)</option>
             </select>
 
             <label>Defensive Pressure</label>
@@ -102,30 +155,35 @@
             <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
                 <button type="button" class="btn-sector btn-cam" id="cam-orbit"
                     onclick="Match.setCameraMode('orbit')">Órbita Livre</button>
-                <button type="button" class="btn-sector active btn-cam" id="cam-center"
+                <button type="button" class="btn-sector btn-cam" id="cam-center"
                     onclick="Match.setCameraMode('center')">TV Centro (4)</button>
                 <button type="button" class="btn-sector btn-cam" id="cam-sideline"
                     onclick="Match.setCameraMode('sideline')">Lateral Móvel (5)</button>
-                <button type="button" class="btn-sector btn-cam" id="cam-lateraltv"
+                <button type="button" class="btn-sector active btn-cam" id="cam-lateraltv"
                     onclick="Match.setCameraMode('lateraltv')">Lateral TV (7)</button>
                 <button type="button" class="btn-sector btn-cam" id="cam-topdown"
                     onclick="Match.setCameraMode('topdown')">Tática Cima (6)</button>
             </div>
 
-            <label>Velocidade (1-3)</label>
+            <label>Velocidade (1-3, F)</label>
             <div style="display: flex; gap: 4px; margin-bottom: 8px;">
-                <button type="button" class="btn-sector btn-speed" id="spd-0.5"
-                    onclick="Match.setSpeed(0.5)">0.5x</button>
+                <button type="button" class="btn-sector btn-speed" id="spd-frame"
+                    onclick="Match.setSpeed('frame')">Frame</button>
+                <button type="button" class="btn-sector btn-speed" id="spd-0.3"
+                    onclick="Match.setSpeed(0.3)">0.3x</button>
+                <button type="button" class="btn-sector btn-speed" id="spd-0.6"
+                    onclick="Match.setSpeed(0.6)">0.6x</button>
                 <button type="button" class="btn-sector active btn-speed" id="spd-1"
                     onclick="Match.setSpeed(1.0)">1.0x</button>
-                <button type="button" class="btn-sector btn-speed" id="spd-1.3"
-                    onclick="Match.setSpeed(1.3)">1.3x</button>
+                <button type="button" class="btn-sector btn-speed" id="spd-1.2"
+                    onclick="Match.setSpeed(1.2)">1.2x</button>
             </div>
 
 
             <div class="subpainel-cabecalho">
                 <h2 style="border-bottom: 2px solid #3498db; color: #3498db;">BLUE AVERAGE</h2>
-                <button type="button" class="btn-subpainel" id="btn-skills-a" title="Minimizar / maximizar — Shift: todos"
+                <button type="button" class="btn-subpainel" id="btn-skills-a"
+                    title="Minimizar / maximizar — Shift: todos"
                     onclick="toggleSkillsTeam('a', undefined, event)">&plus;</button>
             </div>
             <div id="skills-conteudo-a" class="oculto">
@@ -148,7 +206,8 @@
 
             <div class="subpainel-cabecalho">
                 <h2 style="border-bottom: 2px solid #e74c3c; color: #e74c3c;">RED AVERAGE</h2>
-                <button type="button" class="btn-subpainel" id="btn-skills-b" title="Minimizar / maximizar — Shift: todos"
+                <button type="button" class="btn-subpainel" id="btn-skills-b"
+                    title="Minimizar / maximizar — Shift: todos"
                     onclick="toggleSkillsTeam('b', undefined, event)">&plus;</button>
             </div>
             <div id="skills-conteudo-b" class="oculto">
@@ -169,87 +228,152 @@
                     onchange="Tatics.updateSkills()">
             </div>
 
+            <!--
+            ESTATÍSTICA POR JOGO — calibração contra os alvos reais.
+
+            Os números são das DUAS equipas somadas e extrapolados para 90 min
+            (ver MatchStats.porJogo). As linhas são escritas por
+            `updatePainelEstatisticas` em main.js, a partir da tabela
+            ALVOS_ESTATISTICA — para acrescentar uma métrica mexe-se lá, não
+            aqui.
+            -->
+            <div class="subpainel-cabecalho">
+                <h2 style="border-bottom: 2px solid #2ecc71; color: #2ecc71;">ESTATÍSTICA / JOGO</h2>
+                <button type="button" class="btn-subpainel" id="btn-estat" title="Minimizar / maximizar"
+                    onclick="toggleEstatisticas(undefined, event)">&minus;</button>
+            </div>
+            <div id="estat-conteudo">
+                <div id="estat-relogio">a aguardar jogo…</div>
+                <table id="estat-tabela">
+                    <thead>
+                        <tr>
+                            <th>Estatística</th>
+                            <th>Medido</th>
+                            <th>Alvo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="estat-linhas"></tbody>
+                </table>
+            </div>
+
         </div><!-- /painel-conteudo -->
     </div>
 
     <div id="coluna-direita">
-    <div id="painel-direito">
-        <div id="painel-direito-cabecalho">
-            <h2>Teams States</h2>
-            <button type="button" id="btn-painel-direito" title="Minimizar / maximizar (X) — Shift: todos"
-                onclick="togglePainelDireito(undefined, event)">&minus;</button>
+        <div id="painel-direito">
+            <div id="painel-direito-cabecalho">
+                <h2>Teams States</h2>
+                <button type="button" id="btn-painel-direito" title="Minimizar / maximizar (X) — Shift: todos"
+                    onclick="togglePainelDireito(undefined, event)">&minus;</button>
+            </div>
+
+            <div id="painel-direito-conteudo">
+                <div id="hud-info" style="margin-bottom: 10px; font-weight: bold;">
+                    <span id="hud-state-a" style="color:#3498db">Construção</span> | <span id="hud-state-b"
+                        style="color:#e74c3c">Defesa</span>
+                </div>
+
+                <hr class="linha-sep">
+
+                <label>Visibilidade</label>
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+                    <button type="button" class="btn-sector" id="btn-offside" onclick="toggleOffside()">OffSide:
+                        OFF</button>
+                    <button type="button" class="btn-sector" id="btn-playernumber"
+                        onclick="togglePlayerNumber()">PlayerNumber: OFF</button>
+                    <button type="button" class="btn-sector" id="btn-playerpoints"
+                        onclick="togglePlayerPoints()">PlayerPoints: OFF</button>
+                    <button type="button" class="btn-sector" id="btn-playerbt" onclick="togglePlayerBT()">PlayerBT:
+                        OFF</button>
+                    <button type="button" class="btn-sector" id="btn-playerpos" onclick="togglePlayerPOS()">PlayerPOS:
+                        OFF</button>
+                    <button type="button" class="btn-sector" id="btn-playerplayingstyle"
+                        onclick="togglePlayerPlayingStyle()">Player Playing Style:
+                        OFF</button>
+                    <button type="button" class="btn-sector active" id="btn-all-playing-styles"
+                        onclick="toggleAllPlayingStyles()">All Playing Styles:
+                        ON</button>
+                    <button type="button" class="btn-sector" id="btn-teambtpos" onclick="toggleTeamBTPos()">Team BT POS:
+                        OFF</button>
+
+                    <button type="button" class="btn-sector" id="btn-positionbt"
+                        onclick="togglePositionBT()">PositionBT:
+                        OFF</button>
+
+                    <button type="button" class="btn-sector" id="btn-playingstylebt"
+                        onclick="togglePlayingStyleBT()">PlayingStyleBT:
+                        OFF</button>
+                    <button type="button" class="btn-sector active" id="btn-minimapa"
+                        onclick="toggleMinimapa()">Minimapa: ON</button>
+                    <button type="button" class="btn-sector active" id="btn-arbitragem"
+                        onclick="toggleArbitragem()">Arbitragem: ON</button>
+                    <button type="button" class="btn-sector active" id="btn-replay-auto"
+                        title="Ao golo, repete os últimos 15 s na Lateral TV antes da saída de bola"
+                        onclick="if(window.MatchReplay) window.MatchReplay.toggleAutomatico()">Replay Automático:
+                        ON</button>
+                    <button type="button" class="btn-sector active" id="btn-fans" onclick="toggleFans()">Fans:
+                        ON</button>
+                    <button type="button" class="btn-sector" id="btn-som" onclick="toggleSom()">Som: OFF</button>
+                    <button type="button" class="btn-sector active" id="btn-sombras" onclick="toggleSombras()">Sombras:
+                        ON</button>
+                    <button type="button" class="btn-sector" id="btn-passgrid" onclick="toggleUsarPasseGrid()">PassGrid
+                        (decisão): OFF</button>
+                    <button type="button" class="btn-sector" id="btn-touch-toggle"
+                        onclick="TouchControls.toggle(); this.classList.toggle('active', TouchControls.enabled); this.innerText = 'Touch Controls: ' + (TouchControls.enabled ? 'ON' : 'OFF');">Touch
+                        Controls: OFF</button>
+                    <button type="button" class="btn-sector" id="btn-teambtview"
+                        onclick="window.open('teamBtView.html', 'teamBtView', 'width=900,height=700')">TeamBT
+                        Fluxograma (nova aba)</button>
+                </div>
+
+                <hr class="linha-sep">
+                <label>Simulação em lote (sem ecrã)</label>
+                <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 6px;">
+                        <label style="flex: 1; margin: 0;">Jogos
+                            <input type="number" id="sim-jogos" min="1" max="100" step="1" value="30"
+                                oninput="actualizarAvisoDoLote()" style="width: 100%;"></label>
+                        <!-- O rótulo dizia "RELÓGIO DO JOGO" e o código usa este
+                         número como segundos SIMULADOS: o relógio da partida corre
+                         MatchDuration.timeScale (5x) mais depressa, portanto 18 aqui
+                         são ~90 minutos de jogo — uma partida inteira, que é o que
+                         os alvos do relatório assumem. A conversão vai no aviso
+                         abaixo. -->
+                        <label style="flex: 1; margin: 0;"
+                            title="Minutos SIMULADOS por jogo. O relógio da partida corre 5x mais depressa — a conversão está no aviso abaixo.">Min/jogo
+                            (sim)
+                            <input type="number" id="sim-minutos" min="1" max="90" step="1" value="18"
+                                oninput="actualizarAvisoDoLote()" style="width: 100%;"></label>
+                    </div>
+                    <!-- Os 21 playing styles só ficam todos cobertos com 11 jogos:
+                     cada jogo usa uma formação e há 4 estilos à espera do único
+                     LW do 433 (ver construirPlanoCobertura em js/simulate.js). -->
+                    <div id="sim-aviso-cobertura" style="font-size: 11px; opacity: 0.75;"></div>
+                    <button type="button" class="btn-sector" id="btn-fastsim" onclick="runFastSim()">Simular
+                        lote</button>
+                </div>
+            </div>
         </div>
 
-        <div id="painel-direito-conteudo">
-            <div id="hud-info" style="margin-bottom: 10px; font-weight: bold;">
-                <span id="hud-state-a" style="color:#3498db">Construção</span> | <span id="hud-state-b"
-                    style="color:#e74c3c">Defesa</span>
+        <div id="painel-jogadores">
+            <div id="painel-jogadores-cabecalho">
+                <h2>Player Skills</h2>
+                <button type="button" id="btn-painel-jogadores" title="Minimizar / maximizar — Shift: todos"
+                    onclick="togglePainelJogadores(undefined, event)">&minus;</button>
             </div>
-
-            <hr class="linha-sep">
-
-            <label>Visibilidade</label>
-            <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                <button type="button" class="btn-sector" id="btn-offside" onclick="toggleOffside()">OffSide:
-                    OFF</button>
-                <button type="button" class="btn-sector" id="btn-playernumber"
-                    onclick="togglePlayerNumber()">PlayerNumber: OFF</button>
-                <button type="button" class="btn-sector" id="btn-playerpoints"
-                    onclick="togglePlayerPoints()">PlayerPoints: OFF</button>
-                <button type="button" class="btn-sector" id="btn-playerbt" onclick="togglePlayerBT()">PlayerBT:
-                    OFF</button>
-                <button type="button" class="btn-sector" id="btn-playerpos" onclick="togglePlayerPOS()">PlayerPOS:
-                    OFF</button>
-                <button type="button" class="btn-sector" id="btn-playerplayingstyle" onclick="togglePlayerPlayingStyle()">Player Playing Style:
-                    OFF</button>
-                <button type="button" class="btn-sector active" id="btn-all-playing-styles" onclick="toggleAllPlayingStyles()">All Playing Styles:
-                    ON</button>
-                <button type="button" class="btn-sector" id="btn-teambtpos" onclick="toggleTeamBTPos()">Team BT POS:
-                    OFF</button>
-
-                <button type="button" class="btn-sector" id="btn-playingstylebt" onclick="togglePlayingStyleBT()">PlayingStyleBT:
-                    OFF</button>
-                <button type="button" class="btn-sector" id="btn-spatialgrid" onclick="toggleSpatialGrid()">SG
-                    PASS/MARKING: OFF</button>
-                <button type="button" class="btn-sector" id="btn-passcandidates"
-                    onclick="togglePassCandidates()">PlayerPassTarget: OFF</button>
-                <button type="button" class="btn-sector" id="btn-passgrid"
-                    onclick="toggleUsarPasseGrid()">PassGrid (decisão): OFF</button>
-                <button type="button" class="btn-sector" id="btn-marking-debug"
-                    onclick="toggleMarkingDebug()">Marcação: OFF</button>
-                <button type="button" class="btn-sector" id="btn-touch-toggle"
-                    onclick="TouchControls.toggle(); this.classList.toggle('active', TouchControls.enabled); this.innerText = 'Touch Controls: ' + (TouchControls.enabled ? 'ON' : 'OFF');">Touch Controls: OFF</button>
-                <button type="button" class="btn-sector" id="btn-teambtview"
-                    onclick="window.open('teamBtView.html', 'teamBtView', 'width=900,height=700')">TeamBT
-                    Fluxograma (nova aba)</button>
-            </div>
-
-            <hr class="linha-sep">
-            <label>Simulação em lote (sem ecrã)</label>
-            <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
-                <button type="button" class="btn-sector" id="btn-fastsim" onclick="runFastSim()">Simulação rápida
-                    (2×25min)</button>
+            <div id="painel-jogadores-conteudo">
+                <!-- Os títulos passam a ser os nomes das equipas escolhidas
+                     (ver popularPainelJogadores), e não Blue/Red fixos. -->
+                <div class="jogadores-col">
+                    <h3 id="titulo-jogadores-a" style="color:#3498db">Blue</h3>
+                    <div id="lista-jogadores-a"></div>
+                </div>
+                <div class="jogadores-col">
+                    <h3 id="titulo-jogadores-b" style="color:#e74c3c">Red</h3>
+                    <div id="lista-jogadores-b"></div>
+                </div>
             </div>
         </div>
-    </div>
-
-    <div id="painel-jogadores">
-        <div id="painel-jogadores-cabecalho">
-            <h2>Player Skills</h2>
-            <button type="button" id="btn-painel-jogadores" title="Minimizar / maximizar — Shift: todos"
-                onclick="togglePainelJogadores(undefined, event)">&minus;</button>
-        </div>
-        <div id="painel-jogadores-conteudo">
-            <div class="jogadores-col">
-                <h3 style="color:#3498db">Blue</h3>
-                <div id="lista-jogadores-a"></div>
-            </div>
-            <div class="jogadores-col">
-                <h3 style="color:#e74c3c">Red</h3>
-                <div id="lista-jogadores-b"></div>
-            </div>
-        </div>
-    </div>
     </div><!-- /coluna-direita -->
 
     <!-- Portador da bola (esquerda) e marcador mais próximo dele (direita) -->
@@ -258,7 +382,8 @@
         <div class="hud-jog-info">
             <div class="hud-jog-nome">-</div>
             <div class="hud-jog-stamina-bar">
-                <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
+                <span class="seg"></span><span class="seg"></span><span class="seg"></span><span
+                    class="seg"></span><span class="seg"></span>
             </div>
         </div>
     </div>
@@ -267,7 +392,8 @@
         <div class="hud-jog-info">
             <div class="hud-jog-nome">-</div>
             <div class="hud-jog-stamina-bar">
-                <span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span>
+                <span class="seg"></span><span class="seg"></span><span class="seg"></span><span
+                    class="seg"></span><span class="seg"></span>
             </div>
         </div>
     </div>
@@ -282,8 +408,22 @@
         </div>
     </div>
 
-    <div id="placar">RED <span id="placar-a">0</span> x <span id="placar-b">0</span> BLUE | TIME: <span
-            id="placar-tempo">00:00</span></div>
+    <canvas id="minimapa"></canvas>
+
+    <!-- O `placar-a` mostra o golo do TeamB e o `placar-b` o do TeamA (ver
+         updatePlacar em match_ui.js) — por isso o nome da esquerda é o do
+         TeamB. Os nomes vivem em spans próprios para poderem passar a ser os
+         das equipas reais escolhidas no painel (ver actualizarNomesNoPlacar). -->
+    <!-- O placar e o aviso de repetição vivem na mesma linha: o aviso tem de
+         ficar COLADO ao lado do placar, e a largura do placar muda com o nome
+         das equipas — uma caixa flex resolve isso sozinha, um `left` fixo não. -->
+    <div id="placar-linha">
+        <div id="placar"><span id="placar-nome-b">RED</span> <span id="placar-a">0</span> x <span
+                id="placar-b">0</span>
+            <span id="placar-nome-a">BLUE</span> | TIME: <span id="placar-tempo">00:00</span>
+        </div>
+        <div id="aviso-replay" hidden>REPLAY</div>
+    </div>
 
 
     <div id="alerta-golo">GOOL!</div>
@@ -296,6 +436,8 @@
 
     <!-- Skills fixas de cada jogador (gerado por tools/gen_player_skills.js) -->
     <script src="data/player_skills.js"></script>
+    <!-- Planteis reais (gerado por tools/gen_squads.js a partir de assets/) -->
+    <script src="data/squads.js"></script>
 
     <!-- Simulador: carregado por ordem de dependência -->
     <!-- EventBus: sistemas reagem a eventos (GK_CATCH_BALL, ...) em vez de
@@ -304,14 +446,27 @@
     <!-- Limites anatómicos de rotação por articulação, adaptados ao rig do
          modelo — base pra animação procedural (ex.: mergulho do GR). -->
     <script src="js/joint_limits.js"></script>
-    <script src="js/config.js"></script>
+    <!-- Configurações modulares divididas por subsistema -->
+    <script src="js/config/physics.js"></script>
+    <script src="js/config/animations.js"></script>
+    <script src="js/config/gait.js"></script>
+    <script src="js/config/tactics.js"></script>
+    <script src="js/config/passing.js"></script>
+    <script src="js/config/shooting.js"></script>
+    <script src="js/config/defense.js"></script>
+    <script src="js/config/goalkeeper.js"></script>
+    <script src="js/config/player_behavior.js"></script>
+    <script src="js/config/skill_map.js"></script>
     <script src="js/stats.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/controls.js"></script>
 
-    <!-- IK de duas articulações (braço/perna) e mergulho do GR — ver o
-         cabeçalho de js/gk_dive.js para o que substitui e porquê. -->
+    <!-- IK de duas articulações (braço/perna), a camada Reach que a usa para
+         alcançar um ponto com a mão ou o pé, e o mergulho do GR — ver o
+         cabeçalho de js/reach.js e de js/gk_dive.js. O reach.js vem depois do
+         ik.js (usa o IK e o IKChains) e antes do gk_dive.js. -->
     <script src="js/ik.js"></script>
+    <script src="js/reach.js"></script>
     <script src="js/gk_dive.js"></script>
 
     <!-- Sincronização gameplay <-> animação (ver ActionAnimClips em config.js) -->
@@ -333,14 +488,33 @@
     <script src="js/bt/core.js"></script>
     <script src="js/bt/team_bt.js"></script>
     <script src="js/bt/player_bt.js"></script>
-    <script src="js/match.js"></script>
+    <script src="js/goal_net.js"></script>
+    <script src="js/match/match_state.js"></script>
+    <script src="js/match/match_setup.js"></script>
+    <script src="js/match/match_physics.js"></script>
+    <script src="js/match/match_setpieces.js"></script>
+    <script src="js/match/match_loop.js"></script>
+    <script src="js/match/match_ui.js"></script>
+    <!-- Corpo e poses dos clips, partilhados com o animEditor.html. Antes do
+         player.js, que os usa. -->
+    <script src="js/ambiente_sonoro.js"></script>
+    <script src="js/efeitos_sonoros.js"></script>
+    <script src="js/pose.js"></script>
     <script src="js/player.js"></script>
     <script src="js/fsm.js"></script>
     <script src="js/simulate.js"></script>
+    <script src="js/minimap.js"></script>
+    <script src="js/officials.js"></script>
+    <!-- Adeptos com o modelo dos jogadores, quatro InstancedMesh (um por canal
+         de cor). Pode vir depois do match.js: o `Crowd` só é tocado em runtime,
+         dentro do createField, que corre no DOMContentLoaded do main.js. Usa o
+         mergeNonIndexedGeometries do utils.js, carregado bem acima. -->
+    <script src="js/crowd.js"></script>
 
     <!-- Depende de FootballPlayer (player.js) e Sim (simulate.js) já existirem -->
     <script src="js/bt/btDebug.js"></script>
 
+    <script src="js/match/match_replay.js"></script>
     <script src="js/main.js"></script>
     <script src="js/touch_controls.js"></script>
 

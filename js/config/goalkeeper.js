@@ -1,0 +1,1397 @@
+/*
+=============================================================================
+CONFIG: GUARDA-REDES
+=============================================================================
+Posicionamento, saídas da baliza, mergulho, defesa com as mãos e reposições.
+=============================================================================
+*/
+
+const GoalkeeperStyle = {
+    defensive: { depthMin: 1.2, depthMax: 6.0, sweepOut: 6.0 },
+    offensive: { depthMin: 1.8, depthMax: 11.0, sweepOut: 20.0 }
+};
+
+// Referências da curva de profundidade: borda da grande área e meio-campo
+// adversário. Entre elas a profundidade cresce; fora delas está saturada.
+const GK_D_NEAR = typeof Area !== 'undefined' ? Area.profundidade : 16.5;
+const GK_D_FAR = 55.0;
+
+/*
+Posição de ancoragem do guarda-redes, em repouso e a defender.
+
+Função PURA de propósito: não lê Match nem window, só os cinco argumentos, e
+por isso é testável isolada (ver tests/gk_anchor.test.js).
+
+/*
+Geometria e decisão do guarda-redes (gkAnchor, gkAlvoSegurando, gkPodeLancar,
+gkSweepTarget) foram movidas para js/utils.js (ver docs/auditoria_config_match.md item 5).
+*/
+
+/*
+Postura do guarda-redes.
+
+Rotações em radianos. Convenção do esqueleto (ver resetBonesToDefault):
+    perna  rotation.x > 0  →  coxa para TRÁS        (< 0 é para a frente, o chuto)
+    joelho rotation.x > 0  →  perna dobra para trás (calcanhar sobe)
+    peito  rotation.x > 0  →  tronco inclina para a FRENTE
+    perna  rotation.z      →  abre as pernas para os lados
+
+Ele tem três posturas, e antes tinha só uma — a de espera, exagerada e ligada a
+toda a hora: peito a 0.45 (26° para a frente), joelhos a 0.9 (52°) e o corpo
+descido 0.2 m. Ficava quase de joelhos, inclinado, mesmo a andar.
+*/
+const GoalkeeperPose = {
+    // A que distância da própria baliza um adversário com bola o põe em alerta.
+    alertaDist: 25.0,
+
+    /*
+    AGILIDADE A SAIR DA BALIZA. Multiplica o `speedLerp` do reposicionamento do
+    GR (player.js, ramo 'idle'), que é a velocidade em m/s a que ele se desloca
+    para o alvo — cortar a bola, fechar o ângulo, ir buscar uma bola solta.
+
+    Os valores por situação continuam onde estavam (2.0 a reposicionar-se, 4.0
+    num cruzamento, 5.5-6.0 numa bola solta na área, até 9.0 a reagir a um
+    remate): isto escala-os todos de uma vez, para se afinar a agilidade num
+    número só em vez de em oito sítios.
+
+    `agilidadeSkill` faz o atributo GK contar: a 100 o guarda-redes sai
+    `1 + agilidadeSkill` vezes mais depressa do que a 50, a 0 sai
+    `1 - agilidadeSkill` vezes.
+    */
+    /*
+    O TECTO, QUE NAO EXISTIA.
+
+    Relato: *"a bola passa pelo goleiro em uma velocidade elevada e o goleiro
+    consegue ir atras da bola numa velocidade maior que a bola e alcancar a
+    bola"*.
+
+    A `agilidade` multiplica o `speedLerp` de cada situacao e mais nada o
+    travava. A conta, com o GK 85 destes planteis: o ramo de reaccao ao remate
+    da `3.0 + ((85-50)/50)*6.0 = 7.2` m/s, vezes `1.5 * (1 + 0.7*0.25) = 1.76`,
+    da **12.7 m/s**. Usain Bolt faz 12.4. Medido em 900 s de jogo, o maximo
+    real do guarda-redes foi 17.0 m/s contra 8.4 de p99 dos jogadores de campo.
+
+    Agora ha um tecto, aplicado DEPOIS da agilidade: e ela que continua a
+    mandar em quem arranca mais depressa, mas nenhum guarda-redes corre mais do
+    que isto. 7.6 m/s a GK 50 e 8.4 a GK 100 poem-no ao nivel dos avancados
+    (p99 medido 8.4), que e onde um guarda-redes pertence — rapido, nao
+    sobre-humano.
+    */
+    velMaxCorrida: 7.6,        // m/s a GK 50
+    velMaxCorridaSkill: 0.8,   // + isto a GK 100, - isto a GK 0
+
+    agilidade: 1.5,
+    agilidadeSkill: 0.25,
+
+    /*
+    Só se atira ao chão se a bola passar a MAIS de tantos metros ao lado dele.
+    Abaixo disto não há mergulho nenhum: fica de pé e leva as mãos à bola
+    (estado 'maos'), dentro dos limites das juntas. Antes o limiar era 1.2 m e
+    quase toda a defesa virava mergulho lateral — daí o guarda-redes aparecer
+    sempre deitado/torcido de lado mesmo em bolas à altura do peito.
+    */
+    /*
+    2.0 -> 1.0: entre o alcance do braço (~0.9 m) e os 2 m não havia gesto
+    nenhum, e era essa faixa que o teletransporte tapava — ver
+    GkCatchModel.alcanceContacto. Uma bola que lhe passa a mais de um metro do
+    corpo exige que ele se ATIRE, e se ela vier baixa é o mergulho rasteiro
+    (`gkTipoMergulho = 'baixo'`) que o relato pede.
+    */
+    /*
+    =========================================================================
+    A DEFESA DE PERTO E POR BAIXO — a perna esticada no chão
+    =========================================================================
+    Pedido, com fotografia: remate de <= 7 m e rasteiro defende-se com o corpo
+    baixo e a perna do lado da bola ESTICADA ao longo do relão, a outra
+    dobrada por baixo, e o braço de cima no ar com a mão aberta.
+
+    Não é um mergulho: a essa distância não há tempo de voo nenhum para
+    mergulhar — uma bola a 20 m/s de 7 m chega em 0.35 s, e o tempo de reação
+    sozinho já come 0.28. O que um guarda-redes faz ali é abrir-se e tapar
+    campo: a perna cobre o rasteiro, o braço cobre o meio-alto, e o corpo fica
+    entre a bola e a baliza.
+
+    Também não é o estado 'maos', que o deixa de pé com os braços à frente —
+    de pé não se defende um rasteiro a 5 m: a bola passa-lhe por baixo das
+    mãos e por fora dos pés, que é justamente o buraco que a perna esticada
+    fecha.
+
+    `distMax` é a distância de onde o remate SAIU, e não a que a bola está
+    agora: é ela que diz se houve tempo de reagir.
+    =========================================================================
+    */
+    barreira: {
+        distMax: 7.0,        // remate de mais longe do que isto não entra aqui
+        alturaMax: 0.95,     // e só para bola que cruza a linha abaixo disto
+
+        altura: -0.62,       // o corpo desce quase ao chão (soma a ALTURA_BASE_Y)
+        inclinacao: 0.85,    // rotação da pélvis para o lado da bola, rad
+
+        pernaEsticada: 1.25, // abertura lateral da perna do lado da bola, rad
+        pernaJoelho: 0.05,   // e quase sem joelho — é o que a faz uma barreira
+        pernaDobrada: 0.35,  // a outra perna recolhe
+        pernaDobradaJoelho: 1.30,
+
+        bracoAlto: -2.35,    // braço de cima, acima da cabeça (x negativo é para a frente)
+        bracoAltoZ: 1.15,    // e aberto para o lado da bola
+        bracoBaixo: -0.55,   // o outro fica junto ao chão
+        bracoBaixoZ: 0.30,
+        cotovelo: -0.12,     // braços quase direitos: é uma barreira, não um agarrar
+
+        suavizacao: 0.45,    // a pose entra depressa — são décimas de segundo
+
+        /*
+        O corpo, para o teste de contacto, deixa de ser um segmento VERTICAL
+        nos pés e passa a ser o que se vê: um segmento deitado, do tronco até
+        à ponta da bota esticada. Sem isto a pose mudava no ecrã e não defendia
+        nada — o teste continuava a medir uma coluna vertical.
+        */
+        alcanceDeitado: 1.45,   // metros de perna, do tronco à bota
+        alturaDeitado: 0.55,    // altura do tronco nesta pose, para o segmento
+        raioDeitado: 0.34       // raio de contacto ao longo da perna
+    },
+
+    mergulhoLateralMin: 1.0,
+    // Duração (s) do estado 'maos' antes de voltar ao idle.
+    maosDur: 1.0,
+
+    /*
+    --- Tiro de meta -------------------------------------------------------
+    A bola é colocada na quina da PEQUENA ÁREA do lado por onde saiu, o GR
+    caminha até à linha de fundo atrás dela, faz a corrida e chuta.
+    */
+    // Meia-largura da pequena área: 5.5 m para cada lado de cada poste (LARGURA_BALIZA/2 + 5.5).
+    pequenaAreaX: typeof Area !== 'undefined' ? Area.pequenaMeiaLargura : (LARGURA_BALIZA / 2 + 5.5),   // ~9.16
+    pequenaAreaZ: typeof Area !== 'undefined' ? Area.pequenaProfundidade : 5.5,                        // profundidade a partir da linha
+    tiroMetaAndar: 2.2,      // m/s a caminhar até à linha de fundo
+    tiroMetaCorrer: 5.5,     // m/s na corrida para a bola
+    tiroMetaRecuo: 3.8,      // metros atrás da bola onde fica antes de arrancar a corrida (+30cm)
+    tiroMetaDistChuto: 0.85, // distância à bola em que dispara o gesto do chute
+    // Segurança absoluta: se algo correr mal (posicionamento nunca completa,
+    // etc.) chuta na mesma. Tem de caber posicionamento + espera de 3-6s +
+    // corrida — era 6.0, insuficiente só para a espera nova.
+    tiroMetaTimeout: 16.0,
+
+    // Duração (s) do agachar-e-apanhar quando a bola chega mansa/rolando.
+    apanharDur: 0.35,
+    // Quanto tempo o GR fica a segurar a bola (agachado a levantar-se) antes
+    // de poder relançar o jogo — dá tempo às equipas para se reorganizarem.
+    segurarDur: 8.0,
+
+    /*
+    COM A BOLA NA MÃO, o guarda-redes deixa de ficar estátua: avança até
+    `segurarAvanco` metros da própria linha enquanto procura linha de passe.
+
+    O limite é bem aquém dos 16.5 m da grande área — com a bola na mão, sair
+    dela é falta, e não vale a pena andar lá perto da fronteira.
+
+    `segurarMinimo` é o tempo antes do qual não lança, mesmo com alvo à vista:
+    é a folga que as duas equipas precisam para se reorganizarem depois da
+    defesa. Sem ela o relançamento saía no frame seguinte ao da apanhada.
+    */
+    segurarAvanco: 10.0,
+    segurarVel: 2.2,
+    segurarMinimo: 1.5,
+
+    /*
+    ELE ESPERA POR UMA BOA OPÇÃO, ATÉ AOS 8 SEGUNDOS.
+
+    Pedido: "após o goleiro pegar a bola ele tem que esperar até 8 s para
+    repor, aguardando que seus companheiros estejam numa posição boa para o
+    passe; caso não estejam, ele deve chutar pra frente".
+
+    O que se media antes (`tools/headless/reposicao_do_gk.js`, 73 min): ele
+    largava a bola aos **2.05 s de média**, com o prazo sorteado em 6.7 s. Duas
+    razões:
+
+      - o prazo era `5 + rand*3` — nunca eram os 8 s, eram 5 a 8 sorteados;
+      - o gatilho de "já há a quem jogar" era o `findPassTarget()`, que devolve
+        QUALQUER companheiro com linha, e não a saída curta a um homem
+        desmarcado que o `acharLateralParaSaida` já sabia escolher.
+
+    Agora o prazo é o `segurarDur` inteiro e o gatilho é a opção boa. Quem
+    decidiu chutar (estilo directo, ou nenhum defesa livre) não fica os 8 s
+    parado: larga aos `segurarDirecto`, que é o tempo de a equipa sair da área
+    e passar a haver para onde chutar.
+    */
+    segurarDirecto: 3.0,
+
+    // A andar ao longo da baliza a acompanhar o lance: de pé, passada curta.
+    andar: {
+        chest: 0.10,
+        kneeBase: 0.18,     // dobra mínima, somada ao ciclo da passada
+        passada: 0.55,      // fracção da amplitude de corrida de um jogador
+        passadaJoelho: 0.32,// o joelho dobra menos do que a anca abre: é marcha, não corrida
+        bracos: 0.55,       // abertura lateral dos braços
+        altura: 0.0
+    },
+
+    // Adversário com bola perto da área: de pé, joelhos ligeiramente dobrados,
+    // pernas afastadas e mãos prontas. À espera do remate.
+    espera: {
+        chest: 0.16,
+        joelho: 0.32,
+        coxa: 0.14,
+        abertura: 0.13,
+        bracoZ: 0.75,
+        bracoX: -0.35,
+        cotovelo: -0.35,
+        altura: -0.05
+    },
+
+    // Posição para defender o penálti (Match.state === 'PENALTY'):
+    // Um pouco agachado, joelhos para a frente, tronco direito (não inclinado).
+    penalti: {
+        chest: 0.05,
+        joelho: 0.80,
+        coxa: -0.80,
+        abertura: 0.25,
+        bracoZ: 0.90,
+        bracoX: -0.35,
+        cotovelo: -0.35,
+        altura: 0.0
+    },
+
+    // Sem perigo: descontraído, praticamente direito.
+    repouso: {
+        chest: 0.05,
+        joelho: 0.12,
+        coxa: 0.05,
+        abertura: 0.07,
+        bracoZ: 0.45,
+        bracoX: -0.10,
+        cotovelo: -0.15,
+        altura: 0.0
+    },
+
+    // Agachado a apanhar bola mansa/rolando (estado 'apanhar').
+    apanhar: {
+        chest: 0.55,
+        joelho: 1.1,
+        coxa: 0.75,
+        abertura: 0.10,
+        bracoZ: 0.30,
+        bracoX: -0.9,
+        cotovelo: -0.9,
+        altura: -0.35
+    },
+
+    /*
+    Bola agarrada junto ao PEITO, à espera de relançar (estado 'segurando').
+
+    Tronco e pernas são os do `repouso` — de pé, direito, descontraído: já não
+    fica meio agachado depois de apanhar a bola. Só os braços diferem: braços
+    junto ao corpo (bracoZ baixo), para a frente/baixo (bracoX) e antebraços
+    bem fechados PRA CIMA contra o peito (cotovelo muito dobrado) — é isso que
+    "fecha a guarda" em cima da bola.
+    */
+    segurar: {
+        chest: 0.05,
+        joelho: 0.12,
+        coxa: 0.05,
+        abertura: 0.07,
+        bracoZ: 0.05,
+        bracoX: -0.76,
+        cotovelo: -1.82,
+
+        /*
+        A BOLA NAS MÃOS, E NÃO ao lado delas.
+
+        Relato: "a bola não está nas mãos do goleiro quando ele pega; os
+        braços têm que ficar um pouco mais fechados e a bola um pouco mais
+        pra cima". Medido nos 8 s de posse, em jogo:
+
+            distância da bola à mão mais perta   0.50 m de média, 3.46 no pior
+            altura da bola sobre os punhos      -0.36 m (bem ABAIXO deles)
+            distância entre os punhos            0.54 m (a bola tem 0.22)
+
+        Os punhos estavam a mais do dobro do diâmetro da bola — nenhuma mão
+        lhe tocava — e a bola ficava onde tinha sido apanhada, a arrastar-se
+        atrás dele enquanto andava.
+
+        `fecharPunhos` manda o mesmo fecho por bissecção do lançamento lateral
+        (`fecharMaosNaBola`, player.js) fechar os punhos até à distância de um
+        diâmetro, e `bolaAcima` levanta o centro da bola sobre eles — as mãos
+        seguram-na por baixo e pelos lados.
+
+        `bolaAcima` foi calibrado a medir, e não a olho, porque a pose continua
+        a convergir no frame seguinte ao da colagem: com 0.12 a bola ficava 0.09
+        m ABAIXO dos punhos, com 0.22 a 0.05 abaixo, e com 0.32 fica a 0.01 m
+        deles. Depois disto: 0.14 m da mão mais perta (eram 0.50) e punhos a
+        0.29 (eram 0.54).
+        */
+        fecharPunhos: true,
+        bolaAcima: 0.32,
+        altura: 0.0
+    }
+};
+
+/*
+Condução (CARRY) — carregar a bola em frente com toques curtos.
+
+O portador testa `leque` direcções à sua frente (em radianos, 0 = a direito
+para a baliza adversária) e escolhe a de melhor nota. Quanto mais espaço livre,
+maior é o toque à frente.
+Visão de jogo: distância de leitura = técnica * 0.5, ângulo de visão = técnica * 0.7 graus.
+*/
+/*
+=============================================================================
+APARÊNCIA DOS JOGADORES
+=============================================================================
+Antes toda a gente saía do mesmo molde: pele 0xdcdde1, cabelo 0x2c1e16 e
+chuteiras amarelas 0xe8ff00, iguais nos vinte e dois.
+
+Cada tipo junta cabelo e pele que combinam — não se sorteiam em separado, senão
+saía cabelo ruivo com pele escura. As chuteiras são independentes: qualquer
+jogador pode calçar qualquer cor.
+
+`peso` é a fatia relativa de cada tipo; não precisam de somar 1, a escolha
+normaliza-os.
+=============================================================================
+*/
+
+const GoalkeeperDistribution = {
+    /*
+    Probabilidade de SAIR A JOGAR pelos laterais, por Estilo Ofensivo da
+    equipa. O resto é chutão para a frente.
+
+    Estava tudo desligado (`laterais: 0.0`) e o `decidirSaidaGK` devolvia
+    'chuteFrente' fixo — o guarda-redes chutava sempre, mesmo em Possession.
+    A maquinaria da saída curta (acharLateralParaSaida, actPassParaAlvo) já
+    existia toda e não era chamada por ninguém.
+
+    Positional e Possession a 70%, como pedido. Os outros seguem a lógica do
+    estilo: Direct e Counter Attack querem a bola à frente depressa, Wing Play
+    fica a meio.
+    */
+    porEstilo: {
+        possession: 0.70,
+        positional: 0.70,
+        wing_play: 0.50,
+        direct: 0.25,
+        counter_attack: 0.25
+    },
+    laterais: 0.50,       // usado se o estilo não estiver na tabela
+    chuteFrente: 0.50,
+
+    // Um defesa mais longe do que isto não conta como saída curta.
+    distanciaMaxLateral: 45.0,
+    // Defesa com adversário a menos disto em cima não serve.
+    folgaMinima: 4.0,
+
+    /*
+    A saída curta aceita LATERAIS (LB/RB) e CENTRAIS (CB/DC), com preferência
+    pelos laterais — ver acharLateralParaSaida em bt/player_bt.js.
+
+    Só aceitava laterais, e com dois candidatos apenas (ambos obrigados a estar
+    a mais de `folgaMinima` de qualquer adversário) era frequente não haver
+    nenhum: o guarda-redes esperava `esperaMaxSemLinha` e acabava a chutar na
+    mesma. A saída a jogar existia e quase não se via.
+
+    `bonusLateral` é somado à folga do candidato: entre um lateral e um central
+    igualmente livres sai pelo lateral, que é por onde se sai a jogar; o central
+    entra quando é ele o que está mesmo desmarcado.
+    */
+    bonusLateral: 3.0,
+
+    /*
+    =====================================================================
+    O CHUTÃO É A ÚLTIMA OPÇÃO, E NÃO UMA MOEDA AO AR
+    =====================================================================
+    Relato: *"quando o goleiro pega a bola tem um jogador com pontuação de
+    passe maior que 1000 mas mesmo assim o goleiro chuta pra frente. Não
+    deveria chutar pra frente só se não tivesse uma opção boa pra sair
+    jogando?"*.
+
+    Deveria, e não era o que acontecia. Medido em 60 min
+    (`tools/scratch/gk_saida.js`): 30 posses do guarda-redes, 16 acabadas em
+    chutão — e **11 desses 16 tinham uma opção de passe acima de 1000**, com
+    laterais a 1418 e 1462. Duas causas, e a segunda é a que interessa:
+
+    1. O `acharLateralParaSaida` é MUITO mais estreito do que o avaliador de
+       passes: só LB/RB/CB/DC, e só com o adversário mais próximo a mais de
+       `folgaMinima` (4 m). Um lateral com um extremo a 3.8 m é rejeitado — e o
+       avaliador de passes dava-lhe 1462. Nas 16 medidas, `gkThrowTarget` era
+       nulo em TODAS.
+    2. Sem candidato, a chance de sair a jogar era posta a ZERO e a saída
+       sorteava-se na mesma: chutão garantido.
+
+    Agora quem responde à pergunta "há opção boa?" é a nota do avaliador de
+    passes — a mesma que se vê no painel — e não um segundo critério paralelo:
+
+        nota >= `notaSempreSair`     sai a jogar, sempre. Uma opção desta
+                                     qualidade não se deita fora num chutão,
+                                     seja qual for o estilo da equipa.
+        nota >= `notaMinimaParaSair` sai a jogar com a probabilidade do estilo
+                                     (`porEstilo`): é aqui que um Direct chuta
+                                     mais do que um Possession.
+        abaixo disso                 chutão, que é o caso que o relato aceita.
+
+    O `notaSempreSair` é 1000 porque foi o número do relato — *"tem um jogador
+    com pontuação de passe maior que 1000 mas mesmo assim chuta"*. Acima disso
+    o estilo deixa de ter voto.
+
+    O `notaMinimaParaSair` sai da distribuição medida: a melhor nota disponível
+    tem mediana 1208, mínimo 144 e máximo 1888. 900 deixa de fora o quartil mau
+    — as posses em que só há um colega em cima da linha — e é entre 900 e 1000
+    que o estilo da equipa ainda escolhe.
+
+    O `acharLateralParaSaida` continua a mandar em QUEM recebe quando existe:
+    é ele que sabe quem está mesmo desmarcado e ao alcance do braço. Isto só
+    responde ao "chuta ou não chuta".
+    */
+    notaMinimaParaSair: 900,
+    notaSempreSair: 1000,
+
+    /*
+    E UM LATERAL MESMO LIVRE NÃO CONCORRE COM NINGUÉM.
+
+    O `bonusLateral` inclina, mas não impõe: com um central muito desmarcado e
+    um lateral com folga confortável ganhava o central, e a bola saía pelo MEIO
+    — a zona onde a perda custa golo, e o oposto de sair a jogar.
+
+    A partir desta folga o lateral é a saída, sem nota nenhuma pelo meio: dez
+    metros de espaço num corredor é a bola a sair em segurança.
+
+    Tem de ficar acima da `folgaMinima`, senão qualquer lateral elegível
+    ganhava sempre e a saída pelos centrais deixava de existir.
+    */
+    folgaPreferencialLateral: 10.0,
+
+    /*
+    Segundos com a bola no pé antes de largar. A saída curta é mais rápida do
+    que o chutão: quem sai a jogar levanta a cabeça e toca, quem chuta arma a
+    perna. E se decidiu sair a jogar mas não há lateral livre, espera
+    `esperaMaxSemLinha` a ver se aparece antes de desistir e chutar — é isso
+    que evita o guarda-redes preso com a bola.
+    */
+    esperaSaidaCurta: 0.5,
+    esperaChutao: 0.4,
+    esperaMaxSemLinha: 2.5
+};
+
+/*
+Cruzamento.
+
+Antes: `|x| > 17 && zona > 18` → cruzava SEMPRE (medido 100% em toda essa zona,
+e 0% fora dela). Um extremo a x=16 nunca cruzava; a x=20 nunca fazia outra coisa.
+
+Agora a decisão é pontuada: só existe cruzamento se houver alguém na área, e a
+probabilidade sobe com o número de alvos lá dentro, com a largura e com a
+profundidade de quem cruza. Junto à linha de fundo continua quase garantido.
+Valores no referencial de ataque.
+*/
+
+/*
+=============================================================================
+SAIR AO CRUZAMENTO — agarrar ou socar
+=============================================================================
+Pedido: *"quando a projecção do cruzamento for dentro da pequena área o
+guarda-redes pode tentar sair para segurar a bola ou dar um soco na bola para
+longe. Se ele estiver sem marcação num raio de 2 metros vai tentar segurar:
+95% de hipótese de segurar e 5% da bola escapar e continuar o trajecto. Se
+tiver marcação, o guarda-redes vai dar um soco na bola na direcção oposta à
+que a bola está vindo, num ângulo de até 10 graus para cada lado da
+trajectória"*.
+
+O gatilho é a PROJECÇÃO, e não a posição da bola: o `preverQuedaDaBola`
+simula o voo com a física real e diz onde ela vai cair. Cair dentro da pequena
+área é a definição de "bola dele" — fora dela, sair é aventura e o lugar é na
+linha.
+
+A marcação decide o GESTO, como no pedido: com espaço agarra-se, com gente em
+cima soca-se. E o soco vai por onde a bola veio, que é o único sítio para onde
+ela pode ir com força sem ficar na área: devolve-se o cruzamento ao campo, e
+não à pequena área.
+=============================================================================
+*/
+const GkSaidaCruzamento = {
+    raioSemMarcacao: 2.0,    // adversário mais perto do que isto = marcado
+    chanceSegurar: 0.95,     // sem marcação, agarra; nos outros 5% escapa-lhe
+    anguloSocoGraus: 10,     // o soco abre até isto para cada lado da trajectória
+    velocidadeSoco: 16.0,    // m/s à saída do punho
+    elevacaoSoco: 0.35,      // fraccão da velocidade que vai para cima
+    alturaMin: 1.20,         // só bolas altas: abaixo disto é defesa normal
+    /*
+    A que distância da bola ele lhe chega com as mãos no alto. É mais do que o
+    alcance de pé (`GkCatchModel.alcanceContacto`, 0.55) porque isto é um
+    guarda-redes a saltar com os braços esticados — e menos do que a soma
+    ingenua braço+salto, que lhe daria dois metros de íman.
+    */
+    alcanceSaida: 1.60,
+    /*
+    A bola que ESCAPA (os 5%) não muda de direcção: bate na mão e segue. Só
+    perde um pouco de velocidade, para o toque contar e para o lance continuar
+    disputável — é exactamente o que o pedido descreve.
+    */
+    travagemEscape: 0.85
+};
+if (typeof window !== 'undefined') window.GkSaidaCruzamento = GkSaidaCruzamento;
+
+const GoalkeeperDive = {
+    /*
+    TEMPO DE REACÇÃO A UM REMATE, em segundos, antes de o gesto sequer começar.
+
+    Estava escrito à mão no `fsm.js` (`0.45 - ((gk-50)/50) * 0.35`): 0.45 s
+    para um guarda-redes médio. Somado ao `tempoLer` + `tempoImpulso` (0.17 s
+    de agachar e estender), ele só larga o chão aos 0.62 s — e um remate de
+    16 m a 25 m/s chega em 0.64. Ou seja: partia quando a bola já lá estava, e
+    era por isso que o mergulho só tocava a bola em **2 de 17** tentativas
+    (medido, tools/headless/gk_salto_alto.js). O que tapava isso era a
+    apanhada mágica a 1.3 m do corpo, que o relato veio denunciar.
+
+    0.28 de base e 0.18 de amplitude: 0.10 s a GK 100, 0.28 a GK 50, 0.46 a
+    GK 0. Com o gesto por cima dá 0.27 a 0.63 s, que é o tempo de reacção de
+    um guarda-redes a sério.
+    */
+    reaccaoBase: 0.28,
+    reaccaoPorSkill: 0.18,
+
+    /*
+    QUANDO E QUE ELE SE ATIRA. Pedido: "não pode pular no exacto instante do
+    chute; ele pode até se movimentar um pouco para os lados, mas pular só
+    quando a bola estiver ao alcance do pulo com os braços esticados. Seja
+    para fazer a defesa ou não."
+
+    Medido antes (tools/headless/gk_salto_alto.js): no instante em que largava
+    o chão faltavam à bola 0.55-0.90 s e ela estava a 13-16 m dele. O gesto
+    inteiro até a mão lá chegar são `tempoLer + tempoImpulso` (0.17 s) mais
+    `fracContacto` do voo — 0.3 a 0.6 s. Ele caía, deslizava, e a bola chegava
+    depois: é o "a bola nem passa pela defesa e o goleiro já está caído".
+
+    Agora o gatilho é o tempo do PRÓPRIO GESTO: atira-se quando o que falta à
+    bola cabe no que ele demora a lá chegar, e nem um frame antes. Esta margem
+    é a folga — o erro de leitura da trajectória, e o que evita que ele parta
+    exactamente em cima da hora e chegue atrasado.
+    */
+    margemAntecipacao: 0.08,
+
+    /*
+    O ERRO DE LEITURA DA TRAJECTORIA.
+
+    O `pontoDeIntercepcaoGK` e geometria pura — `x = bolaX + velX*t` — e por
+    isso o guarda-redes acertava o canto no PRIMEIRO frame depois de a bola
+    sair do pe, com zero de erro. Medido na cronologia de um remate (o atraso
+    de reaccao deste era 0.17 s):
+
+        t=0.02  reagiu=n  alvoX=-3.16  corpoX=0.21   v=0.0
+        t=0.15  reagiu=n  alvoX=-1.77  corpoX=-0.02  v=11.1
+
+    O `gk-jump-system.md` sempre descreveu o erro que devia existir —
+    "dispersao aleatoria Gaussiana no plano XY, cujo raio e inversamente
+    proporcional ao atributo GK" — e ele nunca tinha sido implementado.
+
+    O raio ENCOLHE a medida que a bola se aproxima: a leitura melhora com o
+    tempo de observacao, e no momento do contacto ja nao ha erro nenhum. O que
+    conta e o raio no instante em que o mergulho arranca (o `GkDive.iniciar`
+    congela o alvo), e ai faltam tipicamente 0.3-0.5 s.
+    */
+    /*
+    O RAIO, CORTADO A MENOS DE METADE depois do lote de 50 jogos.
+
+    Entrou a 1.10 / 0.85 com a medicao do headless a dizer que nao custava
+    golos. Custava, e o lote do browser mostrou onde o headless nao tinha
+    amostra para ver:
+
+        metrica                lote 100 (antes)   lote 50 (com 1.10)   alvo
+        golos                       2.67                3.25           2.52
+        golos por enquadrado         41%                 51%           ~32%
+        xG total                    ~1.57               1.29           2.84
+
+    Golos +0.58 por jogo, e o remate enquadrado a entrar em metade das vezes.
+    Pior: 3.25 golos contra 1.29 de xG — o jogo marca duas vezes e meia o que
+    as proprias chances valem, quando antes desta sessao o racio era 1.7.
+
+    1.10 m era erro de leitura grande de mais para um profissional numa
+    baliza de 7.32 m de largura. A 0.45 o artefacto que isto corrige — saber
+    o canto no primeiro frame depois do remate — desaparece na mesma, porque
+    o que conta e o raio no instante em que o mergulho arranca.
+    */
+    /*
+    O RAMO DA ESPALMADA EXIGE O `gkReagiu`? — um interruptor, para se medir.
+
+    Era esta a segunda metade da correccao do atraso de reaccao: o ramo
+    principal do mergulho sempre exigiu o `gkReagiu`, e o `possoEspalmar` nao.
+    Medido, um guarda-redes com 0.17 s de atraso ja ia a 11.1 m/s aos 0.15 s do
+    remate com o `reagiu` ainda falso.
+
+    Existe como interruptor porque a suspeita e que seja ELE, e nao o erro de
+    leitura, o que fez a conversao de remate enquadrado saltar de 41% para
+    51-54%: cortar o raio do erro para menos de metade nao mexeu no numero.
+    */
+    espalmarExigeReaccao: true,
+
+    erroRaioBase: 0.45,    // metros de dispersao a `erroTempoCheio` de distancia, com GK 50
+    erroRaioSkill: 0.35,   // ± conforme a skill de GK (GK 100 -> 0.10 m; GK 0 -> 0.80 m)
+    erroTempoCheio: 0.55,  // s de tempo restante a partir do qual o erro esta saturado
+    erroFraccaoY: 0.6,     // a altura le-se melhor do que o lado
+
+
+    tempoLer: 0.05,        // reacção: transferência de peso antes de sair
+    tempoImpulso: 0.12,    // agachar e estender as pernas
+    tempoChao: 0.35,       // deslizar no relvado depois de aterrar
+
+    /*
+    E NO MERGULHO ALTO FICA LÁ uns segundos.
+
+    Pedido: *"depois que o guarda-redes cair após o pulo para a defesa no alto
+    e nos cantos, ele deve ficar uns 3 s no chão antes de levantar"*.
+
+    O `tempoChao` de 0.35 s é o deslize de um mergulho rasteiro — cai, escorrega
+    e já está de pé. Uma defesa no ângulo é outra coisa: sai de um salto alto,
+    aterra de lado com a bola no peito ou a escapar-se, e ninguém se levanta
+    dali em trinta e cinco centésimos.
+
+    Vale para o mergulho do tipo 'alto' e para qualquer mergulho num CANTO — as
+    duas situações do pedido. O tipo é escolhido em player.js pela altura do
+    alvo (`espY > 1.2`).
+    */
+    tempoChaoAlto: 2.0,
+    tempoLevantar: 0.50,   // pôr-se de pé (pedido: 500 ms)
+
+    /*
+    E DEPOIS DE SE PÔR DE PÉ AINDA NÃO ARRANCA.
+
+    Relato: *"o goleiro quando cai levanta praticamente instantaneamente e sai
+    atrás da bola. Isso não existe no futebol"*. Medido: do fim do mergulho até
+    voltar a andar a mais de 3 m/s, **0.44 s de média e 0.02 s no melhor caso**.
+    Ou seja, punha-se de pé e no frame seguinte já ia a correr.
+
+    `recuperacao` são os segundos em que ele ainda está a recompor-se, e
+    `recuperacaoVel` é a fracção da velocidade com que arranca — sobe até 1 ao
+    longo da janela. Com 0.40, no instante em que se levanta anda a 40% e só
+    passado um segundo corre como sempre.
+
+    Não mexi no `tempoChao` nem no `tempoLevantar`: esses são o gesto, e
+    alongá-los tirava-o do jogo em vez de o pôr a recompor-se a andar.
+    */
+    recuperacao: 1.0,
+    recuperacaoVel: 0.40,
+
+    /*
+    DURACAO DO VOO. Deixou de ser adivinhada: sai da propria parabola
+    (`tVoo = 2*v0y/g`, subir e voltar a descer), e estes dois sao os limites
+    dela. O `vooMax` de 0.62 s so dava para 0.47 m de salto — menos do que um
+    guarda-redes salta de pe parado — e por isso esta em 0.85.
+    */
+    vooMin: 0.28,
+    vooMax: 0.85,
+    velLateral: 6.0,       // velocidade lateral base do salto (m/s)
+    velLateralSkill: 4.0,  // ± conforme a skill de GK
+
+    /*
+    IMPULSAO VERTICAL. 4.2 m/s sao 0.90 m de subida do centro de massa: um
+    salto de elite, e o tecto humano do gesto. Com os 4.5 antigos a conta do
+    `lancar` pedia 10.26 m/s numa bola ao angulo (5.4 m de salto) e o clamp
+    comia a diferenca em silencio — mas isso nem se via, porque o voo acabava
+    ao primeiro frame (ver `GkDive.update`).
+
+    O minimo existe para o mergulho rasteiro TAMBEM sair do chao: um
+    guarda-redes que se atira a uma bola rasteira levanta os pes, so nao sobe.
+    */
+    vySubidaMax: 4.2,
+    vySubidaMin: 1.5,
+
+    /*
+    Quanto a mao chega ACIMA do ombro com o braco esticado. E o simetrico do
+    `alcanceBraco` (que so contava na horizontal): sem ele o solver mandava o
+    OMBRO a altura da bola, e pedia um salto que nao existe.
+    */
+    alcanceVertical: 0.70,
+
+    /*
+    Quanto a mão chega além do corpo — o corpo não precisa de percorrer a
+    distância toda. 0.75 -> 0.92: e o outro lado do mesmo pedido, a bola na
+    DEFESA. Alarga o que ele alcanca sem lhe mexer na velocidade nem na
+    reaccao, portanto o que muda sao as bolas que passavam a um palmo da mao —
+    que e onde estao as defesas que faltavam.
+    */
+    alcanceBraco: 0.92,
+
+    /*
+    =====================================================================
+    ATÉ QUE DISTÂNCIA VALE A PENA ATIRAR-SE
+    =====================================================================
+    Relato: *"o goleiro está pulando na bola mesmo com a bola a mais de uns 5
+    metros dele. Isso não faz sentido. O goleiro só pula na bola se ele acha
+    que vai alcançar ela com as mãos. Contando a passada, o impulso e o pulo,
+    dificilmente um goleiro chega numa bola a mais de 5 metros"*.
+
+    O `horaDeMergulhar` decidia QUANDO se atirar e nunca SE valia a pena: com
+    `tVoo` limitado ao `vooMax`, uma bola a oito metros dava um gesto tão
+    pronto como uma a dois. Ele atirava-se, caía, e a bola entrava a metros
+    dele.
+
+    Agora há um alcance, e tem duas partes:
+
+      . o TEMPO que sobra. Descontado o `tempoLer` + `tempoImpulso` (0.17 s), o
+        que resta é voo, e o voo cobre `velLateral` metros por segundo. Uma
+        bola que chega em 0.4 s dá 0.23 s de voo, ou seja pouco mais de um
+        metro de lado: pedir-lhe mais do que isso é pedir-lhe que caia no
+        chão a ver a bola passar.
+
+      . o TECTO, que é o pedido: nem com todo o tempo do mundo se cobrem mais
+        de `alcanceLateralMax` metros. A parte de cima do alcance cinemático
+        (`alcanceBraco` + `velLateral` x `vooMax`, que a GK 100 dá 9.4 m) é um
+        artefacto do `vooMax` e não um salto que exista.
+
+    Quem está ACIMA do alcance não se atira: fica de pé e desloca-se para o
+    lado da bola, que é o que o `gkAlvoX` já faz.
+
+    A defesa DESENHADA (penálti, falta directa) não passa por aqui — nesses o
+    desfecho foi sorteado e o gesto é para se ver.
+    */
+    alcanceLateralMax: 5.0,
+
+    /*
+    =====================================================================
+    QUAL DAS TRÊS DEFESAS, E QUANDO É QUE ELAS VALEM
+    =====================================================================
+    Pedido, com os doze fotogramas: três gestos separados por ALTURA DA BOLA —
+    baixa até 1/3 da baliza, média de 1/3 a 2/3, alta daí para cima — e todos
+    "para bolas a mais de 4 metros lateralmente do goleiro".
+
+    As fracções ficam aqui e não em números absolutos porque a baliza tem a
+    medida dela (`ALTURA_BALIZA`, 2.44 m): um terço são 0.81 m e dois terços
+    1.63. Escrever 0.81 à mão era escrever a altura da baliza duas vezes.
+
+    `lateralMinClip` é o corte do pedido. Abaixo dele a bola está ao alcance
+    do corpo e o que se faz não é um mergulho — é o ramo 'maos', que já existe
+    e não muda (ver GoalkeeperPose.mergulhoLateralMin).
+    */
+    bandaBaixa: 1 / 3,        // fracção da altura da baliza
+    bandaAlta: 2 / 3,
+    lateralMinClip: 4.0,      // metros de lado, abaixo disto não há clip
+
+    /*
+    E NÃO SE ATIRA COM A BOLA AINDA LONGE.
+
+    Medido antes disto (`tools/scratch/gk_mergulho.js`, 30 min): **92% dos
+    mergulhos arrancavam com a bola a mais de 5 m dele** — mediana 9.9 m,
+    máximo 20.5. O `horaDeMergulhar` só olhava ao TEMPO, e num remate a 25 m/s
+    os 0.4 s do gesto são dez metros de bola: a conta está certa e o que se vê
+    é um guarda-redes a atirar-se ao chão para uma bola que ainda vem a meio
+    caminho. Com uma bola lenta era pior: 1.5 s de janela e ele já no chão.
+
+    Este tecto é a outra metade da decisão. Enquanto a bola estiver mais longe
+    do que isto ele fica DE PÉ a acompanhar (o `gkAlvoX` desloca-o para o lado
+    do remate), e só se atira quando ela entra na distância em que o gesto e a
+    bola se encontram.
+
+    Doze metros não é um número redondo por acaso: é o que um remate de 30 m/s
+    percorre no tempo do gesto inteiro (0.4 s), ou seja o ponto a partir do
+    qual esperar mais já custa a defesa. Abaixo dele manda o tempo, como antes.
+    */
+    distanciaMaxParaMergulhar: 12.0,
+
+    /*
+    =====================================================================
+    E ELE REAGE MAIS TARDE COM GENTE À FRENTE
+    =====================================================================
+    Pedido: *"nas faltas e chutes temos que adicionar um delay para a reação
+    dos goleiros em virtude dos jogadores a frente atrapalharem a visão dele"*.
+
+    O atraso base sai da habilidade (`reaccaoBase`/`reaccaoPorSkill`) e é o
+    mesmo com o campo limpo ou com seis corpos entre ele e a bola. A barreira
+    de uma falta é o caso óbvio, mas um remate de fora com dois defesas e dois
+    atacantes pelo meio é igual: ele vê a bola mais tarde.
+
+    Conta-se quem está no CORREDOR entre a bola e ele — `visaoLargura` de
+    meia-largura, e só quem está entre os dois, não quem está atrás da bola ou
+    atrás dele. Cada corpo soma `atrasoPorHomemNaVisao`, com tecto em
+    `atrasoVisaoMax`: a partir de um certo ponto já não vê nada, e mais um
+    homem não muda o problema.
+    */
+    atrasoPorHomemNaVisao: 0.05,   // s por corpo no corredor bola->guarda-redes
+    atrasoVisaoMax: 0.20,          // tecto do que a visão tapada pode custar
+    visaoLargura: 1.2,             // meia-largura do corredor, em metros
+    /*
+    ELE CAI DE FRENTE, E NAO SO DE LADO.
+
+    Relato: *"o goleiro, depois do pulo, esta caindo de lado ate uns 45 graus
+    com o solo... ele deveria cair de frente para baixo e colocando os bracos
+    para ajudar a aparar a batida no chao"*.
+
+    O tombo era uma rotacao a volta do eixo FRONTAL do modelo e mais nada —
+    puro rolamento lateral, sem nenhuma componente de cair para a frente. Nao
+    se arranja somando um `rotation.x`: o mergulho ANTIGO fazia isso, compunha
+    os dois em Euler, e o cabecalho do gk_dive.js guarda o resultado — *"deixava
+    o boneco virado/torcido"*.
+
+    A regra "um eixo, um angulo" fica de pe; o que muda e QUAL e o eixo. Em vez
+    do +Z local usa-se `(pesoQuedaFrente, 0, -lado)` normalizado: um eixo so,
+    inclinado, que mistura o tombo lateral com o picar para a frente na
+    proporcao que este numero manda.
+
+    0.55 da ~29 graus da queda para a frente e o resto de lado. A 0 volta ao
+    rolamento puro de antes; a 1 cairia a 45 graus entre os dois.
+    */
+    pesoQuedaFrente: 0.55,
+
+    /*
+    =========================================================================
+    DE LADO NO AR, DE BRUCOS SO NO FIM
+    =========================================================================
+    Relato, com quatro fotografias: *"o guarda-redes esta a saltar para o lado
+    virado com a barriga para baixo. Nao e isso. O correcto e ele saltar para o
+    lado com o corpo de lado (barriga para a frente) e virar para baixo somente
+    no final, para ter apoio para retornar a posicao de pe"*.
+
+    O `pesoQuedaFrente` metia 0.55 de picada para a frente no EIXO da queda, e
+    um eixo e o mesmo do principio ao fim: ele saia do chao ja a rodar para a
+    barriga, e voava de brucos. As fotografias mostram o contrario -- no ar o
+    corpo esta de lado, de perfil para a baliza, e so ao aterrar e que a
+    barriga vira para o relvado para as maos poderem empurrar.
+
+    Agora sao duas rotacoes com tempos diferentes:
+
+      LADO    -- a volta do +Z local, do principio ao fim. E o tombo.
+      FRENTE  -- a volta do +X local, e SO a partir de `fracFrente` do voo,
+                 crescendo ate `anguloFrente` no instante em que toca no chao.
+
+    `fracFrente` 0.70 quer dizer: os primeiros 70% do voo sao de lado puro, o
+    resto e a viragem. No chao fica completa; ao levantar desfaz-se com o
+    tombo, pelo mesmo factor.
+    =========================================================================
+    */
+    fracFrente: 0.70,
+    anguloFrente: 0.62,
+
+    /*
+    A viragem é à volta do eixo LONGO do corpo (o +Y local, da cabeça aos
+    pés), e não à volta do +X. Quem está deitado de lado vira a barriga para
+    baixo rolando sobre si próprio — rodar o +X depois de o corpo já estar
+    tombado 90 graus é um eixo que ficou VERTICAL, e isso não vira barriga
+    nenhuma: gira o boneco no chão.
+
+    Medido com `tools/scratch/gk_barriga.js` (ângulo entre a frente do corpo e
+    o plano do relvado, 0 = de lado, 90 = de bruços):
+
+        pelo +X   voo 0°, chão -5°     (a viragem não acontecia)
+        pelo +Y   voo 0° no início e no meio, 17° no fim, chão 35°
+    */
+
+    /*
+    Raio, em metros, dentro do qual os bracos continuam a ir a bola por IK
+    depois de ele estar no chao. Fora dele os dois bracos passam a amparar a
+    queda (ver poseBracosChao) — que e o pedido, e e o que um guarda-redes faz
+    mal percebe que nao chega la.
+
+    Nao se pode simplesmente cortar o IK no chao: e o `mirarBola` que corre o
+    teste da defesa (`defender`), e sem ele o deslize deixava de defender.
+    */
+    raioIKNoChao: 2.2,
+
+    /*
+    DEITADO, O CORPO TEM DE TOCAR O RELVADO.
+
+    Relato: *"depois do pulo, o goleiro tem que continuar o movimento ate o
+    corpo tocar o chao, para depois levantar"*.
+
+    O `alturaDeitado` e um valor FIXO para a origem do modelo, e a origem esta
+    nos pes (`ALTURA_BASE_Y` e -0.03). Como o angulo do tombo muda muito com o
+    tipo de mergulho, uma altura so nao pode servir os tres — medido, o ponto
+    mais baixo do corpo no instante em que ele "aterra":
+
+        baixo   +0.32 m   flutua 32 cm acima do relvado
+        meio    -0.07 m
+        alto    -0.51 m   meio metro enterrado
+
+    O `baixo` e exactamente o relato: acaba o mergulho no ar e levanta-se de la.
+
+    Agora o `alturaDeitado` e so o ponto de partida e o corpo assenta a serio:
+    mede-se o osso mais baixo e desce-se o modelo ate ele ficar a
+    `folgaDeitado` do chao. A folga existe porque o que se mede sao CENTROS de
+    junta, nao a superficie — um braco deitado tem o centro do pulso uns 10 cm
+    acima da relva.
+    */
+    folgaDeitado: 0.10,
+
+    alturaDeitado: 0.42,   // y da origem do modelo com ele deitado de lado
+    atritoChao: 3.5,       // desaceleração do deslize no relvado (m/s²)
+
+    // Ângulo do tombo, por tipo de defesa. Uma bola rasteira não precisa de
+    // deitar tanto como uma no ângulo.
+    anguloMax: { baixo: 1.22, meio: 1.48, alto: 1.75 },   // 70° / 85° / 100°
+
+    fracContacto: 0.55,    // fracção do voo em que a mão deve chegar ao alvo
+    raioMao: 0.42,         // raio de contacto da mão com a bola
+    // `apanhaBase` saiu daqui: quem decide agarrar/espalmar/roçar é o
+    // GkCatchModel (mais abaixo), para os quatro tipos de defesa.
+
+    /*
+    ESPALMADA PARA FORA. A espalmada devolvia SEMPRE a bola ao campo
+    (`ballVel.z *= -0.5`, o sinal invertido), e por isso nunca havia um canto
+    ganho numa defesa — a saída mais comum de todas num remate colocado.
+
+    Agora há duas: a bola perto do poste ou por cima do ombro sai PELA LINHA DE
+    FUNDO (canto), o resto continua a voltar ao campo. Quem manda é a colocação
+    do remate, não um sorteio.
+
+    A posição da bola é empurrada para FORA da moldura no mesmo instante do
+    toque. Sem isso a mão fica na linha de golo e o que se via era golo: a bola
+    atravessava o plano da baliza nos milissegundos seguintes, ainda dentro dos
+    postes, antes da velocidade nova a tirar de lá.
+    */
+    /*
+    A menos disto do poste, a espalmada pode sair pela linha de fundo.
+    1.1 -> 2.4: com 1.1 m era preciso a bola vir praticamente encostada ao
+    ferro para o guarda-redes ter a opcao de a mandar para canto, e por isso
+    quase tudo voltava ao campo. Os escanteios estao em 0.91 por jogo contra
+    9.92 (9% do alvo) — a defesa para canto e a fonte mais natural deles.
+    */
+    /*
+    FICA EM 2.4, e a subida a 3.6 está registada como erro meu.
+
+    Subi-a para os remates mais centrais (os que a mira menos ambiciosa
+    produz) poderem ser mandados para fora. Mas a baliza tem 3.66 m de
+    meia-largura: uma margem de 3.6 deixa uma faixa central de SEIS
+    CENTÍMETROS, ou seja toda a espalmada passa a sair. É exactamente o caso
+    degenerado que o teste ao lado avisa — *"a margem tem de caber dentro da
+    baliza, senão TODA a espalmada sai"* — e o `penalti_defesa` apanhou-o com
+    uma bola em x = 0.2 a ser mandada para canto.
+
+    E não era preciso: a mira nova aponta entre 0.76 e 2.28 m do centro
+    (`fraccaoCanto.forca` sobre a meia-baliza útil de 2.81), o que dá 1.38 a
+    2.90 m do poste — a maior parte já dentro dos 2.4 de origem. A faixa
+    central que volta ao campo é a de quem remata em cima do guarda-redes, e
+    essa deve mesmo voltar: é o rebote.
+    */
+    espalmarForaMargem: 2.4,   // a menos disto do poste, a espalmada sai
+    espalmarAltaY: 1.70,       // acima disto sai por cima do travessão
+    espalmarFolga: 0.35,       // quanto passa por fora do poste/travessão
+    espalmarLateral: 5.0,      // m/s que leva para lá do poste
+    espalmarSubida: 5.0,       // m/s que leva por cima do travessão
+    espalmarForaZ: 0.45,       // trava o avanço, MANTENDO o sentido (sai)
+    ombroY: 1.35,          // altura do ombro acima da origem, de pé
+
+    // Pose das pernas em voo: estendidas e ligeiramente abertas.
+    coxaVoo: -0.25, joelhoVoo: 0.55, aberturaVoo: 0.18,
+
+    /*
+    =====================================================================
+    A SEQUÊNCIA DO MERGULHO — as pernas, fase a fase
+    =====================================================================
+    Referência: a sequência de um mergulho a sério, seis instantes. O que lá
+    está e não estava aqui é a ASSIMETRIA. As duas pernas faziam o mesmo
+    (`coxaVoo`/`joelhoVoo` iguais nos dois lados), e um mergulho com as duas
+    pernas na mesma posição lê-se como um boneco a deslizar de lado.
+
+    Num mergulho há sempre uma perna de BAIXO — a do lado para onde ele se
+    atira, que dá o impulso e acaba por baixo do corpo — e uma de CIMA, a de
+    trás, que fica esticada no ar e é o que dá a linha do salto.
+
+    Convenção dos sinais, a mesma do resto do rig: `coxa` negativo leva a
+    perna para TRÁS, `joelho` positivo DOBRA (calcanhar para trás).
+
+    São números para se afinarem a olho, com o jogo aberto: o mergulho é o
+    gesto mais visto do guarda-redes.
+    */
+    sequenciaPernas: {
+        /*
+        IMPULSO. A perna de baixo estende-se a empurrar o chão (joelho quase
+        a zero); a de cima já vai a dobrar para arrancar.
+        */
+        impulso: {
+            coxaBaixo: -0.10, joelhoBaixo: 0.10,
+            coxaCima: -0.30, joelhoCima: 0.95
+        },
+
+        /*
+        VOO. Corpo na horizontal, pernas atrás: a de cima esticada e a de
+        baixo a arrastar dobrada. A abertura separa-as, para não ficarem
+        coladas de perfil.
+        */
+        voo: {
+            coxaBaixo: -0.45, joelhoBaixo: 0.70,
+            coxaCima: -0.70, joelhoCima: 0.15,
+            abertura: 0.22, chest: -0.12
+        },
+
+        /*
+        CHÃO. Aterra de lado e as pernas RECOLHEM: os dois joelhos dobram
+        para cima e o tronco roda um pouco para a frente — é isso que dá a
+        rolagem. Antes ficava esticado como uma tábua.
+        */
+        chao: {
+            coxaBaixo: -0.25, joelhoBaixo: 1.45,
+            coxaCima: -0.15, joelhoCima: 1.15,
+            chest: 0.22
+        }
+    },
+
+    /*
+    =========================================================================
+    OS BRAÇOS E O TRONCO DO MERGULHO
+    =========================================================================
+    Pedido: a sequência de um mergulho a sério — o passo de apoio com os
+    braços atrás, os dois a subir na saída, a extensão completa no ar, e a
+    aterragem de lado a escorregar com os braços à frente.
+
+    A máquina de estados já fazia as cinco fases (ler, impulso, voo, chão,
+    levantar, ver js/gk_dive.js) e a `sequenciaPernas` já desenhava as pernas
+    em três delas. Os braços não tinham desenho nenhum: iam os DOIS à bola
+    por IK do princípio ao fim, e o de trás ficava esticado a atravessar o
+    peito.
+
+    Quem manda no braço LÍDER (o do lado do mergulho) continua a ser o IK: é
+    ele que apanha a bola, e isso é jogo, não desenho. O de TRÁS é que passa
+    a seguir a coreografia — e só depois de `fracIKTraseiro` do voo, para o
+    instante do contacto continuar a ter as duas mãos na bola.
+
+    Convenções do rig: `x` do ombro leva o braço à FRENTE, `z` afasta-o do
+    tronco (a passada neutra usa ~0.20; PI/2 é o braço na horizontal). O
+    sinal do `z` é dado pelo lado, no gk_dive.js — aqui os números são
+    sempre positivos.
+    =========================================================================
+    */
+    sequenciaBracos: {
+        /*
+        IMPULSO — o passo de apoio. Os dois braços vão ATRÁS e para baixo, a
+        carregar o gesto; é o que dá a impressão de que ele se atira e não de
+        que cai. Escreve os dois: ainda não há contacto nenhum a proteger.
+        */
+        impulso: {
+            liderX: -0.55, liderZ: 0.90,
+            traseiroX: -0.70, traseiroZ: 0.55,
+            cotovelo: -0.55,
+            /*
+            A partir desta fracção da fase, os braços deixam o balanço e vão
+            à bola por IK (ver a nota na fase 'impulso' do gk_dive.js). O
+            balanço fica nos primeiros 35% — o suficiente para se ver o
+            arranque, pouco o bastante para ele não sair do chão com os
+            braços colados.
+
+            E o `liderZ` subiu de 0.55 para 0.90: mesmo no balanço o braço do
+            lado do mergulho já está aberto do tronco. 0.55 rad são 31 graus,
+            que à vista é um braço ao lado do corpo.
+            */
+            fracIK: 0.35
+        },
+
+        /*
+        VOO — extensão. O braço de trás estica ao longo do corpo, aberto do
+        tronco, e não atravessado à frente do peito.
+        */
+        voo: {
+            traseiroX: -0.25, traseiroZ: 1.35,
+            cotovelo: -0.15,
+            // Antes disto os dois braços continuam a ir à bola.
+            fracIKTraseiro: 0.6
+        },
+
+        /*
+        CHÃO — aterrado de lado, a escorregar: os dois braços à frente, o de
+        cima a proteger a bola e o de baixo esticado no relvado.
+        */
+        chao: {
+            /*
+            O SINAL DO `x` ESTAVA TROCADO, e era metade do relato *"o braço do
+            guarda-redes dobra por trás do corpo"*.
+
+            No rig, `ombro.rotation.x` NEGATIVO leva a mão à FRENTE — medido
+            com `tools/scratch/braco_convencao.js`: x=-0.90 põe a mão 1.41 m à
+            frente do peito, x=+0.90 põe-a 1.41 m atrás. Com +0.95 e +0.75,
+            esta pose — cujo próprio comentário diz "os dois braços à frente,
+            a amparar a batida" — punha-os exactamente ao contrário. Medido
+            na fase 'chao': 60% das amostras com a mão atrás do peito.
+
+            As magnitudes ficam como estavam; muda o sinal.
+            */
+            liderX: -0.95, liderZ: 0.85,
+            traseiroX: -0.75, traseiroZ: 0.55,
+            cotovelo: -0.35
+        }
+    },
+
+    /*
+    TORÇÃO DO TRONCO (chest.rotation.y), em radianos e para o lado do
+    mergulho. O corpo torce-se antes de sair do chão — é isso que faz o gesto
+    ler como um mergulho e não como um tombo lateral.
+    */
+    torcaoTronco: { impulso: 0.30, voo: 0.18, chao: 0.45 },
+
+    pesoIK: 0.45,          // suavização do IK dos braços por frame
+
+    /*
+    O Z MÍNIMO DA MÃO NO ESPAÇO DO PEITO, em metros. Abaixo disto o alvo do IK
+    é empurrado para a frente — ver `apontarBracos` (gk_dive.js), que tem a
+    medição. Serve para o braço nunca dobrar para trás das costas atrás de uma
+    bola que já passou.
+
+    0.15 m é mesmo à frente do peito: chega para tirar a pose errada sem
+    encolher o alcance lateral, que é onde as defesas se ganham.
+    */
+    maoMinZPeito: 0.15
+};
+
+/*
+=============================================================================
+DEFESA DO GUARDA-REDES — agarrar, espalmar, ou só roçar
+=============================================================================
+Havia TRÊS fórmulas para a mesma pergunta, cada uma escondida no seu ramo, com
+bases e declives diferentes:
+
+    mergulho (gk_dive.js)   0.35 + (GK − 50) / 100
+    mãos ao corpo (player)  0.55 + (GK − 50) / 100
+    salto alto (player)     0.40 + (GK − 50) /  80
+    corpo (match.js)        agarra SEMPRE
+
+Nenhuma sabia a que velocidade a bola vinha, nenhuma sabia se a mão estava ao
+peito ou na ponta dos dedos, e nenhuma usava a TÉCNICA. Um remate a 26 m/s na
+ponta dos dedos era tratado como um passe atrasado ao peito.
+
+    P(agarrar) = base[tipo]
+               + pesoGK  · (GK  − 50)/50
+               + pesoTEC · (TEC − 50)/50
+               − custoVel      · (v − vRef)/vRef
+               − custoExtensao · extensao
+               − custoAltura   · alturaAcimaDoPeito
+
+`extensao` é 0 com a bola ao peito e 1 no limite do alcance da mão. É a
+variável que mais faltava: uma bola na ponta dos dedos não se segura, por
+melhor que seja o guarda-redes.
+
+GK pesa pouco mais do dobro da TEC: a especialidade decide, a técnica é a mão
+que fecha em cima.
+
+TRÊS RESULTADOS, e o terceiro é o que faltava para o jogo ter rebotes a sério:
+
+    agarra    fica com ela, jogo parado
+    espalma   desvia-a; para onde depende da TÉCNICA (ver `qualidadeEspalmada`)
+    roça      toca-lhe e ela segue quase na mesma — a defesa que não chega a
+              ser defesa. Só aparece em bolas rápidas e no limite do alcance,
+              que é onde acontece mesmo.
+
+CALIBRAÇÃO: com um guarda-redes médio (GK 50, TEC 50) contra um remate médio
+(v = vRef, extensão 0.5), a média dos quatro tipos dá ~65% de bolas agarradas.
+Ver tests/gk_defesa.test.js, que mede isso e falha se sair da faixa.
+=============================================================================
+*/
+/*
+=============================================================================
+RECUO COM O PE — o que o guarda-redes faz quando nao pode usar as maos
+=============================================================================
+A Lei 12 ja estava metade feita: um passe DELIBERADO com o pe de um companheiro
+marca `Match.recuoParaGR` (ver executePassGameplay, fsm.js) e o
+`maosProibidasNoRecuo` impede o guarda-redes de agarrar. A cabecada e a matada
+no peito nao passam por esse caminho — que e exactamente a distincao da regra.
+
+O que faltava era o DEPOIS: com as maos proibidas e a bola dentro da area, o
+ramo que o mandava agarrar tinha um `else if (!maosProibidas)` e mais nada, por
+isso ele chegava a bola e ficava parado em cima dela, com o adversario a chegar.
+
+`distPressao`: com um adversario a menos disto, nao ha tempo para dominar e sair
+a jogar — chuta-se para a frente, com o mesmo gesto e a mesma balistica do tiro
+de meta (`kickFromGround`). Mais longe do que isso ele tem tempo, e o resto do
+comportamento (sair a jogar, passe curto) continua a valer.
+=============================================================================
+*/
+const GkRecuoModel = {
+    distPressao: 5.0,
+    // A que distancia da bola o guarda-redes ja lhe pode bater.
+    distToque: 1.4,
+
+    /*
+    AQUI VIVIA O `atrasoMin`, E FOI REMOVIDO.
+
+    Era a folga de direcção: a bola tinha de ser jogada mais de 1 m para TRÁS
+    para as mãos ficarem proibidas. A ideia era não apanhar um toque de lado a
+    proteger a bola; o que ela apanhava era outra coisa — o recuo CURTO, que é
+    o mais comum, porque o defesa que devolve a bola ao guarda-redes está a
+    dois metros dele.
+
+    Medido em 30 min (`tools/scratch/recuo_gk.js`): sete bolas agarradas com a
+    mão vinham do pé de um companheiro, todas dentro da folga, com
+    deslocamentos de -0.73 a +3.23 m. A Lei 12 fala do PÉ e não da direcção, e
+    é assim que a regra passou a ser lida — ver `avaliarRecuoParaGR`
+    (js/utils.js).
+
+    A única distância que sobrou é esta, e é só para o toque do PRÓPRIO
+    guarda-redes: ele não se absolve a si mesmo (tocar com o pé e agarrar a
+    seguir era o buraco original), mas quando a bola sai mesmo dali ele pô-la
+    em jogo e a fase acabou. Sem esta saída ficava proibido para sempre, porque
+    já não há direcção nenhuma a limpar a marca.
+
+    Mede-se a distância DELE à bola, e não ao ponto do toque: um toque que manda
+    a bola seis metros para dentro da própria baliza não põe nada em jogo. O que
+    põe é ela ficar longe dele — oito metros são mais do que a área pequena
+    (5.5 m) e menos do que qualquer bola jogada para longe.
+    */
+    libertaComOPe: 8.0
+};
+
+if (typeof window !== 'undefined') window.GkRecuoModel = GkRecuoModel;
+
+const GkCatchModel = {
+
+    /*
+    =====================================================================
+    REMATE FORTE E DE PERTO NAO SE SEGURA
+    =====================================================================
+    Pedido: *"um chute forte muito proximo do guarda-redes nao pode ter defesa
+    e o guarda-redes ficar com a bola. Ele pode defender mas tem que colocar a
+    bola para fora"*.
+
+    E o que a fisica manda: a bola chega com energia a mais e sem tempo para
+    fechar as maos a volta dela. Um guarda-redes defende, mas o que faz e
+    desviar -- para o canto, para a lateral, ou para a frente com a bola a
+    ficar viva.
+
+    Dentro de `distMax` metros do rematador e acima de `velMin`, a hipotese de
+    AGARRAR passa a zero. O resto da decisao fica como estava: o rocar continua
+    a depender da velocidade e da extensao, e o que sobra e espalmada.
+    =====================================================================
+    */
+    semAgarrar: { distMax: 8.0, velMin: 22.0 },
+    /*
+    Probabilidade base por TIPO de defesa, a v = vRef e extensão 0. É a mesma
+    estrutura que as quatro fórmulas antigas tinham, agora explícita e com o
+    mesmo declive para todas.
+    */
+    base: {
+        /*
+        Bola mansa ao corpo, dentro da área. O `custoVel` do
+        `resolverDefesaGK` é que separa o toque fraco do remate forte, e faz
+        isso sozinho — medido com esta base: 95% agarradas a 8-14 m/s, 71% a
+        25 e 51% a 30. Ou seja o remate forte ao corpo JÁ era espalmado sem
+        se mexer aqui.
+
+        Foi por não ter verificado isto que baixei esta chave para 0.55 numa
+        alteração anterior — pior, acrescentando uma SEGUNDA chave `corpo` ao
+        mesmo objecto, que em JavaScript ganha por ser a última. O efeito foi
+        passar a deixar cair quase metade das bolas mansas ao corpo, e os
+        testes `gk_defesa` apanharam-no (a média das quatro defesas caiu de
+        ~65% para 53.3%, e a ordem "ao corpo é mais fácil que de pé"
+        inverteu-se). A chave voltou ao valor de origem.
+        */
+        corpo: 0.98,      // bola mansa ao corpo, dentro da área
+        maos: 0.90,       // de pé, bola perto do tronco
+        salto: 0.80,      // no ar, cruzamento ou bola alta
+        mergulho: 0.68    // esticado, o mais difícil de segurar
+    },
+
+    /*
+    O RAIO DO CORPO para esse teste, em metros: meio ombro (0.22) mais o raio
+    da bola (0.11). Menor do que o alcance da mão de propósito — a mão
+    estica-se, o tronco não.
+
+    0.32 -> 0.45 quando a ambição da mira desceu 10%
+    (`ShotModel.mira.fraccaoCanto`): esses remates passaram a ir mais ao CORPO
+    dele, e o pedido era que acabassem em DEFESA. Com 0.32 o lote mediu-os a
+    entrar — os golos subiram de 129% para 138% do alvo — portanto a barreira
+    tinha de crescer com eles. 0.45 é o tronco com os braços encostados, que
+    é a postura de quem espera um remate ao corpo.
+
+    Varrido antes (9 sementes, 45 min cada) e o número quase não mandava no
+    resultado: 0.20 dava 14% de conversão nos remates à baliza, 0.26 dava 17%
+    e 0.32 dava 19%.
+    A razão é que QUALQUER contacto salva — dos três desfechos do
+    `resolverDefesaGK` só o `roca` deixa a bola seguir, e com o `base.corpo`
+    alto quase nunca sai. Fica no valor físico, que é o defensável, e o que
+    sobra para chegar aos ~29% reais não é este raio: é a COLOCAÇÃO do remate,
+    que no jogo cai a 1.5-1.8 m do centro da baliza (o meio, onde ele está) em
+    vez de junto aos postes.
+    */
+    alcanceCorpo: 0.45,
+    /*
+    Altura do corpo que conta, dos pés para cima. Acima disto a bola passa-lhe
+    por cima da cabeça e é o salto que trata dela (ver o ramo do `salto`).
+    */
+    alturaCorpo: 1.85,
+
+    pesoGK: 0.30,         // amplitude entre GK 0 e GK 100
+    pesoTEC: 0.12,        // idem para a Técnica
+
+    /*
+    Velocidade de referência: um remate normal. Acima disto perde-se agarro,
+    abaixo ganha-se — é o que separa segurar um passe atrasado de segurar um
+    tiro.
+    */
+    vRef: 18.0,
+    custoVel: 0.70,
+
+    // Altura do peito do guarda-redes: é daqui para cima que a bola começa a
+    // custar a segurar (acima da cabeça agarra-se com as pontas dos dedos).
+    alturaPeito: 1.20,
+
+    // Extensão do braço (0 ao peito, 1 no limite) e altura acima do peito.
+    custoExtensao: 0.40,
+    custoAltura: 0.10,
+
+    /*
+    ATÉ QUE DISTÂNCIA DA MÃO É QUE A BOLA SE APANHA.
+
+    Relato, com três capturas: "o goleiro está a pegar a bola sem pular nela; a
+    quase 2 metros de distância a bola é teletransportada para as mãos". Medido
+    (`tools/headless/gk_agarra_de_longe.js`, 15 min): **17 de 17** bolas
+    agarradas com a bola a mais de 1 m da mão, média 1.43 m e máximo 2.03 — e
+    em 11 delas ele estava em `idle`, parado, sem gesto nenhum.
+
+    A causa eram dois `1.3` escritos à mão: o `resolveBallContact`
+    (match_physics.js) media do CENTRO DO MODELO, e o estado 'maos'
+    (player.js) media da mão mas com o mesmo 1.3, que é o dobro do que um
+    braço alcança.
+
+    0.55 = `raioMao` (0.42, o mesmo do mergulho) + o raio da bola. É o contacto
+    a sério: a luva na bola.
+    */
+    alcanceContacto: 0.95,
+
+    // Nunca é certo nem impossível.
+    minAgarra: 0.05,
+    maxAgarra: 0.95,
+
+    /*
+    ROÇAR. Cresce com a velocidade acima de `rocarVMin` e com a extensão — a
+    bola que passa a raspar na luva. Um guarda-redes melhor transforma mais
+    roçares em espalmadas.
+    */
+    rocarVMin: 15.0,
+    rocarEscalaV: 14.0,   // m/s acima do mínimo para saturar
+    rocarPesoExt: 0.6,    // quanto a extensão pesa (o resto é a velocidade)
+    rocarMax: 0.35,
+    rocarPorGK: 0.60,     // reducao multiplicativa: GK 100 roca 60% menos
+
+    // Desvio que um roçar dá à bola: quase nada, é isso que o define.
+    rocarTravagem: 0.92,  // multiplicador da velocidade
+    rocarDesvioMax: 1.2,  // m/s de desvio lateral
+
+    /*
+    QUALIDADE DA ESPALMADA, pela TÉCNICA. Decide PARA ONDE ela vai:
+
+        alta   para fora (canto) ou para a lateral, longe do miolo
+        baixa  rebote curto para o meio da área, com o avançado a chegar
+
+    Era aleatória, e por isso não havia nem uma coisa nem outra de propósito.
+    */
+    /*
+    Qualidade da espalmada: e ela que decide PARA ONDE a bola vai (ver
+    destinoDaEspalmada em utils.js) — canto e lateral com qualidade alta,
+    rebote curto ao meio com qualidade baixa.
+
+    0.50 -> 0.62: com 0.50 metade das espalmadas caia a frente da baliza,
+    disputavel. Um guarda-redes de tecnica media tira a bola do perigo bem
+    mais vezes do que isso, e e essa a diferenca entre um rebote e uma defesa.
+    */
+    /*
+    FICA EM 0.62, e a tentativa de a subir está aqui registada porque foi
+    instrutiva.
+
+    Subi-a a 0.80 para fechar o pedido "defesas do goleiro PARA FORA" — o
+    `destinoDaEspalmada` (utils.js) reparte as espalmadas por esta qualidade:
+    `canto` quando pode sair, `lateral` quando não, e `meio` (o rebote à frente
+    da baliza) no que sobra. Os cantos subiram mesmo, mas o teste
+    `gk_defesa` apanhou o preço: com 0.80 um guarda-redes de TEC 90 fica em
+    **1.0** (0.80 + 0.45 satura) e a técnica deixa de separar o destino do
+    rebote — 1000 cantos contra 530 de um TEC 20, quando a regra é que o bom
+    mande para canto mais do que o dobro do mau. Saturar um parâmetro é
+    apagar a variável que ele existe para representar.
+
+    O trabalho de mandar a bola PARA FORA está no `espalmarForaMargem` (subiu
+    a 3.6 m na mesma alteração), que decide se a espalmada PODE sair. Esse não
+    satura nada: continua a ser a técnica a decidir se ela sai mesmo.
+    */
+    qualidadeBase: 0.62,
+    qualidadePorTEC: 0.45
+};

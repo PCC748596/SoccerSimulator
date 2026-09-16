@@ -1,0 +1,1829 @@
+/*
+=============================================================================
+CONFIG: TÁCTICAS E FORMAÇÕES
+=============================================================================
+Formações, blocos, linhas defensivas, estilos de jogo, mentalidade e controlos.
+=============================================================================
+*/
+
+/*
+RITMO BASE DA PARTIDA. Esteve em 1.035 (+15%, pedido) e VOLTOU a 0.9.
+
+O aumento andou junto com o +30% do `RepositionPace` e o resultado medido foi
+o jogo a trocar de dono a cada 2.7 passes — o relato "meio sem objetivo, os
+times ficam trocando bola". Os números estão na nota do `RepositionPace`
+(config/player_behavior.js), que é onde a decisão de ritmo vive hoje.
+
+ATENÇÃO À OUTRA PONTA, se alguém lhe voltar a mexer: o
+`MatchDuration.timeScale` é `4.5 / GAME_SPEED`, portanto acelerar o jogo
+DESACELERA o relógio. A 0.9 são 5.00 s de relógio por segundo real e um lote
+de 1080 s dá 90 minutos; a 1.035 seriam 4.35 e o mesmo lote daria ~78. A conta
+é `90*60 / MatchDuration.timeScale` (ver o "Onde vou quando quero..." do
+docs/filesSummary.md), e leituras feitas a ritmos diferentes não se comparam
+sem a refazer.
+*/
+/*
+RITMO +10% (pedido): 0.9 -> 0.99.
+
+Fica escrito o que ja se mediu, porque isto ja subiu uma vez e voltou: a 1.035
+o jogo trocava de dono a cada 2.7 passes — o relato "meio sem objetivo, os
+times ficam trocando bola". Nessa altura o ritmo subiu JUNTO com o +30% do
+`RepositionPace`; agora sobe sozinho e fica a 0.99, abaixo do 1.035 que deu
+mau. Se o relato do baralhar voltar, e aqui que se desfaz.
+
+E O RELOGIO ANDA AO CONTRARIO: `timeScale` e `4.5 / GAME_SPEED`, logo acelerar
+o jogo DESACELERA o relogio. De 5.00 passa a 4.55 s de relogio por segundo
+real, e um lote de 1080 s deixa de dar 90 minutos: passa a dar ~82. Para um
+lote de 90 minutos a duracao passa a ser 90*60 / 4.55 = 1188 s.
+*/
+const GAME_SPEED = 0.99;
+
+/*
+Pausa (segundos reais) entre o fim de uma reposição e o recomeço do jogo:
+pontapé de saída, tiro de meta, canto e qualquer resetPlay. Serve para o
+espectador ver o campo já arrumado antes de a jogada arrancar, e para as
+equipas acabarem de assentar nas posições novas.
+
+No tiro de meta a contagem só arranca quando a bola fica pousada na quina da
+pequena área (ver golKickBolaAlvo em match.js) — antes disso a reposição ainda
+não terminou.
+*/
+const ESPERA_APOS_REPOSICAO = 3.0;
+
+/*
+O CANTO LEVA MAIS TEMPO A SER COBRADO -- pedido: *"aumenta o tempo de cobranca
+do escanteio em 2 segundos"*.
+
+Um canto nao e uma reposicao qualquer: a area tem de se compor dos dois lados,
+e quem bate ainda vai a pe ate a bandeirola. Os outros lances continuam com a
+espera comum (`ESPERA_APOS_REPOSICAO`); este tem a sua.
+*/
+const ESPERA_COBRANCA_CANTO = ESPERA_APOS_REPOSICAO + 2.0;
+if (typeof window !== 'undefined') window.ESPERA_COBRANCA_CANTO = ESPERA_COBRANCA_CANTO;
+
+/*
+E O LATERAL TAMBEM -- pedido: *"aumenta em 4s a espera para cobranca do lateral
+para dar tempo dos jogadores se posicionarem"*.
+
+O lateral e o lance que mais gente move sem que se veja porque: o batedor sai
+da ordem `ThrowInModel.ordemBatedor` e pode vir de 25 m, os apoios abrem
+(`apoioQuantos`/`apoioMin`/`apoioMax`) e os marcadores sobem
+(`avancoDosMarcadores`). Com a espera comum de 3 s a bola saia com meia equipa
+ainda a caminho do lugar.
+
+Sete segundos ainda cabem com folga na rede de seguranca (`SetPiecePrazos.
+lateral`, 15 s), que conta do mesmo instante e so existe para o caso de o gesto
+encravar.
+*/
+const ESPERA_COBRANCA_LATERAL = ESPERA_APOS_REPOSICAO + 4.0;
+if (typeof window !== 'undefined') window.ESPERA_COBRANCA_LATERAL = ESPERA_COBRANCA_LATERAL;
+
+/*
+Segundos entre o APITO do árbitro e a saída de bola. O apito autoriza a saída,
+portanto tem de vir ANTES dela — e perto: dado na montagem do kickoff ficava os
+3 s inteiros à frente do toque e lia-se como um apito solto, sem relação com o
+lance. Ver o ramo `kickoffActive` no Match.update.
+*/
+const APITO_ANTES_DA_SAIDA = 1.0;
+
+/*
+DEPOIS DO GOLO OS JOGADORES VOLTAM A PE AO MEIO-CAMPO.
+
+`TOLERANCIA_SAIDA` e a folga, em metros, dentro da qual o `setupKickoff` deixa
+o jogador onde ele chegou em vez de o colocar a mao no posto. Sem ela a
+caminhada era apagada no ultimo frame — andavam os segundos todos e apareciam
+teletransportados na mesma.
+
+`PRAZO_CAMINHADA_SAIDA` e o tempo maximo que se espera por eles (estagio 1 da
+sequencia do golo). Eram 3 s, e 3 s nao chegam para atravessar meio campo a
+correr: quem estava na area adversaria nunca chegava a tempo e caia sempre no
+teletransporte.
+*/
+/*
+=============================================================================
+SAIR A JOGAR DE TRÁS — a forma da equipa com a bola nas mãos do guarda-redes
+=============================================================================
+Relato, com captura: "quando o goleiro pega a bola os jogadores do time com a
+bola demoram a se reposicionar para sair jogando; tem jogadores ficando atrás do
+goleiro (entre o goleiro e seu próprio gol)".
+
+Medido em 74 min, durante os segundos de posse dele: 1.24 companheiros ATRÁS
+dele por leitura, pior caso 8, e 46% das leituras com pelo menos um. Um jogador
+ali não é opção de passe nenhuma — está fora do campo de jogo útil.
+
+`margemAFrente` é o piso: ninguém da equipa fica a menos disto à frente da
+linha do guarda-redes enquanto ele segura a bola. Não é o bloco inteiro a subir
+— é só o chão de quem tinha caído atrás dele.
+=============================================================================
+*/
+const SaidaDeBolaShape = {
+    margemAFrente: 4.0
+};
+
+if (typeof window !== 'undefined') window.SaidaDeBolaShape = SaidaDeBolaShape;
+
+const TOLERANCIA_SAIDA = 2.0;
+const PRAZO_CAMINHADA_SAIDA = 9.0;
+
+/*
+=============================================================================
+PRAZOS DE BOLA PARADA (DESENCRAVE / SEGURANÇA)
+=============================================================================
+Prazos máximos (em segundos reais) para cada lance de bola parada. Se o lance
+não for executado dentro deste tempo (devido a interrupção, perda de batedor
+ou bloqueio físico), o simulador força a retoma do jogo para evitar travamentos.
+=============================================================================
+*/
+/*
+=============================================================================
+LIMIARES DA FICHA DE JOGO (ver js/stats.js)
+=============================================================================
+Uma metrica sem definicao escrita muda de sentido a segunda leitura, por isso
+os numeros que DEFINEM cada estatistica vivem aqui e nao espalhados pelo
+codigo que os conta.
+=============================================================================
+*/
+const StatsModel = {
+    // Passe progressivo: aproxima a bola da linha de fundo adversaria em pelo
+    // menos isto. 10 m e o criterio dos fornecedores para o campo adversario.
+    progressivoMin: 10.0,
+    // Meia-largura do corredor do passe, para contar quem ficou para tras.
+    corredorLinha: 4.0,
+    // A que distancia um adversario ja e pressao sobre quem tem a bola.
+    raioPressao: 4.0,
+    // Quanto tempo depois de um passe certo um remate ainda conta como
+    // 'passe para finalizacao' (e o golo como assistencia).
+    janelaChave: 5.0,
+    // E quanto tempo depois de uma perda um remate adversario ainda e culpa
+    // de quem perdeu a bola.
+    janelaErro: 6.0,
+    // xG a partir do qual um remate conta como GRANDE CHANCE.
+    limiarGrandeChance: 0.25,
+    // Arrefecimento por par (pressionador, portador), para uma aproximacao
+    // nao contar dezenas de pressoes enquanto ele la esta.
+    arrefecimentoPressao: 2.0
+};
+
+if (typeof window !== 'undefined') window.StatsModel = StatsModel;
+
+const SetPiecePrazos = {
+    canto: 20.0,
+    falta: 15.0,
+    penalti: 15.0,
+    lateral: 15.0,
+    tiroDeMeta: 20.0
+};
+
+if (typeof window !== 'undefined') {
+    window.SetPiecePrazos = SetPiecePrazos;
+}
+
+/*
+Duração e escala do relógio de jogo:
+45 minutos de tempo de jogo (2700s) = 10 minutos reais (600s).
+Cada segundo real avança 4.5 segundos no relógio da partida.
+*/
+const MatchDuration = {
+    halfGameMinutes: 45,
+    halfRealMinutes: 10,
+    gameSecondsPerRealSecond: 4.5,
+    get timeScale() {
+        return (typeof GAME_SPEED !== 'undefined' && GAME_SPEED > 0)
+            ? (this.gameSecondsPerRealSecond / GAME_SPEED)
+            : this.gameSecondsPerRealSecond;
+    }
+};
+
+window.cameraMode = 'lateraltv';
+window.cameraZoom = 1.0;
+
+/*
+=============================================================================
+OS LIMITES DO ZOOM
+=============================================================================
+O `cameraZoom` multiplica a POSIÇÃO inteira da câmara (ver `updateCamera`,
+match_ui.js), portanto a distância ao que se está a ver escala com ele — e
+escala de forma DIFERENTE em cada vista, porque cada uma parte de um sítio:
+
+    vista          distância a zoom 1
+    TV Centro           70 m
+    Lateral Móvel       38 m
+    Lateral TV          57 m
+    Tática Cima        105 m     (depende do rácio do ecrã)
+
+Por isso o piso do zoom não pode ser a resposta ao pedido *"ajusta o zoom in
+máximo para uma distância de 5 metros dos jogadores"*: um piso só dava cinco
+distâncias diferentes. O piso existe para o zoom não ir a zero (e com ele a
+posição colapsar para dentro do alvo, que é onde a projecção deixa de ter
+sentido); quem manda nos cinco metros é o `distanciaMinima`, aplicado à
+distância JÁ CALCULADA, seja qual for a vista.
+
+O `min` é escolhido para os 5 m serem ALCANÇÁVEIS na vista mais afastada: a
+Tática Cima precisa de 5/105 = 0.048, e por isso 0.05 não chegava — parava a
+5.25 m. Medido nas quatro vistas com `tools/scratch/zoom_distancia.js`.
+
+`distanciaMinima` fica acima do `near` da câmara (0.1 m, ver main.js), portanto
+não há nada a ser cortado pelo plano de recorte.
+*/
+const CameraZoom = {
+    min: 0.04,              // piso do multiplicador; os 5 m vêm do de baixo
+    max: 2.5,
+    distanciaMinima: 5.0,   // metros, o mais perto que a câmara chega do alvo
+    passoRoda: 0.001        // por unidade de `deltaY` da roda do rato
+};
+if (typeof window !== 'undefined') window.CameraZoom = CameraZoom;
+/*
+Arranca EM PAUSA (pedido): o jogo abre parado e só corre quando se carrega
+em Continue / ▶. Antes começava a jogar sozinho enquanto ainda se estavam a
+mexer as definições do painel.
+*/
+window.isPaused = true;
+
+const TeamSkills = {
+    TeamA: { def: 80, mid: 80, ata: 80, gk: 80 },
+    TeamB: { def: 80, mid: 80, ata: 80, gk: 80 }
+};
+
+/*
+=============================================================================
+ANDAMENTOS — andar, trotar, correr
+=============================================================================
+Havia UMA animação só. O `getRunPose` devolvia sempre a mesma amplitude
+(anca ±1.1 rad = 63°, braços ±1.0), e a velocidade do jogador só mudava a
+rapidez do ciclo: andar era correr em câmara lenta, com o mesmo passo enorme e
+o mesmo tronco inclinado 17° para a frente.
+
+Os três andamentos diferem em quase tudo, não só na cadência:
+
+    a andar   passo curto, joelho quase direito, braços praticamente parados,
+              tronco a prumo, sem fase de voo
+    a trotar  passo médio, joelho a subir, braços dobrados a oscilar
+    a correr  passo longo, calcanhar quase ao rabo, braços a bombear, tronco
+              inclinado para a frente
+
+`passada` é o avanço em metros por CICLO COMPLETO (dois passos) e é o que dá a
+cadência: cadência = velocidade / passada. Antes o divisor era 3.0 fixo, o que
+equivale a dizer que se dá o mesmo tamanho de passo a andar e a sprintar.
+
+Os valores intermédios são interpolados, por isso a transição entre andamentos
+não tem degraus.
+=============================================================================
+*/
+/*
+=============================================================================
+DESLOCAÇÃO LATERAL — não se corre de frente andando de lado
+=============================================================================
+Um marcador tem o corpo virado para a bola (ver steerArrive em player.js) mas o
+alvo dele é o homem: sempre que os dois não estão na mesma direcção, ele
+deslocava-se de lado com o ciclo de passada frontal a tocar por cima. Lia-se
+como um boneco a patinar.
+
+Duas respostas, conforme a velocidade:
+
+    devagar   fica virado para a bola e faz PASSO LATERAL — passada curta e
+              pernas a abrir/fechar, que é o que um defesa faz mesmo.
+    depressa  acima de `velViragem` ninguém se desloca de lado: o corpo roda
+              para a direcção do movimento e volta ao ciclo normal. A cabeça
+              e a cintura continuam a acompanhar a bola (até ±80°), portanto
+              não se perde a bola de vista.
+
+`anguloMin` é a partir de que desvio isto conta como lateral — abaixo disso é
+uma corrida em frente com uma curva, e não se mexe em nada.
+=============================================================================
+*/
+/*
+VELOCIDADE DE GIRO do corpo, em 1/s (constante do slerp por segundo). Quanto
+maior, mais depressa o jogador se vira para onde vai.
+
+Estava escrita à mão em 5.5 dentro do steerArrive, o que dá uma constante de
+tempo de ~0.18 s — a virar 180° o jogador levava perto de um segundo a acabar
+o giro, e via-se a deslizar de lado durante a curva.
+
+`base` é o giro normal; `comBola` é mais lento de propósito (conduzir e mudar
+de direcção ao mesmo tempo é mais difícil do que virar sem bola), e o gesto de
+passe/remate tem os seus próprios valores no fsm, que são ainda mais rápidos
+porque ali a orientação faz parte da execução.
+*/
+
+const TeamShape = {
+    /*
+    Altura MÁXIMA da linha defensiva — que é a TRASEIRA do bloco (z0), e não
+    uma linha calculada à parte. Enquanto eram dois cálculos independentes
+    discordavam uns 10 m e o `holdOffsideLine` achatava a última linha toda
+    no mesmo z. Ver computeBlock em team_bt.js.
+    */
+    linhaDefensiva: {
+        low: -32.5,     // 4 m à frente da linha da grande área
+        medium: -18.25, // a meio caminho entre a grande área e a linha central
+        high: -2.0      // 2 m atrás da linha central
+    },
+
+    /*
+    Tecto ABSOLUTO de avanço do CENTRO do bloco sem bola, por Defensive
+    Pressure (painel
+    esquerdo) — em metros no referencial de ataque (0 = meio-campo, +53 =
+    baliza adversária). Substitui/limita o antigo comportamento de o bloco
+    seguir literalmente `ballZ*dir`: numa reposição do GR adversário (bola
+    lá no fundo do campo dele) o bloco tentava ficar "à frente da bola" e
+    saltava quase até ao ataque, mesmo em Balanced.
+    */
+    // Construção: com a bola aquém deste Z, um médio desce a dar linha de passe.
+    supportBallZ: -6.0,
+
+    /*
+    Margem (metros) da histerese do médio que apoia a construção. Ele só troca
+    quando o outro estiver mais de isto mais perto da bola — ver pickSupportMid
+    em team_bt.js, onde a histerese era "estar no top-3" e com dois candidatos
+    nunca libertava.
+    */
+    supportMidHisterese: 6.0,
+    supportAhead: 9.0,    // quantos metros à frente da bola se oferece
+    supportWide: 8.0      // e quanto abre para o lado, para abrir o corredor
+};
+
+/*
+=============================================================================
+O BLOCO — camada 1
+=============================================================================
+O nível 1 produz um RECTÂNGULO e mais nada. O nível 2 coloca cada jogador
+dentro dele por percentagem, e o nível 3 decide o que ele faz.
+
+Porquê um rectângulo em vez das fórmulas por posição que existiam:
+
+    Todas as compressões eram `clamp(alvo, minimo, maximo)`. Um clamp PROJECTA
+    toda a gente que está fora sobre o MESMO valor de fronteira — quatro
+    jogadores acima do tecto saíam com z idêntico ao centímetro, e 10% dos
+    alvos ficavam exactamente em x=28. Era isso que produzia os montes de
+    jogadores no mesmo sítio.
+
+    Com percentagens não há clamps: comprimir o bloco é encolher o rectângulo,
+    e toda a gente encolhe junta mantendo a forma. A compacidade e a amplitude
+    passam a ser um número cada, e não uma cascata de limites.
+
+Tudo aqui em fracções, no REFERENCIAL DE ATAQUE:
+    profundidade e recuo    fracção do comprimento do campo (106 m)
+    largura e desvio        fracção da largura do campo (68 m)
+=============================================================================
+*/
+// Rapidez com que o alvo de posicionamento persegue o valor calculado, em 1/s.
+// 3.0 => ~0.33 s de constante de tempo.
+const PositionSmoothing = 3.0;
+
+const BlockShape = {
+    /*
+    Guarda-redes com a bola nas mãos: quanto se AFASTAM da baliza dele os dois
+    blocos, em metros. Aplica-se aos dois lados na mesma direcção — a equipa do
+    guarda-redes sobe esta folga, a adversária recua a mesma coisa — por isso o
+    resultado é as duas ficarem mais longe de quem segura a bola, abrindo campo
+    para o relançamento em vez de o jogo ficar amontoado à volta da área.
+    */
+    recuoGkComBola: 10.0,
+
+    /*
+    Tiro de meta: quanto os DOIS blocos se afastam da baliza onde a bola está,
+    por cima do avanço de 10 m que o time que bate já tinha. Mesma ideia do
+    recuoGkComBola, e aplicado da mesma maneira — o time que bate sobe, o que
+    defende recua outro tanto.
+    */
+    avancoTiroMeta: 15.0,
+
+    /*
+    Profundidade do bloco (da última linha ao jogador mais avançado), por
+    definição de compacidade do painel. A traseira deste rectângulo é a linha
+    do fora-de-jogo da equipa — ver computeBlock em team_bt.js.
+    */
+    profundidade: {
+        short: 30 / 106,          // 30 m — bloco curto
+        mediumSmall: 40 / 106,    // 40 m — médio-curto
+        median: 50 / 106,         // 50 m — bloco médio (padrão)
+        mediumLarge: 60 / 106,    // 60 m — médio-longo
+        large: 70 / 106           // 70 m — bloco longo
+    },
+
+    /*
+    AS TRÊS LINHAS DO BLOCO, em fracção da profundidade (0 = traseira,
+    1 = frente). O `computeBlock` lê-as para pôr `zDef`/`zMid`/`zAtk`.
+
+    Desapareceram do config numa reorganização e o `computeBlock` ficou a usar
+    o fallback dele — `{0.0, 0.5, 1.0}` — que é justamente o valor que produziu
+    o defeito medido: o `v` da 442 salta de 0.545 (médios de ala) para 1.000
+    (avançados) sem nada pelo meio, e o avançado fica sozinho na borda da
+    frente. Num bloco de 40 m: CF a +18.3 m do meio-campo com o CM a -3.6, ou
+    seja 21.8 m de buraco entre o meio-campo e o ataque.
+
+    `ataque` a 0.85 é a faixa útil: à frente do meio e sem ir à borda. O
+    caminho contrário (2/3) também já foi tentado e comprime a formação toda
+    para trás — ver tests/bloco_tres_linhas.test.js, que guarda os dois erros.
+    */
+    linhas: {
+        defesa: 0.0,
+        meio: 0.5,
+        ataque: 0.85
+    },
+
+    /*
+    TECTO DE DESVIO AO SLOT, por função e em metros.
+
+    O slot é a formação; tudo o que vem depois (estilo, marcação, mola de
+    coesão, inquietação) desloca-o. Sem tecto, um central acabava a 20 m do
+    posto dele e a formação deixava de existir em campo. Um defesa tem menos
+    corda do que um avançado — é a diferença entre segurar a linha e atacar o
+    espaço.
+    */
+    desvioMaxDoSlot: { def: 9.0, mid: 15.0, ata: 22.0 },
+
+    /*
+    Profundidade MÍNIMA do bloco, em metros. Só entra quando o tecto da Linha
+    Defensiva e a marca de penálti adversária não deixam espaço para a
+    profundidade pedida (linha alta + bloco longo): aí a frente do bloco cede,
+    e é isto que a impede de colapsar em cima da traseira. Ver computeBlock em
+    team_bt.js.
+    */
+    profundidadeMinima: 20.0,
+
+    /*
+    AVANÇO E RECUO DO CENTRO DO BLOCO em relação à linha da bola, em metros e
+    no referencial de ataque da equipa. É a Regra 4 do bloco:
+
+        Team State  T.Offensive / Offensive  ->  +avancoDoCentroComBola  (bola
+                                                 -> baliza ATACADA)
+        Team State  T.Defensive / Defensive  ->  -recuoDoCentroSemBola  (bola
+                                                 -> baliza DEFENDIDA)
+
+    Estavam escritos à mão no `computeBlock` (`bb.isAttacking ? 5.0 : -5.0`) —
+    o número que mais se afina no bloco todo e o único que não tinha manípula.
+    O avanço com bola passou de 5 para 8 m a pedido.
+
+    Não distinguem TRANSIÇÃO de fase instalada: quem lê isto é o `isAttacking`,
+    que é um booleano de posse. Separar T.Offensive de Offensive obriga a ler o
+    Team State, não a posse.
+    */
+    avancoDoCentroComBola: 8.0,
+    recuoDoCentroSemBola: 5.0,
+
+    /*
+    O CENTRO DO BLOCO POR TERÇO — os números que estavam à mão no computeBlock.
+
+    Os dois valores acima descrevem um centro só, o mesmo em todo o campo. O
+    `computeBlock` passou entretanto a ter TRÊS centros com bola, conforme a
+    bola está no terço defensivo, no meio ou no terço ofensivo — a equipa
+    esticava-se num rectângulo só e a ideia foi essa. Só que os números
+    voltaram a ficar escritos à mão lá dentro (`10.0`, `5.0`, `-5.0`, `20.0`,
+    `-20.0`), que é exactamente o que esta secção existe para evitar.
+
+    Todos em metros e no referencial de ataque da equipa:
+
+    `meio`              com a bola no miolo, o centro fica isto à FRENTE dela.
+    `ataqueBase`        base do centro com a bola no terço ofensivo; a
+                        `fraccaoProfundidade` do comprimento do bloco é
+                        SUBTRAÍDA daqui — quanto mais longo o bloco, mais atrás
+                        fica o centro, senão a defesa acabava dentro da área
+                        adversária.
+    `defesaBase`        o mesmo no terço defensivo, mas SOMADA: com a bola lá
+                        atrás, o centro sobe para o bloco não colar à baliza.
+    `bonusOfensivo`     mentalidade `ataque`/`muito_ofensiva` puxa o centro
+                        mais para a frente no terço defensivo.
+    `faixaMeio`         meia-largura da faixa central, em avanço.
+    `rampa`             metros ao longo dos quais se passa do centro do meio
+                        para o do terço, para a mudança não ser um salto.
+    `semBola`           sem posse, o centro fica isto ATRÁS da linha da bola.
+                        É o `recuoDoCentroSemBola` com o sinal já dado.
+    */
+    centro: {
+        meio: 10.0,
+        ataqueBase: 5.0,
+        defesaBase: 0.0,
+        bonusOfensivo: 5.0,
+        fraccaoProfundidade: 1 / 3,
+        faixaMeio: 20.0,
+        rampa: 10.0,
+        semBola: -5.0
+    },
+
+    /*
+    NA TRANSICAO DEFENSIVA NINGUEM SOBE.
+
+    Team State T.Defensive sao os primeiros 3 s depois de perder a bola (ver
+    TeamBlackboard.tick). O bloco continua a ser desenhado a volta da BOLA, e
+    se ela ficou no meio-campo adversario o slot de quem estava recuado fica a
+    FRENTE dele — o jogador vai para a frente enquanto a equipa devia estar a
+    recuperar. Medido: em media 0.8 jogadores com o alvo mais de 3 m a frente,
+    e ate 8 no pior caso, sempre em T.Defensive.
+
+    Com isto ligado, o slot de quem nao tem tarefa de bola nunca fica a frente
+    do jogador durante a transicao: ele fica ou recua, nunca sobe. A postura e
+    o bloco nao mudam — o que muda e so o SENTIDO permitido do movimento
+    enquanto a equipa se reorganiza.
+
+    `folgaTransicao` e o que se tolera antes de cortar (nem toda a subida de
+    meio metro e uma subida).
+
+    FICAM DE FORA quem vai a bola (chaser), quem intercepta e o guarda-redes:
+    esses tem de poder ir para a frente, que e o que pressao quer dizer.
+    */
+    transicaoDefensivaRecuaSo: true,
+    folgaTransicao: 1.0,
+
+    /*
+    SEM BOLA, NINGUEM PASSA A FRENTE DO BLOCO.
+
+    A regra da transicao (`transicaoDefensivaRecuaSo`) so vale nos 3 s a seguir
+    a perder a bola. Passados esses, na fase DEFENSIVE, media-se que continuava
+    a haver gente a ir para a frente: pior caso **seis jogadores** com o alvo a
+    frente de si a defender, e a fonte era quase toda a MARCACAO (34%) e o
+    proprio bloco (31%).
+
+    A marcacao esta certa em ir ao homem — o que esta errado e ir atras dele
+    para LA DA FRENTE DO BLOCO. Um marcador que persegue o extremo ate ao
+    meio-campo adversario deixou de estar a defender: passou o homem a quem
+    vem atras, e e isso que esta regra impoe.
+
+    E um LIMITE de nivel SEGURO (ver js/bt/alvo.js), portanto vale sobre a
+    marcacao e sobre a estrutura, e cede a quem vai a bola — o chaser, o
+    intercetor e o bloqueador tem de poder sair do bloco.
+
+    `folgaFrenteDoBloco` e o que se tolera para la da frente: um passo.
+    */
+    limiteFrenteDoBlocoSemBola: true,
+    folgaFrenteDoBloco: 2.0,
+
+    /*
+    E, SEM BOLA, DEFESAS E MEDIOS FICAM DO LADO DE CA DA BOLA.
+
+    A frente do bloco (acima) nao chegava: o bloco a defender tem 30 m de
+    fundura e a bola anda muitas vezes atras da frente dele, portanto um medio
+    podia estar 16 m a frente da bola e continuar "dentro do bloco". Medido:
+    **1,69 jogadores por frame com o alvo alem da bola** a defender, pior caso
+    nove — 38% medios e 10% defesas.
+
+    A regra e a mais velha do futebol: a defender, poe-te entre a bola e a tua
+    baliza. Vale para `def` e `mid`; os avancados ficam de fora de proposito —
+    sao a saida da equipa, e mandar toda a gente atras da bola e ficar sem
+    ninguem quando ela e recuperada (51% dos casos medidos eram avancados, e
+    esses estao certos).
+
+    Como sempre, cede a quem vai a bola: chaser, intercetor e bloqueador.
+    */
+    limiteAlemDaBolaSemBola: true,
+    folgaAlemDaBola: 1.5,
+    recuamAlemDaBola: ['def', 'mid'],
+
+    /*
+    O PENDULO — ninguem fica na outra ponta do campo.
+
+    O rectangulo tem 47.6 m de largura e o centro dele acompanha a bola em X,
+    portanto os slots espalham-se ate 23.8 m para cada lado dela: com a bola
+    numa ala, o homem do lado contrario fica na linha lateral oposta. Medido
+    com a bola a mais de 12 m do eixo: o jogador mais afastado tinha o alvo a
+    **27.5 m** da bola em X (pior caso 45.6 m), e em media **1.34** jogadores
+    ficavam a mais de 25 m. Dali nao ha linha de passe nenhuma — e a queixa da
+    figura 1.
+
+    `distanciaMaxX` e o tecto de afastamento LATERAL a bola. Quem passa dele e
+    puxado em x (so em x: a profundidade e do bloco) ate ao tecto. Nao e
+    encolher o bloco — a largura continua a mesma; e nao deixar um jogador
+    ficar fora do jogo pelo lado.
+
+    Nao se aplica a quem tem tarefa de bola, e so com posse: sem bola, fechar o
+    lado contrario entrega a ala ao adversario, que e outra conversa (ver
+    deslocamentoDeCorredor).
+    */
+    penduloParaABola: true,
+    distanciaMaxX: 22.0,
+
+    /*
+    O MÉDIO DE ALA NÃO ACABA POR DENTRO DO SEU CENTRAL.
+
+    Relato, com captura: "o RM se confundindo com o CM". A `separacaoLateral`
+    existe para o par lateral↔meia mas assume que **o meia dá a largura e o
+    lateral fica por dentro dele** — e medido
+    (`tools/headless/largura_alas.js`) a premissa está invertida no terreno:
+
+        pos    posto   slot   +estilo   alvo   corpo   |  perdido
+        LB      19.0   19.7    19.9     17.1   16.8    |   2.3 m
+        LM      19.0   20.6    20.1     16.1   15.7    |   3.4 m
+
+    o lateral está MAIS LARGO que o médio de ala, e o médio acaba mais interior
+    do que o próprio CM em 7-10% das leituras. A regra antiga está inerte —
+    desligá-la não move um número — e o embolamento acontece com os papéis
+    trocados.
+
+    Esta é o simétrico dela: o médio é empurrado para fora até ficar a
+    `separacaoMeiaCentro` do CM do seu lado, **e nunca para além do slot dele**.
+    O tecto importa: sem ele inventa-se largura que a formação não pede, que foi
+    o erro da basculação em Setembro.
+
+    Onde a largura se perde, isolado com os interruptores da ferramenta:
+    a mola de coesão custa 1.5 m ao lateral e 0.6 ao médio; o `distanciaMaxX`
+    custa 1.0 ao lateral e 0.7-1.2 ao médio.
+    */
+    separacaoMeiaCentro: 4.0,
+
+    /*
+    COM A BOLA NO MEIO-CAMPO, O BLOCO SOBE.
+
+    Relato: a linha de zaga ficava longe demais da linha de meio-campo. Com a
+    bola no miolo (a faixa que o `computeBlock` ja usa para o `offsetMeio`,
+    +-`faixaMeioCampo` do eixo), o bloco inteiro avanca `avancoNoMeioCampo` do
+    seu proprio COMPRIMENTO — 10% do Length Compactness.
+
+    Avanca o RECTANGULO, nao so a linha de tras: o rectangulo e rigido e nao se
+    deforma (ver a nota do bloco no docs/filesSummary.md), portanto adiantar a
+    zaga e adiantar o bloco. A frente sobe com ela.
+    */
+    faixaMeioCampo: 20.0,       // metros do eixo que contam como meio-campo
+    avancoNoMeioCampo: 0.10,    // fraccao do comprimento do bloco
+
+    /*
+    A TRASEIRA DO BLOCO ACOMPANHA A BOLA DENTRO DA AREA.
+
+    O piso do rectangulo era a linha da grande area e mais nada: com a bola
+    entre essa linha e a baliza, o bloco nao podia recuar mais e ficava um
+    buraco no meio da area — a bola atras da traseira do bloco, com toda a
+    gente colocada a frente dela.
+
+    Passa a haver dois pisos. Enquanto a bola estiver a frente da linha da
+    area, o piso e a linha da area, como antes. Assim que a bola a
+    ultrapassa, o piso passa a ser a propria bola, recuada de
+    `folgaAtrasDaBola` (a traseira fica ligeiramente atras dela, para se
+    poder disputar de tras), ate ao limite de `margemFundoDoBloco` da linha
+    de fundo — o guarda-redes e que manda no que fica atras disso.
+
+    Continua a ser o rectangulo INTEIRO a deslocar-se: ele nunca se deforma.
+    */
+    folgaAtrasDaBola: 1.0,      // metros que a traseira fica atras da bola
+    margemFundoDoBloco: 3.0,    // piso absoluto, medido da linha de fundo
+
+    /*
+    O PENDULO NAO PODE EMBOLAR O LATERAL COM O EXTREMO.
+
+    Medido depois de o ligar: o par lateral/extremo do mesmo lado passou a
+    estar a menos de 4 m um do outro em 10% do tempo (era 4%). Puxar os dois
+    para o lado da bola sem mais nada mete-os na mesma faixa.
+
+    `separacaoLateral` e a distancia MINIMA em x entre os dois. Quem cede e o
+    LATERAL — o extremo e que da a largura, e o lateral tem de ficar por
+    dentro dele quando sobe, que e a forma como o par funciona no futebol.
+    */
+    separacaoLateral: 6.0,
+
+    /*
+    E SO CONTA COMO EMBOLAMENTO SE ELES ESTIVEREM NA MESMA FAIXA.
+
+    A `separacaoLateral` corria sem olhar a profundidade: bastava o lateral
+    estar a menos de 6 m do meia EM X, mesmo com o meia 20 m a frente. Medido
+    em 240 s, o |x| do alvo do lateral: 18.2 m antes desta linha, 10.4 m
+    depois — mais largura perdida aqui do que na mola de coesao inteira.
+
+    `separacaoZLateral` e a distancia em z abaixo da qual os dois contam como
+    estando na mesma faixa. Acima dela nao ha nada para desfazer.
+    */
+    separacaoZLateral: 6.0,
+    /*
+    E EM PROFUNDIDADE: com o meio a ter a bola na ala, o lateral fica ATRAS do
+    meia-lateral para lhe dar apoio (pedido). Ir para o lado dele nao e linha
+    de passe nenhuma — medido, os dois estavam a menos de 6 m um do outro em
+    26% das leituras, e o lateral a frente do meia em 16%.
+    */
+    recuoDeApoio: 7.0,
+    /*
+    ABRIR A LINHA DE PASSE. Nao chega estar recuado: com um adversario entre
+    a bola e ele, o passe nao existe — e o adversario nem precisa de o marcar.
+    O lateral da dois passos de lado ate se ver, ate `abrirLinhaMax`.
+    */
+    abrirLinhaMax: 8.0,
+    abrirLinhaPasso: 2.0,
+    abrirLinhaLargura: 1.5,
+
+    /*
+    E O LATERAL NUNCA ENTRA POR DENTRO DO SEU CENTRAL.
+
+    A separacao acima manda o lateral fechar por dentro do extremo quando os
+    dois estao do lado da bola — e sem mais nada isso metia-o DENTRO da dupla
+    de centrais: medido, **21,6% das leituras de lateral tinham-no por dentro
+    dos centrais**, e 72% desses vinham do proprio slot do bloco. E a figura 2
+    do relato: o lateral direito a esquerda dos centrais.
+
+    `folgaDoCentral` e a faixa que fica entre o lateral e o central do lado
+    dele. Abaixo disto ja nao ha linha de quatro, ha tres homens no mesmo
+    sitio.
+    */
+    folgaDoCentral: 4.0,
+
+    /*
+    ATE ONDE A CAMADA POSICIONAL PODE AFASTAR ALGUEM DO SEU SLOT.
+
+    O slot e o desenho do treinador (Formation Team A/B) mapeado no bloco. A
+    partir dai a marcacao, a mola de coesao, o pendulo e as faixas mexem-lhe —
+    e medido, mexiam de mais: **o alvo final de um central estava em media a
+    6,2 m do slot dele, com p95 de 20,8 m**; nos laterais, 13 m de media.
+    Vinte metros nao e um ajuste, e outra formacao.
+
+    Este tecto e por FUNCAO, e e o que o treinador esperaria: um central quase
+    nao sai do sitio, um medio ajusta, um avancado anda. Corta a soma de todos
+    os desvios da camada posicional, e nao cada um deles — cada regra continua
+    a poder pedir o que quer.
+
+    NAO trava o nivel 3: uma corrida, um apoio ou uma ida a bola sao ACCAO ou
+    BOLA (ver js/bt/alvo.js) e passam por cima disto. E o desenho que fica
+    preso ao desenho; o jogo continua livre.
+    */
+    desvioMaxDoSlot: { def: 9.0, mid: 15.0, ata: 22.0 },
+
+    /*
+    REST DEFENSE — o que fica em casa enquanto a equipa ataca.
+
+    Nao existia (esta na lista de problemas conhecidos), e via-se: os centrais
+    e o medio organizador subiam com a jogada e o adversario tinha 3 ou 4
+    homens livres nas costas. Medido com a equipa a atacar: 0.76 adversarios
+    sem NINGUEM entre eles e a nossa baliza, e tres ou mais em 12% do tempo.
+
+    Duas regras, ambas so com posse:
+
+      `defesasAtrasDaBola`  quantos jogadores de `role: 'def'` tem de ficar
+                            atras da linha da bola. Sao os que estao mais
+                            recuados; os outros sobem na mesma.
+      `recuoDaBola`         quanto atras dela, no minimo.
+
+    O organizador (o CM mais recuado) entra na mesma conta com
+    `medioAtrasDaBola`: o medio que fica e o seguro contra o contra-ataque
+    pelo meio, e era ele que aparecia na area adversaria.
+    */
+    restDefense: {
+        defesasAtrasDaBola: 3,
+        medioAtrasDaBola: 1,
+        recuoDaBola: 3.0
+    },
+
+    /*
+    O CORTE DE FORA-DE-JOGO TEM DE SER O ULTIMO A FALAR.
+
+    A camada posicional ja o fazia (ver computeBlock/tickFinal), mas media-se e
+    nao servia de nada: **9.4% dos alvos da equipa com bola estavam alem da
+    linha, e 100% deles tinham sido escritos DEPOIS** — pela arvore (nivel 3)
+    ou pelos estilos, que reescrevem o `dynamicTarget` em 45% das leituras. O
+    corte do nivel 2 nunca vazava; o problema e que ninguem o respeitava a
+    seguir.
+
+    Agora ha uma guarda no fim do `PlayerAI.tick`, depois de as tres arvores
+    correrem: e o unico sitio por onde todos os ramos passam.
+
+    FICAM DE FORA, e cada um por uma razao:
+      - quem tem a bola (nao ha fora-de-jogo com a bola nos pes);
+      - quem vai a bola (chaser/intercetor): a bola nao esta impedida;
+      - tudo o que nao seja jogo corrido (`Match.state !== 'PLAY'`): num
+        lateral, num canto ou num pontape de baliza nao ha fora-de-jogo.
+
+    `folga` e o meio metro de margem com que a camada posicional ja cortava.
+    */
+    cortarForaDeJogoNoAlvo: true,
+    folgaForaDeJogo: 0.5,
+
+    /*
+    O RESOLVEDOR DE ALVOS (js/bt/alvo.js) — as prioridades.
+
+    `false` volta ao comportamento antigo: cada camada escreve o alvo e ganha
+    quem escrever por ultimo. Existe para se poder medir a diferenca com o
+    mesmo binario, que e como se percebe se uma regra nova ajuda ou atrapalha.
+    */
+    resolverAlvoActivo: true,
+
+    /*
+    Largura do bloco. É a amplitude da equipa — a manípula que o senhor pediu:
+    um número só, e todas as posições abrem ou fecham em proporção.
+    */
+    /*
+    A largura do bloco, em fracção do campo. Subiu 10% em cada escalão com o
+    mesmo relato do `LineShape.fecho`: o bloco a 70% do campo (47.6 m) põe os
+    laterais a |x| 10 m. A 88%, com a mola de coesão afrouxada, ficavam a 13.5 e
+    os médios de ala a 19 — mas isso custou 4.36 golos por jogo (173% do alvo)
+    num lote de 60. A 76%, com a mola de volta a 0.08 (ver MolaDeCoesao), a
+    equipa ocupa 33.7 m de largura contra os 31.9 do início e os golos voltam
+    aos 1.82 por 90 medidos headless.
+    */
+    amplitude: {
+        short: 0.66,          // 66%
+        median: 0.76,         // 76%
+        large: 0.84           // 84%
+    },
+
+    /*
+    JÁ NÃO É LIDO. Era a fracção da posição lateral da bola que o centro do
+    bloco acompanhava — com a bola em x = 20 e `median`, o centro ia a x = 14.
+    O centro em X passou a seguir a bola 1:1 (ver computeBlock), porque o bloco
+    a andar menos do que a bola é o que deixa o portador sozinho na borda.
+
+    Fica aqui, e não apagado, para quem quiser voltar a atenuar saber onde
+    estava — mas hoje mexer nestes números não faz nada.
+    */
+    basculacao: {
+        short: 0.60,
+        median: 0.70,
+        large: 0.80
+    },
+
+    /*
+    SEGUIMENTO DA BOLA pelo centro do bloco, nos dois eixos, em 1/s (ver
+    seguirBola em utils.js). 3.0 dá uma constante de tempo de 1/3 de segundo:
+    com a bola a 10 m/s o centro fica ~3.3 m atrás dela, o suficiente para
+    filtrar ressaltos sem o bloco se arrastar.
+
+    Isto era feito pelo `momentumZ`, com constantes de MOMENTUM: 2.5 s a
+    defender e 4.0 s com a bola a recuar, ou seja 25 a 40 m de atraso à
+    velocidade de um passe. Momentum é o lado do campo (eixo X); o seguimento
+    da bola ao longo do campo é outra coisa e tem outro ritmo.
+    */
+    seguimentoBola: 3.0,
+
+    /*
+    LIMITES DO RECTÂNGULO — as linhas do campo, e mais nada.
+
+    O bloco desloca-se inteiro para dentro do campo quando bate numa linha;
+    NUNCA muda de tamanho. Encolher aproximaria as linhas da equipa umas das
+    outras sem ninguém ter mexido na compacidade, que é a única manípula que
+    deve mudar a dimensão do bloco.
+
+    Não há margens de segurança nem travões intermédios. Havia três, e cada
+    um afastava o rectângulo das linhas:
+
+        margemLateral 0.94  parava o bloco a 2 m da linha lateral
+        margemFundo   0.94  parava-o a 3.2 m da linha de fundo
+        recuoMax      -42   parava a traseira na marca de grande penalidade,
+                            11 m antes da própria linha de fundo
+
+    O centro do bloco segue a bola 1:1 nos dois eixos até a borda tocar a
+    linha; daí em diante fica encostado a ela.
+    */
+};
+
+/*
+=============================================================================
+AJUSTE POR LINHA — camada 2
+=============================================================================
+Depois de o rectângulo estar posto, cada linha desloca-se dentro dele.
+
+`v` é a profundidade dentro do bloco: 0 = última linha, 1 = frente do bloco.
+A posição de base normalizada da formação dá o v de partida; estes valores
+deslocam-no para a frente ou para trás conforme a linha e conforme a equipa
+tem ou não a bola.
+
+Cada valor é um DESLOCAMENTO em v, somado ao v da formação. Não é um lerp
+para um alvo comum: `v = lerp(slot.v, alvo, empurrar)` com `empurrar` até
+0.80 projectava a linha toda quase no mesmo sítio — num 4-4-2 os 5.3 m que
+separam lateral de central ficavam em 0.5 m em campo, e a formação táctica
+deixava de existir dentro do bloco. Com um deslocamento a linha sobe e desce
+inteira e o espaçamento interno da formação mantém-se.
+
+Com bola os médios sobem mas não tanto como os avançados — era o problema de
+o meio-campo ficar vazio. Sem bola toda a gente recua e a equipa junta-se.
+=============================================================================
+*/
+const LineShape = {
+    def: { comBola: 0.05, semBola: -0.03 },
+    mid: { comBola: 0.01, semBola: -0.07 },
+    atk: { comBola: -0.04, semBola: -0.13 },
+
+    /*
+    Estreitamento lateral por linha (multiplica o u em torno do eixo).
+
+    Uma última linha fecha mais do que um meio-campo quando não tem a bola: é a
+    diferença entre tapar o caminho da baliza e cobrir a largura toda.
+    */
+    /*
+    ABERTO 0.78 -> 0.92 (def) e 0.88 -> 0.96 (mid), sem bola.
+
+    Relato: "os laterais e meias pelas laterais estão fechando muito pelo meio;
+    o jogo está embolando muito pelo meio". Medido em 600 s, o |x| do ALVO:
+
+                       antes    depois
+        lateral (LB)    10.7      12.6
+        lateral (RB)    10.4      12.8
+        médio ala (LM)  15.9      17.3
+        médio ala (RM)  16.0      17.6
+
+    Ganham-se dois metros por lateral e um e meio por médio de ala. Não chega
+    para os 18-24 m de um lateral a sério, e a razão está medida: o rectângulo
+    do bloco tem 47.6 m e o CENTRO dele acompanha a bola em X 1:1, portanto com
+    a bola numa ala o lado contrário é comprimido contra o eixo. Tentou-se
+    devolver a `basculacao` (o centro a seguir só uma fracção) e MEDIU-SE PIOR
+    — o alvo do lateral caiu de 11.5 para 10.2 — porque a banda deixa de
+    alcançar a ala onde a bola está e o clamp do campo faz o resto. Fica
+    anotado para não se repetir a tentativa.
+    */
+    fecho: {
+        def: { comBola: 0.96, semBola: 0.92 },
+        mid: { comBola: 1.00, semBola: 0.96 },
+        atk: { comBola: 1.00, semBola: 0.88 }
+    }
+};
+
+/*
+=============================================================================
+O PISO DE LARGURA DOS HOMENS DE ALA — em metros ao eixo, e não em fracção
+=============================================================================
+Relato, repetido: "o lateral e o meia da lateral oposta da jogada estão muito
+no meio, estão se confundindo com os CM e CBs".
+
+A causa está medida e escrita no `fecho` aqui em cima: o `xTarget` de toda a
+gente sai do RECTÂNGULO do bloco (`bloco.x0 + u * largura`, ver
+calcularPontoDoSlot), e o centro desse rectângulo acompanha a bola em X 1:1.
+Com a bola numa ala, o lado contrário fica comprimido contra o eixo — e o
+clamp final ao rectângulo remata o serviço. Medido em 45 min, o |x| REAL:
+
+                    mesmo lado da bola   lado oposto
+    lateral (LB)            20.2             10.5
+    lateral (RB)            21.0             11.6
+    médio ala (LM)          19.4              9.5
+    médio ala (RM)          20.3             10.2
+    central (CB)             8.6              4.4
+    médio centro (CM)        9.8              3.3
+
+Do lado oposto o lateral está a 10 m do eixo, a um metro e meio do médio
+centro — é exactamente o relato. Mexer no `fecho` já foi tentado e dá dois
+metros (ver a nota lá); atenuar a basculação foi tentado e MEDIU PIOR.
+
+O que falta não é afinar a largura do bloco: é tirar os homens de ala de
+dentro dele. Estes são um PISO em metros ao eixo do CAMPO, aplicado depois do
+bloco e do corredor, só para fora e só no lado do próprio jogador — quem quer
+subir mais pela linha sobe, e ninguém é puxado para dentro por causa disto.
+
+Sem bola o piso é menor: é a diferença entre segurar a largura para a inversão
+de jogo e fechar o corredor interior quando se defende.
+*/
+const WideAnchor = {
+    lateral: { comBola: 20.0, semBola: 17.0 },   // LB/RB/LWB/RWB
+    ala: { comBola: 23.0, semBola: 19.0 }        // LM/RM/LW/RW
+};
+
+/*
+Ajuste fino por POSIÇÃO ESPECÍFICA, por cima do LineShape (que só
+diferencia por linha: def/mid/atk). A diferença de profundidade entre
+lateral e central já vem da formação (o LineShape passou a deslocar em vez
+de projectar num alvo comum); isto é o ajuste POR CIMA dela — um médio de
+ponta sobe mais do que um médio central quando a equipa tem bola, para dar
+opção de passe na construção final.
+
+Valor em fracção de v (0..1 da última linha à frente do bloco).
+*/
+const PositionDepthNudge = {
+    LB: { comBola: 0.04, semBola: 0.0 },
+    RB: { comBola: 0.04, semBola: 0.0 },
+    RM: { comBola: 0.08, semBola: 0.0 },
+    LM: { comBola: 0.08, semBola: 0.0 }
+};
+
+/*
+Playing style do lateral (LB/RB) — só actua com bola: sem bola ambos os
+estilos ficam na mesma linha defensiva (ver slotNoBloco em team_bt.js).
+
+    defensive  fica atrás, quase não sobe mesmo com a equipa a atacar.
+    offensive  sobe pelo corredor a dar apoio quando a equipa tem bola.
+
+    comBolaMult  multiplica o PositionDepthNudge.comBola do lateral (ajuste
+                 fino da profundidade dentro do bloco).
+    avancoMax    metros à frente do alvo do PositionBT que ele pode ganhar
+                 quando o corredor está livre (ver attackFullBack). É este
+                 que manda: o comBolaMult sozinho valia ~1-3 m e não dava
+                 subida nenhuma que se visse.
+    recuo        metros que recua quando o corredor está tapado.
+*/
+const FullBackStyle = {
+    defensive: { comBolaMult: 0.3, avancoMax: 2.0, recuo: 3.0 },
+    offensive: { comBolaMult: 1.8, avancoMax: 15.0, recuo: 3.0 },
+    // Full-back Finisher: sobe como o offensive, mas fecha para o eixo em vez
+    // de ficar colado à linha — "joining the attack in high central areas".
+    finisher: { comBolaMult: 1.8, avancoMax: 15.0, recuo: 3.0 }
+};
+
+/*
+=============================================================================
+PLAYING STYLES — traços por jogador
+=============================================================================
+Cada estilo é um conjunto de MODIFICADORES numéricos, não um ramo de código
+próprio. Isso é de propósito: 20 estilos com 20 caminhos especiais seriam
+impossíveis de afinar e de manter coerentes entre si. As folhas do PositionBT
+e do PlayerBT lêem sempre os mesmos campos; o estilo só muda os números.
+
+Campos (todos opcionais, `EstiloBase` dá os valores neutros):
+
+  POSICIONAMENTO (metros, no referencial de ataque)
+    avanco        + sobe / − recua em relação ao slot do bloco
+    largura       + abre para a linha lateral / − fecha para o eixo
+    avancoComBola avanço EXTRA só quando a equipa tem a bola
+    amplitudeZ    quanto o jogador se estica em profundidade (box-to-box)
+
+  COMPORTAMENTO (multiplicadores, 1.0 = neutro)
+    passe         peso dele como alvo de passe (findPassTarget)
+    remate        peso da decisão de rematar
+    cruzar        peso da decisão de cruzar
+    lancar        peso da decisão de lançar
+    conduzir      peso da decisão de conduzir em vez de passar
+    pressao       agressividade no desarme/carrinho e aderência na marcação
+    cadencia      multiplica o tempo de domínio antes de decidir
+
+  BANDEIRAS
+    ombroDefesa   posiciona-se na linha do último defensor (fora-de-jogo no limite)
+    dentroArea    não sai da grande área adversária
+    seguraBola    aguenta a bola de costas em vez de decidir depressa
+    atraiDefesa   corre PARA LONGE da bola a puxar marcação
+    cortaParaDentro  vindo da ala, fecha para o eixo ao receber
+    colaNaLinha   fica encostado à linha lateral
+    juntaSeAoAtaque  defesa que sobe ao ataque
+
+  posicoes      onde o estilo pode ser escolhido (validação/UI)
+=============================================================================
+*/
+/*
+=============================================================================
+AFINAÇÃO DE ESTILOS COM COMPORTAMENTO PRÓPRIO
+=============================================================================
+Dois estilos deixaram de ser só modificadores de posição e passaram a ter
+dinâmica no tempo. Os números vivem aqui.
+
+FOX IN THE BOX. O gatilho pedia a bola a mais de 12 m dentro do meio-campo
+adversário, e medido em jogo isso é **2% dos frames em posse**: o estilo quase
+nunca estava ligado, e ele ficava no slot puro a 25 m da área. Agora liga a
+partir do meio-campo, e a profundidade acompanha a bola — espera
+`esperaAtras` metros à frente dela, nunca aquém da entrada da área, nunca além
+de `avancoMax` (senão ficava em cima do guarda-redes).
+
+DUMMY RUNNER. A corrida de desmarque não tinha fim: enquanto a equipa
+atacasse, ele ficava permanentemente aberto na ponta a `largura` metros do
+slot, longe de tudo. Uma corrida de arrastamento é um GESTO, não uma posição:
+dura `duracao` segundos e depois ele volta às acções normais, com `descanso`
+segundos antes de a poder repetir.
+=============================================================================
+*/
+const PlayingStyleTuning = {
+    /*
+    =========================================================================
+    CREATIVE PLAYMAKER — o jogador que procura o espaço ENTRE os adversarios
+    =========================================================================
+    Pedido: *"é o jogador que procura os espaços entre os jogadores
+    adversários; no meio de 3, no meio de 4; essa movimentação é fundamental
+    para a característica do jogador"*.
+
+    O estilo existia só como multiplicadores de decisão (driblar, passe,
+    lançar) e não deslocava o jogador um metro — a ficha do lote dizia-o com
+    todas as letras: `deslocamentoEstiloM: 0`, `semDeslocacaoPorDesenho: true`.
+    Era um número 10 que se posicionava como um médio qualquer.
+
+    A movimentação tem duas metades:
+
+      PROFUNDIDADE — no buraco entre a defesa e o meio-campo adversários, que
+      é `atrasDaLinha` metros aquém da última linha deles (a mesma linha que o
+      `offsideLimitDir` já publica). Não é ponta-de-lça: `minAtras` impede-o
+      de colar à linha, que é o que o Goal Poacher faz.
+
+      LARGURA — o VÃO, e não um x fixo: o `melhorVaoX` escolhe o ponto mais
+      longe de qualquer adversário àquela profundidade, que é exactamente
+      "no meio de 3, no meio de 4". O leque cobre o corredor central e os
+      meios-espaços, onde este jogador vive.
+    =========================================================================
+    */
+    creativePlaymaker: {
+        atrasDaLinha: 9.0,   // metros aquém da última linha adversária
+        minAtras: 4.0,       // e nunca mais perto dela do que isto
+        candidatosX: [-20, -14, -9, -4, 0, 4, 9, 14, 20]
+    },
+
+    /*
+    =========================================================================
+    TARGET MAN — a referência: recebe, protege, faz o pivô, e rompe
+    =========================================================================
+    Pedido: *"é o atacante que é a referência. Recebe a bola. Sabe proteger.
+    Faz o pivô pra quem vem de trás. Tabela e se infiltra para receber na
+    frente o lançamento"*.
+
+    O `seguraBola` já existia (é a parte do "sabe proteger", e vive na decisão
+    de não largar a bola à primeira). Faltava a MOVIMENTAÇÃO, e ela tem dois
+    tempos que se alternam consoante onde está a bola:
+
+      PIVÔ — com a bola atrás dele e a chegar, VEM AO ENCONTRO dela. É o que
+      dá saída a quem vem de trás: ele desce `descidaPivo` metros na direcção
+      do portador para receber de costas.
+
+      ROMPE — com a bola já perto (`distParaRomper`) ou com quem a tem de
+      cabeça levantada, vira-se e ataca o espaço: sobe para o ombro do último
+      defensor, `ombro` metros aquém da linha, para receber o lançamento.
+
+    A alternância é o estilo. Um target man que só desce nunca ameaça as
+    costas da defesa; um que só rompe deixa a equipa sem ponto de apoio.
+    =========================================================================
+    */
+    targetMan: {
+        descidaPivo: 7.0,      // metros que desce para receber de costas
+        distParaRomper: 22.0,  // com a bola a menos disto, vira-se e ataca
+        ombro: 1.5             // metros aquém da linha, ao romper
+    },
+
+    /*
+    =========================================================================
+    EXTRA FRONTMAN — e o central sobe também quando o tempo acaba
+    =========================================================================
+    Pedido: *"é o defensor que vai à frente em situações de falta com
+    cruzamentos na área, corners para cabeceio, OU SE O TIME ESTÁ PERDENDO NOS
+    ÚLTIMOS MINUTOS DO JOGO"*.
+
+    As duas primeiras já lá estavam (o `juntaSeAoAtaque` na ordenação da bola
+    parada). A terceira faltava por completo: em jogo corrido ele posicionava-se
+    como um central normal até ao apito final, mesmo a perder.
+
+    `minutosFinais` conta a partir do fim do jogo (`MatchDuration.halfGameMinutes`
+    vezes dois); `avancoDesespero` é o quanto sobe nesses minutos — muito, de
+    propósito: quem está a perder aos 85 não está a proteger resultado nenhum.
+    =========================================================================
+    */
+    extraFrontman: {
+        minutosFinais: 8,
+        avancoDesespero: 22.0
+    },
+
+    foxInTheBox: {
+        /*
+        A ENTRADA DA ÁREA É AOS 36.5 (53 - 16.5), e este número dizia 30 —
+        seis metros e meio FORA dela. "Nunca espera mais atrás do que isto"
+        estava a deixá-lo à porta.
+
+        Medido (tools/headless/estilos_tres.js, 600 s): mediana a 24.1 m da
+        entrada da área durante o ataque, e só 16% dos frames lá dentro. A
+        maior parte disso é o estilo estar apagado (activo em 43% do ataque —
+        ver o gatilho e a regra do TeamState em playing_styles.js); o resto é
+        este chão.
+        */
+        entradaArea: 35.0,   // nunca espera mais atrás do que isto
+        esperaAtras: 10.0,   // metros à frente da bola, enquanto ela não chega
+        avancoMax: 46.0,     // e nunca além disto (linha de fundo aos 53)
+
+        /*
+        O QUADRADO CENTRAL DA ÁREA É A CASA DELE.
+
+        A escolha do x era um leque de -16 a +16 (o `melhorVaoX`), portanto o
+        vão mais vazio podia ser junto ao poste ou já fora dos ferros: um Fox
+        in the Box encostado à linha da área grande, a 16 m do eixo, não está
+        onde os golos se marcam.
+
+        Agora o leque começa no quadrado central (`meiaLarguraCentral`, ±7 m —
+        pouco mais do que a largura da baliza) e só abre para os lados quando
+        lá dentro não há vão nenhum livre. `bonusCentral` é o desconto que o
+        quadrado leva na comparação, para empates irem sempre para o meio.
+        */
+        meiaLarguraCentral: 7.0,
+        bonusCentral: 3.0
+    },
+
+    dummyRunner: {
+        duracao: 6.0,        // segundos de corrida
+        descanso: 4.0,       // e antes de poder arrancar outra
+        /*
+        Só arranca com a jogada viva à frente dele — uma corrida de
+        arrastamento com a bola na própria defesa não arrasta ninguém.
+        */
+        bolaAvancoMin: -15.0,
+
+        /*
+        A CORRIDA PUXA PARA O LADO DA JOGADA, não para a outra ponta.
+
+        Estava a correr para o `ladoEst * 15` (o lado do posto dele) quando o
+        portador estava no eixo, e a AFASTAR-SE 7 m do portador quando ele
+        estava numa ala. Com a jogada na direita e o posto dele à esquerda,
+        arrancava para a extrema esquerda: puxava marcação, sim, mas para um
+        sítio de onde não participa da jogada e onde a linha de passe já não
+        existe. É o defeito do relato.
+
+        O objectivo do Dummy Runner é levar o marcador com ele PERTO da
+        jogada — o espaço que ele abre só serve se alguém o puder usar, e a
+        bola tem de conseguir lá chegar.
+
+        `lateralDoPortador` é a distância em x a que ele corre do portador (do
+        lado de fora, para arrastar o central para a ala do lance);
+        `distanciaMax` é o tecto de afastamento — acima disto a corrida deixa
+        de ser uma opção de passe.
+        */
+        lateralDoPortador: 9.0,
+        distanciaMax: 22.0,
+        profundidadeMin: 6.0,
+
+        /*
+        O VAIVÉM — pedido explícito: "deve puxar mais a marcação do zagueiro
+        movimentando-se de um lado para o outro, para a frente e para trás,
+        para dar opção de ser lançado e procurando os espaços vazios entre os
+        jogadores adversários. Isso vai fazer com que o zagueiro vá atrás dele
+        e abra espaço para outros atacantes".
+
+        A corrida era um PONTO: ele ia para lá e ficava. Medido
+        (tools/headless/estilos_tres.js): 5.8 m de deslocação lateral por cada
+        3 segundos — um marcador não sai do sítio por causa disso.
+
+        Agora o alvo oscila. `periodo` é o tempo de um ciclo completo; a fase
+        é própria de cada jogador (pelo id) para dois Dummy Runners não
+        dançarem em espelho. A profundidade oscila mais devagar do que o
+        lateral — vai-e-vem largo com afundamentos ocasionais, e não um
+        ziguezague nervoso.
+
+        `separacaoDoCentral` é o outro metade do relato ("está muito próximo
+        dos zagueiros"): quando o vaivém o deixa em cima de um central,
+        empurra-se para o lado até esta distância. Colado a ele não há espaço
+        nenhum para receber, e o central não precisa de o seguir.
+        */
+        periodoOscilacao: 4.5,
+        amplitudeLateral: 6.5,
+        amplitudeProfundidade: 5.0,
+        separacaoDoCentral: 4.5
+    }
+};
+
+const EstiloBase = {
+    avanco: 0, largura: 0, avancoComBola: 0, amplitudeZ: 1.0,
+    passe: 1.0, remate: 1.0, cruzar: 1.0, lancar: 1.0, conduzir: 1.0,
+    pressao: 1.0, cadencia: 1.0,
+    ombroDefesa: false, dentroArea: false, seguraBola: false,
+    atraiDefesa: false, cortaParaDentro: false, colaNaLinha: false,
+    juntaSeAoAtaque: false
+};
+
+const PlayingStyles = {
+    /* --- Avançados ------------------------------------------------------- */
+    goal_poacher: {
+        nome: 'Goal Poacher', posicoes: ['CF', 'SS'],
+        avancoComBola: 4, remate: 1.35, conduzir: 0.7, cadencia: 0.7,
+        ombroDefesa: true
+    },
+    dummy_runner: {
+        nome: 'Dummy Runner', posicoes: ['CF', 'SS', 'AM'],
+        avancoComBola: 6, largura: 5, passe: 1.3, remate: 0.9,
+        atraiDefesa: true
+    },
+    fox_in_the_box: {
+        nome: 'Fox in the Box', posicoes: ['CF'],
+        driblar: 0.4,
+        avancoComBola: 6, remate: 1.5, conduzir: 0.5, lancar: 0.6, cadencia: 0.6,
+        dentroArea: true
+    },
+    target_man: {
+        nome: 'Target Man', posicoes: ['CF'],
+        driblar: 0.5,
+        passe: 1.25, conduzir: 0.6, cadencia: 1.6,
+        seguraBola: true,
+        // Pivô com a bola atrás, rompe com a bola perto — ver
+        // PlayingStyleTuning.targetMan e `pivo` em aplicarEstiloPosicional.
+        pivo: true
+    },
+
+    /* --- Criativos ------------------------------------------------------- */
+    creative_playmaker: {
+        nome: 'Creative Playmaker', posicoes: ['SS', 'LW', 'RW', 'AM', 'LM', 'RM'],
+        driblar: 1.4,
+        passe: 1.3, lancar: 1.5, conduzir: 1.15, cadencia: 0.85,
+        // Procura o vão entre as linhas adversárias — ver
+        // PlayingStyleTuning.creativePlaymaker.
+        entreLinhas: true
+    },
+    classic_no10: {
+        nome: 'Classic No. 10', posicoes: ['SS', 'AM', 'CM'],
+        avanco: -3, passe: 1.4, lancar: 1.35, conduzir: 0.55, cadencia: 1.3,
+        amplitudeZ: 0.7
+    },
+    hole_player: {
+        nome: 'Hole Player', posicoes: ['SS', 'AM', 'LM', 'RM', 'CM'],
+        avancoComBola: 9, remate: 1.2, amplitudeZ: 1.3
+    },
+
+    /* --- Alas ------------------------------------------------------------ */
+    prolific_winger: {
+        nome: 'Prolific Winger', posicoes: ['LW', 'RW'],
+        driblar: 1.5,
+        // "abre pelas pontas, e mesmo que o jogo vá para o meio ele fica
+        // mais aberto na ponta esperando a bola para poder cruzar" — nunca
+        // fecha, cola na linha (mesmo mecanismo do Cross Specialist).
+        largura: 4, remate: 1.2, cruzar: 1.1,
+        colaNaLinha: true
+    },
+    roaming_flank: {
+        nome: 'Roaming Flank', posicoes: ['LW', 'RW', 'LM', 'RM'],
+        driblar: 1.4,
+        // "abre pelas pontas, mas se o jogo vai para o meio ele fecha mais
+        // para dar opção de passe" — fecha com a bola CENTRAL, não fundo.
+        largura: -4, passe: 1.15, conduzir: 1.2,
+        fechaComBolaCentral: true
+    },
+    cross_specialist: {
+        nome: 'Cross Specialist', posicoes: ['LW', 'RW', 'LM', 'RM'],
+        largura: 7, cruzar: 1.6, conduzir: 0.9, remate: 0.7,
+        colaNaLinha: true
+    },
+
+
+/*
+=============================================================================
+METADE DEFENSIVA DOS ESTILOS — o bloco `defensivo`
+=============================================================================
+O `aplicarEstiloPosicional` (playing_styles.js) so aplica a metade OFENSIVA
+com a equipa a atacar; sem posse le `estiloDefensivoDe`, que exige um bloco
+`defensivo` no estilo. Nenhum estilo o tinha — e o `distanciaComEstilo`, que
+aperta a marcacao, le `defensivo.pressao`, que tambem nao existia.
+
+Consequencia medida em lote: o The Destroyer, cujo gatilho SO liga a defender
+(ver Gatilhos em playing_styles.js), tinha 6995 activacoes e 0.2 m de
+deslocamento — activo exactamente na fase em que nada do estilo se aplicava.
+O mesmo valia para o Anchor Man, o Box-to-Box e o Defensive Full-back.
+
+`recuo` sao metros ATRAS do slot no referencial de ataque (espelho do
+`avanco`); `pressao` multiplica o aperto da marcacao (>1 marca mais perto),
+limitado por `MarkingModel.distanciaMinimaEstilo`.
+=============================================================================
+*/
+
+    /* --- Meio-campo ------------------------------------------------------ */
+    box_to_box: {
+        nome: 'Box-to-Box', posicoes: ['AM', 'LM', 'RM', 'CM', 'DM'],
+        amplitudeZ: 1.5, avancoComBola: 5, pressao: 1.2,
+
+        /*
+        A LINHA DA BOLA É A ÂNCORA DELE — pedido explícito: "deve acompanhar a
+        jogada mais perto da linha do homem com a bola no eixo Z; se adiantar,
+        no máximo uns 10 metros para a frente (atacando) e para trás
+        (defendendo) da linha da bola".
+
+        `faixaNaBola` é uma FAIXA, e não um sítio: ele posiciona-se como
+        sempre e só é cortado quando sai dela. Medido antes disto
+        (tools/headless/estilos_tres.js, 600 s): **38% dos frames de ataque a
+        mais de 10 m da linha da bola**, com desvio-padrão de 18.3 m.
+
+        A máquina que aplica isto já existia em dois sítios
+        (`aplicarAncoraBoxToBox` no player_bt.js e `aplicarTectoDoEstilo` no
+        playing_styles.js) mas a configuração que a acende tinha desaparecido
+        do ficheiro — o `20dbce1` levou-a — e por isso ambas saíam à porta sem
+        fazer nada.
+
+        O tecto da entrada da área (`travaNaEntradaArea`) continua a mandar por
+        cima disto: com a bola dentro da área adversária ele fica na entrada, a
+        mais de 10 m dela, que é o que "de área a área" quer dizer.
+        */
+        faixaNaBola: { frente: 10.0, tras: 10.0 },
+
+        /*
+        E A FAIXA NUNCA O TIRA DO CORREDOR "DE ÁREA A ÁREA". Com a bola no
+        próprio guarda-redes a faixa mandava-o para 10 m da própria linha de
+        fundo — dentro da sua área, em cima do guarda-redes que ia sair a jogar.
+        Três testes apanharam isso (`saida_a_pe`, `saida_do_guarda_redes`,
+        que contam os corpos entre o guarda-redes e a baliza).
+
+        É o mesmo número do `travaNaEntradaArea`, aqui em cima para as duas
+        regras o lerem do mesmo sítio: a entrada da área é aos 36.5 (53−16.5),
+        e 26.5 são os 10 m antes dela.
+        */
+        limiteEntradaArea: 26.5,
+        travaNaEntradaArea: true, // "da entrada de uma área até a entrada da outra" — não passa da entrada
+        // Cobre o campo todo: a defender recua e acompanha, sem se sentar.
+        defensivo: { recuo: 3, pressao: 1.2 }
+    },
+    the_destroyer: {
+        nome: 'The Destroyer', posicoes: ['CM', 'DM', 'CB'],
+        driblar: 0.4,
+        avanco: -2, pressao: 1.6, conduzir: 0.6, lancar: 0.7, amplitudeZ: 0.85,
+        // Ver a nota do bloco `defensivo` acima: e a defender que este estilo
+        // existe, e sem isto nao fazia nada.
+        defensivo: { recuo: 2, pressao: 1.6 }
+    },
+    orchestrator: {
+        nome: 'Orchestrator', posicoes: ['CM', 'DM'],
+        driblar: 0.5,
+        avanco: -5, passe: 1.35, lancar: 1.4, conduzir: 0.7, cadencia: 1.2
+    },
+    anchor_man: {
+        nome: 'Anchor Man', posicoes: ['DM'],
+        driblar: 0.3,
+        avanco: -7, pressao: 1.25, lancar: 0.5, conduzir: 0.5, amplitudeZ: 0.6,
+        defensivo: { recuo: 7, pressao: 1.25 }
+    },
+
+    /* --- Defesas --------------------------------------------------------- */
+    build_up: {
+        nome: 'Build Up', posicoes: ['CB'],
+        avanco: -4, passe: 1.3, lancar: 1.2, cadencia: 1.25
+    },
+    extra_frontman: {
+        nome: 'Extra Frontman', posicoes: ['CB'],
+        /*
+        SEM `amplitudeZ`. Tinha 1.4, e amplitudeZ é o afastamento ao CENTRO do
+        bloco: num central, que está na aresta de trás, > 1 empurra-o para LONGE
+        da baliza adversária — o contrário do nome do estilo — e para fora do
+        rectângulo, porque nada volta a limitá-lo ao bloco depois
+        (ver aplicarEstiloPosicional em playing_styles.js e o clamp de ±50 m
+        em tickFinal). Era isso que se via como uma linha comprida do slot do
+        CB até um canto do campo.
+
+        Este central sobe ao ataque só na BOLA PARADA, para compor a área e
+        disputar o cabeceio — não em jogo corrido. Quem o põe lá é a ordenação
+        do canto em setupSetPiece (match.js), via `juntaSeAoAtaque`; em jogo
+        corrido ele posiciona-se como um central normal.
+        */
+        remate: 1.2,
+        juntaSeAoAtaque: true
+    },
+    offensive_fullback: {
+        nome: 'Offensive Full-back', posicoes: ['LB', 'RB'],
+        // Antes só subia via attackFullBack (nível 2), condicional a corredor
+        // livre + equipa a atacar — sem isso ficava preso na linha, apesar
+        // do estilo. `avanco` é base, sempre activo, contraparte do -2 do
+        // defensive_fullback.
+        avanco: 4, avancoComBola: 12, cruzar: 1.25, colaNaLinha: true
+    },
+    fullback_finisher: {
+        nome: 'Full-back Finisher', posicoes: ['LB', 'RB'],
+        avanco: 4, avancoComBola: 12, largura: -5, remate: 1.2, cruzar: 0.8,
+        cortaParaDentro: true
+    },
+    defensive_fullback: {
+        nome: 'Defensive Full-back', posicoes: ['LB', 'RB'],
+        avanco: -2, pressao: 1.2, cruzar: 0.7,
+        defensivo: { recuo: 2, pressao: 1.2 }
+    },
+
+    /* --- Guarda-redes ---------------------------------------------------- */
+    offensive_gk: { nome: 'Offensive Goalkeeper', posicoes: ['GK'] },
+    defensive_gk: { nome: 'Defensive Goalkeeper', posicoes: ['GK'] }
+};
+
+/*
+Estilo por omissão de cada posição, usado no arranque (ver assignFormations).
+São escolhas neutras: o estilo "normal" daquela posição, não o mais exótico.
+*/
+/*
+Entradas com lista (não string): estilo varia pelo índice do jogador entre os
+da mesma posição nesta formação — ver aplicarPlayingStyle em match.js. Pedido
+explícito: CM(1)/CM(2) e CF(1)/CF(2) não são clones, cada um cobre um papel.
+*/
+const EstiloPorOmissao = {
+    GK: 'defensive_gk',
+    CB: ['build_up', 'extra_frontman'], LB: 'offensive_fullback', RB: 'offensive_fullback',
+    DM: 'anchor_man', CM: ['box_to_box', 'orchestrator'], AM: 'classic_no10',
+    LM: 'roaming_flank', RM: 'roaming_flank',
+    LW: 'prolific_winger', RW: 'prolific_winger',
+    CF: ['fox_in_the_box', 'dummy_runner'], SS: 'creative_playmaker'
+};
+
+/*
+Modelo de remate.
+
+A regra antiga era `distToGoal < max(18, ata/100*22)`: entre skill 50 e 81 o
+resultado era sempre 18 m, ou seja o slider ATACANTES não fazia nada. Isto é
+monótono e, a skill 80 (o valor por omissão), dá os mesmos 18 m de antes.
+
+O ângulo passa a contar: rematar de 15 m junto à linha lateral não é o mesmo
+que de 15 m em frente à baliza.
+*/
+
+const MentalidadeModel = {
+    /*
+    Quanto do `blocoZ` passa para a ÂNCORA DA ÚLTIMA LINHA (ver computeBlock em
+    team_bt.js). O botão Linha Defensiva continua a ser o controlo grosso; isto
+    inclina-o com a Mentalidade.
+
+    Sem isto a Mentalidade não mexia nos defesas de todo: a âncora da traseira
+    vem do painel e tem a última palavra, e o `blocoZ` só movia o centro do
+    rectângulo.
+    */
+    pesoNaLinha: 0.5,
+
+    /*
+    `tectoBloco` JÁ NÃO É LIDO pelo computeBlock: corria no fim e desfazia o
+    seguimento da bola (era ele que prendia o bloco no meio-campo com a bola no
+    terço de ataque). A Mentalidade fala uma vez, pelo `blocoZ`.
+
+    `blocoZ` desloca o centro do bloco em relação à BOLA; `tectoBloco` era o mais
+    longe que esse centro pode ir, medido do meio-campo, no referencial de
+    ataque.
+
+    O tecto era do Defensive Pressure (TeamShape.pressaoLineCap, removido), e
+    por isso a Mentalidade não tinha palavra nenhuma sobre até onde a equipa
+    subia: com Equilibrada e pressão Balanced o bloco ia buscar a bola a 17.7 m
+    DENTRO do meio-campo adversário. O Defensive Pressure passou a ser a
+    distância de marcação (ver MarkingModel.distanciaPorPressao).
+
+    Frações do meio-campo (53 m): um terço, um sexto, zero, um terço, dois
+    terços.
+    */
+    /*
+    `profundidade` (opcional) é o comprimento do bloco que a MENTALIDADE impõe,
+    por cima da escolha do Length Compactness no painel. Só as duas defensivas
+    o têm: uma equipa que se põe atrás joga curta, e deixá-la esticada a 50 m
+    contradizia a própria mentalidade escolhida. As outras três continuam a
+    obedecer ao painel.
+
+    A LARGURA fica de fora de propósito: fechar em largura entrega as alas, e
+    isso é escolha do utilizador no Width Compactness — não uma consequência
+    automática de escolher uma mentalidade defensiva.
+
+    Chave do BlockShape.profundidade — `short` são 30 m em 106 de campo.
+    */
+    muito_defensiva: {
+        agressao: 0.20,
+        blocoZ: -10.0,
+        tectoBloco: -(CAMPO_COMP / 2) / 3,
+        profundidade: 'short',
+        pressao: 'low'
+    },
+    defesa: {
+        agressao: 0.35,
+        blocoZ: -5.0,
+        tectoBloco: -(CAMPO_COMP / 2) / 6,
+        profundidade: 'short',
+        pressao: 'low'
+    },
+    balanceado: {
+        agressao: 0.50,
+        blocoZ: 0.0,
+        tectoBloco: 0.0,
+        pressao: 'balanced'
+    },
+    ataque: {
+        agressao: 0.65,
+        blocoZ: 7.0,
+        tectoBloco: (CAMPO_COMP / 2) / 3
+    },
+    muito_ofensiva: {
+        agressao: 0.80,
+        blocoZ: 12.0,
+        tectoBloco: (CAMPO_COMP / 2) * 2 / 3
+    }
+};
+
+/*
+TEAM PLAY STYLE — como a equipa prefere progredir, não ONDE cada jogador
+fica (isso é Playing Style). Cada campo é um MULTIPLICADOR (1.0 = neutro)
+sobre pesos já existentes:
+
+    circulacao      peso do passe pra trás/lateral quando o lado da bola
+                     está congestionado (findPassTarget, player.js)
+    verticalidade   peso do bónus de progressão vertical (idem)
+    viradas         peso extra quando o passe muda de lado com espaço lá
+    corredores      peso do bónus de sector lateral (Tatics.setores)
+    cruzamento      multiplica a chance de cruzamento (findCross, player_bt.js)
+    pressaoPosPerda multiplica a reacção depois de perder a bola — menor
+                     valor = reage mais depressa (pickChaser, team_bt.js)
+    conducao        multiplica o ORÇAMENTO de condução (CarryModel.distanciaMax
+                     e distanciaMaxDefesa, ver campoAberto em player_bt.js):
+                     quantos metros o portador leva a bola antes de o ramo de
+                     espaço aberto deixar de o servir e ele ter de passar.
+                     Só no contra-ataque é que correr com a bola é o plano;
+                     em Possession e Positional o plano é tocar.
+*/
+const TeamPlayStyles = {
+    possession: {
+        nome: 'Possession',
+        circulacao: 1.9, verticalidade: 0.6, viradas: 1.3,
+        corredores: 0.9, cruzamento: 0.9, pressaoPosPerda: 1.0,
+        conducao: 0.45
+    },
+    direct: {
+        nome: 'Direct',
+        circulacao: 0.65, verticalidade: 1.4, viradas: 0.7,
+        corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 1.0,
+        conducao: 1.0
+    },
+    counter_attack: {
+        nome: 'Counter Attack',
+        circulacao: 0.8, verticalidade: 1.25, viradas: 0.9,
+        corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 0.8,
+        conducao: 1.75
+    },
+    wing_play: {
+        nome: 'Wing Play',
+        circulacao: 1.1, verticalidade: 0.9, viradas: 1.1,
+        corredores: 1.5, cruzamento: 1.4, pressaoPosPerda: 1.0,
+        conducao: 0.9
+    },
+    positional: {
+        nome: 'Positional',
+        circulacao: 1.5, verticalidade: 0.75, viradas: 1.15,
+        corredores: 1.1, cruzamento: 1.0, pressaoPosPerda: 1.0,
+        conducao: 0.55
+    },
+};
+
+const Tatics = {
+    formacaoA: '442',
+    formacaoB: '442',
+    estilo: 'balanceado',
+    teamPlayStyle: 'positional',
+    linhaDefensiva: 'medium',
+    compactness: 'median',
+    lengthCompactness: 'median',
+    pressaoDefensiva: 'balanced',
+    setores: ['esq', 'dir'],
+
+    // Cada sector liga/desliga independentemente agora (antes era sempre
+    // exactamente 2 de 3, um forçava o outro a sair) — nunca deixa ficar
+    // com zero activos.
+    toggleSector: function (sector) {
+        const idx = this.setores.indexOf(sector);
+        if (idx >= 0) {
+            if (this.setores.length <= 1) return;
+            this.setores.splice(idx, 1);
+        } else {
+            this.setores.push(sector);
+        }
+        const el = document.getElementById('sec-' + sector);
+        if (el) el.classList.toggle('active', this.setores.includes(sector));
+        // O contador do rótulo era estático no HTML ("Setor do campo (2)") e
+        // nunca acompanhava os botões.
+        const lbl = document.getElementById('lbl-setores');
+        if (lbl) lbl.textContent = 'Setor do campo (' + this.setores.length + ')';
+        Match.assignFormations();
+    },
+
+    /*
+    SECTOR DE CAMPO: a que faixa pertence um X, no referencial de ATAQUE
+    (x * dirZ). A convenção dos 10 m já vivia em PassTypeModel.larguraCentro e,
+    copiada à mão, dentro de findPassTarget (player.js). Agora é uma só.
+    */
+    sectorDeX: function (x, dirZ) {
+        const xAtk = x * dirZ;
+        if (xAtk < -10) return 'esq';
+        if (xAtk > 10) return 'dir';
+        return 'cen';
+    },
+
+    /*
+    Retorna a prioridade (0 a 1) do setor, baseada em quantos estão ativos.
+    */
+    prioridadeSector: function (sector) {
+        const activeCount = this.setores.length;
+        if (activeCount === 0 || activeCount === 3) return 0.333;
+
+        const isActive = this.setores.includes(sector);
+        if (activeCount === 1) {
+            return isActive ? 0.60 : 0.20;
+        }
+        if (activeCount === 2) {
+            return isActive ? 0.40 : 0.20;
+        }
+        return 0.333;
+    },
+
+    /*
+    Quão FORA dos sectores activados está este X, de 0 (dentro de um deles) a 1
+    (o mais longe que o campo permite). Normalizada pela meia-largura do campo.
+
+    Substitui o getWeightedSectorX, que sorteava um X alvo dentro do grupo
+    activo e o re-sorteava a cada ~1 s. Com Left e Right ligados isso era uma
+    moeda ao ar: um extremo na direita saía metade das vezes com alvo em -19 e
+    atravessava o campo pelo meio para lá chegar. E, por ser distância a um
+    PONTO (±19), penalizava um extremo em x=+25 que já estava bem colocado.
+    */
+    penalidadeSector: function (x, dirZ) {
+        const activos = this.setores;
+        if (!activos || activos.length === 0) return 0;
+        if (activos.indexOf(this.sectorDeX(x, dirZ)) >= 0) return 0;
+
+        const xAtk = x * dirZ;
+        const meiaLargura = CAMPO_LARG / 2;
+        let melhor = Infinity;
+        for (const s of activos) {
+            // Distância à BORDA do sector activo em escala normalizada [0..1]
+            let d;
+            if (s === 'esq') d = (xAtk - (-10)) / meiaLargura;
+            else if (s === 'dir') d = (10 - xAtk) / meiaLargura;
+            else d = (Math.abs(xAtk) - 10) / meiaLargura;
+            if (d < melhor) melhor = d;
+        }
+
+        return Math.max(0, Math.min(1, melhor));
+    },
+
+    update: function () {
+        this.formacaoA = document.getElementById('t-formacao-A').value;
+        this.formacaoB = document.getElementById('t-formacao-B').value;
+        this.estilo = document.getElementById('t-estilo').value;
+        const teamStyleEl = document.getElementById('t-team-style');
+        if (teamStyleEl) this.teamPlayStyle = teamStyleEl.value;
+        this.linhaDefensiva = document.getElementById('t-linha').value;
+        this.compactness = document.getElementById('t-compactness').value;
+        this.lengthCompactness = document.getElementById('t-length-compactness').value;
+        this.pressaoDefensiva = document.getElementById('t-pressao-def').value;
+
+        /*
+        A MENTALIDADE MANDA NO COMPRIMENTO — E TEM DE SE VER NO PAINEL.
+
+        T.Defensiva e Defensiva impõem `short` (30 m) por
+        MentalidadeModel[...].profundidade. O computeBlock já obedecia, mas o
+        dropdown continuava a mostrar a escolha anterior: por fora parecia que
+        a opção não fazia nada, e um painel que mente sobre o que o jogo está a
+        fazer é pior do que não ter a regra.
+
+        Escreve-se nos dois — no `select` e na variável — para o que se vê e o
+        que corre serem a mesma coisa.
+        */
+        const mental = MentalidadeModel[this.estilo];
+        if (mental) {
+            if (mental.profundidade) {
+                this.lengthCompactness = mental.profundidade;
+                const el = document.getElementById('t-length-compactness');
+                if (el) el.value = mental.profundidade;
+            }
+            if (mental.pressao) {
+                this.pressaoDefensiva = mental.pressao;
+                const el = document.getElementById('t-pressao-def');
+                if (el) el.value = mental.pressao;
+            }
+        }
+
+        Match.assignFormations();
+    },
+
+    updateSkills: function () {
+        TeamSkills.TeamA.def = parseInt(document.getElementById('skill-def-a').value);
+        TeamSkills.TeamA.mid = parseInt(document.getElementById('skill-mid-a').value);
+        TeamSkills.TeamA.ata = parseInt(document.getElementById('skill-ata-a').value);
+        TeamSkills.TeamA.gk = parseInt(document.getElementById('skill-gk-a').value);
+
+        TeamSkills.TeamB.def = parseInt(document.getElementById('skill-def-b').value);
+        TeamSkills.TeamB.mid = parseInt(document.getElementById('skill-mid-b').value);
+        TeamSkills.TeamB.ata = parseInt(document.getElementById('skill-ata-b').value);
+        TeamSkills.TeamB.gk = parseInt(document.getElementById('skill-gk-b').value);
+
+        document.getElementById('val-def-a').innerText = TeamSkills.TeamA.def;
+        document.getElementById('val-mid-a').innerText = TeamSkills.TeamA.mid;
+        document.getElementById('val-ata-a').innerText = TeamSkills.TeamA.ata;
+        document.getElementById('val-gk-a').innerText = TeamSkills.TeamA.gk;
+
+        document.getElementById('val-def-b').innerText = TeamSkills.TeamB.def;
+        document.getElementById('val-mid-b').innerText = TeamSkills.TeamB.mid;
+        document.getElementById('val-ata-b').innerText = TeamSkills.TeamB.ata;
+        document.getElementById('val-gk-b').innerText = TeamSkills.TeamB.gk;
+    }
+};
+
+/*
+APOIO DE CIRCULACAO — quem se oferece a distancia de passe, e onde.
+
+O apoio que ja existia (SupportModel.raioMin/raioMax, 3.5 a 7 m, um de cada
+lado) e apoio CURTO: o toque de saida, a tabela. Medido em jogo: 1.3 apoios
+por frame, a 6.1 +/- 4.6 m do portador.
+
+Faltava a outra camada. Media dos companheiros por distancia ao portador:
+0-8 m 18.8%, 8-12 m 12.5%, 12-22 m 42.0%, 22+ 26.6% — havia gente na faixa
+da circulacao, mas por ACASO, parada no slot do bloco, e so 1.7 deles com
+linha de passe aberta. Ninguem tinha a tarefa de se oferecer.
+
+A atribuicao e de EQUIPA e nao de jogador, pela mesma razao da marcacao (ver
+atribuirMarcacoes): cada um a escolher sozinho o melhor ponto escolhe o
+MESMO ponto, e dois jogadores caminham para a mesma coordenada.
+
+Como funciona: gera pontos num leque a volta do portador (varios angulos,
+varios raios dentro da faixa de passe), deita fora os que estao fora do
+campo, em fora-de-jogo, colados a um adversario ou com a linha do portador
+tapada, e depois faz um leilao guloso — o par (jogador, ponto) mais barato
+fecha primeiro, um ponto por jogador, e pontos demasiado proximos uns dos
+outros excluem-se.
+
+O custo de um par e a distancia do SLOT do jogador ao ponto: o apoio inclina
+quem ja estava por perto, nao arranca ninguem do outro lado do campo. Acima
+de `desvioMax` o par nem entra.
+
+Pura: sem Match, sem Tatics, sem THREE (usa o linhaLivre, tambem puro).
+*/
+
+const FormationsData = {
+    '442': [
+        { x: 0, z: -0.95, role: 'gk', pos: 'GK', num: 1 },
+        { x: -0.7, z: -0.6, role: 'def', pos: 'RB', num: 2 },
+        { x: -0.3, z: -0.7, role: 'def', pos: 'CB', num: 4 },
+        { x: 0.3, z: -0.7, role: 'def', pos: 'CB', num: 3 },
+        { x: 0.7, z: -0.6, role: 'def', pos: 'LB', num: 6 },
+        { x: -0.7, z: -0.1, role: 'mid', pos: 'RM', num: 7 },
+        { x: -0.3, z: -0.2, role: 'mid', pos: 'CM', num: 8 },
+        { x: 0.3, z: -0.2, role: 'mid', pos: 'CM', num: 10 },
+        { x: 0.7, z: -0.1, role: 'mid', pos: 'LM', num: 11 },
+        { x: -0.25, z: 0.4, role: 'atk', pos: 'CF', num: 9 },
+        { x: 0.25, z: 0.4, role: 'atk', pos: 'CF', num: 19 }
+    ],
+    '433': [
+        { x: 0, z: -0.95, role: 'gk', pos: 'GK', num: 1 },
+        { x: -0.7, z: -0.6, role: 'def', pos: 'RB', num: 2 },
+        { x: -0.3, z: -0.7, role: 'def', pos: 'CB', num: 4 },
+        { x: 0.3, z: -0.7, role: 'def', pos: 'CB', num: 3 },
+        { x: 0.7, z: -0.6, role: 'def', pos: 'LB', num: 6 },
+        { x: -0.4, z: -0.2, role: 'mid', pos: 'RM', num: 7 },
+        { x: 0, z: -0.3, role: 'mid', pos: 'CM', num: 8 },
+        { x: 0.4, z: -0.2, role: 'mid', pos: 'LM', num: 11 },
+        { x: -0.6, z: 0.5, role: 'atk', pos: 'RW', num: 17 },
+        { x: 0, z: 0.6, role: 'atk', pos: 'CF', num: 9 },
+        { x: 0.6, z: 0.5, role: 'atk', pos: 'LW', num: 21 }
+    ],
+    '4231': [
+        { x: 0, z: -0.95, role: 'gk', pos: 'GK', num: 1 },
+        { x: -0.7, z: -0.6, role: 'def', pos: 'RB', num: 2 },
+        { x: -0.3, z: -0.7, role: 'def', pos: 'CB', num: 4 },
+        { x: 0.3, z: -0.7, role: 'def', pos: 'CB', num: 3 },
+        { x: 0.7, z: -0.6, role: 'def', pos: 'LB', num: 6 },
+        { x: -0.3, z: -0.3, role: 'mid', pos: 'DM', num: 5 },
+        { x: 0.3, z: -0.3, role: 'mid', pos: 'DM', num: 15 },
+        { x: -0.6, z: 0.1, role: 'mid', pos: 'RM', num: 7 },
+        { x: 0, z: 0.2, role: 'mid', pos: 'AM', num: 10 },
+        { x: 0.6, z: 0.1, role: 'mid', pos: 'LM', num: 11 },
+        { x: 0, z: 0.6, role: 'atk', pos: 'CF', num: 9 }
+    ]
+};

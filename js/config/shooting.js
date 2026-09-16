@@ -1,0 +1,2239 @@
+/*
+=============================================================================
+CONFIG: REMATES E BOLAS PARADAS
+=============================================================================
+Remates, livres directos, penáltis, cantos, cruzamentos, cabeceamentos e xG.
+=============================================================================
+*/
+
+const ShootingModel = {
+    /*
+    Alcance a skill 0. 8.0 -> 10.5: medido em lotes de 30 jogos, as
+    finalizacoes ficavam em 14.6 por jogo contra as 26.11 de um jogo a serio
+    (56%) — remata-se pouco, e nao e por falta de sitio: e por a entrada da
+    area cair fora do alcance de quem tem ataque medio (8 + 0.5x10 = 13 m no
+    eixo, e a area tem 16.5 de fundo).
+
+    AVISO, que fica escrito: o xG POR REMATE ja esta em 57% do alvo (0.062
+    contra 0.109), ou seja rematam-se bolas de pior qualidade do que num jogo
+    a serio. Alargar o alcance sobe a contagem e desce a qualidade media. A
+    correccao de fundo e criar mais ataque (os ataques totais estao em 36% do
+    alvo), nao rematar de mais longe.
+    */
+    baseRange: 10.5,
+    // metros adicionais a skill 100
+    skillRange: 10.0,
+    maxOffsetX: 24.0,    // além disto o ângulo é mau demais para rematar
+
+    /*
+    E O ANGULO CONTA, nao so o |x| e a distancia.
+
+    O `emZonaDeFinalizacao` era um rectangulo — distancia dentro do
+    `shootingRange` e |x| abaixo do `maxOffsetX` — e um rectangulo nao sabe
+    nada de trave. Medido em 2400 s: 44% dos remates saiam com menos de 15
+    graus de baliza aberta, e os piores eram um CF a |x| 13.7 m e 4.3 m da
+    linha de fundo (9.3 graus) e outro a |x| 21.2 m — fora da largura da area
+    — e 8.1 m da linha (6.7 graus). Dali cruza-se.
+
+    Para referencia: da marca do penalti a baliza abre ~37 graus, e da entrada
+    da area pelo eixo ~22.
+
+    `distanciaSemAngulo` e a excepcao que tem de existir: encostado a baliza,
+    o desvio ao primeiro poste e remate, por mais fechado que seja o angulo.
+    */
+    anguloMinimo: 14 * Math.PI / 180,
+    distanciaSemAngulo: 6.0,   // metros a baliza: dai para dentro o angulo nao manda
+    /*
+    Fracção do alcance que sobra no pior ângulo. 0.66 -> 0.75: com 0.66, a
+    |x| 15 m sobrava pouco mais de metade do alcance, e o remate de fora da
+    zona central quase não existia. O `anguloMinimo` acima continua a cortar
+    o que é mesmo mau ângulo — este número é só o quanto o alcance encolhe
+    dentro do que já passou nesse crivo.
+    */
+    angleFloor: 0.75,
+
+    // Um defesa que suba não remata como um avançado: só de muito perto.
+    // Antes o central caía no ramo genérico e rematava em 10.4% das vezes
+    // em que aparecia no último terço.
+    defenderFactor: 0.55,
+
+    /*
+    TECTO DO ALCANCE, em metros à baliza.
+
+    O `shootingRange` sai de `baseRange + skill` (10.5 + 10 no máximo) e depois
+    é MULTIPLICADO pelo peso `remate` do playing style — e é por aí que aparecem
+    alcances de 25 a 27 m. Medido: os remates de mais de 30 m vinham de
+    jogadores com 25.3 m de alcance médio.
+
+    Um remate de 30 m é um lance de excepção, não uma decisão de rotina. O tecto
+    corta-os sem mexer no que o estilo faz dentro da faixa normal.
+    */
+    alcanceMax: 25.0,
+
+    /*
+    COM O CAMINHO ABERTO E A BALIZA LONGE, PROGRIDE-SE.
+
+    Relato: "os jogadores com campo à frente estão chutando de mais de 25
+    metros de distância ao invés de progredir com a bola". Medido em 900 s:
+    54% dos remates saíam de mais de 25 m, e 32% de mais de 30 m — num jogo a
+    sério os de mais de 25 m andam pelos 10-15%.
+
+    O `shootingRange` sozinho não o explicava (base 10.5 + 10 pela skill), mas
+    o peso `remate` do playing style multiplica-o: os que remataram de 30 m+
+    tinham alcance médio de 25.3 m.
+
+    A regra é a mesma ideia do `frenteAFrente`, que já existia para o duelo
+    com o guarda-redes: com o corredor limpo, cada metro conduzido melhora o
+    remate. `distMin` é a distância à baliza a partir da qual isto vale;
+    abaixo dela remata-se com as regras de sempre. E cai assim que alguém
+    entra no caminho — aí o remate volta a ser a melhor opção que resta.
+    */
+    progredirComEspaco: {
+        distMin: 25.0,
+        // O mesmo cone do `livreAFrente10m20g` da condução: 20 m à frente,
+        // 45 graus de abertura.
+        alcanceCone: 20.0,
+        anguloCone: 45.0
+    },
+
+    /*
+    DENTRO DA GRANDE ÁREA REMATA-SE, PONTO.
+
+    O alcance acima é uma distância ao CENTRO DA BALIZA, e não cobria a área:
+    com a skill de ataque a 50 dá 13.0 m no eixo, e a área tem 16.5 m de
+    profundidade. Pior fora do eixo, onde a `centralidade` ainda o encolhe — a
+    15 m de X sobram 10.2 m, e daí a baliza está a 15.5 m.
+
+    Medido numa grelha de 20 posições dentro da área: **rematava-se em 6**
+    (30%). Da entrada da área não se rematava nunca, e da meia-lua também não.
+    É a explicação directa dos 0-6 remates por jogo que as simulações davam.
+
+    Dentro da área o alcance deixa de decidir: quem lá está e tem a bola
+    remata. O `maxOffsetX` (24 m) não é problema — a área tem 20.16 de
+    meia-largura, portanto está toda dentro dele.
+
+    Isto NÃO mexe no remate de fora da área, que continua a ser o alcance por
+    skill de sempre.
+    */
+    dentroDaArea: {
+        profundidade: typeof Area !== 'undefined' ? Area.profundidade : 16.5,   // da linha de fundo para dentro
+        meiaLargura: typeof Area !== 'undefined' ? Area.meiaLargura : 20.16,
+        /*
+        Dentro da área também não se aplica o corte da camada CHUTE do
+        SpatialGrid (`chuteVal <= 0` mandava não rematar). Uma célula não
+        autorada dentro da própria área é um buraco na grelha, não uma decisão
+        táctica — e era mais um sítio onde o remate se perdia em silêncio.
+        */
+        ignoraGrid: true
+    },
+
+    /*
+    =====================================================================
+    FRENTE A FRENTE COM O GUARDA-REDES — não se remata, chega-se mais perto
+    =====================================================================
+    Relato: "os jogadores de ataque entram na área e já chutam no gol, de
+    longe; podem chegar mais perto para chutar quando estiverem sozinhos
+    frente-a-frente com o goleiro e tocar no canto".
+
+    A regra `dentroDaArea` acima manda rematar assim que se pisa a área, e ela
+    não olha para mais nada — é exactamente o que produz o remate de 16 m com
+    o caminho todo livre à frente. Num frente-a-frente o certo é conduzir até
+    ao guarda-redes e tocar ao canto: a baliza cresce a cada metro e o ângulo
+    do guarda-redes fecha-se ao mesmo tempo.
+
+    O que conta é o CORREDOR até à baliza, e não um círculo à volta dele — a
+    mesma leitura do `CrossModel.corredor`: um marcador atrás, ou por fora,
+    não o impede de continuar. Só se espera enquanto o corredor estiver limpo;
+    assim que alguém entra nele, a regra cai e remata-se com as regras de
+    sempre.
+
+    `corredorMeiaLargura`  meia-largura do corredor até à baliza, em metros.
+    `recuoAtras`           quanto atrás dele um adversário ainda conta (vem a
+                           correr e apanha-o).
+    `distanciaIdeal`       a partir daqui remata: é o ponto do frente-a-frente.
+                           11 m é pouco mais do que a marca de grande
+                           penalidade (11.0), que é a distância a que este
+                           lance se resolve.
+    `distanciaMax`         tecto: mais longe do que isto a jogada ainda não é
+                           um frente-a-frente, é uma corrida — e vale a leitura
+                           normal, senão um avançado a 40 m com o campo aberto
+                           deixava de rematar de vez.
+    */
+    /*
+    =========================================================================
+    O MÍNIMO DE xG PARA VALER A PENA REMATAR
+    =========================================================================
+    O lote diz o mesmo desde o primeiro dia: remata-se 50% mais do que no
+    futebol real (39.1 por 90 contra 26.1). Enquanto cada remate valia metade
+    do que devia isso não dava golos a mais; agora que o `xG por remate` está
+    em 0.100 contra 0.109 do real, cada remate a mais é golo a mais — e os
+    golos foram de 2.59 a 3.82 por 90 ao longo da sessão.
+
+    A regra `dentroDaArea` é o buraco: "dentro da área remata-se, e mais nada
+    tem voto". Dentro da área cabe o bico da grande área a 16 m e 20 de lado,
+    de onde nenhum avançado remata.
+
+    Medido com `tools/scratch/remates_xg.js`, a distribuição do xG dos remates
+    de hoje:
+
+        p10 0.044   p25 0.049   mediana 0.059   p75 0.163
+
+        corte      remates cortados      xG médio dos que ficam
+        0.03              4%                    0.141
+        0.04              9%                    0.146
+        0.055            ~33%                   ~0.18
+        0.06             54%                    0.241
+
+    0.055 corta a terça parte, que é exactamente o excesso sobre o alvo. Não
+    é um número redondo: é o percentil 33 da distribuição medida.
+
+    EXCEPÇÃO, e é a que impede isto de desfazer o trabalho de ontem: o xG aqui
+    é POSICIONAL — sai de `xgDoRemate(x, z, ...)` e não sabe onde está o
+    guarda-redes. Um remate de 20 m com ele dez metros fora da baliza é uma
+    grande oportunidade e pontua baixo. Por isso o corte não se aplica quando
+    o guarda-redes saiu (`gkAdiantadoRemata`/`gkVelSaida`) nem quando está em
+    cima do avançado (`gkAoAlcance`): nesses casos quem decide é a regra do
+    frente-a-frente, que olha para ele.
+    =========================================================================
+    */
+    xgMinimo: 0.055,
+
+    frenteAFrente: {
+        corredorMeiaLargura: 4.0,
+        recuoAtras: 2.0,
+        distanciaIdeal: 11.0,
+        distanciaMax: 30.0,
+
+        /*
+        COM O GUARDA-REDES A ESTA DISTÂNCIA, REMATA-SE JÁ.
+
+        Relato: *"o jogador do cara a cara ou chuta antes de entrar na área ou
+        não chuta; nem o guarda-redes pega a bola; fica um a tentar correr de
+        frente para o outro"*.
+
+        A regra de cima manda aproximar até à `distanciaIdeal` (11 m) e só
+        depois rematar. Só que ela é cega ao guarda-redes: o corredor conta os
+        adversarios de campo, e quem chama já filtrou o `gk`. Seguido com
+        `tools/scratch/cara_a_cara_timeline.js` (ângulo 20): o avançado entra
+        na área aos 1.5 s, continua a conduzir porque ainda está a 13 m, e aos
+        2.9 s o guarda-redes sai e agarra-lhe a bola aos pés. Nunca houve
+        remate — e, sem remate, também nunca houve defesa para ver.
+
+        7 m é o espaço que o guarda-redes cobre no tempo de armar e bater: com
+        ele mais perto do que isto, esperar mais um metro é dar-lhe a bola.
+        */
+        gkAoAlcance: 7.0,
+
+        /*
+        E COM ELE FORA DA BALIZA, REMATA-SE JÁ — sem esperar que chegue perto.
+
+        Relato: *"com o guarda-redes ofensivo o atacante está a esperar demais
+        para finalizar; o ofensivo sai do golo mais cedo, o atacante tem de
+        perceber isso e finalizar mais rápido"*.
+
+        Medido com `tools/scratch/cara_a_cara_gk_ofensivo.js`, 12 lances com o
+        traço ofensivo forçado: o guarda-redes passava os 5 m de avanço ao
+        segundo 1.9 e o remate só saía 0.71 s depois, com ele já a 1.2-1.7 m do
+        avançado e 10 m fora da linha. Ou seja: o avançado esperava por ele.
+
+        O `gkAoAlcance` acima não chega porque mede a distância ENTRE OS DOIS, e
+        entre o gatilho e a bola sair passam a cadência da decisão e os 0.32 s
+        de armação — tempo em que um guarda-redes lançado faz quatro metros.
+        Este mede o que interessa de verdade: quanto ele JÁ saiu da baliza. A
+        partir de 4 m fora da linha, o que está atrás dele é baliza aberta, e
+        esperar mais um metro só lhe dá tempo de fechar o ângulo.
+
+        É também a condição de que o chapéu vive (ver `chapeuGkAdiantado` no
+        ShotModel): rematar mais cedo põe o chapéu em cima da mesa.
+
+        7 m, e não 4: o `GoalkeeperStyle.defensive` tem `depthMax` 6.0, ou
+        seja um guarda-redes NORMAL passa a vida até aos 6 m fora da linha. Com
+        o corte a 4 m, isto disparava contra toda a gente e virava "rematar de
+        longe sempre" — e o lote já diz que se remata 44% a mais do que devia.
+        A 7 m só apanha quem saiu mesmo: o ofensivo, que vai até aos 11 de
+        profundidade e 20 de varrida.
+        */
+        gkAdiantadoRemata: 7.0,
+
+        /*
+        E O OUTRO SINAL: ELE VEM A SAIR.
+
+        Só a profundidade não chega, e mediu-se porquê. Com o corte a 7 m, o
+        guarda-redes ofensivo do lance só o cruza quando já está a dois metros
+        do avançado — a espera voltava aos 0.68 s. Com o corte a 4 m disparava
+        contra toda a gente, porque um guarda-redes NORMAL vive até aos 6 m
+        fora da linha.
+
+        O que distingue os dois casos não é onde ele está: é se vem a correr
+        para fora. Um guarda-redes lançado a 4 m/s deixou a baliza vazia atrás
+        dele mesmo estando ainda perto dela; um que está quieto a 5 m não.
+
+        Medido com `tools/scratch/cara_a_cara_gk_ofensivo.js`: com os dois
+        sinais, a espera cai de 0.68 s para ~0.30 s — que é o tempo da própria
+        armação, ou seja o avançado deixa de esperar.
+        */
+        gkAdiantadoMin: 3.0,
+        gkVelSaida: 4.0
+    },
+
+    /*
+    A BOLA AO ALCANCE DO PÉ, para se poder rematar sem a ter colada.
+
+    Relato, na sequência do anterior: *"ou chuta antes de entrar na área ou não
+    chuta"*. Seguido com `tools/scratch/cara_a_cara_timeline.js`, a causa não
+    era a decisão de rematar: era não se chegar a ela. Em condução a bola vai
+    0.6 a 0.8 m à frente do pé e o `hasBall` é falso na maioria dos frames; o
+    ramo `RecuperarControlo` ("a bola fugiu, vai buscá-la") está acima do
+    `Rematar` e ganhava quase sempre. O avançado atravessava a área inteira a
+    correr atrás da própria bola, e quem chegava primeiro era o guarda-redes.
+
+    Com a bola mais perto do que isto E em zona de remate, deixa de se ir
+    "buscar" a bola: remata-se. 1.3 m é menos do que o `bolaAoPe` do drible ao
+    guarda-redes (1.8) de propósito — empurrar a bola para o lado aceita-a mais
+    longe do que bater nela.
+
+    O gesto continua a exigir a bola no pé no INSTANTE do contacto (ver
+    `initiateShoot`): entre a decisão e o pé passam 0.318 s, que a esta
+    distância dá para ele alcançar a bola. Quando não dá, sai uma furada e
+    está contada em `remates.furados`.
+    */
+    bolaAoPeRemate: 1.3
+};
+
+/*
+Modelo de passe e condução.
+
+`carryChance*` é a probabilidade de conduzir em vez de passar quando há um
+alvo disponível — sob pressão desce 0.15.
+
+O lançamento (passe para o espaço nas costas da linha adversária) não existia:
+todos os passes miravam a posição actual de um colega. Estes valores dizem onde
+se põe a bola em relação à linha que o nível 1 do adversário já calcula.
+*/
+/*
+=============================================================================
+QUALIDADE DA LINHA DE PASSE
+=============================================================================
+Antes isto era um FILTRO binário com um corredor de 1 a 2.6 m: um adversário
+mais perto do que isso da recta eliminava o candidato, e a recompensa por ter
+a linha limpa valia no máximo +50 pontos — irrelevante ao lado dos +200/+500
+que a liberdade do RECEPTOR vale. Duas consequências medidas no jogo:
+
+  - o passe curto para dentro de tráfego passava, porque bastavam 2 m de folga;
+  - o passe longo para um colega livre era ELIMINADO antes de ser pontuado,
+    porque a recta atravessa o bloco todo e há sempre alguém a 2 m dela.
+
+Agora:
+
+  `bloqueioDuro`  o único corte que resta — alguém literalmente em cima da
+                  recta. É geometria, não julgamento: a bola não passa ali.
+
+  `corredor`      a largura em que um adversário ainda ameaça, e CRESCE com a
+                  distância do passe: numa bola de 8 m um defesa a 3 m não
+                  chega lá; numa de 35 m chega com tempo de sobra.
+
+  `pesoLinha`     a qualidade da linha (0 = colado, 1 = limpa) passa a valer
+                  na MESMA escala da liberdade do receptor, e não 1/10 dela.
+
+  `pesoCorpo`     desconto por CADA adversário dentro do corredor. Uma recta
+                  que passa a 2 m de cinco pessoas não é a mesma coisa que
+                  passar a 2 m de uma — e antes pontuavam igual, porque só se
+                  olhava para o mais próximo.
+=============================================================================
+*/
+
+const ShotModel = {
+    /*
+    Subiu de 28/8 para 32/9 depois de se ver em campo: continuava a ler como
+    fraco. Passa a 23.0 m/s a TEC 0, 32.0 a TEC 50 e 41.0 a TEC 100 — a ponta
+    de cima é a de um remate de elite (~148 km/h), que é o que um TEC 100 deve
+    bater.
+    */
+    potenciaBase: 32.0,     // m/s a TEC 50
+    potenciaPorSkill: 9.0,  // ± isto entre TEC 0 e TEC 100
+    potenciaMin: 16.0,      // nem o pior rematador bate mais fraco do que isto
+
+    /*
+    Elevação de recurso, para quando nem no ângulo óptimo a bola chega ao alvo
+    (remate de muito longe). Era `Math.PI / 5` (36°) escrito à mão — um balão.
+    A 20° a bola vai mais longe e mais tensa, e ainda tem hipótese de incomodar.
+    */
+    elevacaoRecurso: 20 * Math.PI / 180,
+
+    /*
+    =====================================================================
+    O REMATE DECIDE A BOLA, NÃO O DESFECHO
+    =====================================================================
+    Antes sorteava-se o RESULTADO — GOL, TRAVE_CAMPO, TRAVE_FORA,
+    TRAVESSAO_*, GOLEIRO_DEFENDE_* — por pesos de `attackRatio`, e só depois
+    se escolhia o ponto que o produzia. A bola era a encenação de um sorteio
+    já feito, e via-se: `alvoY = random() > 0.5 ? 2.0 : 0.4` (moeda ao ar
+    entre alto e baixo), `sinal = random()` para o canto sem olhar para onde
+    estava o guarda-redes, e potência sempre cheia — não havia remate
+    colocado nem rasteiro, havia um chutão com destino combinado.
+
+    Pior: o desfecho sorteado desligava o guarda-redes. `forcedGKDelay = 1.0`
+    nos remates marcados como golo (ele reagia um segundo tarde, de
+    propósito) e `0` nos marcados como defesa. Toda a fórmula do GkCatchModel
+    só era consultada depois de o sorteio já ter decidido que ia haver defesa.
+
+    Agora escolhe-se TIPO e MIRA, aplica-se o erro, e a bola voa. Quem
+    resolve é a física — a colisão com postes e travessão já existe
+    (`colidirComBaliza` em match.js) — e o guarda-redes, com o seu tempo de
+    reacção normal. Trave e "por cima" deixam de ser casos de uma tabela e
+    passam a ser consequência de a mira ter falhado por pouco.
+    */
+
+    /*
+    TIPOS DE REMATE. A potência é um multiplicador da `potenciaBase`: um
+    remate colocado sai a ~2/3 da força — é essa a troca, precisão contra
+    velocidade, e era ela que não existia.
+    */
+    tipos: {
+        forca: { potencia: 1.00, sigma: 1.35 },
+        colocado: { potencia: 0.68, sigma: 0.80 },
+        rasteiro: { potencia: 0.82, sigma: 0.95 },
+        chapeu: { potencia: 0.45, sigma: 1.20 }
+    },
+
+    /*
+    ESCOLHA DO TIPO, por situação. As chances são testadas por esta ordem
+    (chapéu, rasteiro, colocado) e o que sobra é força.
+    */
+    escolha: {
+        // Chapéu: só com o guarda-redes fora da linha e a uma distância que
+        // dê para o passar por cima.
+        chapeuGkAdiantado: 4.0,   // metros à frente da linha
+        chapeuDistMin: 8.0,
+        chapeuDistMax: 25.0,
+        chanceChapeu: 0.35,
+
+        // Rasteiro ao canto: a bola mais difícil de agarrar que há. Sobe de
+        // perto, onde levantar a bola é desperdiçar a baliza.
+        chanceRasteiraPerto: 0.32,   // até `distPerto`
+        chanceRasteiraLonge: 0.15,
+        distPerto: 12.0,
+
+        // Colocado: precisa de tempo e de pé. Cai sob pressão e com a
+        // distância — de 25 m ninguém coloca, bate.
+        chanceColocado: 0.40,
+        colocadoDistMax: 20.0,
+        colocadoPressao: 3.0,     // adversário a menos disto tira a colocação
+
+        /*
+        FRENTE A FRENTE: toca-se ao canto, não se bate (pedido). Chegado a
+        `ShootingModel.frenteAFrente.distanciaIdeal` com o corredor livre, o
+        remate de força é a pior escolha que há — o guarda-redes está perto e
+        tapa o corpo. Esta fatia é a do RASTEIRO ao canto; o resto é COLOCADO.
+        O chapéu continua a ganhar aos dois quando o guarda-redes sai.
+        */
+        chanceRasteiraFrenteAFrente: 0.60
+    },
+
+    /*
+    MIRA. Aponta-se a um canto, com `margemPoste` de folga para dentro — o
+    ponto MIRADO é sempre golo, o que decide é o erro por cima dele.
+
+    O canto é o mais LONGE do guarda-redes. Era `random()`, e por isso não
+    havia a leitura mais básica do remate: bater onde ele não está.
+    */
+    mira: {
+        margemPoste: 0.85,
+
+        /*
+        NÃO SE MIRA SEMPRE O CANTO — e mirava-se.
+
+        Medido em 3000 remates: o ponto visado era `maxC` em 100% deles, ou
+        seja SEMPRE o mesmo ponto, a 0.85 m do poste. Duas consequências, e
+        as duas apareciam nos lotes:
+
+          o que fica no alvo é bola de canto, e o guarda-redes não lá chega:
+          52% dos remates enquadrados acabavam em golo (real ~32%);
+
+          o que se desvia um pouco sai pela linha: só 15-22% dos remates
+          ficavam enquadrados (real ~33%).
+
+        `fraccaoCanto` é a AMBIÇÃO da pontaria, em fracção da meia-baliza útil:
+        1.0 é o canto, 0 é o meio da baliza. Sorteia-se por remate dentro da
+        faixa do tipo — quem coloca procura o canto, quem bate com força mira
+        mais para dentro (é isso que a potência lhe custa), e um chapéu passa
+        por cima do guarda-redes, não pelo lado.
+
+        Isto NÃO é o erro de execução: esse continua a ser o `ShotModel.erro`,
+        que se soma por cima do ponto visado. Isto é onde o jogador APONTA.
+        */
+        /*
+        MENOS 10% DE AMBIÇÃO, a pedido: "reduz em mais 10% a precisão dos
+        chutes, mas esses chutes têm que ser defesas do goleiro para fora".
+
+        A segunda metade do pedido é que escolhe o instrumento. Tirar outros
+        10% ao `escalaGlobal` (o erro de execução) manda mais bolas para FORA
+        da moldura — foi o que a subida anterior fez, com a percentagem no
+        alvo a cair de 22.6 para 21.7 quando o real são ~33%. Bolas nas
+        bancadas não são defesas do guarda-redes.
+
+        A imprecisão que produz defesas é a da COLOCAÇÃO: o remate continua
+        dentro da baliza mas mais perto do corpo dele, e aí é defendido. Por
+        isso os 10% saem daqui, de quanto o jogador se atreve a procurar o
+        canto, e não do erro de execução.
+
+        Cada faixa desceu 10%:
+            forca     0.30-0.90  ->  0.27-0.81
+            colocado  0.65-1.00  ->  0.59-0.90
+            rasteiro  0.55-1.00  ->  0.50-0.90
+            chapeu    0.10-0.45  ->  0.09-0.41
+
+        E para a defesa sair PARA FORA, e não em rebote aos pés do avançado,
+        o `GoalkeeperDive.espalmarForaMargem` subiu na mesma alteração — ver
+        a nota lá.
+        */
+        fraccaoCanto: {
+            forca: { min: 0.27, max: 0.81 },
+            colocado: { min: 0.59, max: 0.90 },
+            rasteiro: { min: 0.50, max: 0.90 },
+            chapeu: { min: 0.09, max: 0.41 }
+        },
+        alturaRasteira: 0.30,
+        alturaMeia: 1.05,
+        alturaAlta: 1.90,
+        alturaChapeu: 2.15,
+        // Abaixo desta descentragem do GK o canto é escolhido à sorte: com
+        // ele ao meio, os dois lados valem o mesmo.
+        gkCentradoMax: 0.5
+    },
+
+    /*
+    ERRO DA MIRA, em METROS no plano da baliza — e é ele que produz golos,
+    traves e bolas por cima, sem tabela nenhuma. Mesma ideia do
+    `sigmaDePasse`: a bola sai na direcção pedida com um desvio gaussiano.
+
+    O desvio vertical é menor que o lateral (`fracVertical`): errar a altura
+    de um remate é menos comum do que errar o lado.
+    */
+    erro: {
+        base: 1.10,             // metros de sigma, a 6 m e TEC 50
+        porMetro: 0.110,        // cresce com a distância à baliza
+        distRef: 6.0,
+        fracVertical: 0.70,
+        // TEC divide o sigma: 0.65 a TEC 100, 1.45 a TEC 0.
+        tecMin: 0.65,
+        tecMax: 1.45,
+        // Pressão: adversário colado abre a mira.
+        pressaoDist: 3.0,
+        pressaoMult: 1.45,
+        // Ângulo fechado (junto à linha de fundo) também.
+        anguloMult: 1.30,
+        anguloFechado: 35 * Math.PI / 180,
+
+        /*
+        A ÚNICA MANÍPULA DE CALIBRAÇÃO. Multiplica todos os sigmas: acima de
+        1 saem mais remates para fora, abaixo de 1 mais no alvo. Existe para
+        acertar a taxa de conversão SEM voltar a impor desfechos — o
+        resultado continua a sair da bola, do guarda-redes e da madeira.
+
+        A pedido ("aumenta um pouco a chance de bola na defesa e fora"), com o
+        passo medido em 248 min de relogio cada:
+
+            1.00   26.9% dos remates no alvo
+            1.15   15.5% no alvo  <- de mais: o real anda pelos 33%
+            1.07   ver abaixo
+
+        O motivo do pedido: 2.90 golos por jogo (115% do alvo) com 1.12 de xG
+        (39%) — converte-se muito acima do que a qualidade das chances
+        justifica, e parte disso e a mira ser boa demais para remates que sao
+        maus. Mas a correccao tem um tecto: passado esse ponto o jogo deixa de
+        ter golos a menos e passa a ter remates para as bancadas.
+
+        MENOS 10% DE PRECISÃO, a pedido ("reduz a precisão nos chutes dos
+        jogadores em 10%"): 1.07 -> 1.18, que é o sigma dez por cento maior.
+
+        O aviso acima continua a valer e agora está pago em número: a 1.15 já
+        se mediram 15.5% dos remates no alvo contra os ~33% reais, e o lote de
+        60 jogos a 1.07 dava 22.6%. Isto desce mais, o que reduz os golos
+        (estavam em 137% do alvo) e afasta a percentagem no alvo da realidade
+        ao mesmo tempo. É a troca que o pedido faz, dita por inteiro.
+
+        MAIS 15%, a pedido ("reduz em mais 15% a precisão dos chutes"):
+        1.18 -> 1.36. O aviso acima vale a dobrar agora, e com número: a 1.18
+        o lote deu 21-23% dos remates no alvo contra os ~33% reais, e isto
+        baixa mais. É a terceira vez que o pedido vai neste sentido, portanto
+        fica a decisão e fica o custo escrito.
+
+        E 1.36 -> 1.56, mais 15%, a pedido (*"aumenta o erro em 15%"*). Quarta
+        vez no mesmo sentido; o custo continua a ser o mesmo e agora com o
+        número de hoje: o lote anterior a esta linha deu **25.9%** dos remates
+        no alvo, contra os ~33% do futebol real. Subir o erro de EXECUÇÃO
+        afasta mais desse número — o que sai da moldura não dá defesa nem
+        canto, dá pontapé de baliza.
+
+        A manípula que aperta a pontaria SEM mandar bolas para as bancadas
+        continua a ser a `fraccaoCanto` (a ambição da colocação), lá em cima.
+        */
+        escalaGlobal: 1.56
+    }
+};
+
+/*
+=============================================================================
+O BLOQUEIO — o ricochete, e nao um empurrao para a frente
+=============================================================================
+A bola bloqueada era mirada a `ball.z + dirZ * 3`: tres metros a frente do
+rematador, sempre no sentido do ataque, com potencia 4.0-6.4 e altura 0.3.
+Medido em 6 partidas headless (tools/headless/cantos_lote.js): 5.2 bloqueios
+por jogo e NENHUM a chegar a linha de fundo, com os cantos em 3.8 por jogo
+contra os 9.9 de um jogo a serio.
+
+Um bloqueio a serio nao decide para onde a bola vai — desvia-a. Mantem-se a
+direccao do remate, roda-se um angulo e perde-se velocidade. Quem decide se
+ela sai passa a ser a DISTANCIA a que o corte aconteceu: um a 8 m da linha vai
+la fora e da canto, um a 25 m morre no campo. Nada aqui aponta a bola para
+fora de proposito.
+*/
+const BlockModel = {
+    /*
+    Desvio gaussiano em radianos. 0.55 rad = 32 graus de sigma: a maioria dos
+    cortes devolve a bola quase no sentido em que ela vinha (e por isso ela
+    segue para a linha de fundo, que e onde o remate apontava), e a cauda leva
+    ao ricochete de lado.
+    */
+    anguloSigma: 0.55,
+    /*
+    Tecto do desvio, acima dos 90 graus para que o corte possa devolver a bola
+    para tras — o ressalto que volta aos pes do rematador.
+    */
+    anguloMax: 2.0,
+
+    /*
+    Fraccao da potencia do remate que sobrevive ao corte, e o unico numero
+    daqui que foi CALIBRADO em vez de escolhido.
+
+    Com 0.20-0.60 a bola bloqueada fugia da area e os remates caiam de 27.8
+    para 24.3 por 90 (24 partidas, ~2 sigma): o rebote fabricado que o modelo
+    antigo criava -- bola fraca a tres metros da baliza -- estava a alimentar
+    uma parte dos remates. Com 0.12-0.38 ela morre perto de onde foi cortada e
+    os remates ficam nos 27.2, dentro do ruido.
+    */
+    fraccaoVelMin: 0.12,
+    fraccaoVelMax: 0.38,
+    // Chao para bolas travadas por um remate fraco: fica sempre disputavel.
+    velocidadeMin: 2.0,
+
+    // Elevacao do ressalto, em radianos (0 a ~34 graus).
+    elevacaoMax: 0.60
+};
+
+const FreeKickModel = {
+    /*
+    DECISÃO DA COBRANÇA — ver decisaoDeFalta em utils.js. Três casos:
+
+    1. TRAPÉZIO DE REMATE DIRECTO. Até `remateDistMax` do centro da baliza e
+       dentro das rectas que saem dos POSTES a `remateAnguloTrave` da
+       PERPENDICULAR à linha de fundo. A base menor é a própria baliza e o
+       trapézio abre com a distância — a 23 m tem 7.32 + 2 × 13.28 = 33.9 m.
+       Antes o critério era o `emZonaDeFinalizacao` do jogo corrido, que é um
+       rectângulo e não sabe nada de ângulo com a trave: remata-se de posições
+       sem baliza nenhuma à vista, e não se rematava de frente a 25 m.
+
+    2. MINI-CANTO. Ao lado da grande área (`miniCornerXMin`, a meia-largura da
+       área) e a menos de `miniCornerProfundidade` da linha de fundo: dali não
+       há remate, cruza-se para a área como num canto curto.
+
+    3. O RESTO: passe para o melhor colega posicionado.
+    */
+    /*
+    O TECTO DA BATIDA DIRECTA estava em 23 m, e era ELE que fazia a batida
+    directa quase não existir. Medido num lote de 60 faltas espalhadas pelo
+    terço ofensivo, 51 acabavam em passe e 9 em remate — e o mapa mostrava
+    porquê: só se rematava a 14 e 19 m, ou seja de DENTRO da grande área e da
+    orla dela. A falta que toda a gente reconhece — 25 a 30 m, de frente, com
+    barreira — caía sempre no ramo do passe, porque 24 m já era longe de mais.
+
+    30 m é a distância a que se bate uma falta directa. O `remateAnguloTrave`
+    continua a ser o outro corte, e é ele que impede que isto passe a rematar
+    de qualquer sítio: a 30 m a meia-largura do trapézio são 3.66 + 17.3 m, mas
+    a distância é medida ao CENTRO DA BALIZA, portanto o que sobra é a
+    intersecção do círculo de 30 m com a cunha dos 30° — de frente vai-se a
+    30 m, muito aberto não se vai a 20.
+    */
+    remateDistMax: 30.0,                    // ao centro da baliza
+    remateAnguloTrave: 30 * Math.PI / 180,  // da perpendicular à linha de fundo
+    miniCornerXMin: typeof Area !== 'undefined' ? Area.meiaLargura : 20.16, // meia-largura da grande área
+    miniCornerProfundidade: 22.0,           // até esta distância da linha de fundo
+
+    /*
+    =====================================================================
+    A FALTA LATERAL JUNTO À ÁREA
+    =====================================================================
+    O mini-canto exigia estar já FORA da largura da grande área
+    (`miniCornerXMin`, 20.16 m). A falta lateral clássica — a 14-20 m do
+    eixo, à altura da entrada da área — caía toda no ramo do passe, e
+    saía dali um passe curto para a frente como em qualquer sítio do
+    meio-campo. É a posição de onde se cruza, e não se cruzava.
+
+    Esta zona é mais larga e mais funda do que a do mini-canto, e vem
+    DEPOIS do trapézio de remate: de frente continua a rematar-se.
+    */
+    cruzXMin: 14.0,             // do eixo para fora, conta como falta lateral
+    cruzProfundidade: 26.0,     // e até esta distância da linha de fundo
+
+    /*
+    OS QUATRO CRUZAMENTOS. `relX` é medido do eixo da baliza, com sinal do
+    LADO DE ONDE VEM A BOLA (+ = mesmo lado); `dist` é da linha de fundo;
+    `altura` é a que a bola tem de ter QUANDO LÁ CHEGA — é isso que separa
+    uma bola para a cabeça de uma bola para o pé, e não a força de saída.
+
+    A `elevacao` dá a forma: chapelada nas três primeiras, tensa na
+    quarta. A velocidade sai da altura pedida, resolvida com arrasto no
+    `velocidadeParaChegarA` (utils.js) — a conta do vácuo deixava o
+    cruzamento uns metros curto, como deixava o canto.
+
+    `peso` é a probabilidade relativa; `bonusCompanheiro` multiplica o peso
+    quando há um colega dentro de `raioCompanheiro` do alvo. Sem isso
+    cruzava-se com a mesma frequência para um sítio onde não está ninguém.
+    */
+    cruzamentos: [
+        {
+            nome: 'primeira_trave',
+            relX: 3.4, dist: 5.5, altura: 2.30,
+            elevacao: 31 * Math.PI / 180, peso: 30
+        },
+        {
+            nome: 'segunda_trave',
+            relX: -3.4, dist: 5.8, altura: 2.40,
+            elevacao: 33 * Math.PI / 180, peso: 25
+        },
+        {
+            nome: 'marca_penalti',
+            relX: 0.0, dist: 11.0, altura: 2.30,
+            elevacao: 32 * Math.PI / 180, peso: 25
+        },
+        {
+            // MEIA ALTURA para quem chega a rematar de primeira à entrada
+            // da área. Bola tensa, não chapelada: é para bater, não para
+            // cabecear.
+            nome: 'entrada_da_area',
+            relX: 1.0, dist: 17.5, altura: 1.10,
+            elevacao: 14 * Math.PI / 180, peso: 20
+        }
+    ],
+    raioCompanheiro: 6.0,       // para o alvo contar como povoado
+    bonusCompanheiro: 2.2,      // quanto o peso sobe quando lá está alguém
+    variacaoAlvo: 1.2,          // metros de aleatório no alvo, para não sair sempre igual
+
+    distanciaBarreira: 9.15,   // os 9.15 m do regulamento
+    barreira1MaxDist: 30.0,    // mais de 30m do centro do gol: 1 na barreira
+    barreira2MaxDist: 26.0,    // mais de 26m do centro do gol: 2 na barreira
+    barreiraMax: 4,            // faltas perigosas / perto do gol (<= 26m): barreira cheia
+    espacamentoBarreira: 0.85, // ombro com ombro
+    deslocamentoGK: 1.85,      // metros que o GK se desloca para o lado oposto da barreira
+    potenciaBase: 28.5,        // m/s base no remate direto
+    potenciaPorForca: 6.0,     // variação com atributo FOR
+    chanceDefesa: {
+        perfeito: 0.03,   // diff > 5   — bola teleguiada na gaveta por cima da barreira
+        bom: 0.16,        // diff 3..5
+        medio: 0.38,      // diff 1..2
+        fraco: 0.65       // diff <= 0  — remate sem força/efeito suficiente
+    },
+    /*
+    ATRÁS DA BOLA, na linha bola->baliza. Estava em 1.4 m — praticamente em
+    cima dela, sem espaço nenhum para a corrida, e como o gesto era instantâneo
+    o que se via era a bola a saltar sozinha para o pé dele.
+
+    A `corridaMin` é o que sobra depois de descontar a passada final: o
+    `ActionState` leva-o de `recuoBatedor` até junto da bola durante a fase de
+    preparação do clip, e a bola só parte no `contactTime`.
+    */
+    recuoBatedor: 3.0,         // onde ESPERA, atrás da bola (3 m atrás da linha da bola, alinhado com o remate)
+    lateralBatedor: 0.0,       // alinhado na direcção da cobrança como no penálti
+    /*
+    A corrida do gesto cobre só os últimos metros: o `contactTime` do ShotClip
+    são ~0.32 s. Os primeiros metros são andados durante a espera regulamentar
+    (ver o ramo `faltaPendente` no Match.update), e o gesto arranca daqui.
+    */
+    arranqueDoGesto: 1.8,
+    velocidadeAproximacao: 2.4,   // m/s a caminhar para a bola, antes do gesto
+    // Onde o pé fica no instante do contacto: um passo atrás da bola.
+    paragemNoContacto: 0.55,
+    afastaAdversarios: 9.15,   // ninguém da defesa mais perto do que isto da bola
+
+    /*
+    O CORREDOR DA COBRANÇA, e por que existe.
+
+    Quando a falta acaba em REMATE, os lugares do `lugaresDaFalta` punham
+    companheiros do batedor em cima da linha bola->baliza — os dois avançados
+    do `ataque_entrada` esperam o ressalto a 13.5 m da linha de fundo e a 2.5 m
+    do eixo, ou seja à frente da barreira e no caminho da bola. Medido em 60
+    cobranças: **87% tinham um companheiro dentro do corredor**, o mais perto a
+    7.0 m da bola em média — e a barreira está a 9.15.
+
+    Quem estiver lá dentro é empurrado LATERALMENTE para a borda do corredor:
+    continua a atacar o ressalto, mas de lado, que é onde ele espera em campo.
+    Só se aplica ao remate — num cruzamento ou num passe não há linha de
+    cobrança a proteger.
+    */
+    corredorLivre: 5.0,        // meia-largura do corredor bola->baliza, em metros
+
+    /*
+    E NINGUEM FICA EM CIMA DA BOLA.
+
+    Relato: *"na cobranca da falta, por vezes, fica um jogador quase em cima da
+    posicao da cobranca, atrapalhando um pouco"*.
+
+    Medido em 105 cobrancas: o jogador mais perto da bola (tirando o batedor)
+    esta em media a 7.7-8.0 m, mas **1 em 105** fica a menos de 2 m — foi um LB
+    da propria equipa a 1.44 m. E raro, e e exactamente o "por vezes".
+
+    O `corredorLivre` ja empurra quem esta no caminho bola->baliza, mas so
+    quando a decisao e REMATE e so de lado. Quem calha a um metro da bola num
+    passe curto nao era empurrado por ninguem. Este raio e radial e vale sempre.
+
+    2.5 m: o batedor recua `recuoBatedor` para bater e precisa do arco do gesto
+    livre; mais do que isto comecava a desarrumar a montagem toda.
+    */
+    folgaDaBola: 2.5,
+
+    /*
+    =========================================================================
+    GENTE NA ÁREA À ESPERA DO CRUZAMENTO
+    =========================================================================
+    Não havia nenhuma: o setup da falta punha o batedor e a barreira, e os
+    outros nove atacantes ficavam onde a jogada os tinha deixado. Cruzava-se
+    para uma área vazia — e é por isso que a falta no ataque não produzia nada.
+
+    `zonaDeArea` é a partir de onde vale a pena povoar. CUIDADO COM A UNIDADE:
+    é `bolaZ * dir`, medido do MEIO-CAMPO e não da linha de fundo — o mesmo
+    referencial do `barreiraZonaZ` aqui em cima. 18 m do meio-campo é o início
+    do terço ofensivo (106/6 = 17.7), ou seja faltas a menos de ~35 m da
+    baliza. Mais atrás do que isso a falta é de recomposição, não de ataque, e
+    mandar cinco homens para a área só abria o contra-ataque.
+
+    Os slots são relativos à BALIZA, como os do canto (ver attackSetup em
+    match.js): `relX` do eixo, com sinal do lado de onde vem o cruzamento, e
+    `dist` da linha de fundo. `initial` é onde se espera, `target` para onde
+    se ataca quando a bola sai — de fora para dentro, que é como se ganha o
+    corpo ao marcador.
+
+    Menos gente do que num canto, e de propósito: numa falta a bola pode sair
+    em remate ou em passe, e uma equipa inteira dentro da área a um remate
+    directo fica sem ninguém para a segunda bola nem para o contra-ataque.
+    */
+    zonaDeArea: 18.0,
+    slotsArea: [
+        // 1. Primeiro pau
+        { initial: { relX: 3.0, dist: 7.0 }, target: { relX: 3.6, dist: 4.8 } },
+        // 2. Coração da área, à altura da marca de penálti
+        { initial: { relX: -0.5, dist: 11.0 }, target: { relX: 0.0, dist: 8.5 } },
+        // 3. Segundo pau, ataca de trás para a frente
+        { initial: { relX: -4.5, dist: 9.0 }, target: { relX: -3.4, dist: 6.0 } },
+        // 4. Segunda vaga, chega atrasado
+        { initial: { relX: 1.0, dist: 14.5 }, target: { relX: 1.0, dist: 11.5 } },
+        // 5. Sobra na entrada da área, para o ressalto e a recarga
+        { initial: { relX: 0.5, dist: 19.5 }, target: { relX: 0.5, dist: 18.0 } }
+    ],
+    /*
+    E os marcadores, um por cada slot acima, sempre do lado da BALIZA em
+    relação ao homem deles — os dois arrays andam a par, mexer num pede mexer
+    no outro. Só entram os defensores que sobram da barreira: a barreira é
+    obrigação e vem primeiro.
+    */
+    slotsMarcacao: [
+        { relX: 3.2, dist: 5.4 },
+        { relX: -0.5, dist: 9.2 },
+        { relX: -4.2, dist: 7.4 },
+        { relX: 1.0, dist: 12.7 },
+        { relX: 0.5, dist: 17.7 }
+    ],
+
+    /*
+    =====================================================================
+    FALTA DE ATAQUE DENTRO DA ÁREA ADVERSÁRIA — quem cometeu a falta RECUA
+    =====================================================================
+    Relato: "quando tem uma falta de ataque dentro da área adversária, o time
+    infrator também tem que recuar para marcar os adversários; os jogadores
+    estão ficando dentro da área e não estão marcando ninguém".
+
+    Era mesmo assim. Neste lance o batedor é a equipa que defendia, e a bola
+    fica no fundo do campo dela — sector `defesa`, que não tem `slotsMarcacao`
+    (esses são para a falta ofensiva). Os infractores ficavam onde a jogada de
+    ataque os tinha deixado, ou seja dentro da área, e o único ajuste era o
+    empurrão dos 9.15 m — que os afasta da bola sem os pôr a marcar ninguém.
+
+    Agora cada um pega no adversário mais perto e coloca-se do lado da PRÓPRIA
+    baliza em relação a ele, que é o lado por onde a jogada vai sair. E sai da
+    área: a regra manda-os para fora dela até a bola estar em jogo.
+
+    `distanciaMarcacao`  metros entre o marcador e o homem dele.
+    `margemForaDaArea`   a que distância da linha da área ficam quem lá estava
+                         dentro — não é encostado à linha, senão voltam lá para
+                         dentro no primeiro passo.
+    `linhaDeRecuo`       para quem sobra sem homem: metros à frente da linha da
+                         área, onde formam uma linha de espera.
+    `espacamentoRecuo`   entre os que sobram, para não ficarem colados.
+    */
+    recuoDoInfrator: {
+        distanciaMarcacao: 1.8,
+        margemForaDaArea: 1.5,
+        linhaDeRecuo: 8.0,
+        espacamentoRecuo: 5.0
+    },
+
+    /*
+    =====================================================================
+    ONDE SE PÕE A EQUIPA QUE COBRA, POR SECTOR DO CAMPO
+    =====================================================================
+    Até aqui só o batedor e cinco homens na área eram colocados; os outros
+    ficavam onde a jogada os tinha deixado. Uma falta na própria defesa
+    tinha o mesmo desenho de uma falta ao lado da área.
+
+    A UNIDADE É O AVANÇO: `bolaZ * attDir`, medido do MEIO-CAMPO. Negativo
+    é campo próprio, positivo é campo adversário; ±53 são as linhas de
+    fundo. É o mesmo referencial do `barreiraZonaZ` e do `zonaDeArea`.
+
+    CINCO SECTORES (ver setorDaFalta em utils.js):
+
+      defesa          avanço < -17.7   (terço defensivo)
+      meio_recuado    -17.7 a 0        (meio-campo, ainda no campo próprio)
+      meio_avancado    0 a +17.7       (meio-campo, já no campo adversário)
+      ataque_lateral   terço ofensivo, ao lado da área  -> cruzamento
+      ataque_entrada   terço ofensivo, de frente        -> cobrança directa
+
+    Nos dois últimos quem manda é a DECISÃO (`decisaoDeFalta`): o sector de
+    ataque segue o que a bola vai fazer, senão o desenho e a cobrança
+    diziam coisas diferentes.
+    */
+    setores: {
+        tercoDefensivo: -17.7,   // avanço abaixo disto é sector defensivo
+        meioCampo: 0.0,          // e daqui para cima já é campo adversário
+        tercoOfensivo: 17.7
+    },
+
+    /*
+    QUEM BATE, por sector.
+
+      'central'       o ZAGUEIRO (CB) de melhor Técnica, com 'def' de reserva
+      'def'           o DEFENSOR de melhor Técnica (lateral incluído)
+      'naoDef'        o melhor Técnico que NÃO é defensor
+      'lateral'       o LATERAL (LB/RB), o do lado da bola primeiro
+      'lateralDoLado' o LATERAL DAQUELE lado, com o outro lateral de reserva
+      'alaDoLado'     o melhor Técnico entre lateral, meia-lateral e ponta
+                      DAQUELE lado — os três homens do corredor
+
+    Este mapa é o da falta PELO MEIO. A falta pela ala tem o seu, o
+    `batedorPorSetorLateral` aqui a seguir.
+    */
+    batedorPorSetor: {
+        defesa: 'central',
+        meio_recuado: 'central',
+        meio_avancado: 'naoDef',
+        ataque_lateral: 'alaDoLado',
+        ataque_entrada: 'naoDef'
+    },
+
+    /*
+    E QUEM BATE QUANDO A FALTA É PELA ALA — `|x|` acima de `corredorLateral`.
+
+    Pedido: *"para faltas nas laterais na defesa quem bate é o Lateral. Para
+    faltas na meia lateral também é o lateral para que o meia lateral possa se
+    aprofundar na ponta ou área. Nas pontas: melhor técnica entre o Lateral,
+    meia lateral ou ponta"*.
+
+    A ala da DEFESA ao MEIO-CAMPO é do lateral, e a razão é o desenho e não o
+    pé: tirar o lateral do corredor custa pouco (ele é o homem de trás) e
+    deixa o meia-lateral livre para atacar a profundidade. Na PONTA
+    (`ataque_lateral`, que é o sector do cruzamento e por definição já é ala)
+    já não é o desenho que manda — é o pé que cruza melhor dos três do
+    corredor, e por isso esse critério vive no mapa de cima.
+
+    O `ataque_entrada` não aparece aqui de propósito: esse sector é a falta
+    que vai À BALIZA (`decisaoDeFalta` = 'remate'), e aí quem bate é quem
+    remata melhor, venha de onde vier no campo.
+
+    Um sector que falte neste mapa cai no `batedorPorSetor`.
+    */
+    batedorPorSetorLateral: {
+        defesa: 'lateralDoLado',
+        meio_recuado: 'lateralDoLado',
+        meio_avancado: 'lateralDoLado'
+    },
+
+    /*
+    A PARTIR DE QUE `|x|` a falta é "pela ala", em metros do eixo do campo.
+
+    O campo tem 68 m, portanto a linha lateral está a 34. O lateral de raiz
+    nasce a `0.7 * 34 * 0.8` = 19.0 m do eixo (FormationsData mais o
+    `compMult`, ver js/match/match_setup.js) e o central a 8.2. Quinze metros
+    fica entre os dois: é ala o que está do lateral para fora, e meio o que
+    está na meia-esquerda/meia-direita para dentro.
+
+    O `setorDaFalta` não pesa o x nenhum (só o avanço em Z), e por isso este
+    corredor é lido à parte, na escolha do batedor — o DESENHO da equipa
+    continua a ser o do sector.
+    */
+    corredorLateral: 15.0,
+
+    /*
+    O DESENHO. Cada grupo de posições recebe uma linha, em três modos:
+
+      'bola'    `avanco` metros à frente da BOLA (negativo = atrás dela) e
+                `xs` são posições ABSOLUTAS na largura do campo. Serve para
+                as faltas de recomposição, onde o que importa é a escada de
+                linhas à frente da bola.
+      'baliza'  `slots` medidos da LINHA DE FUNDO (`dist`) e do eixo da
+                baliza (`relX`, com o sinal do lado de onde vem a bola).
+                Serve para quem ataca a área — mesmo referencial dos slots
+                do canto.
+      'apoio'   junto à bola: `dx` para o lado (com o sinal do lado da bola)
+                e `dz` para a frente. Serve para quem dá a opção curta.
+
+    Grupos: cb (CB), lat (LB/RB), mc (DM/CM/AM), ml (LM/RM/LW/RW), ata (CF).
+    Quando há mais gente do que lugares, os que sobram repetem o último
+    lugar afastados de `espacamentoExtra` metros.
+    */
+    espacamentoExtra: 4.5,
+
+    /*
+    =====================================================================
+    AS QUATRO ROTINAS DA FALTA NA INTERMEDIÁRIA
+    =====================================================================
+    Pedido, com quatro diagramas de treino: *"cria essas 4 opções de faltas no
+    ataque. Para o time atacante e para o time defensor. Vamos sortear uma
+    delas quando tiver uma falta na intermediária de ataque"*.
+
+    A `formacaoPorSetor` (aqui em baixo) é o desenho POR OMISSÃO de cada
+    sector, e continua a ser o que vale em todo o campo. Isto é outra coisa:
+    na intermediária de ataque — o sector `meio_avancado` e o `ataque_entrada`,
+    que juntos são a faixa de onde estes lances se batem — sorteia-se UMA das
+    quatro e é ela que manda, nas duas equipas.
+
+    Cada rotina tem as duas metades, como pedido:
+
+        `ataque`  o desenho de quem cobra, no mesmo esquema da
+                  `formacaoPorSetor` (modos 'bola', 'baliza' e 'apoio'), para
+                  não haver dois vocabulários de posicionamento no ficheiro.
+        `defesa`  a resposta de quem defende, em dois números que o
+                  `formaDaDefesaNoLivre` lê: `de` é onde fica o homem mais
+                  adiantado (a Lei 13 nunca deixa passar dos 9.15) e `ate` o
+                  mais recuado. Uma defesa que espera a bola longa arma-se
+                  atrás; uma que espera o passe curto sobe.
+
+    Os diagramas, e o que cada um virou:
+
+      1. DEEP FREE KICK — a bola vem de longe para a área. "9,8 attempt to win
+         flick-on for strikers running onto ball", "best headers win the
+         challenge on edge of area", "4 waits for 2nd phase". Dois homens a
+         atacar a primeira bola à entrada da área, dois a atacar o que sobra
+         dela mais à frente, e um a segurar o ressalto atrás.
+
+      2. WIDE, 3 PELA LINHA — "3 looks to pull a defender out", e as duas
+         opções: "3 runs early and 7 plays 3 down the line to cross" ou "10
+         runs square to play ball into 3 or shoot". O desenho é o da primeira:
+         um homem aberto na linha, um apoio curto para lhe dar a bola, e o
+         resto a atacar a área à espera do cruzamento dele.
+
+      3. CENTRAL, OVER THE HILL — "7 or 10 chips the ball over the wall where 9
+         and 11 attempt to finish". Dois homens no limite do fora-de-jogo, em
+         cima da barreira, à espera da bola por cima dela; os médios no
+         ressalto e um homem aberto a esticar a defesa.
+
+      4. WIDE, OUT-SWINGING — "out swinging high ball to back of the 6yrd box
+         (By 3). 9 loops around as target", "4 looks for short kick to get a
+         direct shot". Quatro homens na segunda trave (é lá que a bola cai),
+         um a dar a volta por fora, e o apoio curto para a alternativa de
+         remate directo.
+
+    Quem sorteia é o `setupSetPiece`, e guarda o nome em
+    `Match.rotinaDaFaltaActual` — as duas equipas leem a MESMA, senão o ataque
+    montava uma coisa e a defesa respondia a outra.
+    */
+    rotinasDaIntermediaria: [
+        {
+            nome: 'deep_free_kick',
+            ataque: {
+                // Os dois melhores de cabeça na primeira bola, à entrada da área.
+                cb: { modo: 'baliza', slots: [{ relX: 2.0, dist: 17.0 }, { relX: -2.0, dist: 17.0 }] },
+                // E os pontas a atacar o que sobrar dela, mais perto da baliza.
+                ata: { modo: 'baliza', slots: [{ relX: 5.0, dist: 9.0 }, { relX: -5.0, dist: 9.0 }] },
+                ml: { modo: 'baliza', slots: [{ relX: 13.0, dist: 14.0 }, { relX: -13.0, dist: 14.0 }] },
+                // O 4 da segunda fase: fica atrás, para o que voltar.
+                mc: { modo: 'bola', avanco: 4.0, xs: [-7, 7] },
+                lat: { modo: 'bola', avanco: -6.0, xs: [-20, 20] }
+            },
+            // Ela espera a bola longa: arma-se atrás, a defender a área.
+            defesa: { de: 9.15, ate: 26.0 }
+        },
+        {
+            nome: 'wide_pela_linha',
+            ataque: {
+                // O homem aberto na linha, que "pulls a defender out".
+                ml: { modo: 'bola', avanco: 8.0, xs: [-30, 30] },
+                // O apoio curto que lhe dá a bola.
+                mc: { modo: 'apoio', dx: 6.0, dz: 1.0 },
+                // E a área ocupada à espera do cruzamento dele.
+                ata: { modo: 'baliza', slots: [{ relX: 4.0, dist: 6.0 }, { relX: -4.5, dist: 10.0 }] },
+                cb: { modo: 'baliza', slots: [{ relX: 0.0, dist: 13.0 }] },
+                lat: { modo: 'bola', avanco: -10.0, xs: [-18, 18] }
+            },
+            // Passe curto pela ala: a defesa sobe para o encurtar.
+            defesa: { de: 9.15, ate: 18.0 }
+        },
+        {
+            nome: 'central_over_the_hill',
+            ataque: {
+                // Os dois que atacam a bola por CIMA da barreira, no limite.
+                ata: { modo: 'bola', avanco: 12.0, xs: [-4, 4] },
+                // Os médios no ressalto, de onde sai o remate se ela sobrar.
+                mc: { modo: 'bola', avanco: -1.0, xs: [-8, 8] },
+                // Um homem bem aberto a esticar a linha deles.
+                ml: { modo: 'bola', avanco: 4.0, xs: [-28, 28] },
+                cb: { modo: 'bola', avanco: -14.0, xs: [-9, 9] },
+                lat: { modo: 'apoio', dx: 9.0, dz: -2.0 }
+            },
+            // Barreira e linha alta: o que se defende é a bola picada curta.
+            defesa: { de: 9.15, ate: 16.0 }
+        },
+        {
+            nome: 'wide_out_swinging',
+            ataque: {
+                // A bola cai na SEGUNDA trave: é lá que se junta a gente.
+                ata: { modo: 'baliza', slots: [{ relX: -4.0, dist: 5.5 }, { relX: -1.0, dist: 7.0 }] },
+                cb: { modo: 'baliza', slots: [{ relX: -6.5, dist: 6.0 }, { relX: 1.5, dist: 9.5 }] },
+                // O que dá a volta por fora, a chegar de trás.
+                ml: { modo: 'baliza', slots: [{ relX: 9.0, dist: 12.0 }, { relX: -12.0, dist: 13.0 }] },
+                // E o apoio curto: a alternativa do remate directo.
+                mc: { modo: 'apoio', dx: 5.0, dz: -1.0 },
+                lat: { modo: 'bola', avanco: -12.0, xs: [-17, 17] }
+            },
+            // Cruzamento alto à espera: bloco na área, sem subir.
+            defesa: { de: 9.15, ate: 24.0 }
+        }
+    ],
+
+    /*
+    E EM QUE SECTORES É QUE SE SORTEIA. A "intermediária de ataque" é a faixa de
+    onde estes quatro lances se batem: o meio-campo adversário e a entrada da
+    área. Na ala (`ataque_lateral`) manda o cruzamento, que tem desenho próprio,
+    e na defesa não há rotina nenhuma a montar.
+    */
+    setoresComRotina: ['meio_avancado', 'ataque_entrada'],
+
+    formacaoPorSetor: {
+        /*
+        FALTA NA PRÓPRIA DEFESA (DEEP FREE KICK).
+        A equipa sobe em bloco para a entrada da área adversária para tentar ganhar a 
+        primeira bola (flick-on) ou o ressalto, com os alvos na meia-lua e apoios a fechar.
+        */
+        defesa: {
+            ata: { modo: 'baliza', slots: [{ relX: 4.0, dist: 18.0 }, { relX: -4.0, dist: 18.0 }] },
+            ml: { modo: 'baliza', slots: [{ relX: 14.0, dist: 18.0 }, { relX: -14.0, dist: 18.0 }] },
+            mc: { modo: 'baliza', slots: [{ relX: 0.0, dist: 26.0 }, { relX: 8.0, dist: 18.0 }, { relX: -8.0, dist: 18.0 }] },
+            lat: { modo: 'bola', avanco: -5.0, xs: [-22, 22] },
+            cb: { modo: 'bola', avanco: -10.0, xs: [-10, 10] }
+        },
+
+        // MEIO-CAMPO AINDA NO CAMPO PRÓPRIO: mesma ideia, escada mais curta.
+        meio_recuado: {
+            cb: { modo: 'bola', avanco: 2.0, xs: [-9, 9] },
+            lat: { modo: 'bola', avanco: 12.0, xs: [-26, 26] },
+            mc: { modo: 'bola', avanco: 18.0, xs: [-7, 0, 7] },
+            ml: { modo: 'bola', avanco: 20.0, xs: [-24, 24] },
+            ata: { modo: 'bola', avanco: 32.0, xs: [-8, 8] }
+        },
+
+        /*
+        MEIO-CAMPO JÁ NO CAMPO ADVERSÁRIO. Batem os médios. Os centrais
+        ficam ATRÁS da bola (é aqui que o contra-ataque nasce), os laterais
+        e os meias-laterais abrem na largura, e os avançados à frente.
+        */
+        meio_avancado: {
+            cb: { modo: 'bola', avanco: -12.0, xs: [-9, 9] },
+            lat: { modo: 'bola', avanco: 0.0, xs: [-28, 28] },
+            mc: { modo: 'bola', avanco: 6.0, xs: [-6, 6] },
+            ml: { modo: 'bola', avanco: 10.0, xs: [-27, 27] },
+            ata: { modo: 'bola', avanco: 18.0, xs: [-7, 7] }
+        },
+
+        /*
+        AO LADO DA ÁREA — CRUZAMENTO. Bate o lateral. Os CENTRAIS SOBEM
+        para cabecear e os avançados também; os médios centrais ficam
+        recuados na entrada da área, para o ressalto e para tapar o
+        contra-ataque; o meia-lateral do lado dá o apoio curto ao batedor.
+
+        Os `dist` batem certo com os quatro alvos do cruzamento (ver
+        `cruzamentos`): primeira trave ~5.5 m, segunda ~5.8, marca ~11,
+        entrada ~17.5.
+        */
+        ataque_lateral: {
+            ata: { modo: 'baliza', slots: [{ relX: 3.2, dist: 5.6 }, { relX: -3.4, dist: 6.2 }] },
+            cb: { modo: 'baliza', slots: [{ relX: 0.0, dist: 11.0 }, { relX: -1.5, dist: 8.5 }] },
+            mc: { modo: 'baliza', slots: [{ relX: 1.0, dist: 18.0 }, { relX: -4.0, dist: 19.5 }] },
+            ml: { modo: 'apoio', dx: 5.5, dz: -1.5 },
+            lat: { modo: 'bola', avanco: -16.0, xs: [-16, 16] }
+        },
+
+        /*
+        DE FRENTE À ENTRADA DA ÁREA — COBRANÇA DIRECTA. Os centrais ficam
+        recuados (não têm nada a fazer à frente numa bola que vai à baliza,
+        e é dali que se defende o contra-ataque), os avançados ficam à
+        espera do RESSALTO — do guarda-redes, da barreira ou do poste — e
+        os laterais e médios dão o apoio, para a alternativa curta existir.
+        */
+        ataque_entrada: {
+            ata: { modo: 'baliza', slots: [{ relX: 2.5, dist: 13.5 }, { relX: -2.5, dist: 14.5 }] },
+            mc: { modo: 'apoio', dx: 7.0, dz: -1.0 },
+            ml: { modo: 'apoio', dx: 11.0, dz: 1.5 },
+            lat: { modo: 'apoio', dx: 15.0, dz: -3.0 },
+            cb: { modo: 'bola', avanco: -20.0, xs: [-10, 10] }
+        }
+    }
+};
+
+/*
+=============================================================================
+PENÁLTI
+=============================================================================
+Marca a 11 m, toda a gente fora da área e fora da meia-lua, guarda-redes na
+linha. O remate tem resolução própria — os pesos do remate em jogo corrido
+(bloqueadores, distância, ângulo) não fazem sentido aqui.
+
+`chanceBase` é a probabilidade de o remate ir enquadrado e bem colocado antes
+de o guarda-redes contar; o duelo com ele resolve-se depois, pelo mergulho
+normal (o GK reage com `gkDelayReacao`, como em qualquer remate).
+=============================================================================
+*/
+const PenaltyModel = {
+    marcaZ: typeof Area !== 'undefined' ? Area.distanciaPenalti : 11.0,         // distância à linha de fundo
+    raioMeiaLua: typeof Area !== 'undefined' ? Area.raioMeiaLua : 9.15,        // ninguém dentro disto além do batedor
+    margemArea: typeof Area !== 'undefined' ? Area.profundidade : 16.5,         // linha da grande área
+    recuoBatedor: 4.6,         // onde ele espera, atrás da bola
+    areaX: typeof Area !== 'undefined' ? Area.meiaLargura : 20.16,             // meia-largura da grande área
+    folgaArco: 0.6,            // quanto ficam PARA LÁ da meia-lua
+    folgaArea: 0.8,            // e para lá da linha da área
+    /*
+    Espaçamento entre jogadores na fila da entrada da área. São DEZANOVE (dois
+    planteis menos os dois guarda-redes e o batedor), e a 3.2 m isso dava uma
+    fila de 58 m — mais larga do que a grande área, com metade da gente
+    encostada ao clamp de `areaX + 4`. A 2.2 m ocupa ~40 m e ainda cabe.
+    */
+    espacamentoFila: 2.2,      // entre jogadores na fila da entrada da área
+
+    /*
+    Escalonamento em profundidade da fila, em metros PARA TRÁS (afastando-se da
+    baliza). Os atacantes ficam à frente, a atacar o ressalto; os defesas mais
+    atrás, prontos para o contra-ataque. Sem isto ficavam todos na mesma linha,
+    o que lê como uma parede e não como um aglomerado à espera da recarga.
+
+    Mesma ideia da ordenação `def → mid → ata` do canto (ver defenseSetup em
+    match.js). A fila é ainda MESCLADA entre as duas equipas — quem disputa o
+    ressalto está ombro a ombro com o adversário, não em blocos separados.
+    */
+    recuoPorRole: { ata: 0.0, mid: 1.6, def: 3.2 },
+
+    /*
+    COBERTURA DO CONTRA-ATAQUE. Com toda a gente na entrada da área os vinte e
+    um jogadores liam-se como uma linha só, e ninguém guardava as costas de
+    quem bate — se a bola sair dali a correr, o campo atrás está vazio.
+
+    Dois defesas e um médio da equipa que BATE ficam `recuoCobertura` metros
+    mais atrás do que a sua posição na fila. É a equipa atacante e não a que
+    defende: quem arrisca o contra-ataque num penálti é quem tem toda a gente à
+    frente da bola.
+    */
+    coberturaDef: 2,           // defesas do batedor que ficam atrás
+    coberturaMid: 1,           // e médios
+    coberturaAtaAdv: 2,        // atacantes de quem DEFENDE, à espera da bola
+    recuoCobertura: 12.0,      // metros atrás da fila da entrada da área
+    /*
+    Eles saem da fila e formam uma linha PRÓPRIA, centrada no eixo. Deixá-los
+    na fila punha-os nas pontas — ela tem 21 lugares a 2.2 m, e quem sobra fica
+    encostado à linha lateral, que é o oposto de cobrir o meio.
+    */
+    espacamentoCobertura: 5.0, // entre eles, nessa linha
+    limiteXCobertura: 10.0,    // e nunca mais para fora do que isto
+    avancoAtaAdv: 3.0,         // os atacantes ficam à frente dos outros três
+
+    /*
+    A CORRIDA PARA A BOLA. Mesma divisão em dois tempos da falta (ver
+    FreeKickModel.arranqueDoGesto): o batedor espera em `recuoBatedor`, CAMINHA
+    até `arranqueDoGesto` durante o último terço da espera regulamentar, e o
+    gesto cobre só os últimos metros.
+
+    Sem isto os 4.6 m tinham de caber dentro do `contactTime` do ShotClip
+    (~0.32 s), ou seja ~13 m/s com a pose de remate congelada — o batedor
+    DESLIZAVA sobre a perna de apoio até à bola em vez de correr.
+    */
+    arranqueDoGesto: 2.0,         // onde o gesto arranca, atrás da bola
+    velocidadeAproximacao: 2.6,   // m/s a caminhar para a bola, antes do gesto
+    paragemNoContacto: 0.55,      // onde o pé fica no instante do contacto
+
+    potencia: 26.0,            // m/s à saída
+    alturaMax: 1.9,            // não se coloca acima disto (trave a 2.44)
+    margemPoste: 0.45,         // quanto se afasta do poste ao colocar
+    chanceGolo: 0.78,          // enquadrado e colocado; o resto vai por fora
+
+    /*
+    Probabilidade de o guarda-redes MERGULHAR PARA O SÍTIO CERTO, por banda do
+    duelo `diff = (TEC + d10) - (GK + d10)`. Só se aplica a remates que iam
+    para dentro da baliza (ver baterPenalti); trave e fora não passam por aqui.
+
+    Antes só o ramo `diff <= -5` o mandava ao sítio certo — abaixo disso o
+    mergulho era SEMPRE para o lado contrário, e um penálti bem batido nunca
+    dava defesa. A escala segue a real: ~25% de defesas no total, e quase
+    nenhuma nos remates perfeitos ao ângulo.
+    */
+    chanceDefesa: {
+        perfeito: 0.02,   // diff > 5   — ao ângulo, sem hipótese
+        bom: 0.12,        // diff 3..5
+        medio: 0.30,      // diff 1..2
+        fraco: 0.55       // diff <= 0  — mal batido
+    },
+
+    /*
+    ÁRBITRO no penálti: à ESQUERDA do batedor (ele olha para a baliza), no
+    cruzamento da linha lateral da pequena área com o alinhamento da marca —
+    ou seja x = ±(LARGURA_BALIZA/2 + 5.5) e z = o mesmo z da marca. Dali vê a
+    bola, o pé do batedor e a linha do guarda-redes sem estar no caminho de
+    ninguém, que é a colocação real.
+
+    A diagonal normal (ver pontoDoArbitro) punha-o algures a meio-campo, longe
+    do lance.
+    */
+    arbitroX: 9.16   // LARGURA_BALIZA/2 + 5.5, lateral da pequena área
+};
+
+const CrossModel = {
+    alaX: 15.0,           // a partir daqui conta como estar na ala
+
+    /*
+    O CORREDOR E DELE — quando esta livre, vai ao fundo.
+
+    Relato: *"os laterais e meias pela lateral, as vezes, recebem a bola
+    sozinhos e nao vao pro fundo para cruzar; preferem tocar para o meio"*.
+    Medido em 900 s, posses de LB/RB/LM/RM no corredor do campo adversario,
+    sem adversario a menos de 6 m: **7 posses, ZERO cruzamentos**, quatro
+    passes (tres para dentro, tres para tras) e 1.2 m de avanco medio — 
+    acabavam a 42 m da linha de fundo, ou seja onde receberam.
+
+    Duas regras os prendiam, e nenhuma delas e sobre alas:
+
+      `CarryModel.conduzirSoAcimaDe` (17 m)  havendo passe bom, so se conduz
+                                             do ultimo terco para a frente —
+                                             e eles recebem antes disso;
+      `CarryModel.limiteConducaoDefesa` (0)  um DEFESA nao conduz no campo
+                                             adversario, e um lateral e
+                                             `role: def`.
+
+    As duas continuam a valer em todo o lado menos aqui: com o corredor
+    vazio a frente e linha de fundo para ganhar, conduzir e a jogada.
+    */
+    corredor: {
+        /*
+        O QUE CONTA E O CORREDOR A FRENTE, nao um circulo a volta dele.
+
+        A primeira versao pedia 'nenhum adversario a menos de 6 m' e
+        praticamente nunca acontecia: 6 avaliacoes verdadeiras em 600 s. E
+        tambem nao e a pergunta certa — um marcador ATRAS dele, ou por
+        dentro, nao o impede de ir a linha; o que o impede e alguem no
+        caminho.
+
+        Agora mede-se uma FAIXA ao longo da linha lateral: `comprimento`
+        metros a frente, `largura` para cada lado. Vazia, o corredor e dele.
+        */
+        comprimento: 12.0,  // metros de faixa a frente que tem de estar vazia
+        largura: 3.5,       // meia-largura dessa faixa
+        zonaZ: 0.0,         // do meio-campo adversario para a frente
+        fundoMin: 6.0       // e ainda ha esta linha de fundo para ganhar
+    },
+    zonaZ: 20.0,          // e daqui para a frente vale a pena olhar para a área (recuado para evitar cruzamento de muito longe)
+
+    areaZ: 34.0,          // linha da grande área
+    areaX: 20.5,          // meia-largura da grande área
+    fundoZ: 50.0,         // linha de fundo
+    distMin: 10.0,         // abaixo disto é passe curto, não cruzamento pelo ar
+    distBaseIdeal: 18.0,   // distância de referência ideal para cruzamento
+    penalDistancia: 0.090, // penalidade progressiva por metro de distância além do ideal
+
+    /*
+    DISTÂNCIA: penalização a sério, corte só para o disparate.
+
+    Medidos oito cruzamentos seguidos em jogo: TODOS entre 22 e 32 m, nenhum
+    da linha de fundo — a `penalDistancia` de 0.035/m tira 0.42 a 30 m, e a
+    chance nessa altura já vai acima de 1, portanto não travava nada.
+
+    Um tecto duro a 28 m foi tentado e cortou metade das tentativas sem as
+    substituir por cruzamentos melhores: o ala raramente chega à linha de
+    fundo, portanto o que se ganhava em qualidade perdia-se em jogadas que
+    simplesmente deixavam de existir. O tecto fica só onde não há discussão
+    (uma bola atirada do meio-campo), e a distância passa a pesar na CHANCE,
+    que é onde compete com o resto.
+    */
+    distMax: 34.0,
+
+    /*
+    TERRITÓRIO DO GUARDA-REDES. Um cruzamento que cai dentro da pequena área,
+    ou a menos de `fundoMinAlvo` da linha, é dele — sai da baliza e agarra-a
+    no ar. Nos mesmos oito, um cruzamento raso de 27.8 m acabou nas mãos do
+    GK adversário sem ninguém lhe tocar.
+
+    `pequenaMeiaLargura` vem da Area (config), aqui é só a profundidade.
+    */
+    fundoMinAlvo: 5.5,
+
+    /*
+    RASTEIRO SÓ DE PERTO. Um cruzamento rasteiro de 27.8 m foi medido a acabar
+    nas mãos do guarda-redes sem ninguém lhe tocar: junto ao chão e vindo de
+    longe, ele tem tempo de sobra para sair e agarrar. De longe, a bola tem de
+    ir por cima.
+    */
+    distRasoMax: 18.0,
+
+    /*
+    NÃO SE CRUZA COM UM HOMEM EM CIMA.
+
+    A bola sai a 22° e leva metros a ganhar altura: um adversário nos
+    primeiros passos do cruzamento corta-a junto ao chão, e nem "alto" nem
+    "rasteiro" o evitam. Medidos treze cruzamentos: quatro foram cortados
+    assim, um deles antes de a bola fazer 3 m — todos com a bola a 0.1 m do
+    chão no ponto em que morreram.
+
+    O `bloqueadores` já era contado, mas só decidia alto/raso; nunca fazia o
+    jogador desistir. Agora, com alguém dentro de `saidaLimpaComprimento`
+    metros à frente e `saidaLimpaLargura` para o lado, o cruzamento não sai —
+    a árvore segue para o passe, o drible ou a condução, que é o que um
+    jogador faz nessa situação.
+
+    CALIBRAÇÃO, medida em corridas de uma hora simulada cada:
+
+        5.0 m x 1.8 m de corte                    13 -> 1 cruzamento
+        2.5 m x 1.0 m + 0.35 de penalização       13 -> 1 cruzamento
+
+    O marcador do ala está quase sempre nessa zona, portanto qualquer das duas
+    equivale a desligar o cruzamento. Ficam os números pequenos e SEM
+    penalização: corta-se só o caso indefensável — alguém plantado a dois
+    metros, à frente, na linha da bola.
+    */
+    saidaLimpaComprimento: 2.0,
+    saidaLimpaLargura: 0.8,
+
+    /*
+    LEAD PRÓPRIO DO CRUZAMENTO.
+
+    O alvo do passe passava pelo `alvoDePasse` (utils.js), que projecta o
+    receptor à velocidade máxima dele durante o voo INTEIRO. Num passe em
+    campo aberto isso está certo; num cruzamento não: quem ataca a área faz
+    dois ou três metros e trava, muda de direcção, disputa. Medidos dois
+    cruzamentos a passar a 15 e a 24 m do homem — a bola foi mirada para onde
+    ele estaria se continuasse a correr em linha recta durante 1.5 s.
+
+    Aqui o lead é o mesmo cálculo, com TECTO: `leadMax` metros, no máximo.
+    */
+    leadMax: 4.0,
+    // Velocidade média da bola no cruzamento, para estimar o tempo de voo.
+    velVooEstimada: 18.0,
+
+    /*
+    ESCOLHA DO ALVO. Era `o companheiro mais CENTRAL`, e mais nada: um ponta
+    de lança com um central colado ao primeiro poste ganhava sempre a um
+    extremo sozinho ao segundo. Agora é uma nota:
+
+      `pesoLivre`     metros de folga ao marcador mais próximo (o que mais
+                      pesa: cruza-se para quem está livre)
+      `pesoCentral`   estar pelo eixo continua a valer — é de onde se remata
+      `pesoAlturaAlvo` quem ganha de cabeça é quem se procura num cruzamento
+    */
+    pesoLivre: 1.0,
+    pesoCentral: 0.55,
+    pesoAlturaAlvo: 0.35,
+
+    // +20% pedido explicitamente: cruzamentos pouco frequentes.
+    chanceBase: 0.54,     // com um alvo na área
+    chancePorAlvo: 0.264, // por cada alvo além do primeiro
+    // +100% pedido: cruzar DAS LATERAIS DA ÁREA. Os dois termos que dependem
+    // de estar lá (largura junto à linha, e o peso da camada CRUZAMENTO do
+    // SpatialGrid — ver pesoGrid abaixo) dobraram; a chanceBase não, senão
+    // subia também o cruzamento de qualquer sítio.
+    bonusLargura: 0.72,   // acumulado junto à linha lateral
+    bonusFundo: 0.42,     // acumulado junto à linha de fundo
+    // Quanto vale a célula da camada CRUZAMENTO (0-100) do SpatialGrid, que é
+    // exactamente a faixa das laterais da área. 0.30 -> 0.60.
+    pesoGrid: 0.60,
+    penalPressao: 0.30,   // sob pressão o cruzamento sai mal
+    chanceMax: 0.97,
+
+    /*
+    NAS LATERAIS DA ÁREA O CRUZAMENTO TEM DE GANHAR AO PASSE RASTEIRO.
+
+    Os bónus acima já empurram o cruzamento para cima nessa zona, mas isso não
+    chega: a decisão não é entre "cruzar" e "não fazer nada" — é entre cruzar e
+    PASSAR, e a nota do passe não sabia nada de estar na ala junto à área. Um
+    passe curto para trás pontuava na mesma o que pontuaria no meio-campo, e
+    ganhava.
+
+    Daí a penalização do outro lado da balança: dentro da zona (ver
+    `zonaLateralDaArea` em utils.js) a nota do passe rasteiro e do lançamento
+    rasteiro é multiplicada por `penalPasseRasteiro`. O cruzamento não é
+    tocado — sobe por comparação, que é o que "mais bónus para cruzamento do
+    que para passe" quer dizer.
+
+    A zona é a mesma dos bónus: da ala (`alaX`) para fora, e do `zonaZ` para a
+    frente. A penalização entra a 0 na borda e chega ao valor cheio junto à
+    linha de fundo, para não haver um degrau na decisão.
+    */
+    penalPasseRasteiro: 0.45,   // a nota do passe vale isto, na zona cheia
+    penalLancamentoRasteiro: 0.35,
+
+    /*
+    =====================================================================
+    O CANTO — a força que faltava
+    =====================================================================
+    A balística do canto (case 'SET_PIECE_TAKER' em fsm.js) era SEM ARRASTO:
+    fixava `vy` e resolvia a horizontal por `vHoriz = d / tVoo`, ou seja a
+    fórmula de manual para um tiro no vácuo. A física da bola tem arrasto
+    quadrático nas TRÊS componentes (`BallPhysics.kArrasto`, ver
+    match_physics.js), e a 17-18 m/s isso são ~4 m/s² a travar a bola durante
+    todo o voo.
+
+    Medido para um canto típico (d ≈ 35 m, tVoo ≈ 2.0 s): a bola caía aos
+    ~29 m em vez dos 35 — seis metros curta, à entrada da área em vez de na
+    marca. É exactamente o "falta força" que se vê.
+
+    O resto do código não tem este problema porque resolve a balística por
+    `velocidadeParaAlcance` (utils.js), que simula o voo com arrasto. O canto
+    era o único sítio que ainda usava a conta do vácuo, e passa a usar a
+    mesma função.
+
+    `elevacao` mantém a forma do cruzamento que já havia (o `vy` de 9.8 m/s
+    sobre uma horizontal de ~17.5 dava ~29°); `forca` é o botão para afinar
+    por cima da balística correcta, e fica em 1.0 porque com o arrasto
+    contado a bola já chega ao sítio pedido.
+    */
+    canto: {
+        elevacao: 29.0,      // graus à saída do pé
+        variacaoElev: 3.0,   // ± aleatório, para nem todos os cantos saírem iguais
+        forca: 1.0           // multiplicador por cima da balística com arrasto
+    }
+};
+
+/*
+Domínio de bola: recepção, intercepção e desvio.
+
+A regra antiga era uma só: a bola só podia ser apanhada a menos de 1.2 m E com
+velocidade² < 60 (ou seja, abaixo de 7.75 m/s). Como todos os passes saem entre
+16 e 25 m/s, isso significava que ninguém podia tocar num passe em movimento —
+não havia intercepções no jogo, e o destinatário tinha de esperar meio segundo
+que a bola abrandasse.
+
+Agora qualquer jogador ao alcance disputa a bola. Quanto mais rápida ela vem e
+menor a skill dele, menor a hipótese de a dominar; falhando, desvia-a. Quem
+espera o passe tem uma vantagem (`receiverBonus`), porque já vinha a preparar-se.
+
+O guarda-redes não entra por aqui a alta velocidade: as defesas dele são
+tratadas em FootballPlayer.updateGK().
+*/
+
+const HeaderModel = {
+    /*
+    =========================================================================
+    O CABECEÍO À BALIZA: MIRA MAIS ERRO, e não uma tabela de desfechos
+    =========================================================================
+    Estava aqui um sorteio que decidia o DESFECHO antes de a bola sair da
+    testa — 'GOL', 'TRAVE_CAMPO', 'GOLEIRO_DEFENDE', sete faces com pesos — e
+    depois escrevia a física para o cumprir: no 'GOL' mirava a 0.75-0.93 do
+    poste e púnha `forcedGKDelay = 0.8` com o comentário "GK não chega a
+    tempo".
+
+    Medido, 810 minutos de jogo e 33 golos (3.67 por 90, alvo 2.52):
+
+        último contacto antes do golo
+          cabeceío      23   70%      (no futebol a sério ~17%)
+          nada em 5 s    6   18%
+          remate         3    9%
+          passe          1    3%
+        estado do guarda-redes: idle 19 em 33
+
+    Tirado o atraso forçado (ver `armarGuardaRedes`, utils.js), ele passou a
+    mergulhar — idle 19 -> 3 — e os golos quase não mexeram: 3.67 -> 3.56. A
+    razão é a outra metade do dado: continuava a MIRAR no ângulo em ~59% dos
+    cabeceíos limpos, e de 8 m a 17 m/s a bola chega em 0.47 s. Com 0.28 s de
+    reação não há guarda-redes nenhum que cubra 3 m nesse tempo. Uma mira
+    perfeita não se defende — defende-se um cabeceío, que é outra coisa.
+
+    Passa a ser o mesmo desenho do remate (ShotModel): mira-se um ponto que é
+    SEMPRE golo, e o que decide o desfecho é o ERRO somado por cima. Golos,
+    postes e bolas por cima saem da bola, do ferro e do guarda-redes.
+
+    O erro é maior do que o do pé, e tem de ser: cabecear é acertar com a
+    testa numa bola que vem no ar, muitas vezes em salto e com um marcador ao
+    lado. O `ShotModel.erro` vale 1.10 m a 6 m com TEC 50; aqui a base é 1.70
+    a 4 m, o que põe a maioria dos cabeceíos longe do ângulo e ao alcance de
+    quem defende.
+    =========================================================================
+    */
+    remate: {
+        /*
+        A MIRA. Lado contrário ao guarda-redes, como no remate; a ambição é
+        menor — ninguém coloca uma cabeçada no poste como coloca um pé.
+        */
+        fraccaoCantoMin: 0.30,
+        fraccaoCantoMax: 0.80,
+        alturaMin: 0.45,
+        alturaMax: 1.95,
+        gkCentradoMax: 0.6,     // com o GK a menos disto do meio, o lado é à sorte
+
+        /*
+        O ERRO, em metros no plano da baliza. Mesma forma do ShotModel.erro.
+        `aerial` é TEC*0.65 + STRENGTH*0.35, a mesma conta que já decidia a
+        disputa aérea.
+        */
+        erro: {
+            base: 1.70,
+            porMetro: 0.16,
+            distRef: 4.0,
+            fracVertical: 0.75,
+            // Divide o sigma: 0.70 a aerial 100, 1.45 a aerial 0.
+            aerialMin: 0.70,
+            aerialMax: 1.45,
+            // Em salto acerta-se pior do que com os pés no chão.
+            saltoMult: 1.15,
+            // Marcador colado abre a mira, como a pressão no remate.
+            pressaoDist: 2.2,
+            pressaoMult: 1.40,
+
+            /*
+            A MANÍPULA DE CALIBRAÇÃO, como a `escalaGlobal` do remate: acima
+            de 1 saem mais cabeceíos para fora, abaixo de 1 mais à baliza.
+            Existe para acertar a taxa sem voltar a impor desfechos.
+            */
+            escalaGlobal: 1.0
+        },
+
+        // Potência da cabeçada, em m/s, antes do factor de força.
+        potenciaBase: 12.5,
+        potenciaAmplitude: 3.5
+    },
+
+    /*
+    Sigma da cabeçada à baliza. `o`: { dist, aerial, emSalto, distMarcador }.
+    */
+    sigmaCabeceio: function (o) {
+        const E = this.remate.erro;
+        const dist = Math.max(0, (o && o.dist) || 0);
+        const aerial = Math.max(0, Math.min(100, (o && typeof o.aerial === 'number') ? o.aerial : 50));
+        let s = E.base + Math.max(0, dist - E.distRef) * E.porMetro;
+        s *= E.aerialMax - (E.aerialMax - E.aerialMin) * (aerial / 100);
+        if (o && o.emSalto) s *= E.saltoMult;
+        if (o && typeof o.distMarcador === 'number' && o.distMarcador < E.pressaoDist) s *= E.pressaoMult;
+        s *= E.escalaGlobal;
+        return { lateral: s, vertical: s * E.fracVertical };
+    },
+
+    /*
+    RAIO EM QUE SE CABECEIA À BALIZA. Fora dele a cabeçada é passe ou alívio,
+    nunca remate.
+
+    Era `distToGoal < 24 && |x| < 16`, e as duas medidas eram em EIXOS
+    separados: 24 m só em Z, 16 m só em X. Um jogador a 23 m da linha e 15 m
+    do eixo está a 27.5 m da baliza e continuava a cabecear ao golo — e daí
+    vinham os golos de cabeça de mais de 20 metros, que no futebol quase não
+    existem.
+
+    Agora é a distância a sério ao CENTRO da baliza (o ponto x=0 na linha), num
+    raio só. A guarda de estar virado para lá mantém-se.
+    */
+    raioRemateCabeca: 11.0,
+
+    alcanceMax: 16.0,          // alcance máximo de um alívio de cabeça
+    alcancePasse: 8.5,         // alcance de escora para colega
+
+    /*
+    FORA DA ZONA DE REMATE A CABEÇADA É SEMPRE PARA BAIXO.
+
+    Era o `elevacaoAlivio` a 28° que alimentava o ping-pong aéreo: a bola subia,
+    voltava a cair à altura da testa e o seguinte cabeceava outra vez. O travão
+    do `maxHeadersSeguidos` corta a sequência ao terceiro, mas dois cabeceios
+    seguidos já se vêem, e a bola ficava no ar entre eles.
+
+    Uma cabeçada defensiva bem feita é para BAIXO — bate no chão perto e
+    ressalta rasteira, que é o que a tira da altura da cabeça de toda a gente.
+    Por isso o alívio longo deixou de existir como trajectória própria: fora da
+    zona de remate usa-se sempre `elevacaoEscora`, e o que muda entre escorar
+    para um colega e aliviar sem destinatário é a DISTÂNCIA, não o ângulo.
+
+    O `elevacao` (22°) fica para quem o chamar de fora daqui; o `elevacaoAlivio`
+    foi REMOVIDO, para ninguém lhe voltar a pegar por engano.
+    */
+    elevacao: 22 * Math.PI / 180,        // elevação genérica de cabeceio
+
+    /*
+    Ângulo da cabeçada para baixo — NEGATIVO, a bola sai a descer. Estava em
+    +8°, e a +8° a partir da testa (1.62 m) a bola ainda subia até ~1.75 m e
+    voltava a passar pela altura de cabeceio na descida: o ping-pong recomeçava
+    ali mesmo. Para a bola nunca mais estar à altura da cabeça de ninguém, tem
+    de sair já a descer.
+    */
+    elevacaoEscora: -9 * Math.PI / 180,
+
+    /*
+    Alcance de um alívio para baixo, em metros. A bola sai a descer e bate no
+    chão perto — quer-se isso, não distância. Este é o tecto da distância pedida
+    fora da zona de remate.
+
+    ATENÇÃO ao calcular a velocidade para esta distância: a cabeçada parte de
+    ALTURA_TESTA, não do chão. O `velocidadeParaAlcance` resolve o alcance de um
+    lançamento que SAI DO CHÃO, e usá-lo aqui punha a bola pedida a 4 m a cair
+    aos 8.4 m — o dobro. Usa-se `velocidadeDeLancamento` (utils.js), que resolve
+    um ponto (distância, altura) a partir de uma altura de saída.
+    */
+    alcanceAlivioBaixo: 8.0,
+
+    /*
+    PISO da cabeçada — e é ele que impede o mesmo jogador de cabecear duas
+    vezes seguidas.
+
+    A distância pedida era `min(distância ao colega, alcanceAlivioBaixo)`, sem
+    mínimo nenhum. Com um colega a 1 m, a balística resolvia a cabeçada para
+    **1.93 m/s**: em 0.35 s — o `BallControl.touchLock` — a bola percorria 66 cm
+    e ficava ali à frente da cara de quem a cabeceou, à altura da testa. Ele
+    voltava a alcançá-la assim que o lock passava, e cabeceava outra vez. Era
+    isso que se via como "duas cabeçadas seguidas rápidas do mesmo jogador".
+
+    Uma cabeçada tem sempre pancada: mesmo a escorar para o lado, a bola sai
+    com alguns metros por segundo. `alcanceMin` impede que se peça um alvo
+    absurdamente perto, e `velocidadeMin` é o piso duro, para o caso de a
+    geometria ainda produzir uma solução mansa.
+
+    Os dois juntos garantem que a bola sai da zona de alcance do próprio
+    cabeceador dentro do `touchLock`.
+    */
+    alcanceMin: 3.5,        // metros — nunca se cabeceia para mais perto do que isto
+    velocidadeMin: 7.0,     // m/s à saída, piso duro
+
+    /*
+    Tecto da velocidade de saída de uma cabeçada, em m/s. Uma cabeçada leva a
+    velocidade da testa e do tronco, não de uma perna a rodar: 13 m/s é o topo.
+
+    Sem este tecto a DISTÂNCIA PEDIDA mandava na velocidade, e a geometria de um
+    ângulo descendente fixo é implacável — a sair a -9° de 1.62 m, a bola chega
+    no máximo a ~9.5 m mesmo com velocidade infinita. Pedir 9 m dava **69 m/s**.
+    Com o tecto, é a distância que cede: a bola cai mais perto, ainda para baixo,
+    que é o que interessa.
+    */
+    velocidadeMax: 13.0,
+
+    /*
+    A FAIXA DE ALTURA ONDE O CONTACTO CONTA COMO CABECEIO, em metros a contar
+    de ALTURA_TESTA (1.74). Abaixo dela é peito; acima, a bola passa por cima
+    da cabeça e não há contacto nenhum.
+
+    E É ASSIMÉTRICA, porque a cabeça também é. Medido no rig (ver
+    ALTURA_TESTA, js/config/physics.js): da testa ao topo do crânio são 5 cm,
+    da testa ao queixo são 27. Uma bola que desce um palmo abaixo da testa
+    ainda é cabeceável — ele levanta o queixo —, e uma que passa um palmo
+    acima do crânio já não.
+
+    Era uma única `janelaContacto: 0.22` simétrica. Com a testa errada em 1.62
+    (a boca) dava a faixa 1.40 – 1.84: o fundo por baixo do queixo, o tecto a
+    raspar o crânio. Simétrica na testa certa daria 1.52 – 1.96 e abria um
+    buraco de 14 cm entre o tecto do peito (`peitoAlturaLivre` = 1.38) e o
+    fundo do cabeceio — bolas a 1.45 m dominadas com o PÉ. Os dois valores
+    abaixo mantêm o fundo em 1.40, encostado ao peito como estava, e trazem o
+    tecto para o crânio mais o raio da bola (1.79 + 0.11 = 1.90).
+    */
+    janelaAbaixo: 0.34,   // 1.74 - 0.34 = 1.40, o fundo, encostado ao peito
+    janelaAcima: 0.16,    // 1.74 + 0.16 = 1.90, o crânio mais o raio da bola
+
+    /*
+    E A BOLA TEM DE ESTAR AO ALCANCE DA TESTA.
+
+    Relato: *"os jogadores parecem que estão a cabecear de ombro; a cabeçada é
+    com a bola a tocar na testa"*. Medido com
+    `tools/scratch/cabecada_altura.js`, 47 cabeceios em 40 min: a bola estava
+    em média a **0.73 m** do eixo da cabeça (mínimo 0.34) e 0.40 m acima do
+    pescoço. Em 47, ZERO tinham contacto a sério. Não era de ombro — era de ar.
+
+    A causa: o cabeceio só verificava a ALTURA (`janelaContacto` à volta da
+    testa) e herdava o raio genérico de contacto, `BallControl.reach` = 0.9 m,
+    que é o alcance do CORPO inteiro. A 0.9 m a bola passa ao lado dele.
+
+    O valor sai da medição, e é um compromisso assumido. O contacto geométrico
+    puro — raio da bola (0.11) mais meia cabeça (0.13) — dá 0.24, e com folga
+    para o pescoço 0.32. Só que a 0.32 o cabeceio DESAPARECE do jogo: medido
+    com `tools/scratch/cabecada_aproximacao.js`, das 152 passagens da bola pela
+    altura da testa com alguém a menos de 3 m, só 3% têm alguém a 0.32 m ou
+    menos. A 0.50 m são 26% — e é aí que está o degrau da distribuição:
+
+        0.32 m ->  3%      0.75 m -> 27%
+        0.50 m -> 26%      0.90 m -> 29%   (o valor antigo, sem filtro nenhum)
+
+    0.75 é a bola a passar ao lado da cabeça, e não o meio da testa — e fica
+    assim por uma razão que é preciso dizer: o que falta não é o raio, é a
+    PONTARIA com que o jogador se coloca debaixo da bola. Medido depois de
+    tudo o resto corrigido (`tools/scratch/cabecada_gate.js`): quando a bola
+    desce pela altura da testa, o mais perto que alguém está são 0.60 m, com
+    mediana em 0.74. Com o raio em 0.45 o cabeceio deixa simplesmente de
+    existir — zero em 40 minutos —, o que é pior para o jogo do que o defeito
+    de origem.
+
+    O que estas correcções garantem, e não é pouco: a bola está MESMO à
+    altura da testa quando é cabeceada (antes contava como testa qualquer bola
+    acima da cabeça, até 0.96 m acima dela), e ninguém toca numa bola que lhe
+    passa por cima. Falta pôr o jogador debaixo dela com meio metro de
+    precisão, e isso é obra de outro tamanho: o alvo aéreo, o steering na
+    chegada e o salto.
+    */
+    raioContacto: 0.90,
+
+    /*
+    A LEITURA DA TRAJECTÓRIA, para quem cabeceia — ver `pontoDeCabeceio`
+    (utils.js). Os números são os irmãos dos do guarda-redes
+    (`GoalkeeperDive.erroRaioBase/erroRaioSkill/erroTempoCheio`), com o erro um
+    pouco maior: ler um cruzamento a correr de costas para a bola é mais
+    difícil do que ler um remate de frente.
+
+    `tempoCheio` é o voo a partir do qual o erro está no máximo: uma bola que
+    demora dois segundos a chegar admite engano; uma que chega em 0.3 s já está
+    quase em cima e vê-se bem.
+    */
+    leitura: {
+        erroBase: 1.10,      // metros de erro a INTERCEPT 50, no voo longo
+        erroPorSkill: 0.80,  // quanto encolhe por cada 50 pontos acima de 50
+        tempoCheio: 1.20     // segundos de voo a partir dos quais o erro satura
+    },
+
+    /*
+    QUÃO PERTO DO PONTO DE QUEDA ELE TEM DE ESTAR ANTES DE PARAR.
+
+    Estava 1.0 m, escrito à mão no `actReceivePass`: ele chegava a um metro do
+    sítio e ficava quieto ("senão o steerArrive fica a corrigir centímetros").
+    Com o raio de contacto a 0.9 m, cabecear a 0.75 m era o normal — as duas
+    tolerâncias somavam-se e a bola nunca chegava à testa.
+
+    Agora pára dentro do próprio raio de contacto: aí a bola VEM à cabeça. A
+    oscilação que a nota antiga temia continua tratada — quem está dentro da
+    tolerância pára a velocidade, não fica a corrigir.
+    */
+    toleranciaPonto: 0.30,
+
+    /*
+    Anti Ping-Pong Aéreo:
+    - Limite estrito de no máximo 2 cabeceios seguidos na mesma disputa aérea
+    - Após o limite, obriga domínio de peito ou queda no pé para continuar jogando no chão
+    */
+    maxHeadersSeguidos: 2,
+    cooldownDisputa: 2.2
+};
+
+/*
+Mergulho do guarda-redes (ver js/gk_dive.js).
+
+Substitui o mergulho antigo, que era `gkCorpo.position.x += dirX * v * dt` —
+um deslize lateral imposto por frame, sem agachar, sem impulso e sem voo, com
+o corpo já rodado antes de sair do sítio. E a rotação era composta em Euler
+(`pelvis.rotation.z` do lado + `pelvis.rotation.x` do pitch), o que torcia o
+boneco: dois eixos aplicados em sequência não dão a queda num plano só.
+
+Agora: fases (ler, impulso, voo, chão, levantar), centro de massa balístico
+(`p = p0 + v0·t + ½g·t²`) e UMA rotação à volta de UM eixo — o eixo frontal
+do próprio modelo. Com um só eixo é geometricamente impossível ficar torto.
+*/
+
+const XGModel = {
+    base: 0.55,
+    pesoLogAngulo: 1.10,
+    pesoDistancia: 0.10,
+
+    // Um remate de trás da linha de fundo não tem ângulo nenhum; o piso evita
+    // o ln(0) e dá-lhe um valor desprezável em vez de -Infinity.
+    anguloMinimo: 0.02
+};
+
+/*
+Geometria do canto (pontoDeCanto) foi movida para js/utils.js (ver docs/auditoria_config_match.md item 5).
+*/
+
+/*
+=============================================================================
+FALTA DIRECTA — a cobrança por cima da barreira
+=============================================================================
+A falta que toda a gente reconhece: 17 a 23 m, de frente, barreira de cinco,
+guarda-redes a fechar o outro canto. O ramo FREE_KICK do `setupSetPiece` sabe
+montar uma falta em qualquer sítio do campo e decide entre remate, cruzamento
+e passe; isto é o caso de estudo dessa cobrança directa, montado de propósito
+e com desfecho resolvido à mão, como no penálti.
+
+Porquê resolução própria, outra vez: os pesos do remate em jogo corrido não
+descrevem uma bola parada a 20 m com cinco homens à frente. O que decide é o
+duelo TÉCNICA do batedor contra o GK, e daí sai UM dos doze desfechos.
+
+Ver:
+  pontoDaFaltaDirecta / lugaresDaBarreira / desfechoDaFaltaDirecta  (utils.js)
+  baterFaltaDirecta                                                (player.js)
+  ramo DIRECT_FREE_KICK do setupSetPiece                (match_setpieces.js)
+*/
+const DirectFreeKickModel = {
+    /*
+    ONDE A BOLA FICA. Sorteio dentro da faixa clássica:
+
+      |x| <= xMaxDoCentro          até 10 m do centro da baliza, para os lados
+      distância ao POSTE MAIS PERTO <= distPosteMax (23 m)
+      fora da grande área, com `folgaArea` de margem
+
+    O corte do poste é o que faz a faixa: de frente chega-se aos ~23 m da
+    linha, e quanto mais aberto menos fundo se pode estar. Ver
+    pontoDaFaltaDirecta (utils.js).
+    */
+    xMaxDoCentro: 10.0,
+    distPosteMax: 23.0,
+    folgaArea: 0.8,
+
+    /*
+    A BARREIRA. Cinco homens, a 9.15 m da bola, na linha bola->baliza mas
+    DESLOCADA para fechar o canto do remate: a ponta de fora fica na linha
+    bola->poste mais perto, com `sobraPoste` de margem para lá dela. É isso
+    que o guarda-redes grita a montar — ele fica com o canto do outro lado,
+    que é o que consegue cobrir a mergulhar.
+
+    `alturaParado` é o topo da cabeça da barreira; `alturaSalto` é com o pulo.
+    Um remate que passe por baixo de `alturaSalto` quando a barreira já está
+    no ar é o desfecho `por_baixo`.
+    */
+    barreiraN: 5,
+    distanciaBarreira: 9.15,
+
+    /*
+    ONDE O GUARDA-REDES FICA (pedido): a barreira fecha UM lado, e ele cobre o
+    OUTRO. Ficava ao meio, como num penálti, e ao meio ele não cobre nem um
+    nem outro — a barreira já tapa metade do que ele taparia dali.
+
+    `deslocamentoGk` é quanto ele se afasta do eixo para o lado ABERTO (o
+    contrário do lado de onde se bate, que é o que a barreira fecha).
+    */
+    deslocamentoGk: 1.8,
+    espacamentoBarreira: 0.55,
+    sobraPoste: 0.45,
+    alturaParado: 1.95,
+    alturaSalto: 2.55,
+    /*
+    A folga era 0.30 e nao cabia: a 17.5 m, com a elevacao maxima de um remate,
+    a bola passa a 2.64 m sobre uma barreira que salta ate 2.55. Nao ha
+    trajectoria que limpe 2.85 e ainda caia dentro da baliza dali — o que ha e
+    uma falta batida rente as cabecas, que e o que se ve na televisao.
+    */
+    folgaSobreBarreira: 0.08,   // por cima do topo, quando a bola tem de passar
+
+    /*
+    A COBRANÇA TEM DE SAIR MAIS FORTE (pedido).
+
+    Medido: 18,4 m/s de média, a 25,1° — uma bola lobada. A causa não é a
+    balística, é a BARREIRA: para o mesmo ponto da baliza, cada grau a menos de
+    elevação é mais velocidade, e é a altura a limpar que impõe o ângulo. A
+    20 m, com o alvo a 1,5 m:
+
+        limpar 2,63 m (barreira a saltar + folga)   ~24°   19,6 m/s
+        limpar 2,43 m                               ~21°   21,5 m/s
+        limpar 2,11 m (barreira sem saltar)         ~18°   22,8 m/s
+
+    Por isso o pedido resolve-se assim: procura-se na mesma a elevação mais
+    baixa que limpa a barreira A SALTAR, e SE a velocidade que sai daí ficar
+    abaixo de `forcaMinima`, baixa-se o que se exige limpar — até
+    `alturaMinimaSobreBarreira`, que é a barreira PARADA mais o raio da bola.
+
+    É a troca que um batedor faz mesmo: bater mais tenso é passar mais rente,
+    e passar mais rente é arriscar a barreira. O desfecho `na_barreira` já
+    existe, e é ele que paga esse risco.
+    */
+    forcaMinima: 30.0,
+    alturaMinimaSobreBarreira: 2.10,
+
+    /*
+    O SALTO DA BARREIRA. Todos saltam, com um atraso a contar do contacto —
+    é o atraso que abre a janela do remate rasteiro por baixo.
+    */
+    atrasoSaltoBarreira: 0.12,
+    alturaSaltoBarreira: 0.42,   // apex do pulo, em metros
+
+    /*
+    A que velocidade a bola CHEGA a linha no remate por baixo da barreira. Ela
+    vai rasteira (ver tiroDaFaltaDirecta), portanto o que se pede e o ritmo de
+    chegada, como num passe rasteiro — so que de remate.
+    */
+    vChegadaPorBaixo: 19.0,
+
+    /*
+    O REMATE. `potencia` é a velocidade de saída; a elevação sai da geometria
+    (tem de limpar a barreira e cair no ponto pedido) e é procurada entre
+    `elevMin` e `elevMax` — acima disso já não é uma falta batida, é um
+    balão.
+    */
+    potencia: 26.0,
+    elevMin: 4 * Math.PI / 180,
+    elevMax: 30 * Math.PI / 180,
+
+    /*
+    A COBRANÇA TENSA — a folha seca, e a razão de ela existir.
+
+    Com balística de arrasto puro, a velocidade e a elevação ficam presas ao
+    ponto de chegada: limpar a barreira a 9.15 m e cair na baliza a 20 m obriga
+    a ~22 graus, e a ~22 m/s. Medido antes disto: **19.1 m/s a 23.7 graus** no
+    sorteio inteiro — uma bola lobada, que não é o que se vê numa falta.
+
+    Subir a `forcaMinima` não resolve: ela é um LIMIAR, não um alvo — acima do
+    que a geometria dá, nenhuma elevação qualifica e cai-se na lobada na mesma
+    (medido: com o limiar a 26, a média BAIXOU de 23.0 para 22.0 m/s).
+
+    O que solta a velocidade é a queda extra, que é o que um batedor põe na
+    bola com efeito: bate-se COM A FORÇA que se tem (`potencia` mais o atributo
+    FOR), escolhe-se a elevação mais baixa que ainda limpa a barreira, e a
+    gravidade EFECTIVA é procurada para a bola cair no ponto pedido. Ver
+    `tiroTensoDaFaltaDirecta` (utils.js) e o `freeKickDip` na física.
+
+    `dipMax` é o tecto da queda extra: acima disso a bola já não desenha uma
+    falta, cai como uma pedra.
+    */
+    potenciaPorForca: 5.0,   // m/s de variação com o atributo FOR
+    dipMax: 24.0,            // m/s² de queda extra, no máximo
+
+    /*
+    O GUARDA-REDES REAGE TARDE, E O ATRASO SAI DA TÉCNICA DELE.
+
+    No penálti o `gkDelayReacao` é zero: ele sabe que a bola vem e parte com
+    ela. Numa falta a bola aparece por cima da barreira e ele perde-a de vista
+    — por isso aqui há atraso, e é a habilidade (GK) que o encurta.
+
+        atraso = atrasoBase - ((GK - 50) / 50) * atrasoAmplitude
+
+    clampado em [atrasoMin, atrasoMax]. Um GK de 100 reage em 0.12 s, um de 0
+    em 0.72 s.
+    */
+    atrasoBase: 0.42,
+    atrasoAmplitude: 0.30,
+    atrasoMin: 0.12,
+    atrasoMax: 0.72,
+
+    /*
+    E O TECTO DO ATRASO QUANDO O DESFECHO É UMA DEFESA.
+
+    O atraso é o mesmo — sai da habilidade — mas não pode ser maior do que a
+    janela em que ainda dá para lá chegar: um GK que parte 0.5 s depois de uma
+    bola que leva 0.9 s a chegar já não defende nada, e o desfecho sorteado
+    dizia "defesa". Medido antes deste tecto: 16 dos 21 desfechos `defesa` de
+    um lote acabavam em GOLO.
+
+    `fraccaoAtrasoDefesa` é a parte do tempo de voo que o atraso pode ocupar
+    nesses dois desfechos. Nos outros dez o atraso é o cheio — é ele que faz a
+    falta directa ser diferente do penálti.
+    */
+    fraccaoAtrasoDefesa: 0.22,
+
+    /*
+    E QUANDO O DESFECHO NÃO É DEFESA, PARA QUE LADO É QUE ELE VAI?
+
+    Relato: *"o goleiro ainda está pulando para o lado contrário do
+    deslocamento da bola nas faltas e chutes"*.
+
+    Estava assim, e de propósito: `penaltyDiveX = defende ? alvo.x : -alvo.x`.
+    Espelhar o alvo garantia que um golo sorteado não era defendido por
+    acidente — mas garantia também que, em DEZ dos doze desfechos, ele se
+    atirava exactamente para o lado oposto ao da bola. Sempre. Um guarda-redes
+    engana-se no lado às vezes; não se engana todas as vezes.
+
+    Agora o lado é o CERTO, e o que o impede de defender é o que o impede na
+    realidade: parte tarde (o atraso cheio, sem o tecto do `fraccaoAtrasoDefesa`)
+    e não chega lá. Só nesta fracção dos casos é que ele lê mal e sai para o
+    outro lado — e aí vê-se um guarda-redes batido, que é uma coisa que
+    acontece, em vez de um que parece não estar a ver o jogo.
+    */
+    probLadoErrado: 0.25,
+
+    /*
+    E A DEFESA ACONTECE MESMO.
+
+    O atraso curto punha o guarda-redes a partir a tempo, mas o mergulho ainda
+    tem de LA CHEGAR: medido, 11 dos 15 desfechos `defesa` acabavam em golo,
+    com ele a cair atras da bola. Um desfecho sorteado que sai ao contrario
+    metade das vezes nao e um desfecho, e uma sugestao.
+
+    Por isso a defesa e resolvida como no penalti — a mao — no frame em que a
+    bola chega a `distanciaDaDefesa` da linha: `defesa` e espalmada para o
+    campo, `defesa_fora` sai pela linha de fundo (canto). O mergulho continua a
+    correr por cima, e e ele que se ve.
+    */
+    /*
+    1.6 m era TARDE DEMAIS. O gesto de mãos do próprio guarda-redes resolve o
+    contacto a `1.3` m da mão (ver `resolverDefesaComMaos`), e com ele de pé na
+    linha isso acontece a ~1.8 m dela — ou seja ANTES desta janela. Medido no
+    desfecho `defesa_fora`: 3 cantos em 20, com as outras 17 a acabarem
+    agarradas por ele, que é o desfecho `defesa` e não este.
+
+    A 2.8 m a janela do plano vem primeiro e o desfecho sorteado é o que
+    acontece. O mergulho continua a correr por cima — é ele que se vê.
+    */
+    distanciaDaDefesa: 1.6,
+    // E tambem se resolve quando a bola chega ao alcance da mao dele, que e
+    // onde uma defesa se ve (ver o ramo da defesa no Match.update).
+    alcanceDaDefesa: 1.4,
+    espalmarVelocidade: 9.0,
+
+    /*
+    OS DOZE DESFECHOS, por banda do duelo `diff = (TEC + d10) - (GK + d10)`.
+
+    A mesma ideia do penálti (ver baterPenalti), com os casos que só existem
+    quando há barreira: bater nela, desviar nela para dentro ou para fora, e
+    passar-lhe por baixo enquanto ela salta.
+
+    Os pesos são relativos dentro de cada banda — não têm de somar 100.
+    */
+    desfechos: {
+        perfeito: {   // diff > 5
+            gol: 119, defesa: 12, defesa_fora: 8,
+            trave_gol: 18, trave_fora: 4, travessao_gol: 11, travessao_fora: 3,
+            fora: 6, na_barreira: 10, barreira_gol: 13, barreira_fora: 6,
+            por_baixo: 18
+        },
+        bom: {        // diff 3..5
+            gol: 77, defesa: 16, defesa_fora: 9,
+            trave_gol: 11, trave_fora: 6, travessao_gol: 6, travessao_fora: 5,
+            fora: 10, na_barreira: 14, barreira_gol: 11, barreira_fora: 7,
+            por_baixo: 11
+        },
+        medio: {      // diff 1..2
+            gol: 48, defesa: 18, defesa_fora: 10,
+            trave_gol: 6, trave_fora: 7, travessao_gol: 3, travessao_fora: 6,
+            fora: 14, na_barreira: 18, barreira_gol: 6, barreira_fora: 7,
+            por_baixo: 6
+        },
+        fraco: {      // diff 0..-2
+            gol: 29, defesa: 18, defesa_fora: 10,
+            trave_gol: 3, trave_fora: 7, travessao_gol: 3, travessao_fora: 7,
+            fora: 18, na_barreira: 20, barreira_gol: 3, barreira_fora: 8,
+            por_baixo: 6
+        },
+        mau: {        // diff -3..-4
+            gol: 13, defesa: 16, defesa_fora: 8,
+            trave_gol: 3, trave_fora: 6, travessao_gol: 3, travessao_fora: 8,
+            fora: 26, na_barreira: 22, barreira_gol: 3, barreira_fora: 8,
+            por_baixo: 3
+        },
+        pessimo: {    // diff <= -5
+            gol: 6, defesa: 20, defesa_fora: 8,
+            trave_gol: 3, trave_fora: 5, travessao_gol: 3, travessao_fora: 7,
+            fora: 30, na_barreira: 24, barreira_gol: 3, barreira_fora: 8,
+            por_baixo: 3
+        }
+    },
+
+    /*
+    ONDE CADA DESFECHO APONTA, no plano da baliza (x do eixo, y do chão).
+
+    `margemDentro` é o quanto a bola passa por DENTRO do poste/travessão
+    quando o desfecho é "bate e entra"; `margemFora` o quanto passa por fora.
+    A trave física está em 3.66 e o travessão em 2.44 — como no penálti, o
+    alvo tem de ficar quase em cima deles para o impacto acontecer.
+    */
+    /*
+    `margemDentro` tem de ser maior do que o RAIO DA BOLA (0.11), senão o
+    remate que devia passar rente por dentro bate mesmo no ferro: medido, os
+    dois `travessao_gol` de um lote batiam no travessão e voltavam ao campo.
+    */
+    margemDentro: 0.30,
+    margemFora: 0.10,
+    alturaGoloMin: 0.9,      // um remate por cima da barreira não chega rasteiro
+    alturaGoloMax: 2.25,
+
+    /*
+    O REMATE QUE VAI A GOLO NÃO PODE IR PARA CIMA DO GUARDA-REDES.
+
+    Medido: dos nove desfechos `gol` de um lote de 120, só quatro acabavam em
+    golo. A razão não era a balística — era o alvo. Ele espera no MEIO da
+    linha, e o `GoalkeeperPose.mergulhoLateralMin` (2.0 m) diz que uma bola a
+    menos disso do corpo dele não é mergulho nenhum: fica de pé e leva-lhe as
+    mãos. Um "golo" mirado a 0.8 m do eixo era uma defesa fácil, de pé.
+
+    Por isso os remates de golo saem sempre para lá dessa distância, e é a
+    mesma razão pela qual um jogador não bate uma falta ao centro da baliza.
+    */
+    xGoloMin: 2.35,          // fora do alcance de quem está de pé no meio
+    xGoloMax: 3.30,          // dentro dos postes, com folga
+
+    /*
+    E O QUE ELE DEFENDE tem de estar ao alcance dele: os dois desfechos de
+    defesa miram a faixa entre `defesaXMin` e `defesaXMax`, que é onde um
+    mergulho chega a tempo com o atraso da reacção. Sem este tecto, metade
+    das "defesas" sorteadas acabavam em golo — a bola ia ao ângulo e ele
+    partia tarde, que é exactamente o que o desfecho NÃO dizia.
+    */
+    defesaXMin: 2.2,
+    defesaXMax: 3.0,
+    defesaYMax: 1.7,
+
+    foraLargura: 1.6,        // quanto passa ao lado quando vai fora
+    foraAltura: 1.1,         // e por cima do travessão
+
+    /*
+    O DESVIO NA BARREIRA. A bola bate num dos cinco e muda de direcção:
+    `desvioAngulo` é o desvio lateral máximo e `desvioSubida` o quanto sobe
+    (um desvio na cabeça levanta a bola).
+    */
+    desvioAngulo: 12 * Math.PI / 180,
+    desvioSubida: 3.2,
+    barreiraTravagem: 0.55,   // a bola bate e perde isto da velocidade
+
+    /*
+    A BOLA QUE BATE NA BARREIRA NÃO VOLTA PARA QUEM BATEU.
+
+    Estava a ser devolvida na linha do remate, invertida: ia direita ao
+    batedor, que a cabeceava para dentro sozinho. Um ressalto numa barreira sai
+    de LADO — bate num ombro, numa perna, numa cabeça, e a bola cospe para a
+    linha lateral, para a área ou para as mãos do guarda-redes.
+
+    `ricocheteAnguloMin/Max` é o desvio em relação à direcção do remate: nunca
+    menos de 65°, portanto nunca dentro do cone de onde a bola veio.
+    */
+    ricocheteAnguloMin: 65 * Math.PI / 180,
+    ricocheteAnguloMax: 115 * Math.PI / 180,
+    ricocheteParaGK: 0.30,     // fracção dos ressaltos que sobra para o GK
+
+    /*
+    OS COMPANHEIROS DE QUEM BATE não podem ficar em fora-de-jogo nem tapar a
+    cobrança. Ficam por trás da linha da bola (`recuoOnside` metros atrás dela,
+    portanto sempre com bola à frente) e fora do corredor bola->baliza
+    (`corredorLivre` de meia-largura).
+
+    MAS SÓ ALGUNS. Punham-se lá os NOVE, num leque de 40 m atrás da bola — e
+    isso arrastava o jogo todo com eles: cada um levava atrás o seu marcador
+    (ver `raioDaMarcacao`), e o que se via era a equipa que defende com os
+    laterais na bandeirola de canto e o bloco rasgado ao meio. Um leque de
+    faltas tem três ou quatro homens à volta da bola; o resto da equipa fica
+    onde o bloco os põe.
+    */
+    apoiosNoLeque: 4,
+    recuoOnside: 2.5,
+    corredorLivre: 5.0,
+    espacamentoApoio: 5.5,
+
+    /*
+    A MARCAÇÃO. Os defensores que sobram da barreira marcam os atacantes:
+    ficam `distanciaMarcacao` metros do seu homem, do lado da própria baliza.
+
+    `raioDaMarcacao` é o que impede a marcação de puxar um defensor para o
+    outro lado do campo: só se marca quem está a menos disto da bola. O resto
+    da defesa fica na posição do bloco — um lateral a marcar um extremo que
+    está a 45 m da bola é um buraco na área, não é marcação.
+    */
+    raioDaMarcacao: 25.0,
+    distanciaMarcacao: 1.8,
+
+    /*
+    E QUEM NAO MARCA NEM FAZ BARREIRA VOLTA.
+
+    Media medida na montagem, antes disto: o defensor mais longe da bola estava
+    a 64 m dela — do outro lado do campo, com a falta a 20 m da propria baliza.
+    E o "o azul nao voltou para marcar" do relato: quem estava subido quando a
+    falta foi marcada ficava la.
+
+    Estes ficam numa linha a `recuoLinhaDefensiva` metros da linha de fundo (a
+    orla da propria area), espalhados por `larguraLinhaDefensiva` — o desenho
+    de quem espera um cruzamento, nao o bloco do jogo corrido.
+    */
+    recuoLinhaDefensiva: 18.5,
+    larguraLinhaDefensiva: 28.0
+};

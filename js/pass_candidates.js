@@ -1,11 +1,14 @@
 /*
 =============================================================================
-PlayerPassTarget — pontos candidatos para passe (debug visual)
+PlayerPassTarget — pontos candidatos para passe
 =============================================================================
 Implementa o algoritmo clássico de geração de pontos candidatos ao redor de
 cada companheiro de equipa (sem bola) do jogador com a posse, filtrando os
-que seriam facilmente interceptados. Só visualização — não decide nada (ver
-findPassTarget em player.js para a decisão real).
+que seriam facilmente interceptados.
+
+O leque é consumido pelo PassTypes (ver pontosPorMate em pass_types.js): é
+dele que saem os pontos de mira `space` / `leading` / `direct` de cada passe.
+A visualização de debug que existia aqui foi removida — nada disto desenha.
 
 Geração (por companheiro, "referencial de ataque": frente = dirZ, lateral = X):
     j de 1 a `arcos` (raio = j*`espacamento` -> arcos a 3, 6, 9 ... 21 m)
@@ -42,68 +45,80 @@ const PassCandidates = {
     passoAngular: 15,      // graus entre pontos do mesmo arco
     arcos: 7,              // quantos arcos concêntricos (3, 6, 9 ... 21 m)
     espacamento: 3.0,      // metros entre arcos (o 1º fica a esta distância)
-    raioPonto: 0.15,       // raio do disco desenhado, em metros
     raioAdversario: 2.0,   // adversário a menos disto do ponto -> ponto descartado
 
-    debug: false,
-    _group: null,
-    _pool: [],
-    _usados: 0,
-    _geo: null,
+    /*
+    ALCANCE DO RECEPTOR — o filtro que faltava.
 
-    ensureGroup: function () {
-        if (this._group) return;
-        this._group = new THREE.Group();
-        Match.scene.add(this._group);
-        // Círculo achatado sobre o gramado, não uma esfera flutuando no ar.
-        this._geo = new THREE.CircleGeometry(this.raioPonto, 10);
-        this._mat = new THREE.MeshBasicMaterial({ color: 0xff8c1a, side: THREE.DoubleSide });
-    },
+    Os sete arcos põem pontos até 21 m à frente do companheiro, e nenhum dos
+    filtros perguntava se ele CHEGA LÁ: nem o do campo, nem o do adversário em
+    cima do ponto, nem o da linha de passe. O `leading` escolhe de propósito o
+    ponto vivo mais adiantado, portanto ia buscar o arco de fora sempre que o
+    campo estivesse limpo — e o passe saía para onde nunca ninguém ia. Pior:
+    ficava mais longo justamente quando a defesa estava organizada e não havia
+    lá ninguém para invalidar os pontos de fora.
 
-    getDot: function () {
-        if (this._usados < this._pool.length) {
-            const m = this._pool[this._usados++];
-            m.visible = true;
-            return m;
-        }
-        const mesh = new THREE.Mesh(this._geo, this._mat);
-        mesh.rotation.x = -Math.PI / 2;
-        this._group.add(mesh);
-        this._pool.push(mesh);
-        this._usados++;
-        return mesh;
-    },
+    O limite é físico. O companheiro só apanha o ponto se lá chegar no tempo
+    que a bola demora a percorrer o caminho:
 
-    esconderResto: function () {
-        for (let i = this._usados; i < this._pool.length; i++) this._pool[i].visible = false;
-    },
+        tempo de voo = distância(bola -> ponto) / velocidadeMediaDaBola
+        alcance      = velocidade dele * tempo de voo * margem
 
-    setDebug: function (on) {
-        this.debug = on;
-        this.ensureGroup();
-        this._group.visible = on;
-        if (on) this.rebuild();
-        else { this._usados = 0; this.esconderResto(); }
-    },
+    `velocidadeMediaBola` é a mesma média do lead do initiatePass (player.js) —
+    a de saída é maior, mas o arrasto e o atrito travam a bola ao longo do
+    percurso, e é a média que conta para saber quem lá chega.
+
+    `margemAlcance` abaixo de 1 porque ele não parte na direcção certa nem
+    acelera de repente: pedir-lhe o alcance teórico completo é pedir-lhe uma
+    corrida perfeita.
+
+    `alcanceMinimo` garante que o primeiro arco sobrevive sempre. Sem isso um
+    jogador parado ficava sem passe no vazio nenhum, e trocava-se "longe de
+    mais" por "nunca" — que é o mesmo defeito ao contrário.
+    */
+    velocidadeMediaBola: 11.0,
+    margemAlcance: 0.8,
+    alcanceMinimo: 3.0,
 
     /*
-    Todos os frames. Havia aqui um acumulador que só redesenhava de 0.2 em
-    0.2s: entre redesenhos os jogadores continuavam a correr e os pontos
-    ficavam para trás, pousados em relva vazia a vários metros do dono. A
-    5 redesenhos por segundo o leque nunca coincidia com quem o gerou.
+    A CORRIDA AO PONTO — o filtro que faltava a seguir a esse.
 
-    O custo é o que já era — a mesma conta que corria a cada 0.2s — e é
-    debug, só corre com o toggle ligado.
+    O `raioAdversario` só pergunta se há um adversário JÁ em cima do ponto. Não
+    pergunta quem lá CHEGA primeiro, e era aí que os passes se perdiam: medido
+    num tempo de jogo, os lançamentos cortados eram-no a 96% do percurso — a
+    bola não era interceptada pelo caminho, chegava ao destino e era o
+    adversário que lá estava à espera dela. Um ponto vazio para onde o
+    defensor chega meio segundo antes do nosso avançado é um passe oferecido.
+
+    Agora compara-se tempo com tempo (`tempoDoJogadorAte`, utils.js), com a
+    velocidade de cada um projectada na direcção do ponto: quem já corre para
+    lá tem vantagem, quem tem de inverter paga-a.
+
+    `margemCorrida` é quanto o companheiro tem de chegar À FRENTE. Empatar não
+    chega: uma bola dividida a 50/50 não vale o risco de perder a posse.
     */
-    update: function () {
-        if (!this.debug) return;
-        this.rebuild();
+    margemCorrida: 0.30,
+
+    /*
+    Até onde vale a pena pôr pontos à frente DESTE companheiro, dado onde a
+    bola está agora.
+
+    Resolve-se por arco em vez de fechar uma fórmula: o tempo de voo depende da
+    distância da BOLA ao ponto, que muda com o raio. Percorrer os arcos de fora
+    para dentro (é a ordem do gerador) e ficar pelo primeiro que ele alcança dá
+    o mesmo resultado sem resolver equação nenhuma.
+    */
+    alcancaOPonto: function (mate, raio, distBolaAoPonto) {
+        if (raio <= this.alcanceMinimo) return true;
+        const vMate = (mate && mate.speedMult) ? mate.speedMult : 3.5;
+        const tVoo = distBolaAoPonto / this.velocidadeMediaBola;
+        return raio <= vMate * tVoo * this.margemAlcance;
     },
 
     /*
     Gera a lista de candidatos sobreviventes para o `carrier` — pura, sem
-    THREE, usada tanto pelo desenho de debug como pela decisão de passe real
-    (ver findGridPassTarget em player_bt.js). Devolve [{x, z, mate}, ...].
+    THREE (ver pontosPorMate em pass_types.js e findGridPassTarget em
+    player_bt.js). Devolve [{x, z, mate}, ...].
     */
     gerarCandidatos: function (carrier) {
         const out = [];
@@ -127,30 +142,22 @@ const PassCandidates = {
             const mx = mate.model.position.x, mz = mate.model.position.z;
 
             /*
-            FRENTE = para onde o jogador está VIRADO.
+            FRENTE = direcção do movimento, ou direcção de ataque se parado.
 
-            Duas versões erradas antes desta:
-
-            1. `mate.dirZ` — o eixo de ataque da equipa (±Z). O leque
-               apontava para a baliza adversária viesse o jogador de onde
-               viesse, de través com a corrida dele.
-            2. a velocidade — certa a correr, mas nula quem está parado, e
-               aí caía outra vez no `dirZ`: corpo virado para um lado, os
-               49 pontos para o outro.
-
-            A orientação do modelo resolve os dois casos de uma vez. Não é
-            um terceiro critério: o `steerArrive` roda o corpo para o alvo
-            do movimento todos os frames, por isso a correr ela JÁ é a
-            direcção da corrida — e parado continua a dizer alguma coisa
-            (para onde ele olha), que é o que a velocidade não faz.
-
-            Frente local do modelo é +Z: o steerArrive monta a rotação com
-            `lookAt(pos, pos*2 - alvo)`, cujo eixo +Z fica a apontar ao
-            alvo. Ver player.js.
+            A versão anterior usava `mate.model.quaternion`, mas o `steerArrive` 
+            agora roda o corpo do jogador para olhar para a bola quando está em 
+            AFT_SUPPORT. Isso fazia o leque apontar a 90 graus (para a bola) 
+            e os passes no vazio iam de lado!
             */
-            _vFwd.set(0, 0, 1).applyQuaternion(mate.model.quaternion);
-            _vFwd.y = 0;
-            let fx = _vFwd.x, fz = _vFwd.z;
+            let fx, fz;
+            const velLen = Math.hypot(mate.velocity.x, mate.velocity.z);
+            if (velLen > 0.5) {
+                fx = mate.velocity.x;
+                fz = mate.velocity.z;
+            } else {
+                fx = 0;
+                fz = mate.dirZ;
+            }
             const lenF = Math.hypot(fx, fz);
             if (lenF > 0.001) { fx /= lenF; fz /= lenF; } else { fx = 0; fz = mate.dirZ; }
 
@@ -173,6 +180,18 @@ const PassCandidates = {
                     const pz = mz + (fz * cosO - fx * sinO) * raio;
 
                     if (!this.pontoValido(px, pz, carrier, opponents)) continue;
+
+                    // O companheiro chega lá dentro do tempo de voo? Ver
+                    // alcancaOPonto: sem isto o leading ia buscar o arco de
+                    // fora e o passe saía para o vazio.
+                    const distBola = Math.hypot(px - carrier.model.position.x,
+                        pz - carrier.model.position.z);
+                    if (!this.alcancaOPonto(mate, raio, distBola)) continue;
+
+                    // E chega lá ANTES do adversário mais rápido ao mesmo
+                    // ponto? Ver venceACorrida.
+                    if (!this.venceACorrida(mate, px, pz, opponents)) continue;
+
                     out.push({ x: px, z: pz, mate: mate });
                 }
             }
@@ -181,36 +200,40 @@ const PassCandidates = {
         return out;
     },
 
-    rebuild: function () {
-        this.ensureGroup();
-        this._usados = 0;
+    /*
+    O companheiro chega ao ponto antes de qualquer adversário, com
+    `margemCorrida` de folga? Ver a nota dessa constante.
 
-        /*
-        `ballCarrier` fica a null em cada toque da condução (touchLock) e
-        durante todo o voo de um passe — ou seja, boa parte do tempo em que
-        a bola está viva. Ler só esse campo apagava o leque inteiro nesses
-        instantes, e o efeito no ecrã era um pisca-pisca.
+    O tempo de cada um sai do `tempoDoJogadorAte` (utils.js) — o mesmo modelo
+    de arranque que o `steerArrive` tem, portanto quem está parado paga o
+    arranque e quem corre ao contrário paga a inversão. A velocidade entra
+    projectada na direcção do ponto, a única componente que o aproxima dele.
+    */
+    venceACorrida: function (mate, px, pz, opponents) {
+        if (typeof tempoDoJogadorAte !== 'function') return true;
 
-        `lastTouchedPlayer` cobre essa janela: na condução é o próprio
-        condutor, num passe é quem o fez. O leque continua a ser desenhado
-        em torno da equipa que tem a bola.
-        */
-        const carrier = Match.ballCarrier || Match.lastTouchedPlayer;
-        if (!carrier) { this.esconderResto(); return; }
+        const tempoAte = (p) => {
+            const dx = px - p.model.position.x, dz = pz - p.model.position.z;
+            const d = Math.hypot(dx, dz);
+            if (d < 0.001) return 0;
+            const v = p.velocity ? (p.velocity.x * dx + p.velocity.z * dz) / d : 0;
+            const vMax = (p.speedMult && p.speedMult > 0.5) ? p.speedMult : 6.0;
+            return tempoDoJogadorAte(d, v, vMax);
+        };
 
-        const cands = this.gerarCandidatos(carrier);
-        for (const c of cands) {
-            const dot = this.getDot();
-            dot.position.set(c.x, 0.05, c.z);
+        const tMate = tempoAte(mate);
+        for (const o of opponents) {
+            if (o.role === 'gk' || !o.model) continue;
+            if (tempoAte(o) < tMate + this.margemCorrida) return false;
         }
-
-        this.esconderResto();
+        return true;
     },
 
     // `teammates` saiu da assinatura com a regra do "mais próximo": nenhuma
     // das regras que restam olha para os colegas.
     pontoValido: function (px, pz, carrier, opponents) {
-        if (Math.abs(px) > CAMPO_LARG / 2 || Math.abs(pz) > CAMPO_COMP / 2) return false;
+        const margem = (typeof PassModel !== 'undefined' && PassModel.margemSegurancaLinha) ? PassModel.margemSegurancaLinha : 2.5;
+        if (Math.abs(px) > (CAMPO_LARG / 2) - margem || Math.abs(pz) > (CAMPO_COMP / 2) - margem) return false;
 
         const cx = carrier.model.position.x, cz = carrier.model.position.z;
         const distBola = Math.hypot(px - cx, pz - cz);

@@ -58,6 +58,19 @@ const JointLimits = {
         z -> elevação lateral (braço pra fora)           0-180°
         y -> rotação interna (~70°) / externa (~90°)
     */
+    /*
+    ATENCAO AO SINAL, E ESTA MEDIDO.
+
+    Esta tabela diz `x: 0..180` com x a ser "elevacao frontal". No RIG e ao
+    contrario: medido com a mao lida por getWorldPosition, x = -1.00 poe a mao
+    0.50 m A FRENTE do ombro e x = +1.57 poe-a 0.59 m ATRAS. Ou seja, passar um
+    angulo "para a frente" (negativo) pelo `clampOmbro` trava-o em 0 — braco
+    colado ao corpo — e deixar um positivo passar manda-o para as costas.
+
+    Foi o que aconteceu em dois sitios do guarda-redes (estados 'maos' e
+    'salto_alto'), e os dois deixaram de usar este clamp no eixo x. Quem o for
+    usar com o ombro tem de saber disto: ou converte o sinal, ou limita a mao.
+    */
     shoulder: {
         x: { min: 0, max: 180 * _DEG },
         z: { min: 0, max: 180 * _DEG },
