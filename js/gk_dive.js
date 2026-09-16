@@ -72,9 +72,27 @@ const GkDive = {
         _v1.set(corpo.position.x, corpo.position.y, corpo.position.z + p.dirZ * 10);
         lookAtBola(corpo, _v1);
 
+        /*
+        QUAL DAS TRÊS DEFESAS — ver GkLowClip/GkJump3Clip/GkJumpClip
+        (config/animations.js) e as bandas em GoalkeeperDive.
+
+        Fica decidido AQUI, uma vez, e não a cada frame: a bola muda de altura
+        durante o voo e o gesto não pode mudar de identidade a meio. É a mesma
+        razão pela qual o `tempoNoChao` também se decide no arranque.
+        */
+        const clipDefesa = this.clipDaDefesa(p, alvoX, alvoY);
+
         p.dive = {
             fase: 'ler',
             t: 0,
+            /*
+            O clip escolhido e o relógio dele. `tGesto` conta do primeiro frame
+            do gesto (a leitura) até à aterragem, que é o arco que os doze
+            fotogramas do pedido descrevem — por isso não pode ser o `t`, que
+            reinicia a cada fase.
+            */
+            clip: clipDefesa,
+            tGesto: 0,
             dirX: dirX || 1,
             tipo: tipo || 'meio',
             alvoX: alvoX,
@@ -142,6 +160,51 @@ const GkDive = {
     A fonte e o `gkAlvoX`/`gkAlvoY` que o `updateGK` reescreve todos os frames.
     Depois de sair do chao nao se mexe: a parabola ja esta lancada.
     */
+    /*
+    A DEFESA QUE ESTE LANCE PEDE, ou null para o mergulho de sempre.
+
+    Pedido: três gestos por altura da bola — até 1/3 da baliza, de 1/3 a 2/3, e
+    daí para cima — "todas para bolas a mais de 4 metros lateralmente do
+    goleiro". Ver GoalkeeperDive.bandaBaixa/.bandaAlta/.lateralMinClip.
+
+    Abaixo dos 4 m devolve null e tudo fica como estava: a essa distância o que
+    ele faz não é um mergulho, e o ramo 'maos' (js/player.js) já trata disso.
+    */
+    clipDaDefesa(p, alvoX, alvoY) {
+        const D = GoalkeeperDive;
+        if (typeof GkLowClip === 'undefined') return null;
+        if (typeof D.lateralMinClip !== 'number') return null;
+
+        const lateral = Math.abs(alvoX - p.model.position.x);
+        if (lateral < D.lateralMinClip) return null;
+
+        const alturaBaliza = (typeof ALTURA_BALIZA === 'number') ? ALTURA_BALIZA : 2.44;
+        const y = (typeof alvoY === 'number') ? alvoY : 0;
+        if (y <= alturaBaliza * D.bandaBaixa) return GkLowClip;
+        if (y <= alturaBaliza * D.bandaAlta) return GkJump3Clip;
+        return GkJumpClip;
+    },
+
+    /*
+    DESENHA O CLIP no instante em que o gesto vai.
+
+    O `norm` é o gesto inteiro — leitura, impulso e voo — e não a fase: os doze
+    fotogramas do pedido contam UMA história do princípio ao fim, e cortá-la em
+    fases era voltar ao que havia.
+
+    A aterragem e o levantar ficam de fora de propósito: essas fases têm o
+    `assentarDeitado` e o levantar, que mexem no corpo e não só nos membros.
+    */
+    poseDoClip(rig, d) {
+        if (!d || !d.clip || typeof amostrarClipDefesaGK !== 'function') return false;
+        const D = GoalkeeperDive;
+        const total = D.tempoLer + D.tempoImpulso + (d.tVoo || D.vooMax);
+        const K = amostrarClipDefesaGK(d.clip, (d.tGesto || 0) / Math.max(0.001, total));
+        if (!K) return false;
+        aplicarPoseLancamentoGR(rig, K);
+        return true;
+    },
+
     actualizarAlvo(p, d) {
         // So quando e o jogo a alimentar o mergulho: um mergulho montado a mao
         // (testes, cenarios) traz o alvo no `iniciar` e nao tem `gkAlvoX` vivo.
@@ -231,22 +294,33 @@ const GkDive = {
         if (!d) return false;
 
         d.t += dt;
+        // O relógio do GESTO, que atravessa as fases (ver `poseDoClip`).
+        d.tGesto = (d.tGesto || 0) + dt;
 
         switch (d.fase) {
             case 'ler':
-                // Agacha e carrega o peso na perna do lado do mergulho.
-                this.poseCarregar(rig, Math.min(1, d.t / D.tempoLer) * 0.4);
+                /*
+                Com clip, é ele que desenha; sem clip, o agachamento de sempre.
+                O mesmo nas duas fases seguintes — ver `poseDoClip`, e
+                GkLowClip (config/animations.js) para o porquê de haver clips.
+                */
+                if (!this.poseDoClip(rig, d)) {
+                    // Agacha e carrega o peso na perna do lado do mergulho.
+                    this.poseCarregar(rig, Math.min(1, d.t / D.tempoLer) * 0.4);
+                }
                 this.actualizarAlvo(p, d);
                 if (d.t >= D.tempoLer) { d.fase = 'impulso'; d.t = 0; }
                 break;
 
             case 'impulso': {
                 const k = Math.min(1, d.t / D.tempoImpulso);
-                // Comprime e estende: o pico da compressão é a meio.
-                this.poseCarregar(rig, Math.sin(k * Math.PI) * 0.9);
-                // E por cima disso a assimetria: a perna de baixo empurra o
-                // chão, a de cima já dobra para sair.
-                this.poseImpulso(rig, d, k);
+                if (!this.poseDoClip(rig, d)) {
+                    // Comprime e estende: o pico da compressão é a meio.
+                    this.poseCarregar(rig, Math.sin(k * Math.PI) * 0.9);
+                    // E por cima disso a assimetria: a perna de baixo empurra o
+                    // chão, a de cima já dobra para sair.
+                    this.poseImpulso(rig, d, k);
+                }
                 /*
                 OS BRAÇOS: arranque atrás, e depois JÁ A CAMINHO DA BOLA.
 
@@ -311,7 +385,7 @@ const GkDive = {
                 const base = ALTURA_BASE_Y + (D.alturaDeitado - ALTURA_BASE_Y) * s;
                 corpo.position.y = base + Math.max(0, salto);
 
-                this.poseVoo(rig, d);
+                if (!this.poseDoClip(rig, d)) this.poseVoo(rig, d);
                 this.mirarBola(p, rig);
                 // Passado o instante do contacto, o braço de trás sai do IK
                 // e estica ao longo do corpo.

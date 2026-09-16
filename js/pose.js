@@ -864,6 +864,43 @@ function amostrarClipPasse(norm) {
 }
 
 /*
+=============================================================================
+AS TRÊS DEFESAS — um amostrador só para os três clips
+=============================================================================
+`GkLowClip`, `GkJump3Clip` e `GkJumpClip` (config/animations.js) têm o mesmo
+vocabulário de canais do `GoalkeeperThrowClip`, portanto partilham o
+amostrador E o desenhador (`aplicarPoseLancamentoGR`). O que os distingue é o
+número de keyframes — 3, 4 e 5 — e isso o amostrador já lê do próprio clip.
+
+Quem escolhe qual deles corre é a ALTURA da bola (ver `clipDaDefesa` em
+js/gk_dive.js).
+=============================================================================
+*/
+function amostrarClipDefesaGK(clip, norm) {
+    const fr = clip && clip.frames;
+    if (!fr || fr.length < 2) return null;
+    const n = fr.length;
+    const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
+    const i = Math.min(n - 2, Math.floor(pos));
+    const u = pos - i;
+    const a = fr[i], b = fr[i + 1];
+    const mix = (k) => {
+        const va = (typeof a[k] === 'number') ? a[k] : 0;
+        const vb = (typeof b[k] === 'number') ? b[k] : 0;
+        return va + (vb - va) * u;
+    };
+    return {
+        chest: mix('chest'),
+        coxaL: mix('coxaL'), joelhoL: mix('joelhoL'),
+        coxaR: mix('coxaR'), joelhoR: mix('joelhoR'),
+        bracoLx: mix('bracoLx'), bracoLz: mix('bracoLz'),
+        bracoRx: mix('bracoRx'), bracoRz: mix('bracoRz'),
+        cotoveloL: mix('cotoveloL'), cotoveloR: mix('cotoveloR'),
+        altura: mix('altura')
+    };
+}
+
+/*
 Amostra o clip do arremesso lateral (ThrowInClip) num tempo normalizado 0..1.
 */
 function amostrarClipLateral(norm) {

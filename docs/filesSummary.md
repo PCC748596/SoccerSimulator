@@ -5,6 +5,200 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 16 de Setembro de 2026 — uma correcção que partiu o tiro de meta, o guarda-redes a sair a jogar, e as defesas em keyframes
+
+Sessão curta em pedidos e longa em consequências: a correcção da Lei 12 do dia
+anterior tinha partido o tiro de meta, e três dos quatro pedidos do dia foram
+sobre o guarda-redes.
+
+#### BUG: o guarda-redes cobrava o tiro de meta para si próprio
+
+Relato: *"BUG sério: o goleiro está batendo o tiro de meta para ele mesmo"*. E a
+causa foi a correcção da véspera — vale a pena o registo, porque é o padrão que
+interessa.
+
+A marca da Lei 12 (`Match.recuoParaGR`) passou a ser posta em QUALQUER toque com
+o pé, e só a limpam uma cabeçada, um peito, um toque do adversário ou o próprio
+guarda-redes pôr a bola longe. **Nenhuma dessas coisas acontece quando a bola sai
+pela linha de fundo**: a marca sobrevivia à saída de bola e entrava no tiro de
+meta. Medido: em **100% dos frames de GOAL_KICK** ela estava posta.
+
+Com as mãos "proibidas" ele deixa de ser tratado como guarda-redes — o
+`resolveBallContact` só salta os que têm as mãos livres, e o `updateGK` manda-o
+jogar de pé. A bola parada do lance virava bola dele.
+
+Duas correcções, porque eram dois buracos:
+
+1. **Um lance parado acaba com o recuo.** `limparRecuoParaGR()` no início do
+   `setupSetPiece`, num sítio só para os seis lances: o que dava direito ao
+   livre indirecto acabou quando a bola saiu.
+2. **A bola do tiro de meta não se toca.** O `GOAL_KICK` faltava na lista de
+   bolas paradas protegidas ao lado do lateral, da falta e do penálti
+   (`resolveBallContact`). Passou a notar-se quando a espera do lance deixou de
+   ser fixa e a bola passou a ficar segundos ao lado dele.
+
+Depois: 0% dos frames com a marca posta, e o primeiro a tocar depois do pontapé
+é sempre outro jogador.
+
+> **A lição, que já é a terceira desta série:** uma regra que só se limpa por
+> eventos DE JOGO (toques, partes do corpo) não sobrevive a uma bola que sai.
+> Quem escrever a próxima que se pergunte o que lhe acontece numa reposição.
+
+#### O guarda-redes chutava para a frente com a bola servida
+
+Relato: *"tem um jogador com pontuação de passe maior que 1000 mas mesmo assim o
+goleiro chuta pra frente. Não deveria chutar pra frente só se não tivesse uma
+opção boa pra sair jogando?"*.
+
+Deveria. Medido em 60 min (`tools/scratch/gk_saida.js`): 30 posses, 16 acabadas
+em chutão, **11 delas com uma opção de passe acima de 1000** — laterais a 1418 e
+1462. Três causas empilhadas, em três sítios diferentes:
+
+1. **A decisão usava um segundo critério.** O `acharLateralParaSaida` é muito
+   mais estreito do que o avaliador de passes: só LB/RB/CB/DC **e** com o
+   adversário a mais de 4 m. Sem candidato, a chance de sair a jogar era posta a
+   ZERO — chutão garantido. Nas 16 medidas o `gkThrowTarget` era nulo em todas.
+2. **O executor tinha o mesmo desacordo.** Com a decisão em "sair a jogar" e sem
+   alvo pelo critério estreito, esperava 8 s e chutava na mesma.
+3. **A decisão ficava congelada.** É sorteada uma vez por posse, no instante em
+   que ele agarra a bola — com a equipa desorganizada e as notas baixas.
+
+Agora quem responde a "há opção boa?" é a NOTA do avaliador de passes, a mesma
+que se vê no painel (`_melhorNotaPasse`, posto pelo próprio avaliador):
+
+    nota >= `notaSempreSair` (1000)      sai a jogar, sempre
+    nota >= `notaMinimaParaSair` (900)   decide o estilo da equipa
+    abaixo                                chutão
+
+O executor ganhou uma reserva (`alvoDaSaidaCurta`): quando o critério estreito
+não dá ninguém, vale a melhor opção do avaliador — **larga o filtro da POSIÇÃO e
+mantém o da MARCAÇÃO**. Qual dos dois rejeitava mediu-se: passam os dois filtros
+1.9 companheiros por posse, e nas 6 posses sem candidato as 6 tinham alguém
+desmarcado que não era defesa. Servir a bola a um homem marcado é oferta, e há um
+teste que o prende. E a decisão pode SUBIR para "sair a jogar" quando aparece uma
+opção acima do patamar, nunca no sentido inverso — é isso que a impede de voltar
+a ser um sorteio por frame.
+
+Medido depois, em 3 h de jogo: **97% lançados com a mão, 3% chutados, zero
+chutões com uma opção acima de 1000**.
+
+> **Duas armadilhas de medição, as duas registadas no código:**
+> A primeira métrica media a INTENÇÃO (`gkSaida`) e não o desfecho — com a
+> decisão em "sair a jogar" e sem destinatário, ele chutava na mesma. Só a
+> transição `segurando → lancando/chutando` diz o que aconteceu.
+> A segunda: a linha que desiste de sair a jogar escreve `gkSaida =
+> 'chuteFrente'` sem passar pela decisão, portanto a nota guardada era de uma
+> posse ANTERIOR. Ficou a ser limpa, senão quem medir lê um número que não
+> pertence ao lance — e foi o que me fez pensar que a regra estava a ser
+> ignorada quando não estava.
+
+**O compromisso, que é do utilizador decidir:** com o patamar em 1000 e a mediana
+das notas disponíveis em 1208, o estilo da equipa deixou praticamente de ter voto
+— um Direct já não chuta mais do que um Possession. Subir o `notaSempreSair` para
+1300 devolve a diferença (22% de chutões).
+
+#### As defesas passaram a ser keyframes
+
+Relato, com doze fotogramas de referência e os nomes: *"depois do pulo coloca os
+braços para trás antes da bola chegar; quando a bola toca vai instantaneamente
+para o chão e coloca os braços para baixo; começa a girar com a bola parada;
+bate no chão e fica apoiado na mão uns 2 ou 3 segundos; começa a girar para o
+lado oposto flutuando"*.
+
+A causa é de arquitectura: o mergulho era **procedimental** — três poses de
+destino (`poseImpulso`/`poseVoo`/`poseChao`) perseguidas com `lerpTo` em fases
+cronometradas. Uma pose perseguida tem destino mas não tem ORDEM, e por isso o
+gesto não conta uma história.
+
+Três clips novos, no mesmo esquema do `ShotClip`/`PassClip` e com o vocabulário
+de canais do `GoalkeeperThrowClip` (portanto sem desenhador novo):
+
+| clip | banda | keyframes |
+|---|---|---|
+| `GkLowClip` | até 1/3 da altura da baliza (0.81 m) | 3 |
+| `GkJump3Clip` | de 1/3 a 2/3 (0.81 a 1.63 m) | 4 |
+| `GkJumpClip` | de 2/3 para cima | 5 |
+
+As bandas são FRACÇÕES de `ALTURA_BALIZA` e não metros escritos à mão, e todas
+valem só acima de `lateralMinClip` (4 m) — abaixo disso a bola está ao alcance do
+corpo e quem trata dela é o ramo `maos`, que não mudou.
+
+O relógio do clip atravessa as fases (`tGesto`) em vez de reiniciar em cada uma:
+os doze fotogramas contam uma história só, e cortá-la por fase era voltar ao que
+havia. Os três aparecem no editor de animação como qualquer outro clip.
+
+**O que ficou por fazer, e está dito ao utilizador:** os ângulos são uma leitura
+das fotografias e afinam-se no editor; os braços estão SIMÉTRICOS e nas imagens
+não estão (valores assimétricos ficariam certos num lado e trocados no outro —
+precisa do espelho que o `pernas()` já faz para as pernas); e a queda e o
+levantar ficaram de fora dos clips, que são as fases que mexem no corpo e não só
+nos membros.
+
+#### O editor de animação: três defeitos reais e um que não era
+
+Relato: *"os eixos de rotação têm que ser relativos à parte do corpo; tem partes
+do corpo que não têm rotação (ex: mão); o tronco eu não consigo girar para os
+lados; quando eu movo a junta do corpo só a cabeça e braços movem junto, as
+pernas não se movem"*.
+
+1. **Os eixos eram os do MUNDO.** O `TransformControls` roda em espaço de mundo
+   por omissão e o editor nunca chamava `setSpace`; o que ele escreve no keyframe
+   é o ângulo LOCAL. As duas coisas só coincidem com a junta em repouso — com o
+   braço já levantado, puxar o anel "x" mexia nos três ângulos locais e só os que
+   têm canal eram guardados. `setSpace('local')`.
+2. **As mãos não tinham canal nenhum** e o gizmo abria sem anéis. Seis canais
+   novos (`maoLx/y/z`, `maoRx/y/z`), com a regra dos pés: o eixo que o keyframe
+   não traz fica como está.
+3. **O tronco tinha o Z preso a zero** no `aplicarPoseRemate` — não era o gizmo.
+   Canal `chestZ`, espelhado com o lado que bate como o `chestY`.
+4. **As pernas não estão desligadas do corpo.** Medido: `pelvisY +0.6` move
+   `lLeg` 0.085 m e `lFoot` 0.071; `chest +0.5` move-as 0.000. A junta que move
+   cabeça e braços e deixa as pernas quietas é o **chest**, e isso é anatómico —
+   as pernas penduram na bacia. A hierarquia está certa.
+
+Os três canais novos tiveram de ser ligados também nos AMOSTRADORES — a mesma
+armadilha dos pés do passe: o editor escrevia-os, o desenhador sabia lê-los, e o
+amostrador no meio deitava-os fora.
+
+#### Os pés no clip do passe
+
+Valores do utilizador para os keyframes 2 a 7 (`peLx`/`peLy` no pé de apoio,
+`peRx`/`peRy` no que bate). O `amostrarClipPasse` não devolvia esses canais,
+portanto os valores ficariam escritos no clip e morriam ali.
+
+Ao ligá-los apareceu uma armadilha: para a anca e o tornozelo o valor "ausente" é
+zero, mas **os pés em repouso estão abertos em ±PI/16** — tratar a ausência como
+zero fechava-os de repente nos keyframes 1 e 8. O `mixPe` usa o repouso do pé
+como valor em falta, que é o que "este keyframe não mexe nos pés" quer dizer.
+
+**Fica por resolver:** o `PassFollowThrough` encolhe o seguimento num passe curto
+e escala só `coxaChute` e `joelhoChute` — não os pés. Num toque de três metros a
+coxa fica a 35% e o `peRx` do frame 6 mantém-se inteiro. Escalar o pé não é
+multiplicar por `k`: o repouso dele não é zero.
+
+#### Relvado e bancadas
+
+- **As duas cores do relvado** saíram do meio do `createField` para o config
+  (`RelvaCores`, config/physics.js): eram dois `#hex` soltos a meio da construção
+  da textura. Trocar o verde é trocar duas linhas.
+- **Fora do campo é só a cor escura.** A textura era de UMA dimensão — 16 px de
+  largura, cada linha pintada de ponta a ponta —, portanto a cor só podia variar
+  ao longo do comprimento e as faixas do corte atravessavam o run-off todo.
+  Passou a 256x512: cada faixa pinta-se toda de escuro e só depois se pinta o
+  pedaço dentro das linhas laterais.
+- **Os vãos das bancadas fechados.** Eram 10 buracos de 6.6 a 9.4 m: as rectas
+  acabavam nos limites do CAMPO — que era onde as esquinas ficavam com as
+  bancadas a 4.5 m — e ao afastá-las para 12 as esquinas foram para fora e as
+  rectas não. O fim das rectas passou a sair da geometria da esquina
+  (`cornerX`/`cornerZ`), portanto o anel fecha sozinho em qualquer recuo. Medido:
+  **0 vãos acima de 3 m**, o maior agora 2.82 (os corredores de escadas).
+
+> **Medir uma textura sem ecrã tem duas armadilhas, as duas no cabeçalho do
+> `tools/scratch/relva_cores.js`:** o canvas do harness headless é falso e o
+> `getImageData` devolve zeros (a primeira versão deu tudo a preto e "0 claras",
+> que parecia certo e não media nada); e o registo das pinturas tem de ser POR
+> CANVAS, senão o pixel do relvado vem com a cor de uma etiqueta pintada depois.
+
 ### Sessão de 15 de Setembro de 2026 (2) — a arbitragem, a posse, e o guarda-redes a decidir por metros
 
 Treze relatos visuais, todos medidos antes de se mexer e outra vez depois. As
@@ -216,7 +410,13 @@ guarda-redes está a dois metros dele. A Lei 12 fala do PÉ: a folga foi removid
 
 Faltava também um frame — a marca só era recalculada no `Match.update` seguinte,
 depois do contacto, e o caso mais comum resolve-se no mesmo frame. Passou a ser
-escrita no próprio toque. Sobra uma distância, `libertaComOPe` (8 m), e só para
+escrita no próprio toque.
+
+> **ISTO PARTIU O TIRO DE META, e foi preciso o dia seguinte para dar por isso.**
+> A marca deixou de ter quem a limpasse quando a bola sai pela linha de fundo, e
+> entrava no lance seguinte: em 100% dos frames de GOAL_KICK ela estava posta, e
+> com as mãos "proibidas" o guarda-redes cobrava o tiro de meta para si próprio.
+> Ver a sessão de 16 de Setembro, no topo. Sobra uma distância, `libertaComOPe` (8 m), e só para
 o toque do PRÓPRIO guarda-redes: ele não se absolve a si mesmo, mas quando põe a
 bola longe a fase acabou. Depois: **0 infracções** em 30 min.
 
@@ -7306,6 +7506,28 @@ Coisas medidas e por resolver, para não se voltarem a descobrir por acaso.
 > (os pontapés de baliza a zero), que já não acontecia. Uma lista de problemas
 > envelhece tão depressa como o código.
 
+### Aberto desde 16 de Setembro de 2026
+
+- **As defesas novas têm os braços simétricos, e nas fotografias não estão.** Os
+  `GkLowClip`/`GkJump3Clip`/`GkJumpClip` escrevem esquerda e direita
+  literalmente, e um mergulho acontece para os dois lados — valores assimétricos
+  ficariam certos num lado e trocados no outro. Falta o espelho, que o
+  `GkDive.pernas()` já faz para as pernas. E os ângulos são uma LEITURA das
+  imagens de referência, não uma medição: afinam-se no editor.
+- **A queda e o levantar do mergulho continuam procedimentais.** Os clips cobrem
+  a leitura, o impulso e o voo; as fases de chão mexem no CORPO (o
+  `assentarDeitado`, o tombo) e não só nos membros. Os "2 ou 3 segundos apoiado
+  na mão" e o giro no chão do relato vêm de lá.
+- **O seguimento do passe não escala os pés.** O `PassFollowThrough` encolhe
+  `coxaChute` e `joelhoChute` num passe curto e deixa `peRx`/`peRy` inteiros — o
+  tornozelo faz o seguimento todo numa perna que quase não se mexe. Escalar o pé
+  não é multiplicar por `k`: o repouso dele é ±PI/16 e não zero.
+- **O estilo da equipa deixou de pesar na saída do guarda-redes.** Com o
+  `notaSempreSair` em 1000 e a mediana das notas disponíveis em 1208, quase
+  sempre sai a jogar: um Direct já não chuta mais do que um Possession. Subir o
+  patamar para 1300 devolve a diferença (22% de chutões) — é uma linha, e é uma
+  escolha de jogo e não um defeito.
+
 ### Aberto desde 15 de Setembro de 2026
 
 - **Roubar a bola por trás: resolvido a um quarto.** A guarda do
@@ -9263,6 +9485,12 @@ padrão de fluxograma pro PositionBT/PlayerBT.
 | Tempo de espera do lateral / do canto | `config/tactics.js` → `ESPERA_COBRANCA_LATERAL` / `ESPERA_COBRANCA_CANTO` / `ESPERA_APOS_REPOSICAO` |
 | O replay automático do golo (duração, câmara, ON/OFF) | `match_replay.js` → `REPLAY_GOLO` e `replayDoGolo`; botão `#btn-replay-auto` no painel direito |
 | Distância das bancadas às linhas | `match_setup.js` → `RECUO_LATERAL` / `RECUO_FUNDO` / `RAIO_PRIMEIRA_FILA` (o arco da esquina depende dos três) |
+| Buracos no anel de cadeiras | `match_setup.js` → `cornerX` / `cornerZ`; as rectas têm de acabar onde as esquinas começam. Ferramenta: `tools/scratch/vaos_bancada.js` |
+| A cor do relvado, dentro e fora do campo | `config.js` → `RelvaCores`; a textura é construída no `createField` (`match_setup.js`). Ferramenta: `tools/scratch/relva_cores.js` |
+| O guarda-redes a chutar com opções de passe boas | `config.js` → `GoalkeeperDistribution.notaSempreSair` / `.notaMinimaParaSair`; `bt/player_bt.js` → `decidirSaidaGK` e `alvoDaSaidaCurta`. Ferramenta: `tools/scratch/gk_saida.js` |
+| O gesto de uma defesa (baixa, média, alta) | `config.js` → `GkLowClip` / `GkJump3Clip` / `GkJumpClip`; as bandas em `GoalkeeperDive.bandaBaixa` / `.bandaAlta` / `.lateralMinClip`; a escolha em `gk_dive.js` → `clipDaDefesa` |
+| Um canal novo no editor de animação não aparecer no jogo | Os três sítios: o keyframe (`config/animations.js`), o AMOSTRADOR (`pose.js`) e o desenhador. Esquecer o do meio é o erro repetido |
+| Rodar a mão, ou inclinar o tronco para o lado, no editor | `pose.js` → `aplicarPesECabeca` (`maoL*`/`maoR*`) e `aplicarPoseRemate` (`chestZ`); mapeados em `animEditor.js` → `canaisDaJunta` |
 | Quão perto a câmara chega, e os limites do zoom | `config.js` → `CameraZoom.distanciaMinima` / `.min` / `.max`; o limite é aplicado no `updateCamera` (`match_ui.js`) |
 | Os limites das zonas da falta (defesa/meio/ataque) | `config.js` → `FreeKickModel.setores`; `utils.js` → `setorDaFalta` |
 | Alvos e altura do cruzamento da falta lateral | `config.js` → `FreeKickModel.cruzamentos`; `utils.js` → `cruzamentoDeFalta` |

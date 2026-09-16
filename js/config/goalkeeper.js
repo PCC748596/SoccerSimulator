@@ -744,6 +744,26 @@ const GoalkeeperDive = {
     alcanceLateralMax: 5.0,
 
     /*
+    =====================================================================
+    QUAL DAS TRÊS DEFESAS, E QUANDO É QUE ELAS VALEM
+    =====================================================================
+    Pedido, com os doze fotogramas: três gestos separados por ALTURA DA BOLA —
+    baixa até 1/3 da baliza, média de 1/3 a 2/3, alta daí para cima — e todos
+    "para bolas a mais de 4 metros lateralmente do goleiro".
+
+    As fracções ficam aqui e não em números absolutos porque a baliza tem a
+    medida dela (`ALTURA_BALIZA`, 2.44 m): um terço são 0.81 m e dois terços
+    1.63. Escrever 0.81 à mão era escrever a altura da baliza duas vezes.
+
+    `lateralMinClip` é o corte do pedido. Abaixo dele a bola está ao alcance
+    do corpo e o que se faz não é um mergulho — é o ramo 'maos', que já existe
+    e não muda (ver GoalkeeperPose.mergulhoLateralMin).
+    */
+    bandaBaixa: 1 / 3,        // fracção da altura da baliza
+    bandaAlta: 2 / 3,
+    lateralMinClip: 4.0,      // metros de lado, abaixo disto não há clip
+
+    /*
     E NÃO SE ATIRA COM A BOLA AINDA LONGE.
 
     Medido antes disto (`tools/scratch/gk_mergulho.js`, 30 min): **92% dos

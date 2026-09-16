@@ -650,6 +650,150 @@ O braço esquerdo contrabalança: começa à frente e sai para trás quando o
 direito acelera para a frente.
 =============================================================================
 */
+/*
+=============================================================================
+AS TRÊS DEFESAS DO GUARDA-REDES — por altura da bola
+=============================================================================
+Pedido, com doze fotogramas de referência e os nomes dos keyframes:
+
+    Defesa BAIXA   (até 1/3 da altura da baliza)   GK_Low(1..3)
+    Defesa MÉDIA   (de 1/3 a 2/3)                  GK_Jump3(1..4)
+    Defesa ALTA    (de 2/3 para cima)              GK_Jump(1..5)
+
+    "Todas para bolas a mais de 4 metros lateralmente do goleiro."
+
+O QUE ISTO SUBSTITUI, e porquê. O mergulho era PROCEDIMENTAL: três poses de
+destino (`poseImpulso`/`poseVoo`/`poseChao`, js/gk_dive.js) perseguidas com
+`lerpTo` em fases cronometradas. Cada pose era um alvo, não um desenho, e o que
+se via era o relato: *"depois do pulo coloca os braços para trás antes da bola
+chegar; quando a bola toca vai instantaneamente para o chão e coloca os braços
+para baixo; começa a girar com a bola parada; fica apoiado na mão uns 2 ou 3
+segundos; começa a girar para o lado oposto flutuando"*. Poses perseguidas por
+interpolação não têm ordem — só destino — e por isso o gesto não conta uma
+história.
+
+Keyframes contam. O vocabulário é o dos outros clips do guarda-redes (ver
+GoalkeeperThrowClip aqui em baixo), portanto o desenhador é o mesmo e estes
+clips aparecem no editor de animação como qualquer outro.
+
+O QUE OS CLIPS **NÃO** CONTROLAM: a trajectória do corpo e o tombo para o lado.
+Esses são física — a parábola do salto e o eixo de queda — e continuam no
+`GkDive`. Aqui só vivem os MEMBROS e o tronco, que é onde estão todos os
+defeitos do relato.
+
+Os ângulos são uma primeira passagem lida das fotografias, para o gesto ter a
+forma certa; afinam-se no editor (animEditor.html), que é onde estes números se
+vêem a mexer. Convenção do ombro, que é contra-intuitiva e está medida no
+js/joint_limits.js: `bracoX` NEGATIVO é o braço para a FRENTE (-1.57 ≈ braço na
+horizontal à frente, -2.4 ≈ por cima da cabeça); positivo manda-o para trás.
+=============================================================================
+*/
+
+/*
+DEFESA BAIXA — a bola rasteira, até 1/3 da baliza (0.81 m).
+
+Três fotogramas: a saída baixa com o corpo já inclinado, o voo rente ao chão
+com os dois braços esticados para a bola, e a chegada com o corpo a travar em
+cima dela. As pernas ficam atrás e não se recolhem: numa defesa baixa não há
+altura para recolher nada.
+*/
+const GkLowClip = {
+    contactFrame: 2,
+    frames: [
+        // GK_Low(1) — impulso baixo: agacha, o tronco já vai à frente e os
+        // braços partem de baixo, à frente do corpo.
+        { chest: 0.30, coxaL: -0.35, joelhoL: 0.95, coxaR: -0.20, joelhoR: 0.75,
+          bracoLx: -0.95, bracoLz: 0.55, bracoRx: -0.95, bracoRz: -0.55,
+          cotoveloL: -0.55, cotoveloR: -0.55, altura: 0.00 },
+        // GK_Low(2) — CONTACTO: corpo esticado rente ao chão, os dois braços
+        // à frente, cotovelos quase direitos. É a fotografia da mão na bola.
+        { chest: 0.18, coxaL: -0.55, joelhoL: 0.55, coxaR: -0.45, joelhoR: 0.40,
+          bracoLx: -1.45, bracoLz: 0.30, bracoRx: -1.45, bracoRz: -0.30,
+          cotoveloL: -0.12, cotoveloR: -0.12, altura: 0.00 },
+        // GK_Low(3) — chegada: o corpo assenta de lado, os braços fecham
+        // sobre a bola e as pernas dobram atrás.
+        { chest: 0.35, coxaL: -0.30, joelhoL: 1.10, coxaR: -0.25, joelhoR: 0.95,
+          bracoLx: -1.25, bracoLz: 0.20, bracoRx: -1.25, bracoRz: -0.20,
+          cotoveloL: -0.45, cotoveloR: -0.45, altura: 0.00 }
+    ]
+};
+
+/*
+DEFESA A MEIA-ALTURA — de 1/3 a 2/3 (0.81 a 1.63 m).
+
+Quatro fotogramas: o agachamento, a saída com o corpo a subir, o voo na
+horizontal com os braços à frente do peito, e a chegada. É o mergulho clássico
+de perfil.
+*/
+const GkJump3Clip = {
+    contactFrame: 3,
+    frames: [
+        // GK_Jump3(1) — agacha e carrega o peso na perna do lado da bola.
+        { chest: 0.22, coxaL: -0.25, joelhoL: 1.05, coxaR: -0.10, joelhoR: 0.85,
+          bracoLx: -0.70, bracoLz: 0.70, bracoRx: -0.70, bracoRz: -0.70,
+          cotoveloL: -0.70, cotoveloR: -0.70, altura: -0.05 },
+        // GK_Jump3(2) — sai do chão: o tronco alinha e os braços sobem à
+        // frente, ainda com o cotovelo dobrado.
+        { chest: 0.10, coxaL: -0.50, joelhoL: 0.80, coxaR: -0.30, joelhoR: 0.60,
+          bracoLx: -1.25, bracoLz: 0.45, bracoRx: -1.25, bracoRz: -0.45,
+          cotoveloL: -0.40, cotoveloR: -0.40, altura: 0.00 },
+        // GK_Jump3(3) — CONTACTO: extensão máxima, corpo na horizontal, os
+        // dois braços esticados à altura do peito e as pernas atrás.
+        { chest: -0.05, coxaL: -0.75, joelhoL: 0.45, coxaR: -0.60, joelhoR: 0.30,
+          bracoLx: -1.70, bracoLz: 0.25, bracoRx: -1.70, bracoRz: -0.25,
+          cotoveloL: -0.05, cotoveloR: -0.05, altura: 0.00 },
+        // GK_Jump3(4) — chegada ao chão: os braços seguram à frente e as
+        // pernas recolhem.
+        { chest: 0.25, coxaL: -0.35, joelhoL: 1.00, coxaR: -0.30, joelhoR: 0.85,
+          bracoLx: -1.35, bracoLz: 0.20, bracoRx: -1.35, bracoRz: -0.20,
+          cotoveloL: -0.35, cotoveloR: -0.35, altura: 0.00 }
+    ]
+};
+
+/*
+DEFESA ALTA — de 2/3 da baliza para cima (1.63 m e acima).
+
+Cinco fotogramas: agacha, sai, sobe com os braços a passar dos ombros,
+extensão máxima com os dois braços por cima da cabeça (a bola no ângulo), e a
+queda. É o gesto mais longo dos três, e por isso tem mais um keyframe do que os
+outros — o tempo entre sair do chão e chegar ao ângulo é o que se vê.
+*/
+const GkJumpClip = {
+    contactFrame: 4,
+    frames: [
+        // GK_Jump(1) — agachamento profundo: é daqui que sai a altura.
+        { chest: 0.28, coxaL: -0.20, joelhoL: 1.25, coxaR: -0.05, joelhoR: 1.05,
+          bracoLx: -0.55, bracoLz: 0.75, bracoRx: -0.55, bracoRz: -0.75,
+          cotoveloL: -0.85, cotoveloR: -0.85, altura: -0.08 },
+        // GK_Jump(2) — a impulsão: pernas a estender, braços a arrancar para
+        // cima à frente do corpo.
+        { chest: 0.12, coxaL: -0.45, joelhoL: 0.85, coxaR: -0.20, joelhoR: 0.60,
+          bracoLx: -1.30, bracoLz: 0.55, bracoRx: -1.30, bracoRz: -0.55,
+          cotoveloL: -0.50, cotoveloR: -0.50, altura: 0.02 },
+        // GK_Jump(3) — no ar, os braços passam a linha dos ombros e o corpo
+        // estica.
+        { chest: -0.02, coxaL: -0.70, joelhoL: 0.55, coxaR: -0.45, joelhoR: 0.40,
+          bracoLx: -1.95, bracoLz: 0.35, bracoRx: -1.95, bracoRz: -0.35,
+          cotoveloL: -0.20, cotoveloR: -0.20, altura: 0.00 },
+        // GK_Jump(4) — CONTACTO: os dois braços por cima da cabeça, cotovelos
+        // direitos, corpo em linha. É a fotografia do ângulo.
+        { chest: -0.12, coxaL: -0.85, joelhoL: 0.35, coxaR: -0.70, joelhoR: 0.25,
+          bracoLx: -2.35, bracoLz: 0.22, bracoRx: -2.35, bracoRz: -0.22,
+          cotoveloL: 0.00, cotoveloR: 0.00, altura: 0.00 },
+        // GK_Jump(5) — a queda: os braços descem com a bola e as pernas
+        // recolhem para a aterragem.
+        { chest: 0.20, coxaL: -0.40, joelhoL: 1.05, coxaR: -0.35, joelhoR: 0.90,
+          bracoLx: -1.55, bracoLz: 0.18, bracoRx: -1.55, bracoRz: -0.18,
+          cotoveloL: -0.40, cotoveloR: -0.40, altura: 0.00 }
+    ]
+};
+
+if (typeof window !== 'undefined') {
+    window.GkLowClip = GkLowClip;
+    window.GkJump3Clip = GkJump3Clip;
+    window.GkJumpClip = GkJumpClip;
+}
+
 const GoalkeeperThrowClip = {
     bracoLancamento: 'r', // Braço que lança a bola
     frames: [

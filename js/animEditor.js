@@ -41,6 +41,45 @@ const CLIPS = {
         },
         amostrar: (t) => amostrarClipPasse(t)
     },
+    /*
+    As três defesas. O desenhador é o do lançamento com a mão — os canais são
+    os mesmos (ver amostrarClipDefesaGK, js/pose.js) — e por isso não há um
+    desenhador novo para manter a par.
+
+    A DURAÇÃO é a do gesto no jogo, e vem do GoalkeeperDive: `tempoLer` e
+    `tempoImpulso` mais o voo. Aqui usa-se o voo máximo, que é o que dá para
+    ver o gesto inteiro sem pressa.
+    */
+    GkLowClip: {
+        rotulo: 'Defesa baixa (GK_Low)',
+        clip: () => GkLowClip,
+        duracao: () => GoalkeeperDive.tempoLer + GoalkeeperDive.tempoImpulso + GoalkeeperDive.vooMax,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseLancamentoGR(rig, K);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipDefesaGK(GkLowClip, t)
+    },
+    GkJump3Clip: {
+        rotulo: 'Defesa média (GK_Jump3)',
+        clip: () => GkJump3Clip,
+        duracao: () => GoalkeeperDive.tempoLer + GoalkeeperDive.tempoImpulso + GoalkeeperDive.vooMax,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseLancamentoGR(rig, K);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipDefesaGK(GkJump3Clip, t)
+    },
+    GkJumpClip: {
+        rotulo: 'Defesa alta (GK_Jump)',
+        clip: () => GkJumpClip,
+        duracao: () => GoalkeeperDive.tempoLer + GoalkeeperDive.tempoImpulso + GoalkeeperDive.vooMax,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseLancamentoGR(rig, K);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipDefesaGK(GkJumpClip, t)
+    },
     GoalkeeperKickClip: {
         rotulo: 'Chutão do guarda-redes',
         clip: () => GoalkeeperKickClip,
