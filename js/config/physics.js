@@ -468,7 +468,7 @@ Os valores actuais vieram de duas amostras dadas pelo utilizador. Se o tom não
 bater certo com a amostra, é aqui — e só aqui.
 */
 const RelvaCores = {
-    clara: '#6E9B37',    // a faixa a favor do corte
+    clara: '#618830',    // a faixa a favor do corte
     escura: '#4E8F3C'    // a do sentido contrário
 };
 if (typeof window !== 'undefined') window.RelvaCores = RelvaCores;
