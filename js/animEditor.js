@@ -145,6 +145,13 @@ const LEGENDAS = {
     peRy: 'abre o pé direito para fora',
     cabecaX: '> 0 queixo desce (olha para o chão)',
     cabecaY: 'roda a cabeça para o lado',
+    chestZ: 'inclina o tronco para o LADO (> 0 para o lado que bate)',
+    maoLx: '> 0 dobra o punho esquerdo para a frente',
+    maoLy: 'roda a palma esquerda (pronação/supinação)',
+    maoLz: 'desvia o punho esquerdo para o lado',
+    maoRx: '> 0 dobra o punho direito para a frente',
+    maoRy: 'roda a palma direita (pronação/supinação)',
+    maoRz: 'desvia o punho direito para o lado',
     altura: 'metros: sobe (> 0) ou baixa (< 0) o corpo todo',
     posX: 'metros: move o corpo para os lados (eixo X)',
     posZ: 'metros: move o corpo para a frente/trás (eixo Z)'
@@ -157,7 +164,11 @@ const AMPLITUDE = {
     altura: 0.5, posX: 1.0, posZ: 1.0, giro: 1.2,
     // Pés e cabeça andam em ângulos pequenos; um slider de ±3.2 tornava-os
     // impossíveis de afinar.
-    peLx: 1.0, peLy: 1.0, peRx: 1.0, peRy: 1.0, cabecaX: 1.2, cabecaY: 1.6
+    peLx: 1.0, peLy: 1.0, peRx: 1.0, peRy: 1.0, cabecaX: 1.2, cabecaY: 1.6,
+    // O punho e a inclinação lateral do tronco também vivem em ângulos
+    // pequenos: um slider de ±3.2 dava meia volta ao pulso por um pixel.
+    chestZ: 1.0,
+    maoLx: 1.2, maoLy: 1.6, maoLz: 1.2, maoRx: 1.2, maoRy: 1.6, maoRz: 1.2
 };
 
 /*
@@ -166,7 +177,8 @@ hoje. Aparecem no painel na mesma, a zero, e só passam a existir no clip
 quando se lhes mexe — é o que deixa controlá-los sem reescrever os cinco
 clips à mão.
 */
-const CANAIS_OPCIONAIS = ['peLx', 'peLy', 'peRx', 'peRy', 'cabecaX', 'cabecaY', 'posX', 'posZ'];
+const CANAIS_OPCIONAIS = ['peLx', 'peLy', 'peRx', 'peRy', 'cabecaX', 'cabecaY',
+    'maoLx', 'maoLy', 'maoLz', 'maoRx', 'maoRy', 'maoRz', 'chestZ', 'posX', 'posZ'];
 const AMPLITUDE_OMISSAO = 3.2;
 
 // Quebra de linha, escrita assim para nao haver escapes a partir-se nos
@@ -934,7 +946,14 @@ const Editor = {
                 if (c === 'ThrowInClip') return { x: 'pelvisX', posY: 'altura' };
                 return { posY: 'altura' };
             case 'chest':
-                return (c === 'ShotClip' || c === 'PassClip' || c === 'BallControlRightClip') ? { x: 'chest', y: 'chestY' } : { x: 'chest' };
+                /*
+                O `chestZ` é a inclinação LATERAL do tronco. Relato: *"o tronco
+                eu não consigo girar para os lados"* — e não conseguia mesmo: o
+                canal não existia, e o `aplicarPoseRemate` escrevia z = 0 a
+                todos os frames.
+                */
+                return (c === 'ShotClip' || c === 'PassClip' || c === 'BallControlRightClip')
+                    ? { x: 'chest', y: 'chestY', z: 'chestZ' } : { x: 'chest' };
             case 'neck': return { x: 'cabecaX', y: 'cabecaY' };
             case 'lLeg': return perna('l');
             case 'rLeg': return perna('r');
@@ -946,6 +965,14 @@ const Editor = {
             case 'rElbow': return cotovelo('r');
             case 'lFoot': return { x: 'peLx', y: 'peLy' };
             case 'rFoot': return { x: 'peRx', y: 'peRy' };
+            /*
+            AS MÃOS RODAM — relato: *"tem partes do corpo que não têm rotação:
+            ex: mão"*. Não tinham canal nenhum, portanto o gizmo abria sem
+            anéis. Os três eixos: flexão (x), desvio (z) e a rotação do
+            antebraço (y), que é o que vira a palma.
+            */
+            case 'lHand': return { x: 'maoLx', y: 'maoLy', z: 'maoLz' };
+            case 'rHand': return { x: 'maoRx', y: 'maoRy', z: 'maoRz' };
             default: return null;
         }
     },
@@ -977,6 +1004,21 @@ const Editor = {
         }
         this.gizmo = new THREE.TransformControls(this.camera, this.renderer.domElement);
         this.gizmo.setMode('rotate');
+        /*
+        OS ANÉIS SÃO OS EIXOS DA PARTE DO CORPO, e não os do mundo.
+
+        Relato: *"os eixos de rotação têm que ser relativos à parte do corpo"*.
+        O `TransformControls` roda em espaço de MUNDO por omissão, e o que o
+        editor escreve no keyframe é o ângulo LOCAL (`no.rotation[eixo]`, ver
+        `lerDoGizmo`) — as duas coisas só coincidem com a junta em repouso.
+        Com o braço já levantado, puxar o anel "x" do mundo mexia nos três
+        ângulos locais de uma vez, e só os que têm canal eram guardados: o
+        resto perdia-se e a pose saltava.
+
+        Em espaço local, cada anel é UM ângulo local, que é exactamente o que o
+        keyframe guarda.
+        */
+        this.gizmo.setSpace('local');
         this.gizmo.setSize(0.6);
         this.scene.add(this.gizmo);
 

@@ -316,14 +316,19 @@ const ESCALA_CORPO = 1.8 / 5.5;
 if (typeof window !== 'undefined') window.ESCALA_CORPO = ESCALA_CORPO;
 
 /*
-PÉS E CABEÇA — canais OPCIONAIS, comuns a todos os clips.
+PÉS, CABEÇA E MÃOS — canais OPCIONAIS, comuns a todos os clips.
 
 Os pés estavam fixos em ±PI/16 e a cabeça nunca era tocada: nenhum dos cinco
 clips tinha canais para eles. Agora tem, mas só se o keyframe os trouxer — um
 keyframe sem eles comporta-se exactamente como antes, portanto acrescentar
 isto não mexeu em nenhuma animação existente.
 
-Canais: `peLx`, `peLy`, `peRx`, `peRy`, `cabecaX`, `cabecaY`.
+AS MÃOS entraram pelo mesmo caminho, e pela mesma razão: *"tem partes do corpo
+que não têm rotação: ex: mão"*. O nó existe no rig desde sempre (o IK precisa
+da ponta da cadeia) e nunca teve canais — no editor abria sem anéis nenhuns.
+
+Canais: `peLx`, `peLy`, `peRx`, `peRy`, `cabecaX`, `cabecaY`,
+        `maoLx`, `maoLy`, `maoLz`, `maoRx`, `maoRy`, `maoRz`.
 */
 function aplicarPesECabeca(rig, K) {
     if (!rig || !K) return;
@@ -341,6 +346,22 @@ function aplicarPesECabeca(rig, K) {
     if (rig.neck && (n(K.cabecaX) || n(K.cabecaY))) {
         rig.neck.rotation.set(n(K.cabecaX) ? K.cabecaX : 0,
             n(K.cabecaY) ? K.cabecaY : 0, 0);
+    }
+
+    /*
+    As mãos, com a mesma regra dos pés: o eixo que o keyframe não traz fica
+    como está. Aqui o repouso É zero nos três, portanto não há a armadilha do
+    `peLy` (ver `mixPe` no amostrador do passe).
+    */
+    if (rig.lHand) {
+        rig.lHand.rotation.set(n(K.maoLx) ? K.maoLx : rig.lHand.rotation.x,
+            n(K.maoLy) ? K.maoLy : rig.lHand.rotation.y,
+            n(K.maoLz) ? K.maoLz : rig.lHand.rotation.z);
+    }
+    if (rig.rHand) {
+        rig.rHand.rotation.set(n(K.maoRx) ? K.maoRx : rig.rHand.rotation.x,
+            n(K.maoRy) ? K.maoRy : rig.rHand.rotation.y,
+            n(K.maoRz) ? K.maoRz : rig.rHand.rotation.z);
     }
 }
 
@@ -421,7 +442,20 @@ function aplicarPoseRemate(rig, K) {
     rig.pelvis.position.set(0, 2.6, 0);
     rig.pelvis.rotation.set(0, chuteR ? K.pelvisY : -K.pelvisY, K.leanZ);
 
-    rig.chest.rotation.set(K.chest, chuteR ? K.chestY : -K.chestY, 0);
+    /*
+    O TRONCO INCLINA PARA O LADO — `chestZ`, opcional.
+
+    O terceiro componente estava preso a zero, e por isso o tronco não rodava
+    para os lados no editor por muito que se puxasse o anel: *"o tronco eu não
+    consigo girar para os lados"*. Sem o canal, continua zero e nenhuma
+    animação existente muda.
+
+    Espelha com o lado que bate, como o `chestY`: os clips são escritos para a
+    perna direita e o desenhador serve as duas.
+    */
+    const inclinar = K.chestZ || 0;
+    rig.chest.rotation.set(K.chest, chuteR ? K.chestY : -K.chestY,
+        chuteR ? inclinar : -inclinar);
 
     /*
     A ANCA DO LADO QUE BATE PODE ABRIR — `coxaChuteY`.
@@ -741,6 +775,15 @@ function amostrarClipRemate(norm) {
         bracoRx: mix('bracoRx'), bracoRz: mix('bracoRz'),
         cotoveloL: mix('cotoveloL'), cotoveloR: mix('cotoveloR'),
         coxaChuteY: mixOpt('coxaChuteY'), peChuteY: mixOpt('peChuteY'),
+        /*
+        Os canais que o editor ganhou depois — a inclinação lateral do tronco e
+        as três rotações de cada mão. O repouso de todos eles é ZERO, portanto
+        o `mixOpt` chega: um clip que não os traga desenha exactamente como
+        antes.
+        */
+        chestZ: mixOpt('chestZ'),
+        maoLx: mixOpt('maoLx'), maoLy: mixOpt('maoLy'), maoLz: mixOpt('maoLz'),
+        maoRx: mixOpt('maoRx'), maoRy: mixOpt('maoRy'), maoRz: mixOpt('maoRz'),
         altura: mix('altura')
     };
 }
@@ -751,6 +794,12 @@ Amostra o clip do passe (PassClip) num tempo normalizado 0..1.
 Os campos são os mesmos do ShotClip de propósito: o `aplicarPoseRemate` desenha
 os dois, e é isso que faz do PassClip oito linhas de dados em vez de um
 desenhador novo.
+
+E OS PÉS PASSAM POR AQUI. O `aplicarPesECabeca` sabe desenhar `peLx`/`peLy`/
+`peRx`/`peRy` desde que existam, e o editor (animEditor.js) já os deixava
+editar — mas este amostrador não os devolvia, portanto os valores que se
+punham nos keyframes do passe não chegavam ao jogo: eram escritos, guardados, e
+morriam aqui. Agora saem, com a regra do `mixPe` abaixo.
 */
 function amostrarClipPasse(norm) {
     const fr = PassClip.frames;
@@ -771,6 +820,30 @@ function amostrarClipPasse(norm) {
         const vb = (typeof b[k] === 'number') ? b[k] : 0;
         return va + (vb - va) * u;
     };
+
+    /*
+    OS PÉS TÊM OUTRO ZERO. Para a anca e o tornozelo do lado que bate, o valor
+    "ausente" é zero e o `mixOpt` chega. Para os pés não: em repouso eles estão
+    abertos em ±PI/16 (`criarPerna`, aqui neste ficheiro), e tratar a ausência
+    como zero fechava-os de repente no primeiro e no último keyframe.
+
+    Por isso o lado que falta vale o REPOUSO daquele pé, que é o mesmo que
+    dizer "esse keyframe não mexe nos pés" — e é exactamente o que um keyframe
+    sem o canal quer dizer.
+
+    E se NENHUM dos dois keyframes o traz, devolve-se `undefined`: aí o
+    `aplicarPesECabeca` deixa o pé como está, que é o contrato antigo e o que
+    mantém os outros clips sem mudança nenhuma.
+    */
+    const REPOUSO_PE = { peLx: 0, peLy: Math.PI / 16, peRx: 0, peRy: -Math.PI / 16 };
+    const mixPe = (k) => {
+        const temA = (typeof a[k] === 'number'), temB = (typeof b[k] === 'number');
+        if (!temA && !temB) return undefined;
+        const va = temA ? a[k] : REPOUSO_PE[k];
+        const vb = temB ? b[k] : REPOUSO_PE[k];
+        return va + (vb - va) * u;
+    };
+
     return {
         leanZ: mix('leanZ'), pelvisY: mix('pelvisY'),
         chest: mix('chest'), chestY: mix('chestY'),
@@ -780,6 +853,12 @@ function amostrarClipPasse(norm) {
         bracoRx: mix('bracoRx'), bracoRz: mix('bracoRz'),
         cotoveloL: mix('cotoveloL'), cotoveloR: mix('cotoveloR'),
         coxaChuteY: mixOpt('coxaChuteY'), peChuteY: mixOpt('peChuteY'),
+        peLx: mixPe('peLx'), peLy: mixPe('peLy'),
+        peRx: mixPe('peRx'), peRy: mixPe('peRy'),
+        // Tronco de lado e mãos: repouso zero, portanto `mixOpt` chega.
+        chestZ: mixOpt('chestZ'),
+        maoLx: mixOpt('maoLx'), maoLy: mixOpt('maoLy'), maoLz: mixOpt('maoLz'),
+        maoRx: mixOpt('maoRx'), maoRy: mixOpt('maoRy'), maoRz: mixOpt('maoRz'),
         altura: mix('altura')
     };
 }

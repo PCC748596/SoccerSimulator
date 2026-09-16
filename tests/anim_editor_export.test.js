@@ -253,9 +253,24 @@ console.log(String.fromCharCode(10) + '6 — o mapa junta -> canal');
                 fonte.indexOf(LF + '};', fonte.indexOf('const LateralPose = {')) + 3)}
              return LateralPose;`)();
 
-        const OPCIONAIS = ['peLx', 'peLy', 'peRx', 'peRy', 'cabecaX', 'cabecaY'];
+        /*
+        A LISTA DE OPCIONAIS SAI DO EDITOR, e não de uma cópia aqui.
+
+        Estava copiada à mão e ficou para trás assim que o editor ganhou canais
+        novos (o `chestZ` e as seis rotações das mãos): o teste reprovava um
+        mapeamento correcto por não conhecer o canal. Lida da fonte, não pode
+        voltar a divergir — e se alguém apagar a constante, o teste diz.
+        */
+        const mOpc = srcEditor.match(/const CANAIS_OPCIONAIS = \[([\s\S]*?)\];/);
+        if (!mOpc) {
+            erro('CANAIS_OPCIONAIS desapareceu do animEditor.js');
+        }
+        const OPCIONAIS = mOpc
+            ? mOpc[1].split(',').map(t => t.trim().replace(/^'|'$/g, '')).filter(Boolean)
+            : [];
+
         const JUNTAS = ['pelvis', 'chest', 'neck', 'lLeg', 'rLeg', 'lKnee', 'rKnee',
-            'lArm', 'rArm', 'lElbow', 'rElbow', 'lFoot', 'rFoot'];
+            'lArm', 'rArm', 'lElbow', 'rElbow', 'lFoot', 'rFoot', 'lHand', 'rHand'];
 
         let mausCanais = 0, semCanal = 0, comCanal = 0;
 

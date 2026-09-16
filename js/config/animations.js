@@ -282,22 +282,28 @@ const PassClip = {
 
     O remate não tem estes campos e continua a bater com o peito do pé: o
     amostrador dá-lhes zero quando o clip não os traz.
+
+    E OS PÉS, do keyframe 2 ao 7 (`peLx`/`peLy` no pé de APOIO, `peRx`/`peRy` no
+    que bate). Valores dados pelo utilizador a partir do editor de animação. O
+    1 e o 8 não os trazem de propósito: aí os pés valem o repouso (±PI/16), e é
+    o `mixPe` do amostrador (js/pose.js) que faz a passagem de um para o outro
+    sem salto — para os pés, "ausente" quer dizer repouso e não zero.
     */
     frames: [
         // 1  arranca: a perna de apoio avança, a de passe começa a recuar
         { leanZ: -0.03, pelvisY: 0.06, chest: 0.12, chestY: -0.06, coxaChute: 0.20, joelhoChute: 0.45, coxaApoio: -0.18, joelhoApoio: 0.28, bracoLx: -0.25, bracoLz: 0.60, bracoRx: 0.18, bracoRz: -0.30, cotoveloL: -0.45, cotoveloR: -0.55, coxaChuteY: 0.18, peChuteY: 0.22, altura: 0.00 },
         // 2  PÉ DE APOIO PLANTA ao lado da bola, tronco inclina sobre ele
-        { leanZ: -0.08, pelvisY: 0.11, chest: 0.18, chestY: -0.11, coxaChute: 0.38, joelhoChute: 0.75, coxaApoio: -0.06, joelhoApoio: 0.30, bracoLx: -0.36, bracoLz: 0.85, bracoRx: 0.26, bracoRz: -0.34, cotoveloL: -0.36, cotoveloR: -0.60, coxaChuteY: 0.38, peChuteY: 0.48, altura: -0.01 },
+        { leanZ: -0.08, pelvisY: 0.11, chest: 0.18, chestY: -0.11, coxaChute: 0.38, joelhoChute: 0.75, coxaApoio: -0.06, joelhoApoio: 0.30, bracoLx: -0.36, bracoLz: 0.85, bracoRx: 0.26, bracoRz: -0.34, cotoveloL: -0.36, cotoveloR: -0.60, coxaChuteY: 0.38, peChuteY: 0.48, peLx: -0.28, altura: -0.01 },
         // 3  arma: o joelho dobra, a perna de passe vai atrás
-        { leanZ: -0.12, pelvisY: 0.16, chest: 0.22, chestY: -0.16, coxaChute: 0.52, joelhoChute: 1.05, coxaApoio: 0.00, joelhoApoio: 0.32, bracoLx: -0.46, bracoLz: 1.05, bracoRx: 0.32, bracoRz: -0.38, cotoveloL: -0.28, cotoveloR: -0.64, coxaChuteY: 0.62, peChuteY: 0.78, altura: -0.02 },
+        { leanZ: -0.12, pelvisY: 0.16, chest: 0.22, chestY: -0.16, coxaChute: 0.52, joelhoChute: 1.05, coxaApoio: 0.00, joelhoApoio: 0.32, bracoLx: -0.46, bracoLz: 1.05, bracoRx: 0.32, bracoRz: -0.38, cotoveloL: -0.28, cotoveloR: -0.64, coxaChuteY: 0.62, peChuteY: 0.78, peLx: -0.38, peLy: 0.14, altura: -0.02 },
         // 4  armação máxima — metade da do remate, que isto é um passe
-        { leanZ: -0.14, pelvisY: 0.18, chest: 0.22, chestY: -0.18, coxaChute: 0.55, joelhoChute: 1.12, coxaApoio: 0.03, joelhoApoio: 0.32, bracoLx: -0.50, bracoLz: 1.15, bracoRx: 0.35, bracoRz: -0.40, cotoveloL: -0.24, cotoveloR: -0.66, coxaChuteY: 0.74, peChuteY: 0.92, altura: -0.02 },
+        { leanZ: -0.14, pelvisY: 0.18, chest: 0.22, chestY: -0.18, coxaChute: 0.55, joelhoChute: 1.12, coxaApoio: 0.03, joelhoApoio: 0.32, bracoLx: -0.50, bracoLz: 1.15, bracoRx: 0.35, bracoRz: -0.40, cotoveloL: -0.24, cotoveloR: -0.66, coxaChuteY: 0.74, peChuteY: 0.92, peLx: -0.36, peLy: 0.13, altura: -0.02 },
         // 5  CONTACTO — o pé fecha na bola, o corpo por cima dela
-        { leanZ: -0.10, pelvisY: -0.08, chest: 0.10, chestY: 0.08, coxaChute: -0.30, joelhoChute: 0.12, coxaApoio: 0.04, joelhoApoio: 0.24, bracoLx: 0.02, bracoLz: 0.80, bracoRx: -0.14, bracoRz: -0.44, cotoveloL: -0.22, cotoveloR: -0.34, coxaChuteY: 0.80, peChuteY: 1.00, altura: 0.01 },
+        { leanZ: -0.10, pelvisY: -0.08, chest: 0.10, chestY: 0.08, coxaChute: -0.30, joelhoChute: 0.12, coxaApoio: 0.04, joelhoApoio: 0.24, bracoLx: 0.02, bracoLz: 0.80, bracoRx: -0.14, bracoRz: -0.44, cotoveloL: -0.22, cotoveloR: -0.34, coxaChuteY: 0.80, peChuteY: 1.00, peLx: -0.27, peLy: 0.17, peRx: 0.22, peRy: 0.08, altura: 0.01 },
         // 6  pós-impacto, a perna continua pela inércia
-        { leanZ: -0.08, pelvisY: -0.14, chest: 0.02, chestY: 0.14, coxaChute: -0.62, joelhoChute: 0.08, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.16, bracoLz: 0.70, bracoRx: 0.04, bracoRz: -0.46, cotoveloL: -0.18, cotoveloR: -0.26, coxaChuteY: 0.72, peChuteY: 0.90, altura: 0.03 },
+        { leanZ: -0.08, pelvisY: -0.14, chest: 0.02, chestY: 0.14, coxaChute: -0.62, joelhoChute: 0.08, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.16, bracoLz: 0.70, bracoRx: 0.04, bracoRz: -0.46, cotoveloL: -0.18, cotoveloR: -0.26, coxaChuteY: 0.72, peChuteY: 0.90, peLx: -0.10, peLy: 0.19, peRx: 0.54, peRy: -0.07, altura: 0.03 },
         // 7  acompanhamento CURTO, o pé desce
-        { leanZ: -0.04, pelvisY: -0.08, chest: -0.02, chestY: 0.08, coxaChute: -0.32, joelhoChute: 0.16, coxaApoio: 0.03, joelhoApoio: 0.14, bracoLx: 0.10, bracoLz: 0.45, bracoRx: 0.08, bracoRz: -0.30, cotoveloL: -0.12, cotoveloR: -0.14, coxaChuteY: 0.40, peChuteY: 0.52, altura: 0.01 },
+        { leanZ: -0.04, pelvisY: -0.08, chest: -0.02, chestY: 0.08, coxaChute: -0.32, joelhoChute: 0.16, coxaApoio: 0.03, joelhoApoio: 0.14, bracoLx: 0.10, bracoLz: 0.45, bracoRx: 0.08, bracoRz: -0.30, cotoveloL: -0.12, cotoveloR: -0.14, coxaChuteY: 0.40, peChuteY: 0.52, peLx: -0.14, peLy: 0.19, peRx: 0.07, peRy: 0.19, altura: 0.01 },
         // 8  recuperação, de novo em postura de jogo
         { leanZ: 0.00, pelvisY: 0.00, chest: 0.00, chestY: 0.00, coxaChute: 0.00, joelhoChute: 0.10, coxaApoio: 0.00, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: Math.PI / 16, bracoRx: 0.00, bracoRz: -Math.PI / 16, cotoveloL: 0.00, cotoveloR: 0.00, coxaChuteY: 0.00, peChuteY: 0.00, altura: 0.00 }
     ]
