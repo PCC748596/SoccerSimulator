@@ -162,7 +162,33 @@ Object.assign(Match, {
         const campoGrupo = new THREE.Group();
         let gramaLarg = CAMPO_LARG + 52;
         let gramaComp = CAMPO_COMP + 34;
-        const cvsR = document.createElement('canvas'); const ctxR = cvsR.getContext('2d'); cvsR.width = 16; cvsR.height = 512;
+        /*
+        =================================================================
+        AS FAIXAS DO CORTE SÓ DENTRO DO CAMPO
+        =================================================================
+        Pedido: *"usa só a cor escura do gramado fora do campo de jogo"*.
+
+        A textura era de UMA dimensão — 16 px de largura, e cada linha do canvas
+        pintada de ponta a ponta. A cor só podia variar ao longo do comprimento
+        (o eixo Z), portanto as faixas do corte atravessavam o relvado inteiro,
+        campo e run-off, e não havia como parar nas linhas laterais.
+
+        Agora é 2D: cada faixa pinta-se primeiro TODA de escuro e só depois se
+        pinta o pedaço que cai dentro das linhas laterais com a cor da faixa.
+        As três faixas de cada ponta — o run-off atrás das balizas, que já eram
+        faixas próprias no desenho antigo — ficam escuras de uma ponta à outra.
+
+        Custo: 256x512 em vez de 16x512, uma vez por jogo. E o `repeat` deixa de
+        ser 15 em X: com a cor a variar na largura, repetir a textura era
+        repetir o campo quinze vezes.
+        */
+        const cvsR = document.createElement('canvas'); const ctxR = cvsR.getContext('2d');
+        cvsR.width = 256; cvsR.height = 512;
+
+        // Onde é que as linhas laterais caem, em pixels da textura.
+        const xDentroIni = Math.round(((gramaLarg / 2 - CAMPO_LARG / 2) / gramaLarg) * 256);
+        const xDentroFim = Math.round(((gramaLarg / 2 + CAMPO_LARG / 2) / gramaLarg) * 256);
+
         const stripeHeights = [];
         for (let i = 0; i < 3; i++) stripeHeights.push(17 / 3);
         for (let i = 0; i < 20; i++) stripeHeights.push(CAMPO_COMP / 20);
@@ -172,13 +198,24 @@ Object.assign(Match, {
             let nextY = currentY + stripeHeights[i];
             let yStartPix = Math.round((currentY / gramaComp) * 512);
             let yEndPix = Math.round((nextY / gramaComp) * 512);
-            // As duas cores vivem no config: ver RelvaCores (config/physics.js).
-            ctxR.fillStyle = (i % 2 === 0) ? RelvaCores.clara : RelvaCores.escura;
-            ctxR.fillRect(0, yStartPix, 16, yEndPix - yStartPix);
+            const altura = yEndPix - yStartPix;
+
+            // Fora do campo é sempre a escura. As duas cores vivem no config:
+            // ver RelvaCores (config/physics.js).
+            ctxR.fillStyle = RelvaCores.escura;
+            ctxR.fillRect(0, yStartPix, 256, altura);
+
+            // E dentro, a faixa do corte — menos nas três de cada ponta, que
+            // são o run-off atrás das balizas.
+            const noCampo = (i >= 3 && i < 23);
+            if (noCampo && (i % 2 === 0)) {
+                ctxR.fillStyle = RelvaCores.clara;
+                ctxR.fillRect(xDentroIni, yStartPix, xDentroFim - xDentroIni, altura);
+            }
             currentY = nextY;
         }
         const relvaTex = new THREE.CanvasTexture(cvsR);
-        relvaTex.wrapS = THREE.RepeatWrapping; relvaTex.wrapT = THREE.ClampToEdgeWrapping; relvaTex.repeat.set(15, 1);
+        relvaTex.wrapS = THREE.ClampToEdgeWrapping; relvaTex.wrapT = THREE.ClampToEdgeWrapping;
         window.relva = new THREE.Mesh(new THREE.PlaneGeometry(gramaLarg, gramaComp), new THREE.MeshStandardMaterial({ map: relvaTex, roughness: 1.0 }));
         window.relva.rotation.x = -Math.PI / 2; window.relva.receiveShadow = true; campoGrupo.add(window.relva);
 
@@ -553,6 +590,26 @@ Object.assign(Match, {
         const BANCADA_X = CAMPO_LARG / 2 + RECUO_LATERAL;
         const BANCADA_Z = CAMPO_COMP / 2 + RECUO_FUNDO;
 
+        /*
+        ONDE AS RECTAS ACABAM E AS ESQUINAS COMEÇAM — é o mesmo ponto, e é daqui
+        que sai.
+
+        O arco de uma esquina é um quarto de círculo de raio
+        `RAIO_PRIMEIRA_FILA` centrado em (cornerX, cornerZ); as duas pontas dele
+        caem em (BANCADA_X, cornerZ) e (cornerX, BANCADA_Z), ou seja EM CIMA da
+        primeira fila da lateral e da do fundo. Logo: a lateral tem de ir até
+        |z| = cornerZ e o fundo até |x| = cornerX.
+
+        Relato: *"fecha os vãos das arquibancadas"*. As rectas acabavam nos
+        limites do CAMPO (|z| = 52, |x| = 32), que era onde as esquinas ficavam
+        quando as bancadas estavam a 4.5 m. Afastadas para 12, as esquinas
+        andaram para fora e as rectas não — sobravam dez buracos de 6.6 a 9.4 m,
+        medidos com `tools/scratch/vaos_bancada.js`. Amarrado à geometria da
+        esquina, o anel fecha sozinho em qualquer recuo.
+        */
+        const cornerX = BANCADA_X - RAIO_PRIMEIRA_FILA;
+        const cornerZ = BANCADA_Z - RAIO_PRIMEIRA_FILA;
+
         function buildCorner(cx, cz, startAngle) {
             for (let r = 0; r < rows; r++) {
                 const R = RAIO_PRIMEIRA_FILA + r * 1.2;
@@ -583,11 +640,12 @@ Object.assign(Match, {
         for (let r = 0; r < rows; r++) {
             const standX = -BANCADA_X - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            addStepBox(1.2, 0.5, CAMPO_COMP + 2, standX, standY, 0, 0);
+            addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             let colIdx = 0;
-            for (let z = -(CAMPO_COMP / 2) + 1; z <= (CAMPO_COMP / 2) - 1; z += 0.85, colIdx++) {
+            // Até onde a esquina começa — ver `cornerZ`.
+            for (let z = -cornerZ; z <= cornerZ; z += 0.85, colIdx++) {
                 // 2 colunas sem cadeiras a cada 20 cadeiras para criar os corredores/escadas do estádio
                 if (colIdx % 22 >= 20) continue;
                 addSeatInstance(standX, seatYOffset, z, Math.PI / 2, r, colIdx);
@@ -598,11 +656,11 @@ Object.assign(Match, {
         for (let r = 0; r < rows; r++) {
             const standX = BANCADA_X + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            addStepBox(1.2, 0.5, CAMPO_COMP + 2, standX, standY, 0, 0);
+            addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             let colIdx = 0;
-            for (let z = -(CAMPO_COMP / 2) + 1; z <= (CAMPO_COMP / 2) - 1; z += 0.85, colIdx++) {
+            for (let z = -cornerZ; z <= cornerZ; z += 0.85, colIdx++) {
                 // 2 colunas sem cadeiras a cada 20 cadeiras para criar os corredores/escadas do estádio
                 if (colIdx % 22 >= 20) continue;
                 addSeatInstance(standX, seatYOffset, z, -Math.PI / 2, r, colIdx);
@@ -613,14 +671,22 @@ Object.assign(Match, {
         for (let r = 0; r < rows; r++) {
             const standZ = BANCADA_Z + (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            addStepBox(CAMPO_LARG - 4, 0.5, 1.2, 0, standY, standZ, 0);
+            addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             let colIdx = 0;
-            for (let x = -(CAMPO_LARG / 2) + 2; x <= (CAMPO_LARG / 2) - 2; x += 0.85, colIdx++) {
+            // Até onde a esquina começa — ver `cornerX`.
+            for (let x = -cornerX; x <= cornerX; x += 0.85, colIdx++) {
                 // 2 colunas sem cadeiras periodicamente
                 if (colIdx % 20 >= 18) continue;
-                if (Math.abs(x) > 4.5 || r > 1) {
+                {
+                    /*
+                    AS DUAS PRIMEIRAS FILAS ATRÁS DA BALIZA DEIXARAM DE TER
+                    BURACO. Era `Math.abs(x) > 4.5 || r > 1`: um vão de 9.4 m no
+                    meio, que fazia sentido com a bancada a 5.5 m da linha (as
+                    cadeiras tapavam a baliza) e deixou de fazer com ela a 12.
+                    Foi o maior dos vãos medidos.
+                    */
                     addSeatInstance(x, seatYOffset, standZ, Math.PI, r, colIdx);
                 }
             }
@@ -630,23 +696,21 @@ Object.assign(Match, {
         for (let r = 0; r < rows; r++) {
             const standZ = -BANCADA_Z - (r * 1.2);
             const standY = 0.25 + (r * 0.5);
-            addStepBox(64, 0.5, 1.2, 0, standY, standZ, 0);
+            addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
             let colIdx = 0;
-            for (let x = -32; x <= 32; x += 0.85, colIdx++) {
+            // Até onde a esquina começa — ver `cornerX`. E sem o buraco das duas
+            // primeiras filas atrás da baliza (ver a bancada Norte).
+            for (let x = -cornerX; x <= cornerX; x += 0.85, colIdx++) {
                 // 2 colunas sem cadeiras periodicamente
                 if (colIdx % 20 >= 18) continue;
-                if (Math.abs(x) > 4.5 || r > 1) {
-                    addSeatInstance(x, seatYOffset, standZ, 0, r, colIdx);
-                }
+                addSeatInstance(x, seatYOffset, standZ, 0, r, colIdx);
             }
         }
 
-        // O centro do arco recua o raio da primeira fila em cada eixo, para ela
-        // encostar na lateral e no fundo ao mesmo tempo. Ver os recuos acima.
-        let cornerX = BANCADA_X - RAIO_PRIMEIRA_FILA;
-        let cornerZ = BANCADA_Z - RAIO_PRIMEIRA_FILA;
+        // O `cornerX`/`cornerZ` já estão calculados lá em cima, com os recuos:
+        // é deles que as rectas tiram até onde vão.
         buildCorner(-cornerX, cornerZ, Math.PI / 2);
         buildCorner(cornerX, cornerZ, 0);
         buildCorner(-cornerX, -cornerZ, Math.PI);

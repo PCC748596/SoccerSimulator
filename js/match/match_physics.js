@@ -487,9 +487,18 @@ Object.assign(Match, {
         nas mãos do batedor; na falta e no penálti está pousada no chão à
         espera dos 3 s, e sem isto o primeiro que lhe passasse ao lado ficava
         com ela e a cobrança nunca acontecia.
+
+        O TIRO DE META FALTAVA NESTA LISTA, e passou a notar-se quando a espera
+        dele deixou de ser fixa (`GoalKickShape.esperaMaxPelaEquipa`): a bola
+        fica pousada na quina da pequena área com o guarda-redes ao lado dela
+        durante segundos, e quem a cobra é o gesto do `tiro_meta`, não esta
+        disputa. Sem a guarda, bastava a marca da Lei 12 estar posta para ele
+        deixar de ser saltado aqui em baixo e ficar com a própria bola do
+        lance. Ver o `limparRecuoParaGR` no `setupSetPiece`, que trata da
+        outra metade.
         */
         if (this.state === 'THROW_IN' || this.state === 'FREE_KICK' ||
-            this.state === 'PENALTY') return false;
+            this.state === 'PENALTY' || this.state === 'GOAL_KICK') return false;
 
         /*
         BOLA NAS MÃOS DO GUARDA-REDES NÃO SE TOCA.

@@ -33,6 +33,30 @@ Object.assign(Match, {
     },
 
     setupSetPiece: function (type, team) {
+        /*
+        UMA BOLA PARADA ACABA COM O RECUO PARA O GUARDA-REDES.
+
+        BUG, com relato: *"o goleiro está batendo o tiro de meta para ele
+        mesmo"*. A marca da Lei 12 (`Match.recuoParaGR`) é posta em QUALQUER
+        toque com o pé e só é limpa por uma cabeçada, um peito, um toque do
+        adversário, ou o próprio guarda-redes pôr a bola longe. Nenhuma dessas
+        coisas acontece quando a bola sai pela linha de fundo — portanto a
+        marca sobrevivia à saída de bola e entrava no tiro de meta.
+
+        Medido antes disto: em **100% dos frames de GOAL_KICK** a marca estava
+        posta. Com as mãos "proibidas", o guarda-redes é tratado como um
+        jogador de campo — entra na disputa do `resolveBallContact` (que só
+        salta os guarda-redes com as mãos livres) e o `updateGK` manda-o jogar
+        de pé. Ou seja: em vez de cobrar o tiro de meta, ele joga a bola para
+        si próprio.
+
+        Um lance parado é uma fase nova do jogo, e nenhuma delas herda o recuo
+        anterior: o que dava direito ao livre indirecto acabou quando a bola
+        saiu. Limpa-se aqui, num sítio só, porque são seis os lances e espalhar
+        a regra por todos era garantir que um ficava para trás.
+        */
+        if (typeof limparRecuoParaGR === 'function') limparRecuoParaGR();
+
         this.mudarEstado(type, 'setpiece_' + type.toLowerCase());
         this.setPieceTeam = team;
 
