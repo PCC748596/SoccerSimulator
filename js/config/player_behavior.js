@@ -711,10 +711,28 @@ const BallControl = {
     colado às costas do portador fica a 0.9 m da bola e ganha-a sem gesto
     nenhum.
 
-    Medido em 20 min (`tools/scratch/_roubo_angulo.js`), contando só as perdas
+    Medido em 20 min (`tools/scratch/roubo_angulo.js`), contando só as perdas
     para um adversário que estava a menos de 3 m: 37 roubos, dos quais **12
     (32%) por trás** — a 90 cm de distância e com o ladrão em MOVE_TO_POS,
     CARRY ou BALL_CONTROL_RIGHT, ou seja sem sequer tentar desarmar.
+
+    O QUE ISTO RESOLVEU, E O QUE NÃO: medido em A/B com a mesma semente,
+    ligando e desligando esta guarda (`anguloCos: -2` nunca dispara),
+
+        com a guarda    30 roubos, 9 por trás (30%)
+        sem a guarda    42 roubos, 14 por trás (33%)
+
+    ou seja **corta um roubo em cada quatro** no total, e a FRACÇÃO por trás
+    quase não se mexe. Com n ~ 30 por corrida a dispersão entre corridas (30% a
+    38% em duas) é maior do que o efeito na fracção, portanto o número honesto é
+    o dos totais.
+
+    A razão de sobrarem: esta guarda mede o ângulo no frame do CONTACTO, e o
+    medidor mede-o no frame em que o dono perdeu a bola. Entre os dois o ladrão
+    já vem a passar para o lado — chega ao contacto dentro dos 120° e a guarda
+    deixa-o passar, com razão. O que falta é a outra metade do problema, que não
+    é geometria: o portador não protege a bola com o corpo. Ver os problemas
+    conhecidos em docs/filesSummary.md.
 
     `anguloCos` é o cosseno do ângulo entre a FRENTE do portador e a direcção
     de onde vem o adversário: -0.5 são 120 graus, ou seja o terço de trás. Daí

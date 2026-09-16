@@ -404,7 +404,7 @@ ISTO JA TEVE UMA FOLGA DE DIRECCAO, e era ela o defeito. A marca so era posta
 com a bola jogada mais de `atrasoMin` (1 m) para TRAS, para nao apanhar "um
 toque de lado a proteger a bola". Relato: *"o goleiro nao pode pegar com a mao
 uma bola atrasada pelo jogador do proprio time com o pe"*. Medido em 30 min
-(`tools/scratch/_recuo_gk.js`): de 16 bolas agarradas com a mao, SETE vinham do
+(`tools/scratch/recuo_gk.js`): de 16 bolas agarradas com a mao, SETE vinham do
 pe de um companheiro — e todas passavam pela folga, com deslocamentos de -0.73
 a +3.23 m. A folga nao separava o recuo do toque de lado: separava o recuo
 longo do recuo curto, e o curto e o mais comum de todos, porque o defesa que

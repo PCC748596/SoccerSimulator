@@ -697,7 +697,7 @@ const GoalkeeperDive = {
     /*
     E NÃO SE ATIRA COM A BOLA AINDA LONGE.
 
-    Medido antes disto (`tools/scratch/_gk_mergulho.js`, 30 min): **92% dos
+    Medido antes disto (`tools/scratch/gk_mergulho.js`, 30 min): **92% dos
     mergulhos arrancavam com a bola a mais de 5 m dele** — mediana 9.9 m,
     máximo 20.5. O `horaDeMergulhar` só olhava ao TEMPO, e num remate a 25 m/s
     os 0.4 s do gesto são dez metros de bola: a conta está certa e o que se vê
@@ -1132,7 +1132,7 @@ const GkRecuoModel = {
     o mais comum, porque o defesa que devolve a bola ao guarda-redes está a
     dois metros dele.
 
-    Medido em 30 min (`tools/scratch/_recuo_gk.js`): sete bolas agarradas com a
+    Medido em 30 min (`tools/scratch/recuo_gk.js`): sete bolas agarradas com a
     mão vinham do pé de um companheiro, todas dentro da folga, com
     deslocamentos de -0.73 a +3.23 m. A Lei 12 fala do PÉ e não da direcção, e
     é assim que a regra passou a ser lida — ver `avaliarRecuoParaGR`

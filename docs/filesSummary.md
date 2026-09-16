@@ -5,6 +5,305 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 15 de Setembro de 2026 (2) — a arbitragem, a posse, e o guarda-redes a decidir por metros
+
+Treze relatos visuais, todos medidos antes de se mexer e outra vez depois. As
+ferramentas ficaram em `tools/scratch/` e estão citadas nos comentários do
+código que justificam. Três correcções desta sessão são correcções de
+correcções anteriores — está escrito onde, porque o padrão interessa mais do
+que o número.
+
+#### O árbitro: três relatos, e o segundo nasceu do primeiro
+
+**O braço errado.** *"Indica as faltas com o braço errado."* No rig, `lArm`
+nasce em `x = +0.8` e `rArm` em `-0.8` (`criarBraco`, pose.js); o modelo olha
+para `+Z` com `+Y` para cima, portanto a direita dele é `-X`. Uma guinada
+POSITIVA aponta para o lado **esquerdo**, e o código escolhia o braço direito
+(`useRight = guinada >= 0`). O gesto certo, no braço errado, com o cotovelo
+atravessado no peito. O teste tinha a mesma premissa invertida e passava com o
+defeito — foi corrigido com ele.
+
+**A coroa em vez da circunferência.** Pedido: *"um círculo de 25 m de raio ao
+redor da bola e outro de 20; o juiz fica correndo nesse espaço"*. Era um número
+só (`distanciaBola: 15`), e um número só é uma circunferência: qualquer metro a
+mais ou a menos era erro a corrigir e ele passava o jogo a corrigi-lo. Agora a
+diagonal dá o RUMO e a coroa a DISTÂNCIA, cruzadas resolvendo qual é o ponto da
+diagonal a `raio` metros da bola (`sqrt(raio² - h²)` a partir do pé da
+perpendicular, ficando o ponto mais perto de onde ele já está). Dentro da faixa
+o raio não se mexe — ele corre AO LONGO dela; fora, volta ao meio e não à borda
+que atravessou. Distância mediana à bola **14.4 -> 23.1 m**, 35% do tempo dentro
+da coroa.
+
+> **Uma tentativa que não serve, e porquê:** pôr o alvo em `bola + direcção da
+> diagonal x raio`. Essa direcção é a PERPENDICULAR à diagonal, portanto
+> inverte-se de repente quando a bola cruza a diagonal — e o árbitro atravessava
+> o campo a correr atrás dela.
+
+**Correr virado para o outro lado.** Medido em 10 min: **21% dos frames em
+corrida com o corpo a mais de 30° do caminho e 7% a mais de 90°** (de costas).
+Duas causas, as duas no `mover`:
+
+1. O corte da rotação era a distância ao ALVO (`d > 0.4`), e a zona morta do
+   passo é `paragemMax` = 0.06. Entre as duas ele dava passo a velocidade cheia
+   com o rumo do frame anterior — instrumentado, **34% dos frames em corrida**.
+2. A decisão corrida/passo-lateral vinha de `d / dt`, a velocidade para chegar
+   num frame: a 1/60 são 60x a distância, portanto dava sempre `velMax` e o
+   passo lateral nunca existia.
+
+Depois: p90 do desvio **90° -> 30°** e **zero** frames a correr de costas.
+
+> **Duas tentativas que não servem:** usar a velocidade filtrada (`velAnim`)
+> atrasa-se uns dez frames e punha-o a correr de costas durante toda a arrancada
+> (91% dos frames maus eram a mais de 3.6 m/s); e um corte seco pela distância
+> (`d <= 3`) dava um degrau de **6.9 m/s num frame**, apanhado pelo
+> `arbitro_passada.test.js`. Ficou o `tempoDeAjuste` (0.85 s): a velocidade de
+> cada frame é `d / tempoDeAjuste` limitada ao máximo dele, portanto a fronteira
+> entre correr e ajustar é contínua — no ponto de troca a velocidade é a mesma
+> dos dois lados.
+
+**E de costas para a BOLA**, que é o preço da correcção acima: virá-lo para onde
+corre é virá-lo de costas ao lance quando o alvo fica do lado oposto. Medido:
+**19.5% dos frames com a bola a mais de 90° e 11.8% a mais de 135°**. O
+`RefereeModel.anguloMaxDaBola` (110°) limita o desvio — ele corre aberto,
+atravessado, com a bola na periferia. Depois: **0.3%** acima de 135°, e o p99 de
+174° para 116°.
+
+#### O cabeceio no pescoço: a testa estava na boca
+
+Relato: *"os jogadores estão cabeceando a bola no pescoço"*. Era literal. O
+`ALTURA_TESTA` era deduzido (`ALTURA_CABECA - 0.10` = 1.62) na suposição de que
+1.72 era o topo do crânio. Medido no rig, com o modelo de pé:
+
+    pescoço 1.45 | queixo 1.47 | centro da cabeça 1.63 | olhos 1.66-1.71
+    TESTA 1.71-1.79 | topo do crânio 1.79
+
+1.62 fica à altura da BOCA, dez centímetros abaixo dos olhos — e o
+`executeHeader` cola a bola nessa altura em todos os cabeceios. A janela
+simétrica de ±0.22 descia a 1.40, por baixo do queixo. Agora `ALTURA_TESTA =
+1.74`, medido, e a janela é **assimétrica** (`janelaAbaixo: 0.34`,
+`janelaAcima: 0.16`) porque a cabeça também é: da testa ao crânio são 5 cm, ao
+queixo são 27. O fundo fica em 1.40, encostado ao tecto do peito como estava —
+simétrico na testa certa abria um buraco de 14 cm onde a bola a 1.45 m era
+dominada com o PÉ.
+
+Mediana do contacto 1.73 -> **1.74**, cabeceios 13 -> 16 por 40 min.
+
+#### As faltas pela ala: quem bate, e o lado que ninguém lia
+
+Pedido: *"na defesa e na meia lateral bate o Lateral (para o meia lateral poder
+aprofundar); nas pontas, melhor técnica entre lateral, meia lateral ou ponta"*.
+
+O `setorDaFalta` só pesa o avanço em Z — o x da bola não entrava em lado nenhum,
+portanto uma falta encostada à linha tinha o mesmo batedor de uma no eixo
+(verificado: saída idêntica com x=0 e x=28). E o critério `'lateral'` escolhia
+por Técnica pura: com o RB melhor do que o LB, a ala esquerda saía batida pelo
+lateral direito. O comentário dizia *"o lateral do LADO da bola bate primeiro"*
+e a função nem recebia a posição da bola.
+
+Novo mapa `batedorPorSetorLateral`, activo com `|x| >= corredorLateral` (15 m —
+entre o central de raiz, a 8.2, e o lateral, a 19.0):
+
+| falta na ala | antes | agora |
+|---|---|---|
+| defesa | zagueiro (CB) | **lateral daquele lado** |
+| meio-campo próprio | zagueiro (CB) | **lateral daquele lado** |
+| meio-campo adversário | melhor técnico não-defesa | **lateral daquele lado** |
+| ponta (`ataque_lateral`) | lateral de melhor Técnica | **melhor Técnica entre lateral, meia-lateral e ponta do lado** |
+
+O lado sai de `x * attDir` e não do `x` cru: a equipa B é espelhada nos DOIS
+eixos no `processTeam`, e sem o `attDir` uma delas teria sempre o lateral
+trocado. É a função `ladoDaBola` (utils.js), e é o defeito que o
+`escolherBatedorDoLateral` (match_state.js) **ainda tem** — ver os problemas
+conhecidos.
+
+**E o bug do lugar trocado**, que apareceu na verificação: como o batedor sai do
+próprio grupo, quem sobrava herdava `xs[Math.min(i, n-1)]` = `xs[0]`, sempre o
+lugar da ESQUERDA. Medido: o RM que estava em `x = +26` era mandado para `-27`,
+atravessava o campo inteiro e deixava a ala dele vazia. Agora, grupo incompleto,
+cada um fica com o lugar mais perto de onde já está; grupo completo, o
+mapeamento é o de antes.
+
+#### As quatro rotinas da intermediária
+
+Pedido, com quatro diagramas de treino: *"cria essas 4 opções de faltas no
+ataque, para o time atacante e para o defensor, e sorteia uma quando tiver uma
+falta na intermediária"*. Ficaram em `FreeKickModel.rotinasDaIntermediaria`,
+cada uma com o diagrama escrito ao lado do desenho que gerou:
+
+| rotina | o lance | a defesa arma-se até |
+|---|---|---|
+| `deep_free_kick` | bola longa; os dois melhores de cabeça na primeira bola à entrada da área, os pontas no que sobra, um homem na segunda fase | 26 m |
+| `wide_pela_linha` | um aberto na linha a puxar um defesa, apoio curto para lhe dar a bola, área ocupada para o cruzamento | 18 m |
+| `central_over_the_hill` | bola picada por cima da barreira, dois a atacá-la no limite, médios no ressalto | 16 m |
+| `wide_out_swinging` | cruzamento alto para a SEGUNDA trave, um a dar a volta por fora, apoio curto para o remate directo | 24 m |
+
+O ataque usa o mesmo vocabulário da `formacaoPorSetor` (`modo: 'bola'`,
+`'baliza'`, `'apoio'`), para não haver dois esquemas de posicionamento no
+ficheiro; a defesa traz `de`/`ate`, e a Lei 13 ganha sempre ao `de` da rotina. O
+sorteio é uma vez por lance, nos sectores `meio_avancado` e `ataque_entrada`, e
+as duas equipas leem a MESMA (`Match.rotinaDaFaltaActual`).
+
+> **Ordem que importa:** o sorteio tem de acontecer ANTES do
+> `formaDaDefesaNoLivre`, que é chamado logo depois da barreira. No primeiro
+> esboço ficou junto ao desenho do ataque, sessenta linhas abaixo, e metade do
+> pedido chegava tarde.
+
+#### O lateral espera mais quatro segundos
+
+`ESPERA_COBRANCA_LATERAL = ESPERA_APOS_REPOSICAO + 4` = 7 s, no molde do
+`ESPERA_COBRANCA_CANTO` que já existia. É o lance que mais gente move sem que se
+veja porque: o batedor pode vir de 25 m, os apoios abrem e os marcadores sobem.
+Custo medido no lote: tempo parado 5.35% -> 5.58%, que é o preço directo do
+pedido.
+
+#### O replay automático do golo, e um travão que estava em conflito
+
+Pedido: botão *Replay Automático ON/OFF* no painel direito (padrão ON), e ao
+golo uma repetição dos últimos 15 s na Lateral TV antes da saída de bola. Feito
+em `REPLAY_GOLO` (match_replay.js): 15 s antes da marca do golo + 1 s depois (o
+frame em que a bola entra é o único que ninguém quer perder), câmara devolvida
+no fim, e um aviso **REPLAY** amarelo a piscar ao lado do placar
+(`#aviso-replay`; o placar e o aviso passaram a viver numa linha flex, porque a
+largura do placar muda com o nome das equipas e um `left` fixo descolava-se).
+
+Para isso foi preciso separar dois travões que estavam em conflito **desde
+antes**: o `startReplay` punha o jogo em pausa e o `playFrame` não avança em
+pausa — o replay manual congelava no primeiro frame, e carregar em Continue
+punha a simulação a correr POR BAIXO da repetição, a escrever nos mesmos corpos
+que ela estava a repor. Agora quem segura o `Match.update` é o próprio
+`isReplaying` (main.js) e a pausa volta a querer dizer só "o utilizador mandou
+parar". É também isso que prende a saída de bola: sem `Match.update`, a máquina
+de estados do golo fica onde está.
+
+#### Roubar a bola por trás
+
+Relato: *"ainda estão roubando a bola por trás de quem está carregando"*. Não
+era o desarme — esse já recusava o carrinho pelas costas. Era o
+`resolveBallContact`, que dá a bola a quem tem o CORPO mais perto dela e não
+sabe que existe um portador. Medido em 20 min, contando só as perdas para um
+adversário a menos de 3 m: 37 roubos, **12 (32%) por trás**, a 90 cm, com o
+ladrão em `MOVE_TO_POS`/`CARRY`/`BALL_CONTROL_RIGHT` — sem sequer tentar
+desarmar.
+
+`BallControl.rouboPorTras`: com a bola no pé do dono (≤ 1.6 m), um adversário a
+mais de 120° da frente dele não a leva por contacto. O dono é o
+`lastTouchedPlayer` e **não** o `ballCarrier`: este é apagado a cada toque de
+condução (medido, 20% dos frames de condução não têm `ballCarrier` nenhum) e era
+exactamente nesses que a bola era tirada.
+
+**E o resultado é mais modesto do que pareceu à primeira.** A primeira corrida
+deu 17% e foi ruído de amostra única (n ~ 30). Medido em A/B com a guarda ligada
+e desligada (`anguloCos: -2` nunca dispara):
+
+    com a guarda    30 roubos, 9 por trás (30%)
+    sem a guarda    42 roubos, 14 por trás (33%)
+
+Corta **um roubo em cada quatro** no total, e a FRACÇÃO por trás quase não se
+mexe — a dispersão entre corridas (30% a 38%) é maior do que o efeito nela. Os
+que sobram explicam-se: a guarda mede o ângulo no frame do CONTACTO e o medidor
+no frame em que o dono perdeu a bola; entre os dois o ladrão já vem a passar
+para o lado, chega ao contacto dentro dos 120° e a guarda deixa-o passar, com
+razão. Ver os problemas conhecidos.
+
+#### A bola atrasada com o pé (Lei 12)
+
+A regra existia e exigia que a bola andasse mais de 1 m **para trás**
+(`GkRecuoModel.atrasoMin`). Medido em 30 min: sete bolas agarradas com a mão
+vinham do pé de um companheiro, **todas** dentro da folga, com deslocamentos de
+-0.73 a +3.23 m. A folga não separava o recuo do toque de lado — separava o
+recuo LONGO do CURTO, e o curto é o normal, porque quem devolve a bola ao
+guarda-redes está a dois metros dele. A Lei 12 fala do PÉ: a folga foi removida.
+
+Faltava também um frame — a marca só era recalculada no `Match.update` seguinte,
+depois do contacto, e o caso mais comum resolve-se no mesmo frame. Passou a ser
+escrita no próprio toque. Sobra uma distância, `libertaComOPe` (8 m), e só para
+o toque do PRÓPRIO guarda-redes: ele não se absolve a si mesmo, mas quando põe a
+bola longe a fase acabou. Depois: **0 infracções** em 30 min.
+
+#### O tiro de meta que era batido com a equipa a meio caminho
+
+Relato com captura. O desenho estava certo e nunca acontecia: a cobrança era
+disparada só pelo relógio de 3 s, e o `golKickProntos` — a bandeira que o
+`updateGoalKickWait` levanta quando a equipa chegou ao lugar — **não era lida
+por ninguém**. Medido em 6 tiros de meta, no instante da batida: faltavam à
+equipa **17 a 23 metros** para andar, metade dela ainda em `MOVE_TO_POS`. Agora
+o relógio só corre depois de ela chegar, com tecto de 8 s
+(`GoalKickShape.esperaMaxPelaEquipa`). Depois: **2 a 3 m**.
+
+#### O um-dois: +100 pontos a quem toca e arranca
+
+Pedido: quem passou a bola, se correr para a frente sem ninguém a 5 m à frente,
+vale mais 100 pontos como opção de passe. `PassModel.bonusTocaECorre`, com as
+três condições medidas no referencial de ataque dele: foi ele que fez o passe
+anterior (`Match.ultimoPassador`, prazo de 3 s), vai a mais de 0.8 m/s para a
+frente, e o cone de 5 m à frente está livre. Entra no mesmo acumulador do
+`bonusInfiltracao` — quem toca e arranca não muda de estado, e por isso nunca
+era preferido a ninguém.
+
+#### O guarda-redes: três relatos, e o terceiro mudou a métrica
+
+**O lado contrário.** *"Está pulando para o lado contrário do deslocamento da
+bola nas faltas e chutes."* Era literal e deliberado:
+`penaltyDiveX = defende ? alvo.x : -alvo.x`. Espelhar garantia que um golo
+sorteado não era defendido por acidente, e garantia também que em **dez dos doze
+desfechos** ele se atirava ao lado oposto. Sempre. Agora vai ao lado CERTO e o
+que o impede é o atraso cheio; só em `DirectFreeKickModel.probLadoErrado` (25%)
+é que lê mal o lance e sai para o outro lado.
+
+**A visão tapada.** Pedido: mais atraso quando há gente à frente. O
+`homensNaVisaoDoGuardaRedes` conta os corpos no corredor bola->guarda-redes
+(1.2 m de meia-largura, só quem está ENTRE os dois), a 0.05 s por corpo com
+tecto de 0.20. Entra no funil de todos os remates (`armarGuardaRedes`) e também
+na falta directa. Medido: 58% dos remates têm alguém à frente, e o atraso
+mediano vai de **0.172 s com campo limpo a 0.222 s** com um corpo.
+
+**Mergulhos impossíveis.** *"Está pulando na bola mesmo com a bola a mais de uns
+5 metros dele."* A primeira métrica que usei estava errada — medi o desvio
+LATERAL, e esse já estava dentro dos 5 m (máximo 3.03). O que se vê é a
+distância à BOLA no arranque: **92% dos mergulhos começavam a mais de 5 m dela**,
+mediana 9.9, máximo 20.5. O `horaDeMergulhar` só olhava ao TEMPO, e num remate a
+25 m/s os 0.4 s do gesto são dez metros de bola. Dois limites novos:
+
+- `alcanceLateralMax` (5 m) — o que ele cobre contando leitura, impulso e voo; a
+  parte de cima do alcance cinemático (9.4 m a GK 100) é um artefacto do
+  `vooMax`, não um salto que exista;
+- `distanciaMaxParaMergulhar` (12 m) — enquanto a bola estiver mais longe, fica
+  de pé a acompanhar (o `gkAlvoX` já o desloca).
+
+Depois: pior caso **11.3 m**, nada além do tecto, e os mergulhos inúteis
+desapareceram — 13 por 30 min passaram a 8. A defesa DESENHADA (penálti, falta
+directa) está de fora das duas regras: ali o desfecho foi sorteado e o gesto é
+para se ver.
+
+#### As bancadas a 7 metros
+
+Pedido: afastar as arquibancadas para 7 m das linhas laterais (eram 4.5). Os
+três recuos estavam escritos à mão nos sítios onde se constrói cada bancada, e o
+das esquinas **duas vezes** — no raio da primeira fila e na âncora do arco.
+Passaram a constantes com a relação explícita, porque o arco da esquina tem de
+encostar na lateral e no fundo ao mesmo tempo: subir só o recuo lateral abria
+uma fenda na esquina. Medido depois: primeira fila lateral a **7.00 m**, fundo
+intacto a 5.50.
+
+#### Três testes recalibrados, e a razão de cada um
+
+- `gk_salta_no_momento`: a amostra caiu para 8 mergulhos em 30 min porque os
+  mergulhos inúteis deixaram de existir — o tempo de jogo subiu para 45 min e
+  acrescentou-se a asserção em METROS, que é como o relato veio (a antiga só
+  media tempo, e tempo sozinho não apanha os dez metros de uma bola a 25 m/s).
+- `laterais_largura` (7 -> 9%) e `saida_de_bola_ritmo` (10 -> 12%): limiares
+  estatísticos que ficaram EM CIMA do valor. Varridas seis e cinco sementes, com
+  a dispersão nova escrita no comentário. No segundo a causa é directa e
+  esperada: o guarda-redes segura a bola mais tempo de propósito, logo há mais
+  frames da equipa a acabar a caminhada — e o fim de uma caminhada é a travagem
+  de quem está a chegar. A outra metade desse teste (velocidade média acima de
+  4.5 m/s) não se mexeu, e é ela que garante que ninguém anda.
+
+Testes novos: `tests/toca_e_corre.test.js` (8 casos), `tests/falta_rotinas.test.js`
+(5 casos), `tests/replay_golo.test.js` (9 casos). A suite fecha em **145
+ficheiros sem falhas**.
+
+
 ### Sessão de 14-15 de Setembro de 2026 — o cara a cara, o cabeceio que não existia, e a calibração a chegar ao sítio
 
 Sessão longa, toda conduzida por relatos visuais e toda medida antes de mexer.
@@ -2305,14 +2604,25 @@ A regra passou a ter duas metades, as duas em utils.js:
 
 - `registarToqueComPe(jogador, comPe)` guarda QUEM tocou e **onde a bola estava
   nesse instante**; `limparRecuoParaGR()` é o que a cabeça e o peito chamam.
-- `avaliarRecuoParaGR()` decide **por frame**, antes do `updateBall`: a bola
-  andou mais de `GkRecuoModel.atrasoMin` (1 m) para trás desde esse toque? Então
-  é bola atrasada.
+- `avaliarRecuoParaGR()` decide: o último toque foi com o PÉ de um companheiro
+  do guarda-redes? Então é bola atrasada, venha ela de onde vier.
 
-A decisão tem de ser refeita por frame porque há duas maneiras de a bola chegar
-atrasada — o passe (sabe-se logo para onde vai) e **o toque que sobra**, o
-defesa que domina, conduz e a deixa correr para trás. A segunda só se conhece
-vendo a bola andar.
+**A DIRECÇÃO DEIXOU DE CONTAR (15 de Setembro).** Havia uma folga — a bola tinha
+de andar mais de `GkRecuoModel.atrasoMin` (1 m) para TRÁS — e era ela o defeito:
+medido em 30 min, sete bolas agarradas com a mão vinham do pé de um companheiro,
+todas dentro da folga, com deslocamentos de -0.73 a +3.23 m. Ela não separava o
+recuo do toque de lado; separava o recuo LONGO do CURTO, e o curto é o mais
+comum, porque quem devolve a bola ao guarda-redes está a dois metros dele. A Lei
+12 fala do PÉ.
+
+A marca é escrita no PRÓPRIO toque (o `registarToqueComPe` chama o
+`avaliarRecuoParaGR`) e não no frame seguinte: o recálculo por frame corre depois
+do contacto, e o caso mais comum resolve-se no mesmo frame.
+
+Sobra uma única distância, `GkRecuoModel.libertaComOPe` (8 m), e só para o toque
+do PRÓPRIO guarda-redes: ele não se absolve a si mesmo (tocar com o pé e agarrar
+a seguir era o buraco original), mas quando a bola fica longe dele pô-la em jogo
+e a fase acabou. Sem essa saída ficava proibido para sempre.
 
 E fechou-se o buraco que restava: **o guarda-redes absolvia-se a si próprio**.
 O toque dele com o pé era tratado como "toque de outra pessoa" e limpava a
@@ -4791,6 +5101,15 @@ Técnica. E no cruzamento pela ala bate o LATERAL e não o melhor não-defensor,
 porque os centrais e os pontas queremo-los DENTRO da área a atacar a bola. Ambos
 são uma linha em `FreeKickModel.batedorPorSetor`.
 
+**E A FALTA PELA ALA TEM MAPA PRÓPRIO (15 de Setembro):**
+`FreeKickModel.batedorPorSetorLateral`, activo quando `|x| >=
+FreeKickModel.corredorLateral` (15 m). Da defesa ao meio-campo adversário bate o
+LATERAL daquele lado (`'lateralDoLado'`), para o meia-lateral ficar livre de
+atacar a profundidade; na ponta bate o melhor Técnico entre lateral,
+meia-lateral e ponta desse lado (`'alaDoLado'`). O lado sai de `x * attDir`
+(`ladoDaBola`, utils.js) e não do `x` cru — a equipa B é espelhada nos dois
+eixos, e sem o `attDir` uma delas teria sempre o lateral trocado.
+
 A geometria é pura e vive em `utils.js` (`setorDaFalta`, `grupoNaBolaParada`,
 `batedorDaFalta`, `lugaresDaFalta`), para se medir sem montar um jogo — é o que o
 teste faz. O `match_setpieces.js` só aplica.
@@ -5418,8 +5737,9 @@ jogo real, um defesa (ou um colega por trás do receptor) volta de costas e
 cabeceia a bola antes que ela toque no relvado.
 
 - **Percepção de cabeceio** (`js/perception.js`): `computeInterception` procura
-  primeiro o ponto onde a bola DESCE pela altura da testa (`ALTURA_TESTA` ±
-  `HeaderModel.janelaContacto`) e só depois recua para o ponto jogável normal.
+  primeiro o ponto onde a bola DESCE pela altura da testa (`ALTURA_TESTA`, com
+  a janela assimétrica `HeaderModel.janelaAbaixo`/`.janelaAcima`) e só depois
+  recua para o ponto jogável normal.
   Antes a bola alta só era interceptável quando chegasse ao topo da cabeça,
   o que punha o ponto de encontro demasiado longe para quem tinha de voltar.
 - **Colega pode ajudar** (`js/bt/team_bt.js`): `pickIntercetor` deixou de
@@ -6852,7 +7172,7 @@ Spec em [docs/superpowers/specs/2026-08-24-reach-animacao-procedural-design.md](
 
 - **Árbitro e dois assistentes**, equipamento preto, **fora** de `Match.players`/`Match.opponents` de propósito: sem blackboard, sem BT, sem colisões — metê-los nas listas obrigava a filtrá-los em dezenas de ciclos. Usam o **mesmo modelo dos jogadores**: instancia-se um `FootballPlayer` só para dar `model` + `rig`, com equipamento preto e as chuteiras repintadas. O construtor é seguro para isto — não se inscreve em lado nenhum e os sprites que cria nascem invisíveis dentro do próprio `model`; o `discoTatico` é criado no `updateShirt`, que nunca chamamos (sem número nas costas, sem disco na vista táctica). Passada pelo `getGaitPose` do jogo.
 - **Assistentes** cobrem metades diagonalmente opostas das duas linhas laterais e seguem o **segundo último jogador** da equipa que ali defende. A linha é calculada localmente e não lida de `bb.offsideLimitDir`, que é anulado quando a equipa não tem posse.
-- **Árbitro** corre a diagonal do **lateral direito ao ponta esquerda do TeamB** — de (+23, +40) a (-23, -40) — projeta a bola nela e afasta-se até `RefereeModel.distanciaBola` (15 m). Colocação inicial a 12 m da bola, por fora do círculo central. Botão *Arbitragem: ON/OFF*.
+- **Árbitro** corre a diagonal do **lateral direito ao ponta esquerda do TeamB** — de (+23, +40) a (-23, -40). A diagonal dá-lhe o RUMO e a COROA à volta da bola a distância: fica entre `RefereeModel.raioMin` (20 m) e `raioMax` (25 m), no ponto da diagonal a essa distância. Dentro da faixa o raio não se mexe — corre ao longo dela; fora, volta ao meio. Nunca de costas para a bola: o `anguloMaxDaBola` (110°) limita o desvio do corpo, e acima de `passoLateral`/`tempoDeAjuste` ele corre aberto. Colocação inicial a 12 m da bola, por fora do círculo central. Botão *Arbitragem: ON/OFF*.
 
 **Minimapa — `js/minimap.js` (ficheiro novo)**
 
@@ -6968,6 +7288,41 @@ Coisas medidas e por resolver, para não se voltarem a descobrir por acaso.
 > incluindo a que estava marcada como "o furo mais antigo e de maior retorno"
 > (os pontapés de baliza a zero), que já não acontecia. Uma lista de problemas
 > envelhece tão depressa como o código.
+
+### Aberto desde 15 de Setembro de 2026
+
+- **Roubar a bola por trás: resolvido a um quarto.** A guarda do
+  `BallControl.rouboPorTras` corta 42 roubos para 30 em 20 min, mas a fracção
+  vinda de trás fica em 30% contra os 33% sem ela. A geometria já está tratada
+  (ninguém tira a bola do PÉ do dono vindo de mais de 120°); o que falta é a
+  outra metade e não é geometria — **o portador não protege a bola com o
+  corpo**. Um jogador com um adversário às costas continua a conduzir em frente
+  como se estivesse sozinho, e o contacto acaba por acontecer dentro dos 120°,
+  onde a regra (com razão) não se aplica. Ferramenta:
+  `tools/scratch/roubo_angulo.js`, e **medir com n > 100**: a 20 min a amostra
+  é de ~30 roubos e a dispersão engana (uma corrida deu 17%, a seguinte 38%).
+- **O batedor do LATERAL escolhe o lado errado numa das equipas.** O
+  `escolherBatedorDoLateral` (`match_state.js`) tira o lado de
+  `bolaPos.x >= 0 ? 'esquerda' : 'direita'`, sem `attDir`. A convenção das
+  formações põe os esquerdos em `x` positivo só para a equipa A — a B é
+  espelhada nos dois eixos pelo `processTeam` —, portanto numa delas a ordem
+  `['LB','LM','CM']` é percorrida para o flanco contrário ao da bola. É o mesmo
+  defeito que foi corrigido nas FALTAS a 15 de Setembro, e a cura já está
+  escrita: `ladoDaBola(bolaX, attDir)` em `utils.js`. Não foi medido o impacto
+  (quantos laterais saem batidos pelo homem do outro flanco).
+- **A bola ainda passa a ~0.73 m ao lado da cabeça num cabeceio.** A altura
+  ficou certa (ver a sessão de 15 de Setembro: `ALTURA_TESTA` medido no rig,
+  1.74), mas o `HeaderModel.raioContacto` continua nos 0.90 m do alcance do
+  CORPO. O que falta não é o raio, é a PONTARIA com que o jogador se coloca
+  debaixo da bola — apertar o raio sem isso apaga o cabeceio do jogo
+  (verificado: a 0.45 m dá zero em 40 min). Ferramenta:
+  `tools/scratch/cabecada_altura.js`.
+- **O árbitro cumpre a coroa 35% do tempo.** Com os raios de 20-25 m pedidos, a
+  distância mediana à bola é 23.1 m, mas 31% do tempo está mais perto de 20 e
+  34% mais longe de 25 — a bola anda mais depressa do que ele (um passe faz 20+
+  m/s contra os 7.5 dele). A coroa é um alvo, não uma cerca. As alavancas são a
+  velocidade dele (`RefereeModel.velocidade`) ou antecipar o alvo pela
+  trajectória da bola, nenhuma das duas medida.
 
 ### Aberto desde 9 de Setembro de 2026
 
@@ -8875,7 +9230,22 @@ padrão de fluxograma pro PositionBT/PlayerBT.
 | Cabeçada que desvia a bola para o lado | `config.js` → `SaltoCabeceio.deLado`; `player.js` → `anguloDoDesvioDeCabeca` |
 | Quanto tempo a marcação do canto dura | `config.js` → `CornerDefenseModel.prazo`; `match/match_loop.js` → ramo `cantoVivo` |
 | Quem bate a falta, por zona do campo | `config.js` → `FreeKickModel.batedorPorSetor`; `utils.js` → `batedorDaFalta` |
+| Quem bate a falta PELA ALA (e o lado certo) | `config.js` → `FreeKickModel.batedorPorSetorLateral` / `.corredorLateral`; `utils.js` → `ladoDaBola` |
 | Onde a equipa se põe numa falta | `config.js` → `FreeKickModel.formacaoPorSetor`; `utils.js` → `lugaresDaFalta` |
+| As quatro rotinas da falta na intermediária (ataque e defesa) | `config.js` → `FreeKickModel.rotinasDaIntermediaria` / `.setoresComRotina`; o sorteio no `match_setpieces.js`, antes do `formaDaDefesaNoLivre` |
+| O árbitro longe/perto da bola, ou de costas para ela | `officials.js` → `RefereeModel.raioMin` / `.raioMax` / `.anguloMaxDaBola` / `.tempoDeAjuste`; `pontoDoArbitro` e `mover` |
+| O árbitro a indicar a falta com o braço errado | `officials.js` → `tickSinal`; o lado sai do sinal da guinada (a direita do modelo é `-X`) |
+| Onde a bola bate num cabeceio | `config/physics.js` → `ALTURA_TESTA` (medido no rig); `config/shooting.js` → `HeaderModel.janelaAbaixo` / `.janelaAcima` |
+| Adversário a tirar a bola pelas costas do portador | `config/player_behavior.js` → `BallControl.rouboPorTras`; a guarda vive no `resolveBallContact` (`match_physics.js`) |
+| O guarda-redes a agarrar uma bola atrasada com o pé | `utils.js` → `registarToqueComPe` / `avaliarRecuoParaGR`; `config/goalkeeper.js` → `GkRecuoModel.libertaComOPe` |
+| O guarda-redes a mergulhar para bolas que nunca alcança | `config/goalkeeper.js` → `GoalkeeperDive.alcanceLateralMax` / `.distanciaMaxParaMergulhar`; `player.js` → `alcanceDoMergulho` / `bolaLongeParaMergulhar` |
+| O guarda-redes a reagir tarde (ou cedo) com gente à frente | `config/goalkeeper.js` → `GoalkeeperDive.atrasoPorHomemNaVisao` / `.atrasoVisaoMax` / `.visaoLargura`; `utils.js` → `homensNaVisaoDoGuardaRedes` |
+| O guarda-redes a mergulhar para o lado contrário numa falta | `config/shooting.js` → `DirectFreeKickModel.probLadoErrado` |
+| Tiro de meta batido com a equipa fora do sítio | `config/player_behavior.js` → `GoalKickShape.esperaMaxPelaEquipa`; o `golKickProntos` é lido no `match_loop.js` |
+| Premiar quem toca e arranca (um-dois) | `config/passing.js` → `PassModel.bonusTocaECorre` / `.tocaECorreRaio` / `.tocaECorreDuracao`; `player.js` → `bonusDoTocaECorre` |
+| Tempo de espera do lateral / do canto | `config/tactics.js` → `ESPERA_COBRANCA_LATERAL` / `ESPERA_COBRANCA_CANTO` / `ESPERA_APOS_REPOSICAO` |
+| O replay automático do golo (duração, câmara, ON/OFF) | `match_replay.js` → `REPLAY_GOLO` e `replayDoGolo`; botão `#btn-replay-auto` no painel direito |
+| Distância das bancadas às linhas | `match_setup.js` → `RECUO_LATERAL` / `RECUO_FUNDO` / `RAIO_PRIMEIRA_FILA` (o arco da esquina depende dos três) |
 | Os limites das zonas da falta (defesa/meio/ataque) | `config.js` → `FreeKickModel.setores`; `utils.js` → `setorDaFalta` |
 | Alvos e altura do cruzamento da falta lateral | `config.js` → `FreeKickModel.cruzamentos`; `utils.js` → `cruzamentoDeFalta` |
 | De que distância se bate directo à baliza | `config.js` → `FreeKickModel.remateDistMax` e `.remateAnguloTrave` |
