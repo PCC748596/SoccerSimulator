@@ -843,6 +843,19 @@ function amostrarClipPlayerKick(norm) {
         return va + (vb - va) * u;
     };
     return {
+        /*
+        O AVANCO E A FRACCAO DO CAMINHO JA ANDADO, 0..1 — nao sao metros.
+
+        E o que faz do gesto UMA animacao: o corpo avanca ao ritmo do passo que
+        as pernas estao a dar, em vez de deslizar em linha recta por baixo
+        delas. Sobe depressa nos frames 0-3 (o passo) e fica PARADO em 1.00 nos
+        dois ultimos (o pe de apoio esta cravado, o corpo nao anda mais).
+
+        Fraccao e nao metros para o mesmo clip servir corridas de comprimentos
+        diferentes: a falta anda `arranqueDoGesto - paragemNoContacto`, o tiro
+        de meta anda o seu proprio recuo. Quem chama multiplica.
+        */
+        avanco: mix('avanco'),
         leanZ: mix('leanZ'),
         pitchX: mix('pitchX'),
         chest: mix('chest'),

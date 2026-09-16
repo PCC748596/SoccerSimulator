@@ -166,6 +166,13 @@ const GoalkeeperPose = {
     tiroMetaAndar: 2.2,      // m/s a caminhar até à linha de fundo
     tiroMetaCorrer: 5.5,     // m/s na corrida para a bola
     tiroMetaRecuo: 3.8,      // metros atrás da bola onde fica antes de arrancar a corrida (+30cm)
+    /*
+    O PASSO QUE O GESTO DA POR SI. E a distancia que o PlayerKickClip percorre
+    do primeiro frame ate ao contacto, com o `avanco` a distribui-la pelos
+    keyframes. Quem caminha ate aqui e a espera do lance ('tiro_meta_espera'),
+    nao o chute: o chute e uma animacao so e traz o passo dentro dele.
+    */
+    tiroMetaPassoDoGesto: 1.9,
     tiroMetaDistChuto: 0.85, // distância à bola em que dispara o gesto do chute
     // Segurança absoluta: se algo correr mal (posicionamento nunca completa,
     // etc.) chuta na mesma. Tem de caber posicionamento + espera de 3-6s +
@@ -755,13 +762,27 @@ const GoalkeeperDive = {
     medida dela (`ALTURA_BALIZA`, 2.44 m): um terço são 0.81 m e dois terços
     1.63. Escrever 0.81 à mão era escrever a altura da baliza duas vezes.
 
-    `lateralMinClip` é o corte do pedido. Abaixo dele a bola está ao alcance
-    do corpo e o que se faz não é um mergulho — é o ramo 'maos', que já existe
-    e não muda (ver GoalkeeperPose.mergulhoLateralMin).
+    `lateralMinClip` é onde os clips começam a valer, e era 4.0 — o número do
+    pedido original ("todas para bolas a mais de 4 metros lateralmente").
+
+    ERA CEDO DE MAIS, e deixava uma banda sem gesto nenhum. Quem manda no
+    mergulho é o `GoalkeeperPose.mergulhoLateralMin`, 1.0 m: abaixo disso é o
+    ramo 'maos' (defesa de pé, sem se atirar) e acima disso ele MERGULHA. Com
+    o corte dos clips em 4.0, tudo entre **1 e 4 metros** era um mergulho a
+    sério desenhado pela pose procedural antiga (`poseCarregar`/`poseImpulso`/
+    `poseVoo` em gk_dive.js) — sem clip, sem os doze fotogramas. Relato: *"o
+    pulo do goleiro em baixo com bola até 4 metros não está funcionando"*.
+
+    Passa a 1.0, o mesmo valor do `mergulhoLateralMin`: a partir do instante em
+    que ele decide atirar-se, há gesto. Os dois números querem dizer a mesma
+    coisa — onde acaba a defesa de pé e começa o mergulho — e ter dois cortes
+    diferentes era ter um intervalo que nenhum dos dois cobria.
+
+    Abaixo de 1.0 nada muda: continua a ser o ramo 'maos'.
     */
     bandaBaixa: 1 / 3,        // fracção da altura da baliza
     bandaAlta: 2 / 3,
-    lateralMinClip: 4.0,      // metros de lado, abaixo disto não há clip
+    lateralMinClip: 1.0,      // = GoalkeeperPose.mergulhoLateralMin
 
     /*
     E NÃO SE ATIRA COM A BOLA AINDA LONGE.

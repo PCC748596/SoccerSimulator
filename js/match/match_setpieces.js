@@ -1724,7 +1724,31 @@ Object.assign(Match, {
                 p.dynamicTarget.z = linhaZ + attDir * (Area.profundidade + 1.0);
             }
 
-            p.speedMult = 4.0;
+            /*
+            O RITMO SAI DA DISTANCIA, e nao de um numero fixo.
+
+            Era `4.0` para toda a gente. O `MOVE_TO_POS` passa o `speedMult`
+            direito ao `steerArrive` como TECTO em m/s, portanto 4.0 e um
+            trote, e com a travagem de chegada da ~3.7 m/s medidos.
+
+            Para quem BATE chegava: o `setupSetPiece` ja o apanha perto do
+            lugar. Para quem RECEBE nao: acabou de atacar e esta amontoado na
+            area do outro, a 25-30 m do bloco. Medido em 2 tiros de meta, com
+            a equipa que recebe a partir de 25.4 m e 30.3 m do alvo -- ao fim
+            de 5 s ainda lhe faltavam 8.0 m e 11.6 m, com 7 e 9 dos 10 fora do
+            lugar, e a bola ja tinha sido batida.
+
+            `RepositionPace.cruzeiro` e o mesmo ritmo que o resto do motor usa
+            para se repor (ver os escaloes em config/player_behavior.js): 7.82
+            m/s acima de 25 m, a descer por escaloes ate ao andar. O 4.0 fica
+            como chao, para este lance nunca ser mais lento do que era.
+            */
+            const distAoAlvo = p.model.position.distanceTo(p.dynamicTarget);
+            const ritmo = (typeof RepositionPace !== 'undefined' && RepositionPace.cruzeiro)
+                ? RepositionPace.cruzeiro(distAoAlvo,
+                    (typeof p.skillFor === 'function') ? p.skillFor('SPEED') : 50)
+                : 4.0;
+            p.speedMult = Math.max(4.0, ritmo);
             if (mover) p.fsm.changeState('MOVE_TO_POS');
             else if (p.model.position.distanceTo(p.dynamicTarget) < 1.5) {
                 p.fsm.changeState('SET_PIECE_WAIT');
@@ -1772,16 +1796,31 @@ Object.assign(Match, {
         if (this.state !== 'GOAL_KICK') return;
 
         const team = this.setPieceTaker ? this.setPieceTaker.team : null;
-        const atacantes = (team === 'TeamA') ? this.players : this.opponents;
+        const bate = (team === 'TeamA') ? this.players : this.opponents;
+        const recebe = (team === 'TeamA') ? this.opponents : this.players;
 
         if (team) this.formaDoTiroDeMeta(team, false);
 
         if (!this.golKickProntos) {
-            const todosProntos = atacantes.every(p => {
-                if (p.role === 'gk') return true;
-                return p.fsm.currentState === 'SET_PIECE_WAIT';
-            });
-            if (todosProntos) this.golKickProntos = true;
+            /*
+            AS DUAS EQUIPAS, e nao so a que bate.
+
+            Esta bandeira nasceu de um relato sobre quem BATE ("os jogadores do
+            time com a bola ainda nao estao se posicionando") e ficou a
+            percorrer so essa metade. A outra metade tem o problema pior: acaba
+            de atacar, esta amontoada na area, e tem 25-30 m para recuar ate ao
+            bloco -- mais do dobro do caminho de quem bate. Ninguem esperava por
+            ela, e o lance era batido com a equipa que recebe ainda em
+            movimento. E a captura do relato.
+
+            O TECTO CONTINUA A MANDAR: o `golKickEsperaPeloBloco` do
+            match_loop.js bate na mesma ao fim de `esperaMaxPelaEquipa` (8 s),
+            portanto ninguem pode congelar o lance por ficar preso -- agora sao
+            22 jogadores a poder ficar presos em vez de 11, e e exactamente por
+            isso que o tecto existe.
+            */
+            const noLugar = (p) => p.role === 'gk' || p.fsm.currentState === 'SET_PIECE_WAIT';
+            if (bate.every(noLugar) && recebe.every(noLugar)) this.golKickProntos = true;
         } else {
             this.golKickEspera += dt;
         }

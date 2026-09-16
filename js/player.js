@@ -223,7 +223,6 @@ class FootballPlayer {
         this.gkKickNorm = 0;
         this.gkKickTipo = null;    // 'chao' no tiro de meta; null = das mãos
         this.gkKickBlend = null;   // mistura corrida->chute do chão (ver iniciarBlendChuteChao)
-        this.gkTiroFase = 0;       // 0 caminhar até à linha, 1 corrida
         this.gkTiroAlvo = null;    // ponto de arranque do tiro de meta
         this.gkReagiu = false;
         this.gkDelayReacao = 0;
@@ -1086,13 +1085,14 @@ class FootballPlayer {
             z: bolaFalta.z - (dz / distCorrida) * paragem
         };
 
-        // Velocidade a zero: quem move o corpo daqui para a frente e o
-        // `onPrepare`. Ver a nota igual no penalti.
+        // Velocidade a zero: quem move o corpo e o `onPrepare`.
         this.velocity.set(0, 0, 0);
 
         this.actionState = new ActionState(clip, {
+            // Corpo pela curva `avanco` do clip (ver PlayerKickClip).
             onPrepare: (ctx, norm) => {
-                const k = Math.min(1, norm / dur);
+                const K = amostrarClipPlayerKick(Math.min(1, norm / dur));
+                const k = (typeof K.avanco === 'number') ? K.avanco : Math.min(1, norm / dur);
                 this.model.position.x = inicio.x + (fim.x - inicio.x) * k;
                 this.model.position.z = inicio.z + (fim.z - inicio.z) * k;
             },
@@ -1490,7 +1490,9 @@ class FootballPlayer {
         */
         this.actionState = new ActionState('playerKick', {
             onPrepare: (ctx, norm) => {
-                const progress = Math.min(1, norm / contactTime);
+                const linear = Math.min(1, norm / contactTime);
+                const K = amostrarClipPlayerKick(linear);
+                const progress = (typeof K.avanco === 'number') ? K.avanco : linear;
                 this.model.position.x = inicioPen.x + (fimPen.x - inicioPen.x) * progress;
                 this.model.position.z = inicioPen.z + (fimPen.z - inicioPen.z) * progress;
             },
@@ -6005,9 +6007,26 @@ class FootballPlayer {
                 gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, -0.5, 0.2);
 
                 gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, P.chest, 0.2);
-                // Ligeiro balanço vertical da passada.
-                const balanco = Math.sin(t * Math.PI * 4) * 0.04;
-                gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + P.altura + balanco, 0.2);
+                /*
+                SEM BALANCO ESCRITO A MAO — relato: *"o goleiro quando anda
+                fica abaixando e levantando, parece uma mola"*.
+
+                Estava aqui um `Math.sin(t * PI * 4) * 0.04`: um salto vertical
+                de +-4 cm ao DOBRO da cadencia da passada, que so o
+                guarda-redes tinha. Um jogador de campo nao tem nada disto — a
+                altura dele sai do `assentarNoChao`, que mede onde a sola da
+                bota esta e desce o corpo ate ela tocar o relvado.
+
+                E o `assentarNoChao` tambem corre para o guarda-redes (fim do
+                updateGK). Eram os DOIS a escrever `position.y` no mesmo frame:
+                o seno a empurrar para cima e para baixo, o assento a puxar
+                para a sola. A mola era a discussao dos dois.
+
+                O balanco vertical de quem anda continua a existir, e e o
+                verdadeiro: vem de a perna esticar e dobrar, e quem o traduz em
+                altura e o assento — a mesma conta dos outros vinte e um.
+                */
+                gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + P.altura, 0.2);
             } else {
                 let P;
                 if ((Match.state === 'PENALTY' || Match.state === 'FREE_KICK') && this.team !== Match.setPieceTeam) {
@@ -6055,128 +6074,111 @@ class FootballPlayer {
             GkDive.update(this, dt, gkCorpo, gkRig);
         } else if (this.gkEstado === 'tiro_meta_espera') {
             /*
-            Espera parada antes do tiro de meta (ESPERA_APOS_REPOSICAO). Fica
-            no ponto de arranque, de pé e virado para a bola.
+            Espera antes do tiro de meta (ESPERA_APOS_REPOSICAO). E AQUI que
+            ele caminha ate ao ponto de arranque do gesto, nao depois.
 
-            O resetBonesToDefault é o essencial aqui: quem provocou o tiro de
-            meta foi quase sempre uma defesa, e sem isto o guarda-redes passava
-            estes segundos congelado na pose do mergulho.
+            ANTES a caminhada vinha DEPOIS da espera, dentro do 'tiro_meta', em
+            duas fases (recuar 3.8 m, depois correr ate a bola), cada uma
+            desenhada pelo ciclo de passada. So no fim e que entrava o clip do
+            chute. Ou seja: o tiro de meta eram DUAS animacoes coladas uma a
+            outra — andar, e depois chutar — e era isso que se via.
+
+            Agora a caminhada e reposicionamento de bola parada, como a de toda
+            a gente, e acontece durante os segundos de espera que o lance ja
+            tinha. Quando a espera acaba ele esta parado no sitio e o chute e
+            UMA animacao so, do primeiro passo ao contacto (ver PlayerKickClip,
+            que traz o passo e o avanco do corpo dentro dele).
+
+            O resetBonesToDefault so corre quando ele esta parado: quem provocou
+            o tiro de meta foi quase sempre uma defesa, e sem isto ele passava
+            estes segundos congelado na pose do mergulho. A caminhar seria o
+            contrario — apagava a passada a cada frame.
             */
-            this.resetBonesToDefault();
+            {
+                const bolaE = Match.ball.position;
+                const G = GoalkeeperPose;
+                const plantXe = bolaE.x + this.dirZ * 0.32;
+                const plantZe = bolaE.z - this.dirZ * 0.10;
+                const passoGesto = (typeof G.tiroMetaPassoDoGesto === 'number')
+                    ? G.tiroMetaPassoDoGesto : 1.9;
+                // Ponto de arranque: o passo do clip para tras do pe de apoio.
+                const alvoEx = plantXe;
+                const alvoEz = plantZe - this.dirZ * passoGesto;
+
+                const dxE = alvoEx - gkCorpo.position.x;
+                const dzE = alvoEz - gkCorpo.position.z;
+                const distE = Math.hypot(dxE, dzE);
+                const passoE = (G.tiroMetaAndar || 2.2) * dt;
+
+                if (distE > 0.12) {
+                    const sxE = distE > passoE ? (dxE / distE) * passoE : dxE;
+                    const szE = distE > passoE ? (dzE / distE) * passoE : dzE;
+                    gkCorpo.position.x += sxE;
+                    gkCorpo.position.z += szE;
+
+                    // A MESMA caminhada de toda a gente (aplicarPosePassada).
+                    const velE = dt > 0.0001 ? Math.hypot(sxE, szE) / dt : 0;
+                    const P0E = getGaitPose(0, velE);
+                    this.animTimer += (velE * dt) / P0E.passada;
+                    const ttE = ((this.animTimer % 1.0) + 1.0) % 1.0;
+                    aplicarPosePassada(gkRig, getGaitPose(ttE, velE), ttE, {
+                        amp: 1.0,
+                        suavizacao: Math.min(1, velE / 2.0)
+                    });
+                    gkRig.pelvis.rotation.set(0, 0, 0);
+                    gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.3);
+                } else {
+                    this.resetBonesToDefault();
+                }
+            }
             _v1.set(Match.ball.position.x, gkCorpo.position.y, Match.ball.position.z);
             lookAtBola(gkCorpo, _v1);
         } else if (this.gkEstado === 'tiro_meta') {
             /*
-            Tiro de meta em duas fases:
-                fase 0  posiciona-se atrás e à esquerda da bola para a corrida
-                fase 1  corre para a bola (Figura 1) e planta o pé de apoio (Figura 2)
-            */
-            this.gkTempoMergulho += dt;
-            const tTM = this.gkTempoMergulho;
-            const bolaTM = Match.ball.position;
-            const G = GoalkeeperPose;
+            O TIRO DE META E UMA ANIMACAO SO.
 
-            // Posição exata de apoio do pé esquerdo ao lado da bola:
-            // ~0.32m à esquerda do alinhamento da bola e ~0.10m atrás da bola
+            Aqui viviam duas fases, cada uma com o seu ciclo de passada:
+                fase 0   recuar 3.8 m para tras da bola
+                fase 1   correr ate ao pe de apoio
+            e so no fim e que entrava o clip do chute. Andar e chutar eram dois
+            clips colados, e via-se a emenda.
+
+            A caminhada passou para o 'tiro_meta_espera', onde e reposicionamento
+            de bola parada e tem os segundos do lance para acontecer. Quando
+            chega aqui ele ja esta no ponto de arranque, parado: este estado nao
+            anima nada, so arranca o gesto.
+
+            O PASSO E O AVANCO DO CORPO ESTAO DENTRO DO CLIP (PlayerKickClip,
+            canal `avanco`), portanto nada fora dele escreve o esqueleto ou
+            desloca o corpo enquanto o chute decorre.
+            */
+            const bolaTM = Match.ball.position;
             const plantX = bolaTM.x + this.dirZ * 0.32;
             const plantZ = bolaTM.z - this.dirZ * 0.10;
 
-            let alvoTMx, alvoTMz, velTM;
-            if (this.gkTiroFase === 0) {
-                const recuo = G.tiroMetaRecuo || 3.8;
-                alvoTMx = this.gkTiroAlvo ? this.gkTiroAlvo.x : (bolaTM.x + this.dirZ * 0.70);
-                alvoTMz = this.gkTiroAlvo ? this.gkTiroAlvo.z : (bolaTM.z - this.dirZ * recuo);
-                velTM = G.tiroMetaAndar;
-            } else {
-                // Corre diretamente para a posição de apoio ao lado da bola
-                alvoTMx = plantX;
-                alvoTMz = plantZ;
-                velTM = G.tiroMetaCorrer || 5.2;
-            }
-
-            const dxTM = alvoTMx - gkCorpo.position.x;
-            const dzTM = alvoTMz - gkCorpo.position.z;
-            const distTM = Math.hypot(dxTM, dzTM);
-            const passoTM = velTM * dt;
-            let sxTM = 0, szTM = 0;
-            if (distTM > passoTM && distTM > 0.0001) {
-                sxTM = (dxTM / distTM) * passoTM;
-                szTM = (dzTM / distTM) * passoTM;
-            } else {
-                sxTM = dxTM; szTM = dzTM;
-            }
-            gkCorpo.position.x += sxTM;
-            gkCorpo.position.z += szTM;
-
-            // Vira-se para a frente / bola durante a preparação e corrida
             _v1.set(bolaTM.x, gkCorpo.position.y, bolaTM.z);
             lookAtBola(gkCorpo, _v1);
 
-            // Ciclo de passada da corrida de aproximação (Figura 1)
-            {
-                /*
-                Corrida de aproximação ao tiro de meta: mesmo ciclo do jogo
-                (getGaitPose), pela mesma razão do bloco `andando` mais acima —
-                a passada por ciclo tem de vir do andamento, não de um 3.0/1.55
-                escritos à mão, senão o boneco desliza.
-                */
-                /*
-                A MESMA CAMINHADA DE TODA A GENTE -- pedido: *"o guarda-redes
-                quando esta a caminhar para bater o tiro de meta esta com uma
-                animacao de caminhada diferente dos jogadores"*.
-
-                E estava: isto escrevia os ossos a mao, com `GoalkeeperPose.andar`
-                por cima do ciclo -- uma dobra de joelho propria (`kneeBase`),
-                uma abertura de bracos propria (`bracos`), o tronco inclinado, e
-                os bracos a 60% da amplitude na fase de caminhar. O ciclo era o
-                mesmo (`getGaitPose`), a ESCRITA e que era outra, e e a escrita
-                que se ve.
-
-                Quem desenha a passada de um jogador de campo e o
-                `aplicarPosePassada` (js/pose.js), partilhado com o editor de
-                animacao. O guarda-redes passa a usar o mesmo, com as mesmas
-                opcoes: nao ha "caminhada de guarda-redes", ha a caminhada.
-                */
-                const velPlanarTM = dt > 0.0001 ? Math.hypot(sxTM, szTM) / dt : 0;
-                const P0TM = getGaitPose(0, velPlanarTM);
-                this.animTimer += (velPlanarTM * dt) / P0TM.passada;
-                const tt = ((this.animTimer % 1.0) + 1.0) % 1.0;
-                const pose = getGaitPose(tt, velPlanarTM);
-
-                aplicarPosePassada(gkRig, pose, tt, {
-                    amp: 1.0,
-                    // A velocidades baixas a pose entra por lerp, como no campo.
-                    suavizacao: Math.min(1, velPlanarTM / 2.0)
-                });
-                gkRig.pelvis.rotation.set(0, 0, 0);
-                gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.3);
-            }
-
-            if (this.gkTiroFase === 0) {
-                // Arranca a corrida após posicionar-se no ponto de recuo
-                if (distTM < 0.35 || tTM > 0.6) {
-                    this.gkTiroFase = 1;
-                    this.gkTempoMergulho = 0;
-                }
-            } else if (distTM <= Math.max(0.35, passoTM * 1.5) || tTM > G.tiroMetaTimeout) {
-                // Chegada ao lado da bola: inicia a animação do chute.
-                // O corpo NÃO salta para plantX/plantZ aqui — a fixação do pé
-                // de apoio, a pose e a orientação entram por mistura ao longo
-                // de GK_GROUND_KICK_BLEND (ver iniciarBlendChuteChao).
-                this.iniciarBlendChuteChao(gkCorpo, gkRig, plantX, plantZ);
-                this.gkEstado = 'chutando';
-                this.gkKickTipo = 'chao';
-                this.gkTempoMergulho = 0;
-                this.gkKickNorm = 0;
-                this.gkKickAction = new ActionState('playerKick', {
-                    onContact: () => {
-                        this.kickFromGround();
-                        if (typeof EventBus !== 'undefined') {
-                            EventBus.emit('GOAL_KICK_TAKEN', { team: this.team, gk: this });
-                        }
+            /*
+            O corpo desliza do sitio onde a espera o deixou ate ao pe de apoio
+            AO RITMO DO `avanco` do clip — e o `gkKickBlend` que o faz, frame a
+            frame, no ramo do chute do chao. Se a espera nao chegou para ele
+            chegar ao ponto de arranque, o clip cobre o que faltar: o avanco e
+            uma fraccao, nao uma distancia fixa.
+            */
+            this.iniciarBlendChuteChao(gkCorpo, gkRig, plantX, plantZ);
+            this.gkEstado = 'chutando';
+            this.gkKickTipo = 'chao';
+            this.gkTempoMergulho = 0;
+            this.gkKickNorm = 0;
+            this.gkKickAction = new ActionState('playerKick', {
+                onContact: () => {
+                    this.kickFromGround();
+                    if (typeof EventBus !== 'undefined') {
+                        EventBus.emit('GOAL_KICK_TAKEN', { team: this.team, gk: this });
                     }
-                });
-            }
+                }
+            });
         } else if (this.gkEstado === 'maos') {
             /*
             Defesa de PÉ: a bola vem a menos de mergulhoLateralMin do corpo, e
@@ -6940,11 +6942,21 @@ class FootballPlayer {
                 */
                 const K = amostrarClipPlayerKick(normK);
 
+                /*
+                O CORPO ANDA AO RITMO DO `avanco` DO CLIP.
+
+                Era um smoothstep sobre `GK_GROUND_KICK_BLEND` (0.04 s): o
+                corpo chegava ao pe de apoio em dois frames e o resto do gesto
+                fazia-se parado. Agora a fraccao vem do keyframe — sobe durante
+                o passo (frames 0-3) e fica em 1.00 na armacao e no contacto,
+                que e quando o pe de apoio ja esta cravado no chao.
+
+                E o que faz o passo do clip ser um passo e nao um deslize: as
+                pernas e o corpo andam da mesma curva.
+                */
                 const B = this.gkKickBlend;
                 if (B) {
-                    B.t += dt;
-                    const u = Math.min(1, B.t / B.dur);
-                    B.w = u * u * (3 - 2 * u);
+                    B.w = (typeof K.avanco === 'number') ? K.avanco : 1;
                     gkCorpo.position.x = B.origemX + (B.plantX - B.origemX) * B.w;
                     gkCorpo.position.z = B.origemZ + (B.plantZ - B.origemZ) * B.w;
                 }

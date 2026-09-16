@@ -510,19 +510,19 @@ const PlayerKickClip = {
     frames: [
         // 0 — GoalKick1. Corpo baixo (`altura` -0.08) e muito inclinado sobre
         // o apoio, joelho de apoio dobrado, cabeça a olhar a bola no chão.
-        { leanZ: -0.30, pitchX: -0.10, chest: 0.35, coxaChute: 0.45, joelhoChute: 0.80, coxaChuteZ: -0.05, coxaApoio: -0.25, joelhoApoio: 0.40, bracoLx: -0.30, bracoLz: 0.70, bracoRx: 0.20, bracoRz: -0.60, cotoveloL: -0.60, cotoveloR: -0.50, peRx: -0.10, peLx: 0.10, cabecaX: -0.45, altura: -0.08 },
+        { avanco: 0.00, leanZ: -0.30, pitchX: -0.10, chest: 0.35, coxaChute: 0.45, joelhoChute: 0.80, coxaChuteZ: -0.05, coxaApoio: -0.25, joelhoApoio: 0.40, bracoLx: -0.30, bracoLz: 0.70, bracoRx: 0.20, bracoRz: -0.60, cotoveloL: -0.60, cotoveloR: -0.50, peRx: -0.10, peLx: 0.10, cabecaX: -0.45, altura: -0.08 },
         // 1 — GoalKick2. A passada: o corpo levanta-se do agachamento, a perna
         // de chute sobe atrás com o joelho a fechar, os braços abrem.
-        { leanZ: -0.15, pitchX: -0.05, chest: 0.18, coxaChute: 0.65, joelhoChute: 1.45, coxaChuteZ: -0.10, coxaApoio: -0.30, joelhoApoio: 0.25, bracoLx: -0.50, bracoLz: 1.15, bracoRx: 0.40, bracoRz: -1.05, cotoveloL: -0.40, cotoveloR: -0.35, peRx: -0.25, peLx: 0.05, cabecaX: -0.35, altura: -0.02 },
+        { avanco: 0.50, leanZ: -0.15, pitchX: -0.05, chest: 0.18, coxaChute: 0.65, joelhoChute: 1.45, coxaChuteZ: -0.10, coxaApoio: -0.30, joelhoApoio: 0.25, bracoLx: -0.50, bracoLz: 1.15, bracoRx: 0.40, bracoRz: -1.05, cotoveloL: -0.40, cotoveloR: -0.35, peRx: -0.25, peLx: 0.05, cabecaX: -0.35, altura: -0.02 },
         // 2 — GoalKick3. Armação máxima. `joelhoChute` 2.20 são 126°, o
         // calcanhar junto ao glúteo que a imagem mostra; o tecto anatómico do
         // joelho são 145° (JointLimits.knee.x).
-        { leanZ: -0.20, pitchX: -0.22, chest: 0.40, coxaChute: 0.95, joelhoChute: 2.20, coxaChuteZ: -0.18, coxaApoio: -0.05, joelhoApoio: 0.15, bracoLx: -0.65, bracoLz: 1.30, bracoRx: 0.55, bracoRz: -1.20, cotoveloL: -0.30, cotoveloR: -0.25, peRx: -0.40, peLx: 0.00, cabecaX: -0.40, altura: 0.00 },
+        { avanco: 0.90, leanZ: -0.20, pitchX: -0.22, chest: 0.40, coxaChute: 0.95, joelhoChute: 2.20, coxaChuteZ: -0.18, coxaApoio: -0.05, joelhoApoio: 0.15, bracoLx: -0.65, bracoLz: 1.30, bracoRx: 0.55, bracoRz: -1.20, cotoveloL: -0.30, cotoveloR: -0.25, peRx: -0.40, peLx: 0.00, cabecaX: -0.40, altura: 0.00 },
         // 3 — GoalKick4. CONTACTO. A abertura das pernas é `coxaChute` -0.70
         // (40° à frente) contra `coxaApoio` 0.75 (43° atrás), 83° no total — é
         // a abertura grande da imagem. O tronco ABRE para trás (`chest`
         // negativo) e o corpo sobe 0.18 m: na imagem os dois pés estão no ar.
-        { leanZ: -0.10, pitchX: 0.15, chest: -0.10, coxaChute: -0.70, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 0.75, joelhoApoio: 0.45, bracoLx: 0.00, bracoLz: 1.55, bracoRx: -0.10, bracoRz: -1.55, cotoveloL: -0.05, cotoveloR: -0.05, peRx: -0.25, peLx: -0.35, cabecaX: -0.20, altura: 0.18 }
+        { avanco: 1.00, leanZ: -0.10, pitchX: 0.15, chest: -0.10, coxaChute: -0.70, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 0.75, joelhoApoio: 0.45, bracoLx: 0.00, bracoLz: 1.55, bracoRx: -0.10, bracoRz: -1.55, cotoveloL: -0.05, cotoveloR: -0.05, peRx: -0.25, peLx: -0.35, cabecaX: -0.20, altura: 0.18 }
     ]
 };
 
