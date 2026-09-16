@@ -2676,10 +2676,26 @@ class FootballPlayer {
                     dist: +this.model.position.distanceTo(c.player.model.position).toFixed(1)
                 }));
             }
+
+            /*
+            A NOTA DO VENCEDOR FICA GUARDADA — e fora do `if` do debug.
+
+            Quem a lê é a decisão de saída do guarda-redes (`decidirSaidaGK`,
+            bt/player_bt.js): "há uma opção boa para sair a jogar?" é uma
+            pergunta sobre a QUALIDADE da melhor opção, e a qualidade está
+            calculada aqui. Sem isto, a decisão tinha de a recalcular com
+            critérios próprios — que foi exactamente o que aconteceu, e os dois
+            critérios discordavam.
+
+            Uma atribuição por avaliação; o `_notasPasse` (o pódio inteiro)
+            continua a só existir com o debug ligado, que esse custa.
+            */
+            this._melhorNotaPasse = ratedCandidates[0].score;
             return ratedCandidates[0].player;
         }
 
         this.ultimoAlvoPasse = null;
+        this._melhorNotaPasse = -Infinity;
         return null;
     }
 
@@ -6783,7 +6799,14 @@ class FootballPlayer {
             */
             const opcaoBoa = this.gkThrowTarget && this.gkThrowTarget.model;
             const lancarCedo = gkPodeLancar(t, opcaoBoa);
-            const prazo = (this.gkSaida === 'chuteFrente' && !opcaoBoa)
+            /*
+            `gkSaidaEraChutao`: ele decidiu chutar e depois subiu para "sair a
+            jogar" porque apareceu uma opcao boa (ver a subida em
+            player_bt.js). Se ela desaparecer, o prazo tem de continuar a ser o
+            curto — senao ficava os 8 s a espera para chutar na mesma.
+            */
+            const iaChutar = (this.gkSaida === 'chuteFrente') || this.gkSaidaEraChutao;
+            const prazo = (iaChutar && !opcaoBoa)
                 ? Math.max(GoalkeeperPose.segurarMinimo, GoalkeeperPose.segurarDirecto || 3.0)
                 : (this.gkSegurarDur ?? GoalkeeperPose.segurarDur);
 

@@ -142,12 +142,39 @@ test('o prazo é o da regra, e não um sorteio', () => {
 });
 
 test('quem decidiu chutar não fica os 8 s parado', () => {
+    /*
+    O QUE ESTE TESTE PRENDE É A AUSÊNCIA DE TEMPO MORTO, e deixou de poder
+    prender o instante exacto.
+
+    A decisão de saída já não fica congelada: se aparecer uma opção MESMO
+    desmarcada e boa (`GoalkeeperDistribution.notaSempreSair`), ele muda de
+    ideias e sai a jogar — é o pedido *"não deveria chutar pra frente só se não
+    tivesse uma opção boa pra sair jogando?"*.
+
+    E neste cenário aparece. O `montar(true, ...)` cola um adversário a cada
+    companheiro, mas isso é só o instante zero: eles correm, e medido frame a
+    frame a marcação desfaz-se sozinha — 0 desmarcados aos 0.02 s, 2 aos 0.77,
+    6 aos 1.27. Quem devolve o LB é o `acharLateralParaSaida` de sempre, com o
+    critério de folga intacto; o que mudou foi ele voltar a ser consultado.
+
+    Portanto: ou ele lança (apareceu opção), ou chuta — e se chutar, não antes
+    do `segurarDirecto`. O que continua proibido é gastar os 8 s para chutar na
+    mesma.
+    */
     montar(true, 'chuteFrente');
     const t = ateLargar(true);
     assert.ok(t < GoalkeeperPose.segurarDur - 1.0,
-        `esperou ${t.toFixed(1)} s para chutar na mesma — é tempo morto`);
-    assert.ok(t >= GoalkeeperPose.segurarDirecto - 0.5,
-        `chutou aos ${t.toFixed(1)} s, antes de a equipa sair da área`);
+        `esperou ${t.toFixed(1)} s para largar na mesma — é tempo morto`);
+
+    const chutou = (gk.gkSaida !== 'laterais');
+    if (chutou) {
+        assert.ok(t >= GoalkeeperPose.segurarDirecto - 0.5,
+            `chutou aos ${t.toFixed(1)} s, antes de a equipa sair da área`);
+    } else {
+        assert.ok(t >= GoalkeeperPose.segurarMinimo - 0.1,
+            `saiu a jogar aos ${t.toFixed(1)} s: nem a folga mínima para as ` +
+            'equipas saírem da área');
+    }
 });
 
 test('o gatilho é a opção BOA, e não qualquer linha de passe', () => {

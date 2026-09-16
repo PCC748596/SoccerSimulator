@@ -708,24 +708,108 @@ function decidirSaidaGK(ctx) {
         chance = G.porEstilo[Tatics.teamPlayStyle];
     }
     
-    // A preferência do estilo da equipa é a base, mas podemos ajustá-la em
-    // função da disponibilidade real das linhas de passe.
+    /*
+    A preferência do estilo é a base; quem a ajusta é a QUALIDADE da melhor
+    opção de passe — ver GoalkeeperDistribution.notaMinimaParaSair, que traz a
+    medição e o porquê dos dois patamares.
+
+    Era o `acharLateralParaSaida` sozinho a decidir isto, e ele é um segundo
+    critério, muito mais estreito do que o avaliador de passes: sem candidato
+    punha a chance a ZERO e o chutão ficava garantido, mesmo com um lateral a
+    valer 1462 no painel. Medido: 11 dos 16 chutões tinham uma opção acima de
+    1000.
+
+    O `lateralLivre` continua a existir e continua a escolher QUEM recebe (é o
+    ramo do 'segurando', mais abaixo). O que mudou é que já não é ele a
+    responder "há alguém a quem jogar".
+    */
     const lateralLivre = acharLateralParaSaida(ctx);
-    if (!lateralLivre) {
-        // Se ninguém está livre, não tem como sair a jogar curto.
+
+    // A nota fica no jogador, posta pelo próprio avaliador (ver
+    // `_melhorNotaPasse` em player.js).
+    p.findPassTarget();
+    const nota = (typeof p._melhorNotaPasse === 'number') ? p._melhorNotaPasse : -Infinity;
+
+    const sempre = (typeof G.notaSempreSair === 'number') ? G.notaSempreSair : Infinity;
+    const minima = (typeof G.notaMinimaParaSair === 'number') ? G.notaMinimaParaSair : Infinity;
+
+    if (nota >= sempre) {
+        // Boa de mais para se deitar fora num chutão.
+        chance = 1.0;
+    } else if (nota < minima && !lateralLivre) {
+        /*
+        Nem nota, nem ninguém desmarcado: é o caso em que o chutão é a jogada
+        certa, e é o único em que ele sai garantido.
+        */
         chance = 0.0;
     }
-    // Se há um lateral livre, a chance permanece a que o estilo de jogo mandou
-    // (ex: Possession = 70%, Direct = 25%).
+    // No meio fica a chance do estilo, que é o que a distingue: um Direct
+    // chuta mais do que um Possession com a mesma opção na mão.
+
+    // Guardada para se poder medir a decisao pelo que ela SABIA na altura, e
+    // nao pelo que existia segundos depois (ver tools/scratch/gk_saida.js).
+    p._notaNaDecisao = nota;
 
     p.gkSaida = (Math.random() < chance) ? 'laterais' : 'chuteFrente';
     return p.gkSaida;
+}
+
+/*
+E QUEM RECEBE, QUANDO O CRITERIO ESTREITO NAO DA NINGUEM.
+
+O `acharLateralParaSaida` exige um defesa com o adversario a mais de
+`folgaMinima` (4 m) e dentro do alcance. Quando nao ha, o relancamento ficava
+sem destinatario e o guarda-redes esperava os 8 s do `segurarDur` para chutar na
+mesma — ou seja, a decisao dizia "sair a jogar" e o desfecho era o chutao.
+Medido depois de a DECISAO ja estar corrigida: sobravam 6 chutoes em 27, todos
+com uma opcao acima de 1000 no painel.
+
+DOS DOIS FILTROS DO CRITERIO ESTREITO, A RESERVA LARGA UM E MANTEM O OUTRO.
+
+O `acharLateralParaSaida` exige duas coisas: ser DEFESA (LB/RB/CB/DC) e estar
+DESMARCADO (adversario a mais de `folgaMinima`). Medido em 28 posses
+(`tools/scratch/gk_saida.js` e a sonda dos filtros): passam os dois filtros 1.9
+companheiros por posse, e em 6 posses nao passa nenhum — mas **nas 6 havia
+alguem desmarcado que nao era defesa**. E a POSICAO que rejeita, nao a marcacao.
+
+Por isso a reserva larga a posicao e MANTEM a marcacao. Servir a bola a um
+homem marcado nao e saida, e oferta — e ha um teste que o prende
+(tests/reposicao_do_guarda_redes.test.js: com toda a gente marcada, ele espera
+os 8 s em vez de largar cedo). A primeira versao desta reserva nao tinha o
+filtro da folga e reprovou-o, com razao.
+*/
+function alvoDaSaidaCurta(ctx) {
+    const p = ctx.p;
+    const G = GoalkeeperDistribution;
+
+    const lateral = acharLateralParaSaida(ctx);
+    if (lateral) return lateral;
+
+    const alvo = p.findPassTarget();
+    if (!alvo || !alvo.model) return null;
+
+    const nota = (typeof p._melhorNotaPasse === 'number') ? p._melhorNotaPasse : -Infinity;
+    const minima = (typeof G.notaMinimaParaSair === 'number') ? G.notaMinimaParaSair : Infinity;
+    if (nota < minima) return null;
+
+    const d = p.model.position.distanceTo(alvo.model.position);
+    if (d > (G.distanciaMaxLateral || 45)) return null;
+
+    // E tem de estar DESMARCADO, como qualquer saida curta.
+    let folga = Infinity;
+    for (const o of ctx.opponents) {
+        if (!o || !o.model) continue;
+        folga = Math.min(folga, o.model.position.distanceTo(alvo.model.position));
+    }
+    return (folga > (G.folgaMinima || 4)) ? alvo : null;
 }
 
 function limparSaidaGK(p) {
     if (!p.hasBall && p.gkSaida) {
         p.gkSaida = null;
         p.gkThrowTarget = null;
+        p.gkSaidaEraChutao = false;
+        p._notaNaDecisao = undefined;
     }
 }
 
@@ -3100,7 +3184,44 @@ function tratarGuardaRedes(ctx) {
     const G = GoalkeeperDistribution;
     // Sorteada UMA vez por posse (ver decidirSaidaGK) — a cada frame seria
     // "o que calhar primeiro" em vez da proporção pedida.
-    const saida = p.gkSaida || decidirSaidaGK(ctx);
+    let saida = p.gkSaida || decidirSaidaGK(ctx);
+
+    /*
+    E ELE PODE MUDAR DE IDEIAS — para sair a jogar, nunca ao contrario.
+
+    A decisao e sorteada UMA vez por posse, e de proposito: sortear a cada
+    frame dava "o que calhar primeiro" em vez da proporcao do estilo. So que
+    ela e tomada no instante em que ele agarra a bola, com a equipa ainda
+    desorganizada e as notas de passe baixas — e o relancamento acontece
+    segundos depois, quando ja ha uma boa opcao. Medido: chutoes com uma opcao
+    acima de 1000 no momento de largar, todos com a decisao tomada quando ela
+    ainda nao existia.
+
+    A subida e monotona: de 'chuteFrente' para 'laterais' quando aparece uma
+    opcao acima do `notaSempreSair`, e nunca no sentido inverso. Isso e o que
+    a impede de voltar a ser um sorteio por frame.
+    */
+    if (saida === 'chuteFrente' && p.gkEstado === 'segurando' &&
+        typeof G.notaSempreSair === 'number') {
+        p.findPassTarget();
+        if ((p._melhorNotaPasse || -Infinity) >= G.notaSempreSair) {
+            p.gkSaida = 'laterais';
+            saida = 'laterais';
+            /*
+            MAS O PRAZO CONTINUA A SER O DE QUEM IA CHUTAR.
+
+            O prazo de 8 s existe para quem decidiu sair a jogar esperar que
+            alguem se desmarque; quem decidiu chutar larga aos
+            `segurarDirecto` (3 s) para nao gastar oito segundos a chegar ao
+            mesmo sitio. Sem esta marca, a subida punha-o a herdar os 8 s — e
+            se a opcao boa desaparecesse entretanto (ela aparece e some,
+            medido), ficava os oito segundos parado para chutar na mesma.
+
+            Ver o `prazo` no ramo 'segurando' (js/player.js).
+            */
+            p.gkSaidaEraChutao = true;
+        }
+    }
 
     /*
     Quando o GR segura a bola nas mãos, o relançamento é tratado pelo estado
@@ -3111,7 +3232,9 @@ function tratarGuardaRedes(ctx) {
     */
     if (p.gkEstado === 'segurando') {
         if (saida === 'laterais') {
-            const lateral = acharLateralParaSaida(ctx);
+            // Ver `alvoDaSaidaCurta`: o critério estreito primeiro, e a melhor
+            // opção do avaliador de passes como reserva.
+            const lateral = alvoDaSaidaCurta(ctx);
             p.gkThrowTarget = lateral || null;
             /*
             SEM NINGUÉM LIVRE, ELE ESPERA — NÃO DESISTE.
@@ -3133,7 +3256,7 @@ function tratarGuardaRedes(ctx) {
     }
 
     if (saida === 'laterais') {
-        const lateral = acharLateralParaSaida(ctx);
+        const lateral = alvoDaSaidaCurta(ctx);
         if (lateral) {
             if (p.decisionTimer > G.esperaSaidaCurta) actPassParaAlvo(ctx, lateral);
             else actCarry(ctx);
@@ -3146,6 +3269,14 @@ function tratarGuardaRedes(ctx) {
         */
         if (p.decisionTimer <= G.esperaMaxSemLinha) { actCarry(ctx); return; }
         p.gkSaida = 'chuteFrente';
+        /*
+        Esta desistência não passa pelo `decidirSaidaGK`, portanto a nota que
+        ficou lá guardada é de OUTRA decisão. Apaga-se, senão quem medir isto
+        lê um número que não pertence a esta posse — foi o que aconteceu a
+        medir os chutões que sobravam, e deu a impressão de que a regra estava
+        a ser ignorada quando não estava.
+        */
+        p._notaNaDecisao = undefined;
     }
 
     if (p.decisionTimer > G.esperaChutao) p.puntBall();

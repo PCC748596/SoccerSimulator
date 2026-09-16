@@ -395,6 +395,55 @@ const GoalkeeperDistribution = {
     bonusLateral: 3.0,
 
     /*
+    =====================================================================
+    O CHUTÃO É A ÚLTIMA OPÇÃO, E NÃO UMA MOEDA AO AR
+    =====================================================================
+    Relato: *"quando o goleiro pega a bola tem um jogador com pontuação de
+    passe maior que 1000 mas mesmo assim o goleiro chuta pra frente. Não
+    deveria chutar pra frente só se não tivesse uma opção boa pra sair
+    jogando?"*.
+
+    Deveria, e não era o que acontecia. Medido em 60 min
+    (`tools/scratch/gk_saida.js`): 30 posses do guarda-redes, 16 acabadas em
+    chutão — e **11 desses 16 tinham uma opção de passe acima de 1000**, com
+    laterais a 1418 e 1462. Duas causas, e a segunda é a que interessa:
+
+    1. O `acharLateralParaSaida` é MUITO mais estreito do que o avaliador de
+       passes: só LB/RB/CB/DC, e só com o adversário mais próximo a mais de
+       `folgaMinima` (4 m). Um lateral com um extremo a 3.8 m é rejeitado — e o
+       avaliador de passes dava-lhe 1462. Nas 16 medidas, `gkThrowTarget` era
+       nulo em TODAS.
+    2. Sem candidato, a chance de sair a jogar era posta a ZERO e a saída
+       sorteava-se na mesma: chutão garantido.
+
+    Agora quem responde à pergunta "há opção boa?" é a nota do avaliador de
+    passes — a mesma que se vê no painel — e não um segundo critério paralelo:
+
+        nota >= `notaSempreSair`     sai a jogar, sempre. Uma opção desta
+                                     qualidade não se deita fora num chutão,
+                                     seja qual for o estilo da equipa.
+        nota >= `notaMinimaParaSair` sai a jogar com a probabilidade do estilo
+                                     (`porEstilo`): é aqui que um Direct chuta
+                                     mais do que um Possession.
+        abaixo disso                 chutão, que é o caso que o relato aceita.
+
+    O `notaSempreSair` é 1000 porque foi o número do relato — *"tem um jogador
+    com pontuação de passe maior que 1000 mas mesmo assim chuta"*. Acima disso
+    o estilo deixa de ter voto.
+
+    O `notaMinimaParaSair` sai da distribuição medida: a melhor nota disponível
+    tem mediana 1208, mínimo 144 e máximo 1888. 900 deixa de fora o quartil mau
+    — as posses em que só há um colega em cima da linha — e é entre 900 e 1000
+    que o estilo da equipa ainda escolhe.
+
+    O `acharLateralParaSaida` continua a mandar em QUEM recebe quando existe:
+    é ele que sabe quem está mesmo desmarcado e ao alcance do braço. Isto só
+    responde ao "chuta ou não chuta".
+    */
+    notaMinimaParaSair: 900,
+    notaSempreSair: 1000,
+
+    /*
     E UM LATERAL MESMO LIVRE NÃO CONCORRE COM NINGUÉM.
 
     O `bonusLateral` inclina, mas não impõe: com um central muito desmarcado e
