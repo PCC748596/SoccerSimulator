@@ -6651,10 +6651,51 @@ class FootballPlayer {
             O segmento passa a ir do tronco até à ponta da bota, no sentido em
             que ele se abriu.
             */
-            let corpoAx = gkCorpo.position.x, corpoAy = ALTURA_BASE_Y, corpoAz = gkCorpo.position.z;
-            let corpoBx = gkCorpo.position.x, corpoBy = ALTURA_BASE_Y + ALT_CORPO, corpoBz = gkCorpo.position.z;
+            /*
+            A COLUNA NASCE ONDE O CORPO ESTÁ, e não em `ALTURA_BASE_Y`.
+
+            Era a constante, e isso só está certo com ele de pé no chão. Os
+            ramos que escrevem a própria altura — o salto alto e o mergulho,
+            que são os dois que o `assentarNoChao` deixa sair — punham o corpo
+            no ar com a coluna esquecida ao nível do relvado, portanto ela
+            cobria altura que ele já não ocupava.
+
+            Apanhado a rastrear uma agarrada "de longe" que o
+            `gk_agarra_com_a_mao` assinalou: bola a 1.51 m da mão, em
+            `gkEstado = 'salto_alto'`, com o corpo a 1.12 m de altura. A mão
+            não lhe chegava e a coluna fantasma dizia que sim.
+
+            Não foi o encaixe ajoelhado que trouxe isto — com ele desligado o
+            caso continua lá. O que ele fez foi duplicar as bolas agarradas
+            (11 para 20 no mesmo lote) e com isso pôr um caso raro dentro da
+            amostra.
+
+            De pé no chão `gkCorpo.position.y` É o `ALTURA_BASE_Y`, portanto
+            para o caso normal isto não muda nada.
+            */
+            let corpoAx = gkCorpo.position.x, corpoAy = gkCorpo.position.y, corpoAz = gkCorpo.position.z;
+            let corpoBx = gkCorpo.position.x, corpoBy = gkCorpo.position.y + ALT_CORPO, corpoBz = gkCorpo.position.z;
             let raioCorpoM = RAIO_CORPO;
-            if (this.gkBarreira) {
+            /*
+            NO ENCAIXE O CORPO ESTÁ BAIXO, e o segmento tem de o acompanhar.
+
+            A pose desce `gkCorpo.position.y` em `encaixe.altura` (0.55 m) e a
+            coluna acima parte de `ALTURA_BASE_Y`, uma constante — ficava meio
+            metro acima do guarda-redes e media altura que ele já não ocupa.
+            Medido: 1 de 20 bolas agarradas a 0.85 m da mão E do corpo, contra
+            0 de 11 com o encaixe desligado.
+
+            O segmento passa a nascer na posição REAL do corpo e a ter a altura
+            do tronco ajoelhado. Ver GoalkeeperPose.encaixe.
+            */
+            if (this.gkEncaixe) {
+                const EC = GoalkeeperPose.encaixe;
+                corpoAy = gkCorpo.position.y;
+                corpoBx = gkCorpo.position.x;
+                corpoBz = gkCorpo.position.z;
+                corpoBy = gkCorpo.position.y + (EC.alturaEncaixe || 0.95);
+                raioCorpoM = (EC.raioEncaixe || RAIO_CORPO);
+            } else if (this.gkBarreira) {
                 const B = GoalkeeperPose.barreira;
                 _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
                 const lado = this.gkLadoBarreira || 1;
@@ -6778,11 +6819,80 @@ class FootballPlayer {
                 this.resetBonesToDefault();
             }
 
-            // Mesma correcção do mergulho: projecta a mão a partir do ângulo
-            // REAL do braço (procedural acima), não um offset fixo.
-            const alcanceSalto = 0.95;
-            const maoSaltoX = gkCorpo.position.x + Math.sin(gkRig.rArm.rotation.z) * alcanceSalto;
-            const maoSaltoY = gkCorpo.position.y + 0.35 + Math.cos(gkRig.rArm.rotation.x) * alcanceSalto;
+            /*
+            E O IK LEVA A MÃO À BOLA — o mesmo do mergulho.
+
+            Sem isto a pose do salto abria os braços 0.5 rad (29 graus) para o
+            lado e mais nada: nenhum braço ia à bola. O ponto sintético que
+            estava aqui em baixo fingia uma mão a 0.95 m ao longo do braço mais
+            0.35 m de altura, e era ele que fazia as contas baterem — estava a
+            COMPENSAR uma pose que não alcança.
+
+            Medido ao trocar o ponto sintético pela mão a sério: as bolas
+            agarradas caíram de 20 para 5 no mesmo lote. Não era a medição que
+            estava generosa, era a pose que não chegava lá.
+
+            O `GkDive.apontarBracos` é o IK que o mergulho já usa, e traz com
+            ele a regra que impede o braço de dobrar para trás das costas (ver
+            `maoMinZPeito` e a medição no gk_dive.js). O salto alto era o único
+            gesto de defesa sem ele.
+
+            Corre DEPOIS da pose acima, senão os `lerpTo` dos braços apagavam-no,
+            e só dentro da janela de contacto (`t < 0.7`), que é a mesma
+            condição que o teste da defesa usa mais abaixo.
+            */
+            if (t < 0.7 && typeof GkDive !== 'undefined' && GkDive.apontarBracos) {
+                GkDive.apontarBracos(gkRig);
+            }
+
+            /*
+            A MÃO REAL, LIDA DO RIG — e não uma fórmula.
+
+            Estava assim, e a nota dizia "projecta a mão a partir do ângulo
+            REAL do braço, não um offset fixo":
+
+                const alcanceSalto = 0.95;
+                maoSaltoX = corpo.x + sin(rArm.rotation.z) * alcanceSalto;
+                maoSaltoY = corpo.y + 0.35 + cos(rArm.rotation.x) * alcanceSalto;
+                //  e o Z era o do CORPO, sem desvio nenhum
+
+            Continuava a ser uma fórmula, e ignorava o desvio do ombro, o
+            antebraço, o ângulo do cotovelo e o Z por completo. Rastreada uma
+            bola agarrada com a mão do rig a 1.51 m dela, em 'salto_alto': o
+            ponto sintético dizia que ela estava ao alcance e a mão não estava
+            lá. Com o corte em `distMaoSalto < 1.4`, um ponto errado em 0.5 m
+            chega para agarrar de onde não se chega.
+
+            O mergulho já lê a mão a sério (`rig[mao].getWorldPosition` no
+            gk_dive.js) e é esse o padrão. Aqui passa a ler as DUAS e a usar a
+            mais perto da bola, que é a que a agarraria.
+
+            O vector é alocado aqui de propósito: os `_v1`/`_v2` deste ficheiro
+            são partilhados e este bloco corre a meio de uma pose que já os
+            usa. São uns frames por salto, não um custo por frame de jogo.
+            */
+            let maoSaltoX, maoSaltoY, maoSaltoZ;
+            {
+                const pm = new THREE.Vector3();
+                let melhor = Infinity;
+                for (const nome of ['rHand', 'lHand']) {
+                    const no = gkRig[nome];
+                    if (!no) continue;
+                    no.getWorldPosition(pm);
+                    const d = pm.distanceTo(Match.ball.position);
+                    if (d < melhor) {
+                        melhor = d;
+                        maoSaltoX = pm.x; maoSaltoY = pm.y; maoSaltoZ = pm.z;
+                    }
+                }
+                if (maoSaltoX === undefined) {
+                    // Sem rig (nunca deve acontecer): o antigo ponto sintético.
+                    const alcanceSalto = 0.95;
+                    maoSaltoX = gkCorpo.position.x + Math.sin(gkRig.rArm.rotation.z) * alcanceSalto;
+                    maoSaltoY = gkCorpo.position.y + 0.35 + Math.cos(gkRig.rArm.rotation.x) * alcanceSalto;
+                    maoSaltoZ = gkCorpo.position.z;
+                }
+            }
             
             // CCD: raycasting contínuo
             let distMaoSalto;
@@ -6795,15 +6905,15 @@ class FootballPlayer {
                 const lenSq = bx * bx + by * by + bz * bz;
                 let t = 0;
                 if (lenSq > 0.000001) {
-                    const dot = (maoSaltoX - P1.x) * bx + (maoSaltoY - P1.y) * by + (gkCorpo.position.z - P1.z) * bz;
+                    const dot = (maoSaltoX - P1.x) * bx + (maoSaltoY - P1.y) * by + (maoSaltoZ - P1.z) * bz;
                     t = Math.max(0, Math.min(1, dot / lenSq));
                 }
                 const projX = P1.x + t * bx;
                 const projY = P1.y + t * by;
                 const projZ = P1.z + t * bz;
-                distMaoSalto = Math.hypot(maoSaltoX - projX, maoSaltoY - projY, gkCorpo.position.z - projZ);
+                distMaoSalto = Math.hypot(maoSaltoX - projX, maoSaltoY - projY, maoSaltoZ - projZ);
             } else {
-                distMaoSalto = Math.hypot(maoSaltoX - Match.ball.position.x, maoSaltoY - Match.ball.position.y, gkCorpo.position.z - Match.ball.position.z);
+                distMaoSalto = Math.hypot(maoSaltoX - Match.ball.position.x, maoSaltoY - Match.ball.position.y, maoSaltoZ - Match.ball.position.z);
             }
             
             const jaEntrouSalto = (Match.state !== 'PLAY');

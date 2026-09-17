@@ -190,7 +190,27 @@ const GoalkeeperPose = {
         // O pulso vira a palma para cima, a receber a bola.
         pulsoX: -0.35,
 
-        suavizacao: 0.45      // entra depressa, como a barreira
+        suavizacao: 0.45,     // entra depressa, como a barreira
+
+        /*
+        O CORPO, PARA O TESTE DE CONTACTO — e é obrigatório, como na barreira.
+
+        O teste normal é uma coluna vertical de `ALTURA_BASE_Y` até
+        `ALTURA_BASE_Y + GkCatchModel.alturaCorpo` (1.85 m). Esta pose BAIXA o
+        corpo 0.55 m, e a coluna não sabia disso: ficava meio metro acima de
+        onde o guarda-redes está, e a medir altura que ele já não ocupa.
+
+        Medido: com o encaixe ligado, 1 de 20 bolas agarradas estava a 0.85 m
+        da mão E do corpo — ou seja agarrada de onde ele não chegava. Com ele
+        desligado, 0 de 11.
+
+        `alturaEncaixe` é o tronco ajoelhado acima da origem JÁ BAIXADA, e
+        `raioEncaixe` é mais largo do que o normal (0.45) porque nesta pose o
+        que tapa a bola são os dois braços fechados em volta dela, não a
+        silhueta magra de quem está de pé.
+        */
+        alturaEncaixe: 0.95,
+        raioEncaixe: 0.52
     },
 
     barreira: {
