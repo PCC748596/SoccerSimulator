@@ -5,6 +5,377 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 16-17 de Setembro de 2026 — o gesto único de bola parada, o corpo do jogador, e um estádio de dois anéis
+
+Sessão longa e de pedidos muito variados: começou num merge, passou por uma
+animação recusada duas vezes, e acabou com holofotes. O fio que a atravessa é
+metódico e vale mais do que qualquer das alterações: **tudo o que foi medido
+aguentou; tudo o que foi adivinhado falhou.** Ficam registados os dois casos.
+
+#### O merge: `github-import` para `main`, com histórias não relacionadas
+
+Os dois ramos não partilhavam commit base (`refusing to merge unrelated
+histories`). O `github-import` era uma evolução refactorizada do `main`:
+`js/config.js` dividido em `js/config/*` (10 ficheiros), `js/match.js` em
+`js/match/*` (7), documentação da raiz para `docs/`. 485 ficheiros contra 67.
+
+Resolvido com um commit de merge de dois pais e árvore igual ao
+`github-import`: preserva os dois históricos e não ressuscita código obsoleto.
+Ficaram de fora 19 ficheiros que só existiam no `main` — `patch_utils.js` e 13
+testes que apontavam ao `js/config.js` e ao `js/match.js` pré-divisão. Estado
+anterior etiquetado em `backup-main-pre-merge`.
+
+#### O gesto único de bola parada — e a passada que trocava de perna
+
+Relato: *"o chute de bola parada está misturando duas animações. A R e a G."*
+E estava, literalmente:
+
+| lance | animava com |
+|---|---|
+| `GOAL_KICK` | `GoalkeeperGroundKickClip` + a pose da corrida misturada por cima |
+| `FREE_KICK` | `ShotClip` — o clip do **remate** de jogo corrido |
+| `PENALTY` | `ShotClip` |
+| `CORNER_KICK` | nenhum: a velocidade da bola escrita no mesmo frame |
+
+O comentário do `player.js` assumia a dívida: *"A CORRIDA usa sempre o clip e o
+estado do REMATE, mesmo quando a falta vai acabar em passe curto."*
+
+`PlayerKickClip` é o gesto único: **4 keyframes**, um por imagem de referência,
+com função de pose e amostrador próprios. Não partilha nada com o `ShotClip`
+nem com o clip antigo do guarda-redes, que ficam no ficheiro — o antigo mantém
+entrada no editor, renomeada, para se comparar lado a lado.
+
+**A perna de chute é fixa nos quatro keyframes.** `coxaChute` faz
+`0.45 -> 0.65 -> 0.95 -> -0.70`: recua de forma monótona e vem à frente uma
+vez. Verificado por asserção que há **uma única inversão de direcção** em todo
+o clip — a batida.
+
+**A causa da troca de perna não eram os clips.** O ramo do ciclo de corrida no
+`animateBones` **não tinha guarda de estado nenhuma**: escrevia a perna inteira
+com `aplicarPosePassada`, por atribuição directa e sem lerp, sempre que
+`speed >= 0.1`, em qualquer estado. O remate e o passe escapavam **por
+acidente** — os dois fazem `velocity.set(0,0,0)` antes de entrar no gesto,
+portanto o ramo nunca corria. Quem entrasse num gesto com o corpo ainda em
+andamento levava o ciclo de corrida por cima durante os ~20 frames que a
+velocidade demora a decair, e o ciclo de corrida alterna as pernas.
+
+A guarda passou a ser por estado (`temGestoComClip`, `js/fsm.js`) e o
+`baterFalta` ganhou o `velocity.set(0,0,0)` que o penálti já tinha.
+
+**A duração é um tecto medido, não um gosto.** Varrida contra os dois testes
+que apanham o custo de atrasar a bola parada:
+
+| duração | abaixo de 3 m/s (tecto 12%) | agarradas em 20 min (mín. 5) |
+|---|---|---|
+| 0.25 s | 5% | 10 |
+| 0.35 s | 8% | 9 |
+| 0.45 s | 10% | 7 |
+| **0.55 s** | **8%** | **10** |
+| 0.70 s | 14% reprova | 4 reprova |
+
+Não é monótono — 0.55 mede melhor que 0.45 —, e é a mesma fragilidade de
+semente que o cabeçalho desses dois testes já documenta. O que não é ruído é o
+0.70 reprovar os dois ao mesmo tempo: custava 60% das recuperações do
+guarda-redes por 20 minutos. Ficou 0.55.
+
+O canto continua sem gesto: ligá-lo obriga a adiar a escrita de `Match.ballVel`
+até ao `contactTime`, e isso mexe em lógica com testes próprios.
+
+#### O guarda-redes, de cima a baixo
+
+**O encaixe ajoelhado.** Pedido com fotografia: bola rasteira até 1/3 da
+baliza, vinda a até 30 graus na direcção dele, defendida com os dois joelhos
+dobrados. `GoalkeeperPose.encaixe`, com três condições no gatilho —
+`interY <= 0.81 m` (= `ALTURA_BALIZA/3`), ângulo entre a trajectória da bola e
+a linha bola->guarda-redes `<= 30 graus`, e `|lateral| <= 1.5 m`.
+
+O ângulo é o que distingue o gesto: uma bola rasteira que vem **ao corpo**
+agarra-se pondo o corpo atrás dela; a mesma bola a passar de raspão exige
+esticar-se. Só a altura não separava os dois casos.
+
+É uma **pose do ramo `'maos'`**, como a `barreira` e pela mesma razão — herda o
+teste de contacto das mãos em vez de ganhar uma cópia dele. E fica *antes* da
+barreira na decisão, porque as duas competem pela bola baixa e perto e o
+pedido é explícito em querer os dois joelhos dobrados, não a perna esticada.
+
+Pose medida: quadril desce 0.55 m, tronco 26 graus à frente, joelhos a 89 e 112
+graus (o recolhido mais dobrado), abertura lateral de 29 e 7 graus.
+
+**O pulo em baixo não estava avariado — estava desligado.**
+`GoalkeeperDive.lateralMinClip` valia `4.0`: os três clips de defesa só
+entravam para bolas a mais de 4 m de lado. Mas quem manda no mergulho é o
+`GoalkeeperPose.mergulhoLateralMin`, **1.0 m** — entre 1 e 4 m havia mergulho
+a sério desenhado pela pose procedural antiga, sem clip nenhum. Medido: **19
+dos 20 mergulhos de um jogo estavam nessa banda.** Dois cortes diferentes para
+a mesma fronteira deixavam 3 m que nenhum cobria.
+
+**A mola ao andar.** Relato: *"o goleiro quando anda fica abaixando e
+levantando, parece uma mola."* Era um `Math.sin(t * PI * 4) * 0.04` escrito à
+mão no ramo de caminhar dele — mais ou menos 4 cm ao dobro da cadência, que
+**só o guarda-redes tinha**. E o `assentarNoChao` também escreve o `position.y`
+no mesmo frame: eram os dois a discutir a mesma altura. Apagado o seno; a
+altura passa a sair da mesma conta dos outros vinte e um.
+
+**O salto alto agarrava de onde não chegava, e a correcção expôs a pose.**
+Rastreada uma bola agarrada com a mão do rig a **1.51 m** dela. O salto usava
+uma mão sintética:
+
+```js
+maoSaltoX = corpo.x + sin(rArm.rotation.z) * 0.95;
+maoSaltoY = corpo.y + 0.35 + cos(rArm.rotation.x) * 0.95;
+//  e o Z era o do CORPO, sem desvio nenhum
+```
+
+Ignorava o ombro, o antebraço, o cotovelo e o Z. O mergulho já lia a mão a
+sério (`getWorldPosition`) e o comentário dele documenta este mesmo defeito
+corrigido lá — o salto alto tinha ficado para trás.
+
+Trocar pela mão real fez as agarradas cair de **20 para 5**: a medição não
+estava generosa, a **pose não alcançava**. O salto abria os braços 0.5 rad
+(29 graus) para o lado e mais nada. Ligado o `GkDive.apontarBracos` (o IK do
+mergulho, que traz a regra que impede o braço de dobrar para trás das costas):
+7 agarradas, todas legítimas.
+
+Duas hipóteses minhas foram **refutadas** neste caminho antes de a pilha de
+chamadas dar a resposta — a coluna de contacto desalinhada no encaixe e no
+salto. Ficaram no código porque são defeitos reais por si (a coluna nascia em
+`ALTURA_BASE_Y`, uma constante, enquanto o corpo estava 0.55 m abaixo ou
+1.12 m no ar), mas **não eram a causa** e está escrito que não são.
+
+#### O corpo do jogador: mão, proporção e altura
+
+**A mão.** Era uma laje (`0.35 x 0.4 x 0.2`). Passa a ter punho, junta, palma,
+três dedos e polegar, tudo em `MaoDetalhada`. O pivô `handG` **não se move** —
+é dele que o IK dos braços (`ik.js` assume `L2 = 0.8`), o `colarBolaAsMaos`, o
+`fecharMaosNaBola` e dois testes de contacto lêem a posição da mão; a geometria
+vai num sub-grupo por baixo.
+
+Medidas finais: punho 3.9 cm de secção (40% do antebraço) e 1.5 cm de altura,
+junta de 3.9 cm inscrita nele, palma 11.5 cm, três dedos de 6.5 / 6.0 / 5.5 cm
+com a ponta a 78% da base.
+
+Três erros pelo caminho, todos corrigidos: o polegar espelhado pelo braço (com
+o `maoG` rodado PI/2, o x local corre ao longo do **z do corpo**, logo espelhar
+punha um polegar para a frente e o outro para trás); reduzi a secção do punho
+quando o pedido era a altura; e pincei os vértices de cima em vez dos de baixo,
+afinando o dedo do lado da palma.
+
+**A proporção em cabeças.** `ProporcaoCorpo`, com a conta explícita:
+`k = corpo / ((N-1) * cabeca)`. A `5.04` dá `k = 1.000` e reproduz o modelo
+original — é a prova da fórmula. O `ESCALA_CORPO` passou a sair dali para a
+**altura total não mudar** com a proporção: é isso que mantém válidos o
+`ALTURA_TESTA` e o `ALTURA_CABECA`, que são absolutos em metros. Ficou em 5.5
+cabeças (7 foi experimentado e recusado).
+
+**A altura por jogador**, 1.60 a 2.00 m com média 1.75 — `AlturaJogador`.
+Bónus por posto (GK +0.13, CB +0.10), por estilo (`target_man` +0.11),
+penalização pela velocidade e ruído determinístico pelo `id`.
+
+Duas armadilhas que a medição apanhou:
+
+1. **O termo da velocidade estava centrado em 50** e nos plantéis reais o SPEED
+   vai de 66 a 94 (média 82.4). Ninguém ganhava altura, todos perdiam: a média
+   saía em 1.673 m. Centrado na média medida, volta ao sítio.
+2. **O nominal não é o realizado.** Com `media: 1.75` a média realizada era
+   1.712, porque as parcelas não são simétricas e o piso de 1.60 corta a cauda.
+   Calibrado contra os 22 jogadores: `1.795` dá 1.751 realizada.
+
+Resultado medido: GK 1.86, CB 1.90, rápidos (SPEED >= 88) 1.64, restantes 1.74.
+Cada modelo mede exactamente o que lhe é pedido (erro 0.0 cm).
+
+**E a física acompanha.** O `ALTURA_TESTA` tinha 8 usos reais, todos a assumir
+um boneco de 1.855 m. Passaram por `alturaTestaDe(p)` / `alturaCabecaDe(p)`,
+que fazem a conta **num sítio só** — a mesma lição das oito guardas. A janela
+de cabeceio de um central de 1.97 m vai a 2.01 m contra os 1.66 m de um lateral
+de 1.60 m; antes era 1.74 para todos. O mais consequente era o segmento do
+corpo no `distanciaAoCorpo`: um jogador de 1.62 m tinha um corpo 10 cm mais
+alto do que ele para efeitos de colisão.
+
+Ficou de fora, de propósito, o `alturaCruzamento: ALTURA_CABECA` — um
+cruzamento é apontado à altura da cabeça antes de se saber quem o cabeceia.
+
+#### Passe, lateral e bloqueio
+
+**A marcação pelas costas.** Relato: os jogadores marcados por trás perdem
+demasiadas bolas ao receber. Medido em 797 passes:
+
+| marcador do recetor | passes | certos |
+|---|---|---|
+| livre (>= 5 m) | 422 | 76% |
+| < 2.5 m à **frente** | 60 | 73% |
+| < 2.5 m **atrás** | 43 | **63%** |
+
+`MarcacaoPelasCostas` encolhe a distância **efectiva** do marcador quando ele
+está pelas costas (`factorMarcadorAtras: 0.70`), fazendo-o descer um degrau na
+escada de bónus que já existia. Limitado à defesa e ao meio. Ligado nos dois
+selectores através de uma função partilhada — havia quatro cópias da mesma
+escada.
+
+Resultado: o caso alvo subiu de 67% para 77%, **mas custou 10% de progressão**
+(339 -> 305 m por 100 passes). Testado `0.85` como alternativa: pior nos dois
+(66% e 210 m). Ficou `0.70`, com o custo registado.
+
+**O lateral forte de perto.** Medido: 24.2 m/s de média nos lançamentos de
+8-12 m, com máximo de **54.1 m/s**. A causa era a faixa de elevação rasante
+(-8 a +4 graus) aplicada a um alvo ALTO: acima de `distanciaAosPes` (9 m) a
+bola vai ao peito, a queda passa de 1.7 m para 0.62 m, o voo encurta para
+~0.4 s e cobrir 10 m exige 24 m/s. Os 54 m/s vinham do ramo de recurso, onde
+`sqrt(alcance*g / sin(2*elev))` explode com a elevação perto de zero.
+
+A faixa passou a depender da **altura do alvo**: aos pés continua rasante, ao
+peito arqueia (14 a 22 graus). Mais um tecto de 18 m/s como rede de segurança.
+Depois: **12.9 m/s de média, máximo 18.0**.
+
+Verificado que não havia saída rasante: apontar sempre aos pés ainda pede
+~20 m/s a 12 m. O arco é fisicamente necessário, e por isso uma asserção do
+`lateral_altura_chegada` foi **alterada** — ela codificava a decisão de
+desenho antiga. As duas novas asserções que a substituem são mais exigentes:
+que o lateral aos pés continua a descer, e que o tecto de velocidade existe.
+
+**O blocker lento.** Relato: tem de ir mais rápido fechar a linha da bola com
+a baliza. Medido em 1292 amostras: a 5-10 m do sítio ia a **3.3 m/s**, com o
+jogador **4.49 m fora** da linha. O ritmo saía do `cruzeiro` genérico, e para
+o cruzeiro 5-10 m é um ajuste sem urgência.
+
+`RepositionPace.pisoBloqueio: 6.8`, um chão no molde do `pisoSaidaDeBola`,
+aplicado **depois** de o alvo de bloqueio existir — o `speedMult` era escrito
+antes dele e media a distância ao alvo errado. Depois: 5.68 m/s a 5-10 m, +72%.
+
+**Mas a velocidade sozinha não fechou a linha:** o desvio médio desceu só de
+4.49 para 4.03 m. O alvo dele persegue a posição **actual** da bola, não a
+prevista — chega mais depressa a um ponto que já não serve. Fica identificado.
+
+#### Som, arbitragem e o impedimento que não se reproduziu
+
+**O som do toque na cabeçada**, que não existia. Um só sítio, dentro do
+`executeHeader` junto ao contador — é o único ponto por onde todas as cabeçadas
+passam (a velocidade de saída é escrita em três ramos diferentes mais abaixo).
+A força vem da velocidade de **chegada** da bola: 0.62 num balão de 5 m/s, 1.00
+acima de 20. Confirmado em jogo: 5 de 5 cabeçadas a soar em 15 minutos.
+
+**O apito na linha de fundo.** Não era falha — era decisão deliberada, com o
+receio escrito de *"um apito a cada vinte segundos"*. Medido: com o tiro de
+meta e o canto a apitar fica **1 apito a cada 92 s**, porque a falta já era
+32.2 por 90 min e domina a contagem. O lateral continua calado.
+
+**O impedimento depois de um passe para trás: não reproduzido.** Relato de um
+impedimento marcado a um avançado depois de um passe para a própria defesa.
+Instrumentado e corrido em 5 sementes, 3.3 h de jogo simulado, 29 impedimentos:
+**zero** vindos de passe para trás, **zero** com o guarda-redes a agarrar pelo
+meio. A hipótese — as marcas de impedimento não são limpas por `grabBall`,
+`kickFromGround`, `puntBall` nem `releaseFromHands` — é verdade no código mas
+**não disparou**. Fica registada como caminho possível e não como causa.
+
+Nota lateral que a mesma leitura revelou: esses quatro caminhos também nunca
+chamam `marcarPosicoesDeImpedimento`, portanto um lançamento ou chutão do
+guarda-redes não pode produzir impedimento nenhum. É uma falha a menos, o
+contrário do relato.
+
+#### O estádio
+
+**Placas de publicidade** a 5 m das linhas, 1 m de altura, com os cantos
+arredondados em quartos de círculo de raio 6.5 m — o mesmo da primeira fila da
+bancada, para as duas curvas serem concêntricas. As pontas dos arcos caem em
+cima das rectas por construção, em qualquer recuo.
+
+**Os corredores da bancada, centrados no meio-campo.** Saíam de um módulo sobre
+o **índice** da cadeira contado desde a ponta (`colIdx % 22 >= 20`), numa
+posição sem relação com o campo — e as bancadas de fundo usavam outro passo
+(`% 20 >= 18`), portanto os quatro lados nem concordavam. Passou a ser uma
+conta em **metros a partir do centro**, e a grelha das cadeiras foi ancorada no
+centro em vez da ponta: sem isso o corredor central ficava com o centro em
+0.15 m, porque `-58.5 + k*0.85` nunca dá 0. Largura de 1.70 para 2.55 m.
+
+**Túneis de acesso**, 24 por anel, um por corredor nas quatro bancadas, no
+degrau 7. Três erros meus, os dois primeiros apanhados por medição antes de
+chegarem ao ecrã:
+
+1. centrei a boca no **meio** do degrau em vez da face visível — ficava com
+   dois metros de betão à frente;
+2. a moldura atravessava a face do degrau, três planos no mesmo sítio, e
+   piscava (o z-fighting não vinha da distância ser pequena, vinha da
+   sobreposição);
+3. construí a moldura como caixa **cheia** em vez de anel, e o túnel ficou
+   cinzento — esse só apareceu no ecrã.
+
+A boca leva material **por face**: escuro só na que dá para o campo (o índice
+depende do lado da bancada), betão nas outras cinco.
+
+**Bancada de dois anéis**, `BancadaAneis`. 20 degraus por anel, parede de 3 m e
+cobertura no fim de cada um, rectas e nas curvas. Os quatro ciclos das bancadas
+e o `buildCorner` passaram a correr por anel em vez de duplicados — com
+`aneis: 1` e `degrausPorAnel: 30` volta exactamente à bancada anterior.
+
+O anel de cima estava mal colocado: nascia atrás da parede do de baixo, ou seja
+**16.6 m atrás** do bordo da cobertura. Num estádio de dois anéis o de cima
+fica em voladura sobre o de baixo, com a cobertura inferior a servir-lhe de
+piso; `recuoSobreCobertura: 3.0` põe-no a 3 m desse bordo. O estádio encurtou
+de 48.6 para 35 m de profundidade.
+
+Resultado: 26.5 m de altura, 24 528 lugares. O tecto dos lugares subiu de
+30 000 para 45 000 — estava a 1 824 do limite, e esse corte é **silencioso**
+(`if (seatIndex >= maxSeats) return`).
+
+**As áreas escuras na bancada** eram o betão a receber sombra fora do alcance
+da câmara de sombra. Ela é ortográfica e cobre mais ou menos 70 m (escolhido
+pelos texels por metro no **relvado**, com medição); com dois anéis a bancada
+vai a 95 m em x e 114 m em z, e amostrar o mapa fora do alcance devolve o texel
+da borda. Desligado o `receiveShadow` no betão, nas paredes, nas coberturas e
+nas bocas — as cadeiras e os adeptos já estavam assim. O custo: a cobertura
+deixa de projectar sombra sobre a bancada. A alternativa era alargar o `d` para
+95, o que baixava a nitidez no relvado de 14.6 para 10.8 texels/m.
+
+**Instanciação.** Malhas normais de 1736 para 1495: as 48 bocas de túnel
+passaram a 4 `InstancedMesh` (quatro grupos porque a face escura depende do
+lado e uma `InstancedMesh` partilha a tabela de materiais) e as 192 barras de
+moldura a uma malha fundida. As paredes e coberturas das curvas eram 560 malhas
+e ~1680 materiais — os materiais estavam a ser criados **dentro** do ciclo — e
+passaram a uma malha fundida por anel e tipo.
+
+**Holofotes e o jogo de dia ou à noite.** 8 conjuntos no bordo da cobertura do
+anel superior, nas laterais (`x = +-65 m`, `y = 26 m`), 48 lâmpadas
+instanciadas e travessas fundidas. Uma `SpotLight` por conjunto e não por
+lâmpada — 48 luzes na cena não se justificam.
+
+```
+DIA     sol 0.80   ambiente 0.45   céu 0x87ceeb   holofotes 0
+NOITE   sol 0.08   ambiente 0.16   céu 0x0a1018   holofotes 0.55
+```
+
+`definirPeriodo(true/false)` e `togglePeriodo()`, em `window`. À noite o sol
+fica num **resíduo** e não a zero: é ele que projecta as sombras dos jogadores,
+porque os holofotes têm `castShadow = false` de propósito. Ainda **não há
+botão na interface**, e os valores de intensidade são um primeiro palpite —
+foram verificados fora do browser, o que prova a lógica mas não a leitura no
+ecrã.
+
+#### O relvado
+
+O verde claro estava a ler-se como limão. O problema era o **matiz**, não o
+brilho: a faixa clara estava a 87 graus (amarelo-verde) enquanto a escura já
+estava a 107 (verde) — eram duas cores diferentes e não a mesma em dois
+brilhos. Uma primeira tentativa mexeu só no brilho (`#618830`) e foi revertida
+a pedido. `#5A9638` leva o matiz a 98 graus e desce a luminância de 138 para
+130, mantendo 7 pontos de contraste com a escura para as faixas do corte não
+desaparecerem.
+
+#### O que fica em aberto
+
+- **`tests/gk_agarra_com_a_mao` é frágil.** A suite acaba a sessão a **145 de
+  145**, mas este teste falhou e voltou a passar várias vezes ao longo do dia:
+  a amostra dele oscilou entre 4 e 20 agarradas conforme o ritmo do jogo, e o
+  mínimo exigido são 5. A asserção de qualidade (nenhuma bola agarrada de
+  longe) é a que interessa e tem passado desde o IK do salto alto.
+- **`tests/saida_de_bola_ritmo`** esteve a 13% contra um tecto de 12% depois do
+  encaixe ajoelhado. Medido: sem o encaixe dá 12%, colado ao tecto; antes da
+  `MarcacaoPelasCostas` dava 5-8%. A causa está na alteração do passe, e a
+  alternativa testada era pior nos três indicadores.
+- **O alvo do blocker** persegue a bola actual e não a prevista.
+- **O canto** continua sem gesto de cobrança.
+- **O penálti colocado** usa o gesto de pancada até ter um próprio.
+- **A face de baixo da cobertura nas curvas** não leva a cor escura própria,
+  porque a geometria é fundida numa malha só.
+
 ### Sessão de 16 de Setembro de 2026 — uma correcção que partiu o tiro de meta, o guarda-redes a sair a jogar, e as defesas em keyframes
 
 Sessão curta em pedidos e longa em consequências: a correcção da Lei 12 do dia
