@@ -2721,6 +2721,28 @@ function actHoldPosition(ctx) {
         // Fica a uma distância de "cercar" (jockey) da bola na direção do gol
         const jockeyDist = 5.0; // metros
         p.dynamicTarget.copy(ballPos).add(ballToGoal.multiplyScalar(jockeyDist));
+
+        /*
+        E VAI PARA LÁ COM PRESSA — ver RepositionPace.pisoBloqueio, com as
+        1292 amostras que o motivaram.
+
+        O `speedMult` foi escrito ACIMA, antes de este alvo existir, e saiu do
+        `cruzeiro` genérico contra o alvo do nível 2. Para o cruzeiro, 5-10 m é
+        um ajuste sem urgência: media-se 3.3 m/s a 5-10 m do sítio, com o
+        jogador 4.5 m fora da linha da bola com a baliza.
+
+        O piso aplica-se DEPOIS do alvo estar decidido, porque é a distância a
+        ESTE alvo que diz se ele está fora de posição. E só acima de
+        `pisoBloqueioDist`, senão ele oscila em cima do ponto.
+        */
+        if (typeof RepositionPace !== 'undefined' &&
+            typeof RepositionPace.pisoBloqueio === 'number') {
+            const faltaBloq = p.model.position.distanceTo(p.dynamicTarget);
+            if (faltaBloq > (RepositionPace.pisoBloqueioDist || 1.5)) {
+                p.speedMult = Math.max(p.speedMult || 0, RepositionPace.pisoBloqueio);
+            }
+        }
+
         p.fsm.changeState('BLOCKING');
     } else if (p.isCovering) {
         p.apoioAtivo = false;

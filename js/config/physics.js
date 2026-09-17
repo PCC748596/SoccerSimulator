@@ -632,7 +632,27 @@ Os valores actuais vieram de duas amostras dadas pelo utilizador. Se o tom não
 bater certo com a amostra, é aqui — e só aqui.
 */
 const RelvaCores = {
-    clara: '#6E9B37',    // a faixa a favor do corte
+    /*
+    A CLARA ESTAVA LIMÃO, e o problema era o MATIZ e não o brilho.
+
+    Relato: *"escurece um pouco o verde claro do campo, está muito verde
+    limão"*. Medidas as duas faixas:
+
+        clara  #6E9B37   rgb 110,155,55   matiz  87   luminancia 138
+        escura #4E8F3C   rgb  78,143,60   matiz 107   luminancia 123
+
+    87 graus é amarelo-verde — é daí que vem o limão. A faixa ESCURA já estava
+    a 107, verde a sério; eram as duas de cores diferentes e não a mesma cor em
+    dois brilhos.
+
+    #5A9638 leva a clara a 98 graus (a meio caminho da escura) e desce a
+    luminância de 138 para 130. Continua 7 pontos acima da escura, que é o que
+    mantém as faixas do corte visíveis — escurecer até igualar apagava-as.
+
+    Uma tentativa anterior mexeu só no brilho (#618830) e foi revertida a
+    pedido: o tom continuava amarelo, só mais escuro.
+    */
+    clara: '#5A9638',    // a faixa a favor do corte
     escura: '#4E8F3C'    // a do sentido contrário
 };
 if (typeof window !== 'undefined') window.RelvaCores = RelvaCores;

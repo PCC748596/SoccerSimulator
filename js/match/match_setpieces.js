@@ -79,12 +79,23 @@ Object.assign(Match, {
         acende nada, e sem arbitros na cena isto nao faz nem rebenta.
         */
         /*
-        APITO. Só o que o árbitro apita mesmo: falta e penálti. O canto, o
-        lateral e o pontapé de baliza são reposições que o jogo retoma sozinho
-        — apitar todas dava um apito a cada vinte segundos.
+        APITO. A falta e o penálti sempre; e a BOLA FORA PELA LINHA DE FUNDO
+        — pedido: *"juiz não está apitando quando a bola sai na linha de
+        fundo"*.
+
+        O LATERAL CONTINUA CALADO, e é a diferença que importa aqui. A nota
+        antiga excluía as três reposições com uma razão boa — "apitar todas
+        dava um apito a cada vinte segundos" — e o lateral é de longe a mais
+        frequente das três. A linha de fundo é outra coisa: o tiro de meta e o
+        canto interrompem o lance, mudam a posse e movem as duas equipas de
+        campo, e é isso que um apito marca.
+
+        `GOAL` fica de fora de propósito: o golo tem o seu próprio apito no
+        match_loop.js, e apitar aqui também dava dois.
         */
         if (typeof EfeitosSonoros !== 'undefined' &&
-            (type === 'FREE_KICK' || type === 'PENALTY')) {
+            (type === 'FREE_KICK' || type === 'PENALTY' ||
+             type === 'GOAL_KICK' || type === 'CORNER_KICK')) {
             EfeitosSonoros.apito(1.0);
         }
 

@@ -1499,6 +1499,40 @@ const RepositionPace = {
     */
     bonusRecuo: 1.35,
     recuoMinimo: 4.0,
+
+    /*
+    =====================================================================
+    E FECHAR A LINHA DA BOLA COM A BALIZA É PRESSA
+    =====================================================================
+    Relato: *"o jogador do block tem que ir mais rápido para fechar a linha da
+    bola com o gol, está muito lento"*.
+
+    E está. Medido em 30 min de jogo, 1292 amostras de quem está em BLOCKING:
+
+        distância ao alvo    speedMult   velocidade real
+            0-2 m              1.97         1.63 m/s
+            2-5 m              3.05         2.74 m/s
+            5-10 m             3.40         3.30 m/s
+           10+  m             6.11         5.14 m/s
+
+        desvio da linha bola-baliza   4.49 m de média
+        amostras a mais de 3 m fora   768 de 1292
+
+    A 5-10 m do sítio onde tem de estar ele vai a 3.3 m/s, que é trote. A
+    razão é o ritmo sair do `cruzeiro` genérico, e para o cruzeiro genérico
+    5-10 m é um ajuste sem urgência — é a distribuição certa para quem se está
+    a recolocar, e a errada para quem está a deixar a baliza aberta.
+
+    `pisoBloqueio` é um CHÃO, como o `pisoSaidaDeBola`: não impede o cruzeiro
+    de pedir mais em distâncias grandes, só impede que peça menos. 6.8 m/s é o
+    escalão do sprint de recuperação, que é o que fechar a linha é.
+
+    `pisoBloqueioDist` existe pela mesma razão que o do `pisoSaidaDeBola`:
+    chegado ao sítio, o `steerArrive` tem de poder travar, senão ele oscila
+    em cima do alvo a 6.8 m/s.
+    */
+    pisoBloqueio: 6.8,
+    pisoBloqueioDist: 1.5,
     // O guarda-redes anda quase sempre — reposiciona-se, não corre o campo.
     velocidadeGK: 2.99,
 
