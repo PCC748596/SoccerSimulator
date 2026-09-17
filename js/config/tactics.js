@@ -206,9 +206,9 @@ match_ui.js), portanto a distância ao que se está a ver escala com ele — e
 escala de forma DIFERENTE em cada vista, porque cada uma parte de um sítio:
 
     vista          distância a zoom 1
-    TV Centro           70 m
+    TV Centro           67 m
     Lateral Móvel       38 m
-    Lateral TV          57 m
+    Lateral TV          52 m
     Tática Cima        105 m     (depende do rácio do ecrã)
 
 Por isso o piso do zoom não pode ser a resposta ao pedido *"ajusta o zoom in

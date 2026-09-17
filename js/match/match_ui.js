@@ -5,8 +5,8 @@ Object.assign(Match, {
                 this.showOffsideLines = !this.showOffsideLines;
                 this.offsideLineA.visible = this.showOffsideLines;
                 this.offsideLineB.visible = this.showOffsideLines;
-                if(this.defLineA) this.defLineA.visible = this.showOffsideLines;
-                if(this.defLineB) this.defLineB.visible = this.showOffsideLines;
+                if (this.defLineA) this.defLineA.visible = this.showOffsideLines;
+                if (this.defLineB) this.defLineB.visible = this.showOffsideLines;
             }
             if (e.key === 'f' || e.key === 'F') this.setSpeed('frame');
             /*
@@ -120,45 +120,45 @@ Object.assign(Match, {
             let cvs = document.createElement('canvas');
             cvs.width = 128; cvs.height = 128;
             let ctx = cvs.getContext('2d');
-            
+
             // Desenha a bola (branco com pentágonos pretos)
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            ctx.arc(64, 64, 60, 0, Math.PI*2);
+            ctx.arc(64, 64, 60, 0, Math.PI * 2);
             ctx.fill();
-            
+
             ctx.fillStyle = '#1a1a1a';
             // Pentágono central
             ctx.beginPath();
-            for (let i=0; i<5; i++) {
-                let a = (Math.PI*2/5)*i - Math.PI/2;
-                let px = 64 + 18*Math.cos(a);
-                let py = 64 + 18*Math.sin(a);
-                if (i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            for (let i = 0; i < 5; i++) {
+                let a = (Math.PI * 2 / 5) * i - Math.PI / 2;
+                let px = 64 + 18 * Math.cos(a);
+                let py = 64 + 18 * Math.sin(a);
+                if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
             }
             ctx.closePath();
             ctx.fill();
             // Pentágonos exteriores
-            for (let i=0; i<5; i++) {
-                let a = (Math.PI*2/5)*i - Math.PI/2;
-                let cx = 64 + 44*Math.cos(a);
-                let cy = 64 + 44*Math.sin(a);
+            for (let i = 0; i < 5; i++) {
+                let a = (Math.PI * 2 / 5) * i - Math.PI / 2;
+                let cx = 64 + 44 * Math.cos(a);
+                let cy = 64 + 44 * Math.sin(a);
                 ctx.beginPath();
-                for (let j=0; j<5; j++) {
-                    let a2 = (Math.PI*2/5)*j + a;
-                    let px = cx + 14*Math.cos(a2);
-                    let py = cy + 14*Math.sin(a2);
-                    if (j===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                for (let j = 0; j < 5; j++) {
+                    let a2 = (Math.PI * 2 / 5) * j + a;
+                    let px = cx + 14 * Math.cos(a2);
+                    let py = cy + 14 * Math.sin(a2);
+                    if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
                 }
                 ctx.closePath();
                 ctx.fill();
             }
-            
+
             // Borda exterior
             ctx.lineWidth = 4;
             ctx.strokeStyle = '#cccccc';
             ctx.beginPath();
-            ctx.arc(64, 64, 60, 0, Math.PI*2);
+            ctx.arc(64, 64, 60, 0, Math.PI * 2);
             ctx.stroke();
 
             let tex = new THREE.CanvasTexture(cvs);
@@ -180,9 +180,9 @@ Object.assign(Match, {
             grad.addColorStop(0, 'rgba(0,0,0,0.6)');
             grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctxS.fillStyle = grad;
-            ctxS.fillRect(0,0,64,64);
+            ctxS.fillRect(0, 0, 64, 64);
             let texS = new THREE.CanvasTexture(cvsS);
-            
+
             this.discoSombra = new THREE.Mesh(
                 new THREE.PlaneGeometry(1.0 * 0.75, 1.0 * 0.75),
                 new THREE.MeshBasicMaterial({ map: texS, transparent: true, depthWrite: false })
@@ -200,12 +200,12 @@ Object.assign(Match, {
 
         if (tatico) {
             // BallPhysics.raio approx 0.11
-            let altura = Math.max(0, this.ball.position.y - 0.11); 
-            
+            let altura = Math.max(0, this.ball.position.y - 0.11);
+
             // Aumenta o tamanho do ícone da bola em até 35% no ápice
-            let escalaBola = 1.0 + Math.min(0.35, altura * 0.08); 
+            let escalaBola = 1.0 + Math.min(0.35, altura * 0.08);
             this.discoIcon.scale.set(escalaBola, escalaBola, escalaBola);
-            
+
             // Para dar ainda mais a sensação de 3D, a bola "sobe" um pouquinho para o Sul (Z+) no ecrã
             // simulando a perspectiva da câmara que não é 100% perfeitamente a pino ou apenas a paralaxe.
             this.discoIcon.position.z = altura * 0.3;
@@ -231,8 +231,19 @@ Object.assign(Match, {
         let lookTarget = this._cLTar;
 
         if (window.cameraMode === 'center') {
-            // Câmara de TV mais próxima da ação, na altura do último degrau
-            targetPos.set(58 * zoom, 39 * zoom, 0);
+            /*
+            TV CENTRO. ALTURA 34 E NAO 39 — pedido: baixar cinco metros.
+
+            A distancia a zoom 1 passa de hypot(58, 39) = 70 m para
+            hypot(58, 34) = 67 m, que e o numero citado nos comentarios do zoom
+            (mais abaixo e no CameraZoom, config/tactics.js). O afastamento
+            lateral (58) nao se mexeu: baixar e descer o ponto de vista, nao
+            aproxima-lo.
+
+            Era "na altura do ultimo degrau" da bancada; a 34 fica um degrau
+            mais abaixo.
+            */
+            targetPos.set(58 * zoom, 34 * zoom, 0);
             lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'sideline') {
             // Câmara Lateral bem mais próxima, acompanhando a bola no eixo Z
@@ -243,7 +254,17 @@ Object.assign(Match, {
             // Mistura de TV Centro e Lateral Móvel
             // Acompanha até metade do meio-campo, depois fica parada e só roda
             let bz = THREE.MathUtils.clamp(this.ball.position.z, -26.5, 26.5);
-            targetPos.set(48 * zoom, 30 * zoom, bz);
+            /*
+            ALTURA 20 E NAO 30 — dois pedidos seguidos de "baixar cinco
+            metros", 10 m ao todo.
+
+            A distancia a zoom 1 passa de hypot(48, 30) = 57 m para
+            hypot(48, 20) = 52 m, que e o numero citado nos comentarios do
+            zoom (aqui em baixo e no CameraZoom, config/tactics.js). O
+            afastamento lateral (48) nao se mexeu: baixar a camara e descer o
+            ponto de vista, nao aproxima-lo.
+            */
+            targetPos.set(48 * zoom, 20 * zoom, bz);
             lookTarget.copy(this.ball.position);
 
             if (typeof TeamAI !== 'undefined') {
@@ -279,8 +300,8 @@ Object.assign(Match, {
 
         Pedido: *"ajusta o zoom in máximo para uma distância de 5 metros dos
         jogadores"*. O `cameraZoom` multiplica a posição inteira, e cada vista
-        parte de uma distância diferente (70 m na TV Centro, 38 na Lateral
-        Móvel, 57 na Lateral TV, 94 na Tática Cima), portanto o mesmo
+        parte de uma distância diferente (67 m na TV Centro, 38 na Lateral
+        Móvel, 52 na Lateral TV, 94 na Tática Cima), portanto o mesmo
         multiplicador dá quatro aproximações diferentes — e um piso no
         multiplicador não é um limite em metros.
 
