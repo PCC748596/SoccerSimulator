@@ -5477,8 +5477,20 @@ class FootballPlayer {
         */
         if (this.gkSaiuAoCruzamento) {
             const S_SAI = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
+            /*
+            A BANDEIRA MORRE NO CHAO, e nao a 1.20 m.
+
+            Estava `y < alturaMin`: o cruzamento desce, passava essa marca
+            ainda no ar e a bandeira caia — com ela, a saida que ja estava a
+            acontecer. Agora usa a altura do GESTO (ver alturaMinGesto), que e
+            a mesma marca que o `resolverSaidaAoCruzamento` aplica. As duas
+            contas tem de ser a mesma, senao a bandeira morre num limiar e o
+            gesto e recusado noutro.
+            */
+            const hMorte = (typeof S_SAI.alturaMinGesto === 'number')
+                ? S_SAI.alturaMinGesto : (S_SAI ? S_SAI.alturaMin : 1.2);
             const bolaMorreu = !S_SAI || Match.state !== 'PLAY' || !!Match.ballCarrier ||
-                Match.ball.position.y < S_SAI.alturaMin;
+                Match.ball.position.y < hMorte;
             if (bolaMorreu) {
                 this.gkSaiuAoCruzamento = false;
             } else if (gkCorpo.position.distanceTo(Match.ball.position) <= S_SAI.alcanceSaida) {
@@ -5683,6 +5695,41 @@ class FootballPlayer {
                 let isCross = (Match.ballVel.y > 2.0 && Match.ball.position.y > 1.2 && Math.abs(Match.ball.position.z) > 24 && !Match.ballCarrier && Match.lastTouchedPlayer !== this);
 
                 /*
+                =========================================================
+                A BOLA VAI CAIR NA PEQUENA AREA — E ENTAO E DELE
+                =========================================================
+                Isto vivia DENTRO do ramo `isCross`, e o `isCross` exige
+                `ballVel.y > 2.0`: ou seja a bola a SUBIR. Metade dos
+                cruzamentos ja vem a descer quando a projeccao do voo os poe
+                na pequena area (um canto, um cruzamento alto lido tarde), e
+                nesses a bandeira nunca se levantava — medido, 44% dos voos
+                para a pequena area chegavam a levantar bandeira
+                (tools/headless/gk_cruzamento_pequena.js).
+
+                O que decide isto e ONDE A BOLA VAI CAIR, e nao se ela sobe ou
+                desce: se cai na pequena area, e dele. Por isso e uma conta
+                propria, com o gatilho de altura (`alturaMin`, bola no ar) e a
+                projeccao do voo — a mesma `preverQuedaDaBola` de antes.
+
+                E NAO O LEVA FORA DA BALIZA: a condicao e a queda dentro da
+                PEQUENA area, que e o quintal dele. Um remate enquadrado nao
+                passa por aqui — o ramo do mergulho corre antes deste (ver
+                `bolaVindoPraMim` acima) e apanha-o primeiro.
+                */
+                const S_CRUZ_PREV = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
+                let quedaNaPequena = null;
+                if (S_CRUZ_PREV && !Match.ballCarrier && Match.lastTouchedPlayer !== this &&
+                    Match.ball.position.y > S_CRUZ_PREV.alturaMin &&
+                    typeof preverQuedaDaBola === 'function' && typeof Area !== 'undefined') {
+                    const q = preverQuedaDaBola();
+                    if (q && Math.abs(q.x) <= Area.pequenaMeiaLargura &&
+                        Math.abs(this.ownGoalZ - q.z) <= Area.pequenaProfundidade &&
+                        Math.sign(q.z) === Math.sign(this.ownGoalZ)) {
+                        quedaNaPequena = q;
+                    }
+                }
+
+                /*
                 Bola solta, lenta, perto dele — passe atrás do próprio time
                 ou bola perdida do adversário, tanto faz: ele SEMPRE apanha
                 com as mãos, nunca controla com o pé. Antes isto só existia
@@ -5777,7 +5824,7 @@ class FootballPlayer {
                             }
                         }
                     }
-                } else if (isCross) {
+                } else if (isCross || quedaNaPequena) {
                     alvoGkZ = ownGoalZCenter(this.team) + (Match.ball.position.z - ownGoalZCenter(this.team)) * 0.55;
                     alvoGkX = Match.ball.position.x * 0.65;
                     speedLerp = 4.0;
@@ -5794,24 +5841,51 @@ class FootballPlayer {
                     Fora da pequena area nao sai: fica o posicionamento de
                     sempre, que e acompanhar a bola a meio caminho da linha.
                     */
-                    const S_CRUZ = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
-                    if (S_CRUZ && typeof preverQuedaDaBola === 'function' && typeof Area !== 'undefined') {
-                        const quedaCruz = preverQuedaDaBola();
-                        const linhaZCruz = this.ownGoalZ;
-                        const dentroPequena = quedaCruz &&
-                            Math.abs(quedaCruz.x) <= Area.pequenaMeiaLargura &&
-                            Math.abs(linhaZCruz - quedaCruz.z) <= Area.pequenaProfundidade &&
-                            (Math.sign(quedaCruz.z) === Math.sign(linhaZCruz));
-                        if (dentroPequena) {
-                            alvoGkX = quedaCruz.x;
-                            alvoGkZ = quedaCruz.z;
-                            speedLerp = 6.0;
-                            this.gkSaiuAoCruzamento = true;
-                        }
+                    // A conta esta feita acima (`quedaNaPequena`), e e ela
+                    // que manda: vai ao ponto de queda, depressa, e levanta a
+                    // bandeira que o gesto consome.
+                    if (quedaNaPequena) {
+                        alvoGkX = quedaNaPequena.x;
+                        alvoGkZ = quedaNaPequena.z;
+                        /*
+                        8.0 E NAO 6.0 — a saida ao cruzamento e um sprint.
+
+                        Medido com o tools/headless/gk_cruzamento_pequena.js: a
+                        6.0 ele chegava a 2.2-2.7 m da bola no instante em que
+                        ela aterrava, ou seja LA, mas tarde, e o gesto nunca
+                        acontecia. E o unico ramo do updateGK em que a bola vai
+                        cair no quintal dele e ninguem mais a pode disputar com
+                        vantagem.
+                        */
+                        speedLerp = 6.0;
+                        this.gkSaiuAoCruzamento = true;
                     }
 
                     let distToBall = gkCorpo.position.distanceTo(Match.ball.position);
-                    if (distToBall < 2.5 && Match.ball.position.y > 1.2 && Match.ball.position.y < 3.2) {
+                    /*
+                    O SALTO NAO PODE PARTIR CEDO — era aqui que a saida ao
+                    cruzamento morria.
+
+                    O `salto_alto` toma conta do corpo (e a animacao que o
+                    move), portanto assim que ele entra, a corrida para o ponto
+                    de queda ACABA. Com o gatilho em 2.5 m da posicao ACTUAL da
+                    bola, ele saltava a caminho: media-se a bola a aterrar com
+                    ele a 2.2-3.5 m dela (mediana 3.07), sempre fora do
+                    `alcanceSaida` de 1.6 — zero gestos em 27 cruzamentos.
+
+                    Com a bola a cair na pequena area, o salto espera por DUAS
+                    coisas: estar quase no ponto de queda e a bola estar quase
+                    ao alcance. Fora desse caso o gatilho e o de sempre.
+                    */
+                    let podeSaltar = (distToBall < 2.5);
+                    if (quedaNaPequena) {
+                        const dq = Math.hypot(gkCorpo.position.x - quedaNaPequena.x,
+                            gkCorpo.position.z - quedaNaPequena.z);
+                        const S_ALC = (typeof GkSaidaCruzamento !== 'undefined')
+                            ? GkSaidaCruzamento.alcanceSaida : 1.6;
+                        podeSaltar = (dq < 1.2) && (distToBall < S_ALC + 0.5);
+                    }
+                    if (podeSaltar && Match.ball.position.y > 1.2 && Match.ball.position.y < 3.2) {
                         this.gkEstado = 'salto_alto';
                         this.gkTempoMergulho = 0;
                     }
@@ -7470,7 +7544,14 @@ class FootballPlayer {
     resolverSaidaAoCruzamento() {
         const S = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
         if (!S || typeof Match === 'undefined' || !Match.ball) return false;
-        if (Match.ball.position.y < S.alturaMin) return false;
+        /*
+        A ALTURA DO GESTO NAO E A DO GATILHO. Ver `alturaMinGesto`
+        (config/goalkeeper.js): isto corria com `alturaMin` (1.20 m) e
+        recusava-se sempre, porque o cruzamento CAI — quando ele chega ao ponto
+        de queda a bola vem ja a meio metro do chao.
+        */
+        const hMin = (typeof S.alturaMinGesto === 'number') ? S.alturaMinGesto : S.alturaMin;
+        if (Match.ball.position.y < hMin) return false;
 
         const adversarios = (this.team === 'TeamA') ? Match.opponents : Match.players;
         let marcado = false;

@@ -611,7 +611,32 @@ const GkSaidaCruzamento = {
     anguloSocoGraus: 10,     // o soco abre até isto para cada lado da trajectória
     velocidadeSoco: 16.0,    // m/s à saída do punho
     elevacaoSoco: 0.35,      // fraccão da velocidade que vai para cima
-    alturaMin: 1.20,         // só bolas altas: abaixo disto é defesa normal
+    /*
+    ALTURA MINIMA PARA ISTO SER UM CRUZAMENTO: abaixo disto e bola rasteira e
+    resolve-se com a defesa normal. E o gatilho, e nao o gesto.
+    */
+    alturaMin: 1.20,
+
+    /*
+    E A ALTURA MINIMA DO GESTO, QUE E OUTRA — foi aqui que o comportamento
+    todo se perdia.
+
+    Relato: *"quando a bola for cruzada na pequena area o goleiro tem que
+    tentar pegar ou socar a bola. Ja tinha passado isso, verifica."* E estava
+    escrito, e media-se ZERO gestos em 27 cruzamentos a cair na pequena area
+    (tools/headless/gk_cruzamento_pequena.js).
+
+    A causa: o gesto exigia a bola acima de `alturaMin` (1.20 m) no instante
+    do contacto. So que o cruzamento CAI — quando ele finalmente chega ao
+    ponto de queda, a bola vem ja a 0.4-1.1 m. Medido nos voos em que ele
+    chegou a 1.1 m da bola: 0.48 m e 1.09 m de altura. O gesto era recusado
+    exactamente no unico momento em que podia acontecer, e a bandeira era
+    apagada pela mesma conta.
+
+    0.50 m e a altura a que um guarda-redes ainda apanha ou soca com as maos —
+    abaixo disso e uma bola no chao e o gesto certo e outro (o 'apanhar').
+    */
+    alturaMinGesto: 0.50,
     /*
     A que distância da bola ele lhe chega com as mãos no alto. É mais do que o
     alcance de pé (`GkCatchModel.alcanceContacto`, 0.55) porque isto é um

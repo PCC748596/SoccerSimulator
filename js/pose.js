@@ -55,9 +55,30 @@ function pintarPadraoDeEquipamento(ctx, largura, altura, peca, corBase) {
     const cores = (peca && peca.cores && peca.cores.length) ? peca.cores : [corBase];
     const padrao = (peca && peca.padrao) ? peca.padrao : 'solido';
 
+    /*
+    A BARRA INFERIOR (`peca.barra`) e pintada por CIMA de tudo o resto, e por
+    isso mora numa funcao a parte chamada no fim dos dois caminhos: e a barra
+    vermelha na bainha do Flamengo e a verde no calcao do Fluminense.
+
+    `altura` e uma FRACCAO da peca (0.12 = 12% em baixo), e nao pixeis: a mesma
+    peca e pintada em canvas de 256 e de 512 conforme onde e usada, e uma
+    barra em pixeis ficava com espessuras diferentes na mesma camisola.
+
+    Em baixo no CANVAS e em baixo na peca: o topo da textura e o ombro (e la
+    que a gola e desenhada), portanto as ultimas linhas sao a bainha.
+    */
+    const barra = (peca && peca.barra) ? peca.barra : null;
+    const pintarBarra = () => {
+        if (!barra || !barra.cor) return;
+        const h = Math.max(1, Math.round(altura * (barra.altura || 0.1)));
+        ctx.fillStyle = barra.cor;
+        ctx.fillRect(0, altura - h, largura, h);
+    };
+
     if (padrao === 'solido' || cores.length < 2) {
         ctx.fillStyle = cores[0];
         ctx.fillRect(0, 0, largura, altura);
+        pintarBarra();
         return ctx;
     }
 
@@ -70,15 +91,35 @@ function pintarPadraoDeEquipamento(ctx, largura, altura, peca, corBase) {
     ctx.fillStyle = cores[0];
     ctx.fillRect(0, 0, largura, altura);
 
+    /*
+    AS BARRAS PODEM TER LARGURAS DIFERENTES (`peca.pesos`, ver Uniformes): no
+    tricolor do Fluminense o branco e uma risca fina entre duas faixas largas,
+    e com barras iguais as tres cores dividiam a camisola por igual.
+
+    A conta e por FRACCAO ACUMULADA e nao por passo fixo: soma-se o peso de
+    cada barra, divide-se pelo total, e cada barra ocupa a sua fatia. Com pesos
+    todos iguais da exactamente o passo constante de antes.
+    */
+    const pesos = [];
+    for (let i = 0; i < n; i++) {
+        const w = (peca && peca.pesos && peca.pesos.length)
+            ? peca.pesos[i % peca.pesos.length] : 1;
+        pesos.push(w > 0 ? w : 1);
+    }
+    const somaPesos = pesos.reduce((a, w) => a + w, 0);
+
     const vertical = (padrao === 'listras');
-    const passo = (vertical ? largura : altura) / n;
+    const total = vertical ? largura : altura;
+    let acumulado = 0;
     for (let i = 0; i < n; i++) {
         ctx.fillStyle = cores[i % cores.length];
-        const a = Math.floor(i * passo);
-        const b = Math.ceil((i + 1) * passo);
+        const a = Math.floor(total * (acumulado / somaPesos));
+        acumulado += pesos[i];
+        const b = Math.ceil(total * (acumulado / somaPesos));
         if (vertical) ctx.fillRect(a, 0, b - a, altura);
         else ctx.fillRect(0, a, largura, b - a);
     }
+    pintarBarra();
     return ctx;
 }
 if (typeof window !== 'undefined') window.pintarPadraoDeEquipamento = pintarPadraoDeEquipamento;
@@ -109,7 +150,20 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     const UNI = uniforme || null;
     const pecaCamisa = UNI ? UNI.camisa : null;
     const pecaMeiao = UNI ? UNI.meiao : null;
-    const corCalcaoFinal = (UNI && UNI.calcao) ? UNI.calcao : corCalcao;
+    /*
+    O CALCAO PODE SER UMA PECA e nao so uma cor — pedido: *"coloca uma barra
+    verde no short tambem"*. Aceita as duas formas:
+
+        calcao: '#f2f2f2'                              uma cor, como antes
+        calcao: { cores: ['#f2f2f2'], barra: {...} }    desenho com barra
+
+    Sendo uma string, nada muda e nao se gasta uma textura: um calcao de uma
+    cor so nao precisa de canvas nenhum.
+    */
+    const pecaCalcao = (UNI && UNI.calcao && typeof UNI.calcao === 'object') ? UNI.calcao : null;
+    const corCalcaoFinal = pecaCalcao
+        ? ((pecaCalcao.cores && pecaCalcao.cores[0]) || corCalcao)
+        : ((UNI && UNI.calcao) ? UNI.calcao : corCalcao);
     const temPadraoCamisa = !!(pecaCamisa && pecaCamisa.padrao && pecaCamisa.padrao !== 'solido');
 
     let shirtMat;
@@ -122,7 +176,16 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     } else {
         shirtMat = new THREE.MeshStandardMaterial({ color: corCamisa, roughness: 0.9 });
     }
-    const shortMat = new THREE.MeshStandardMaterial({ color: corCalcaoFinal, roughness: 0.9 });
+    let shortMat;
+    if (pecaCalcao) {
+        const cvsK = document.createElement('canvas'); cvsK.width = 256; cvsK.height = 256;
+        pintarPadraoDeEquipamento(cvsK.getContext('2d'), 256, 256, pecaCalcao, corCalcaoFinal);
+        shortMat = new THREE.MeshStandardMaterial({
+            map: new THREE.CanvasTexture(cvsK), roughness: 0.9
+        });
+    } else {
+        shortMat = new THREE.MeshStandardMaterial({ color: corCalcaoFinal, roughness: 0.9 });
+    }
     const bootMat = new THREE.MeshStandardMaterial({ color: ap.corChuteira, roughness: 0.5 }); const studMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
     const hairMat = new THREE.MeshStandardMaterial({ color: ap.cabelo, roughness: 0.9 });
     /*
@@ -161,7 +224,31 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     */
     const cvsV = document.createElement('canvas'); cvsV.width = 512; cvsV.height = 512; const ctxV = cvsV.getContext('2d');
     pintarPadraoDeEquipamento(ctxV, 512, 512, pecaCamisa, corCamisa);
-    ctxV.fillStyle = '#dcdde1'; ctxV.beginPath(); ctxV.moveTo(136, 0); ctxV.lineTo(376, 0); ctxV.lineTo(256, 280); ctxV.fill(); ctxV.strokeStyle = '#2f3640'; ctxV.lineWidth = 12; ctxV.stroke();
+    /*
+    A GOLA E REDONDA, e pequena.
+
+    Era um V: um triangulo de (136,0) a (376,0) com o bico em y=280 — mais de
+    metade da altura do tronco, num decote de 240 px de boca. Pedido: *"a gola
+    V das camisas esta muito grande; transforma em gola redonda"*.
+
+    Agora e um arco: 86 px de raio centrado no topo do tronco, ou seja 172 de
+    boca e 86 de queda — menos de um terco do que o V descia. `Math.PI` a `0`
+    desenha a metade de BAIXO da circunferencia (no canvas o y cresce para
+    baixo), que e o que fica a vista abaixo da linha do ombro; a metade de cima
+    ficaria fora da textura.
+
+    O `#dcdde1` e o mesmo cinza claro de antes — e o tom da gola, nao da
+    camisola, e por isso nao sai do uniforme.
+    */
+    const RAIO_GOLA = 86;
+    ctxV.fillStyle = '#dcdde1';
+    ctxV.beginPath();
+    ctxV.arc(256, 0, RAIO_GOLA, 0, Math.PI);
+    ctxV.closePath();
+    ctxV.fill();
+    ctxV.strokeStyle = '#2f3640';
+    ctxV.lineWidth = 10;
+    ctxV.stroke();
 
     /*
     AS COSTAS ficam com o mesmo material de sempre — e o `updateShirt`

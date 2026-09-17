@@ -58,6 +58,23 @@ function ctxFalso() {
     };
 }
 
+/*
+O calção pode ser uma cor ou uma peça com desenho (ver `pecaCalcao` no
+construirCorpo): o Fluminense leva barra verde na bainha, e por isso é peça.
+*/
+const corDoCalcao = (u) => (typeof u.calcao === 'string')
+    ? u.calcao : u.calcao.cores[0];
+
+/*
+As barras da bainha são pintadas por cima de tudo, no fim — logo são o ÚLTIMO
+rectângulo. Para contar as barras do padrão, tira-se o fundo (o primeiro) e a
+barra (o último, se a peça tiver uma).
+*/
+const barrasDoPadrao = (ctx, peca) => {
+    const r = ctx.rects.slice(1);
+    return (peca && peca.barra) ? r.slice(0, -1) : r;
+};
+
 /* --- A tabela diz o que o pedido diz ---------------------------------- */
 
 test('Flamengo: faixas vermelhas e negras, calção preto, número branco', () => {
@@ -66,6 +83,8 @@ test('Flamengo: faixas vermelhas e negras, calção preto, número branco', () =
 
     assert.strictEqual(u.camisa.padrao, 'faixas', 'as faixas do Flamengo são horizontais');
     assert.strictEqual(u.camisa.cores.length, 2, 'rubro-negro são duas cores');
+    // Pedido: cinco faixas, três da primeira cor e duas da segunda.
+    assert.strictEqual(u.camisa.divisoes, 5, 'são cinco faixas, 3 + 2');
 
     const lum = (hex) => {
         const n = parseInt(hex.slice(1), 16);
@@ -79,7 +98,17 @@ test('Flamengo: faixas vermelhas e negras, calção preto, número branco', () =
     const preto = u.camisa.cores.find(c => lum(c) < 0.15);
     assert.ok(preto, `nenhuma das cores (${u.camisa.cores}) é preta`);
 
-    assert.ok(lum(u.calcao) < 0.15, `calção em ${u.calcao} não é preto`);
+    assert.ok(lum(corDoCalcao(u)) < 0.15, `calção em ${corDoCalcao(u)} não é preto`);
+
+    /*
+    E A BARRA VERMELHA NA BAINHA (pedido): com cinco faixas e a primeira
+    preta, a de baixo também sai preta, e é a barra que devolve o vermelho ao
+    fundo da camisola.
+    */
+    assert.ok(u.camisa.barra, 'a camisola do Flamengo ficou sem a barra da bainha');
+    assert.strictEqual(u.camisa.barra.cor, vermelho, 'a barra da bainha não é vermelha');
+    assert.ok(u.camisa.barra.altura > 0 && u.camisa.barra.altura < 0.3,
+        `barra de ${u.camisa.barra.altura} da peça é fita ou é meia camisola`);
     // Meião preto E vermelho: padrão, não cor lisa.
     assert.strictEqual(u.meiao.padrao, 'faixas');
     assert.strictEqual(u.meiao.cores.length, 2);
@@ -101,7 +130,13 @@ test('Fluminense: tricolor em listras, calção e meião brancos, número verde 
     const grena = u.camisa.cores.find(c => canal(c, 0) > canal(c, 1) && canal(c, 0) > canal(c, 2));
     assert.ok(branco && verde && grena, `o tricolor não tem as três cores: ${u.camisa.cores}`);
 
-    assert.ok(canal(u.calcao, 0) > 220 && canal(u.calcao, 1) > 220, `calção ${u.calcao} não é branco`);
+    const kc = corDoCalcao(u);
+    assert.ok(canal(kc, 0) > 220 && canal(kc, 1) > 220, `calção ${kc} não é branco`);
+    // E com barra VERDE na bainha (pedido).
+    assert.ok(u.calcao.barra, 'o calção ficou sem a barra verde');
+    assert.ok(canal(u.calcao.barra.cor, 1) > canal(u.calcao.barra.cor, 0) &&
+        canal(u.calcao.barra.cor, 1) > canal(u.calcao.barra.cor, 2),
+        `a barra do calção (${u.calcao.barra.cor}) não é verde`);
     assert.ok(canal(u.meiao.cores[0], 1) > 220, `meião ${u.meiao.cores[0]} não é branco`);
 
     // Verde escuro: verde dominante e escuro.
@@ -120,13 +155,47 @@ test('quem não tem desenho continua como estava', () => {
     assert.strictEqual(corDoUniforme(null, '#3498db'), '#3498db');
 });
 
+test('a contagem das faixas do Flamengo é 3 + 2, e a maioria é preta', () => {
+    const u = uniformeDe('Flamengo-RJ');
+    const c = ctxFalso();
+    pintar(c, 256, 256, u.camisa, '#000000');
+    const barras = barrasDoPadrao(c, u.camisa);
+    assert.strictEqual(barras.length, 5);
+
+    const contagem = {};
+    for (const b of barras) contagem[b.cor] = (contagem[b.cor] || 0) + 1;
+    const valores = Object.values(contagem).sort((a, b) => b - a);
+    assert.deepStrictEqual(valores, [3, 2], `a contagem das faixas saiu ${valores}`);
+
+    // A que aparece três vezes é a preta.
+    const lum = (hex) => {
+        const n = parseInt(hex.slice(1), 16);
+        return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+    };
+    const tresVezes = Object.keys(contagem).find(k => contagem[k] === 3);
+    assert.ok(lum(tresVezes) < 0.15, `as três faixas são de ${tresVezes}, que não é preto`);
+});
+
+test('a cor que representa o clube não é a primeira da camisa, é a dominante', () => {
+    /*
+    A ordem das cores serve o DESENHO (é ela que dá três faixas pretas); a cor
+    do disco da vista táctica é outra coisa — com a primeira, o disco do
+    Flamengo ficava preto com contorno preto.
+    */
+    const u = uniformeDe('Flamengo-RJ');
+    assert.notStrictEqual(u.corPrincipal, u.camisa.cores[0]);
+    assert.strictEqual(corDoUniforme(u, '#000000'), u.corPrincipal);
+    // E sem corPrincipal escrito, continua a cair na primeira cor.
+    assert.strictEqual(corDoUniforme({ camisa: { cores: ['#123456'] } }, '#000'), '#123456');
+});
+
 /* --- O padrão pinta na direcção certa --------------------------------- */
 
 test('faixas são horizontais e listras são verticais', () => {
     const faixas = ctxFalso();
     pintar(faixas, 256, 256, Uniformes['Flamengo-RJ'].camisa, '#000000');
     // Fora o fundo, cada barra ocupa a largura toda e uma fatia da altura.
-    const barrasH = faixas.rects.slice(1);
+    const barrasH = barrasDoPadrao(faixas, Uniformes['Flamengo-RJ'].camisa);
     assert.strictEqual(barrasH.length, Uniformes['Flamengo-RJ'].camisa.divisoes);
     for (const b of barrasH) {
         assert.strictEqual(b.w, 256, 'uma faixa horizontal atravessa a camisola');
@@ -138,7 +207,7 @@ test('faixas são horizontais e listras são verticais', () => {
 
     const listras = ctxFalso();
     pintar(listras, 256, 256, Uniformes['Fluminense-RJ'].camisa, '#000000');
-    const barrasV = listras.rects.slice(1);
+    const barrasV = barrasDoPadrao(listras, Uniformes['Fluminense-RJ'].camisa);
     for (const b of barrasV) {
         assert.strictEqual(b.h, 256, 'uma listra vertical atravessa a camisola de cima a baixo');
         assert.ok(b.w < 256, 'uma listra vertical não pode ocupar a largura toda');
@@ -147,6 +216,66 @@ test('faixas são horizontais e listras são verticais', () => {
     assert.strictEqual(barrasV[0].cor, barrasV[3].cor);
     assert.notStrictEqual(barrasV[0].cor, barrasV[1].cor);
     assert.notStrictEqual(barrasV[1].cor, barrasV[2].cor);
+});
+
+test('no tricolor, o grená e o verde são mais largos que o branco', () => {
+    /*
+    Pedido. As larguras vêm dos `pesos` da peça, e o que se mede é a largura
+    PINTADA — é a única forma de apanhar um peso que não chegue ao desenho.
+    */
+    const peca = Uniformes['Fluminense-RJ'].camisa;
+    const [grena, verde, branco] = peca.cores;
+    const c = ctxFalso();
+    pintar(c, 512, 512, peca, '#000000');
+
+    const larguraDe = (cor) => {
+        const b = barrasDoPadrao(c, peca).filter(r => r.cor === cor);
+        assert.ok(b.length, `a cor ${cor} não foi pintada`);
+        return b.reduce((a, r) => a + r.w, 0) / b.length;
+    };
+
+    const lG = larguraDe(grena), lV = larguraDe(verde), lB = larguraDe(branco);
+    assert.ok(lG > lB, `grená ${lG.toFixed(1)} px não é mais largo que o branco ${lB.toFixed(1)}`);
+    assert.ok(lV > lB, `verde ${lV.toFixed(1)} px não é mais largo que o branco ${lB.toFixed(1)}`);
+    // E as duas cores largas são iguais entre si.
+    assert.ok(Math.abs(lG - lV) < 2, `grená e verde com larguras diferentes (${lG} / ${lV})`);
+
+    // As barras continuam a cobrir a peça de ponta a ponta.
+    const ordenadas = barrasDoPadrao(c, peca).sort((a, b) => a.x - b.x);
+    let fim = 0;
+    for (const b of ordenadas) {
+        assert.ok(b.x <= fim, `buraco entre ${fim} e ${b.x}`);
+        fim = Math.max(fim, b.x + b.w);
+    }
+    assert.strictEqual(fim, 512);
+});
+
+test('sem pesos, as barras ficam todas iguais', () => {
+    // O caminho antigo tem de continuar a dar o passo constante: é o que as
+    // faixas do Flamengo usam.
+    const c = ctxFalso();
+    pintar(c, 500, 500, { padrao: 'faixas', cores: ['#111111', '#222222'], divisoes: 5 }, '#000');
+    const alturas = c.rects.slice(1).map(r => r.h);
+    for (const h of alturas) assert.strictEqual(h, 100);
+});
+
+test('a gola é redonda e pequena, não um V', () => {
+    /*
+    Pedido: *"a gola V das camisas está muito grande; transforma em gola
+    redonda"*. O V era um triângulo com o bico a y=280 — mais de metade da
+    altura do tronco. A gola é desenhada dentro do `construirCorpo`, que precisa
+    de THREE e de DOM, por isso o que se verifica é o desenho no código.
+    */
+    const ini = srcPose.indexOf('const RAIO_GOLA');
+    assert.ok(ini > 0, 'a gola redonda desapareceu do pose.js');
+    const bloco = srcPose.slice(ini, ini + 400);
+    assert.ok(/ctxV\.arc\(256, 0, RAIO_GOLA/.test(bloco), 'a gola deixou de ser um arco');
+    assert.ok(!/moveTo\(136, 0\)/.test(srcPose), 'o triângulo do decote em V continua lá');
+
+    const raio = parseInt(srcPose.slice(ini).match(/RAIO_GOLA = (\d+)/)[1], 10);
+    // A textura do tronco tem 512 px: uma gola que desça mais de um quarto
+    // dela é o V outra vez, com outra forma.
+    assert.ok(raio > 40 && raio <= 128, `raio da gola de ${raio} px está fora do razoável`);
 });
 
 test('sem barras não fica um pixel vazio entre elas', () => {
@@ -176,6 +305,32 @@ test('solido é uma cor só', () => {
     pintar(c, 50, 50, Uniformes['Fluminense-RJ'].meiao, '#ff0000');
     assert.strictEqual(c.rects.length, 1);
     assert.strictEqual(c.rects[0].cor, Uniformes['Fluminense-RJ'].meiao.cores[0]);
+});
+
+test('a barra é pintada por cima e NA BAINHA, em fracção da peça', () => {
+    const peca = { padrao: 'solido', cores: ['#ffffff'], barra: { cor: '#00ff00', altura: 0.2 } };
+    for (const lado of [100, 500]) {
+        const c = ctxFalso();
+        pintar(c, lado, lado, peca, '#000');
+        const barra = c.rects[c.rects.length - 1];
+        assert.strictEqual(barra.cor, '#00ff00', 'a barra não é o último rectângulo');
+        assert.strictEqual(barra.w, lado, 'a barra atravessa a peça');
+        // Em baixo: o topo da textura é o ombro (é lá que a gola é desenhada).
+        assert.strictEqual(barra.y + barra.h, lado, 'a barra não está na bainha');
+        // Em fracção: 20% da peça, seja o canvas de 100 ou de 500.
+        assert.strictEqual(barra.h, Math.round(lado * 0.2));
+    }
+});
+
+test('o calção com desenho passa a ser uma peça, e sem desenho continua a ser uma cor', () => {
+    // O Fluminense leva barra: é peça. O Flamengo é preto liso: é string.
+    assert.strictEqual(typeof Uniformes['Fluminense-RJ'].calcao, 'object');
+    assert.strictEqual(typeof Uniformes['Flamengo-RJ'].calcao, 'string');
+    // E o construirCorpo trata os dois casos (um calção de uma cor não gasta textura).
+    assert.ok(/const pecaCalcao = \(UNI && UNI\.calcao && typeof UNI\.calcao === 'object'\)/.test(srcPose),
+        'o construirCorpo deixou de aceitar o calção como peça');
+    assert.ok(/pintarPadraoDeEquipamento\(cvsK\.getContext\('2d'\)/.test(srcPose),
+        'o calção com desenho não é pintado');
 });
 
 /* --- As ligações existem ---------------------------------------------- */

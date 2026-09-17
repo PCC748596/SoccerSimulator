@@ -24,9 +24,20 @@ lista de `cores`:
 
 `divisoes` é quantas barras aparecem na peça. É um número de DESENHO e não de
 medida: as faces do tronco são mapeadas 0..1 cada uma, portanto o que se
-escreve aqui é exactamente o que se conta no ecrã. O Flamengo da fotografia tem
-cinco pares de faixas no tronco; o Fluminense leva listras finas, e por isso
-doze.
+escreve aqui é exactamente o que se conta no ecrã.
+
+`barra` (opcional) pinta uma BARRA na bainha da peça, por cima de tudo o resto
+— a vermelha do Flamengo e a verde no calção do Fluminense. A `altura` dela é
+uma FRACÇÃO da peça e não píxeis: a mesma peça é pintada em canvas de 256 e de
+512 conforme onde é usada, e uma barra em píxeis saía com espessuras diferentes
+na mesma camisola.
+
+`pesos` (opcional) dá LARGURAS DIFERENTES a cada cor do ciclo. Pedido: *"na
+camisa tricolor as faixas grená e verde escuro são mais largas que as
+brancas"*. Sem ele as barras são todas iguais, que é o que basta para as faixas
+do Flamengo; com ele, a largura de cada barra é proporcional ao peso da cor
+dela — e é assim que o branco do Fluminense fica a fazer de risca entre duas
+faixas largas, em vez de as três cores dividirem a camisola por igual.
 
 O NÚMERO TEM COR PRÓPRIA, e é a razão pela qual isto não podia sair da cor da
 camisa: sobre as faixas do Flamengo (metade preta, metade vermelha) só o branco
@@ -54,7 +65,45 @@ const Uniformes = {
     as sombras do modelo, e a camisola lê-se como um buraco.
     */
     'Flamengo-RJ': {
-        camisa: { padrao: 'faixas', cores: ['#c8102e', '#17171b'], divisoes: 10 },
+        /*
+        CINCO FAIXAS: TRÊS PRETAS E DUAS VERMELHAS — pedido, e a contagem
+        manda no desenho.
+
+        Estavam dez barras (cinco pares), e a olho lia-se como um padrão de
+        risquinhas e não como a camisola: as faixas do Flamengo são largas.
+        Cinco barras num tronco dão faixas com o dobro da altura.
+
+        A ORDEM DAS CORES É QUE DÁ OS TRÊS PRETOS. Com `divisoes: 5` e duas
+        cores, as barras saem 0,1,0,1,0 — ou seja a PRIMEIRA cor aparece três
+        vezes e a segunda duas. Por isso o preto vem primeiro na lista: trocar
+        a ordem é trocar quem fica com três.
+
+        O pedido dizia "duas brancas"; ficam VERMELHAS, que é a outra cor do
+        uniforme 1 que ele próprio descreveu ("preta e vermelha") e a que está
+        na fotografia da camisola. Para as ter brancas de verdade, é trocar
+        `#c8102e` por `#f2f2f2` aqui — e mais nada.
+        */
+        /*
+        E UMA BARRA VERMELHA NA BAINHA (pedido). Com cinco faixas e a primeira
+        preta, a de baixo tambem sai preta — a barra devolve o vermelho ao
+        fundo da camisola, que e o remate que a fotografia mostra.
+
+        `altura` e uma fraccao da peca: 0.10 sao os ultimos 10% da textura.
+        */
+        camisa: {
+            padrao: 'faixas', cores: ['#17171b', '#c8102e'], divisoes: 5,
+            barra: { cor: '#c8102e', altura: 0.10 }
+        },
+        /*
+        A COR QUE O REPRESENTA no disco da vista táctica e nas etiquetas é o
+        VERMELHO, e por isso é escrita à parte.
+
+        O disco saía da primeira cor da camisa, e essa passou a ser o preto
+        quando as faixas mudaram de ordem (é a ordem que dá três pretas) — um
+        disco preto com o contorno preto do TeamA é um disco que não se vê. É
+        também o vermelho que identifica o clube de longe.
+        */
+        corPrincipal: '#c8102e',
         calcao: '#17171b',
         meiao: { padrao: 'faixas', cores: ['#17171b', '#c8102e'], divisoes: 6 },
         numero: '#ffffff',
@@ -71,9 +120,39 @@ const Uniformes = {
     que se lê em todas as outras.
     */
     'Fluminense-RJ': {
-        camisa: { padrao: 'listras', cores: ['#7a1b2b', '#0f6b3a', '#f2f2f2'], divisoes: 12 },
-        calcao: '#f2f2f2',
+        /*
+        AS LISTRAS NÃO SÃO TODAS DA MESMA LARGURA — pedido: *"as faixas grená e
+        verde escuro são mais largas que as brancas"*. É o que está na
+        fotografia: duas faixas de cor separadas por uma risca branca fina.
+
+        Os pesos são relativos e seguem a ordem das cores. Estiveram em
+        1.7/1.7/0.6 e voltou o mesmo pedido — *"as faixas grená e verde do
+        Fluminense são mais largas"* —, portanto vão a **2.6/2.6/0.5**: as
+        faixas de cor ficam cinco vezes mais largas que a risca branca, que
+        passa a ser o filete que as separa em vez de uma terceira listra.
+
+        Com doze barras, a camisola fica com quatro ciclos de
+        grená/verde/branco.
+        */
+        camisa: {
+            padrao: 'listras',
+            cores: ['#7a1b2b', '#0f6b3a', '#f2f2f2'],
+            pesos: [2.6, 2.6, 0.5],
+            divisoes: 12
+        },
+        /*
+        O CALÇÃO É BRANCO COM UMA BARRA VERDE (pedido). É uma peça e não uma
+        cor — ver o `pecaCalcao` no construirCorpo; a barra fica na bainha, com
+        o mesmo verde das listras da camisola.
+        */
+        calcao: {
+            padrao: 'solido',
+            cores: ['#f2f2f2'],
+            barra: { cor: '#0f6b3a', altura: 0.16 }
+        },
         meiao: { padrao: 'solido', cores: ['#f2f2f2'] },
+        // O grená é a dominante do tricolor — ver corPrincipal no Flamengo.
+        corPrincipal: '#7a1b2b',
         numero: '#0b4728',
         contorno: 'rgba(255,255,255,0.85)'
     }
@@ -95,13 +174,18 @@ function uniformeDe(nome) {
 
 /*
 A COR QUE REPRESENTA O UNIFORME quando só cabe uma: o disco da vista táctica,
-a etiqueta, o minimapa. É a primeira cor da camisa — a dominante do desenho,
-que é como um clube se identifica ("o rubro-negro", "o tricolor" lê-se pelo
-vermelho e pelo grená).
+a etiqueta, o minimapa.
+
+SAI DO `corPrincipal` e não da primeira cor da camisa. A ordem das cores serve
+o DESENHO (no Flamengo é ela que dá três faixas pretas e duas vermelhas), e
+essa ordem não tem nada a ver com a cor por que o clube se reconhece de longe —
+com a primeira cor, o disco do Flamengo ficava preto com contorno preto. Sem
+`corPrincipal` escrito, cai na primeira cor, que é o que serve a maioria.
 */
 function corDoUniforme(uniforme, porOmissao) {
-    if (!uniforme || !uniforme.camisa) return porOmissao;
-    const cores = uniforme.camisa.cores;
+    if (!uniforme) return porOmissao;
+    if (uniforme.corPrincipal) return uniforme.corPrincipal;
+    const cores = uniforme.camisa ? uniforme.camisa.cores : null;
     return (cores && cores.length) ? cores[0] : porOmissao;
 }
 
