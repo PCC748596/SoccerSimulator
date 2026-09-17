@@ -114,10 +114,32 @@ const CrowdModel = {
     `festa` roda o ombro para lá da vertical (-2.85 rad, mais de 160°), que é o
     que leva os braços acima da cabeça.
     */
+    /*
+    O SINAL DO COTOVELO ESTAVA INVERTIDO — relato: *"o braco dos torcedores
+    esta pra tras"*.
+
+    A convencao do rig, a mesma do modelo dos jogadores (ver a nota da
+    `LateralPose` em config/animations.js): o cotovelo NEGATIVO dobra o
+    antebraco para a FRENTE do braco. Estava positivo em todas as poses, logo
+    o antebraco ia para tras.
+
+    Medida a mao em z (frente = +z), em relacao ao ombro:
+
+        pose      cotovelo    antes        invertido
+        sentado     +0.85     -0.29 atras    +1.02
+        idle        +1.05     -0.87 atras    +0.69
+        dePe        +0.25     -0.02 atras    +0.43
+        festa       +0.35     +0.72          +0.12
+
+    A `festa` ja estava a frente porque o ombro a -2.85 levanta o braco por
+    cima da cabeca; invertida, as maos ate sobem (y 5.55 -> 5.69, com a cabeca
+    a 4.67). Invertem-se as quatro para a convencao ser UMA, em vez de tres
+    corrigidas e uma pela regra antiga.
+    */
     poses: {
         sentado: {
             anca: -1.45, joelho: 1.45, tronco: 0.12,
-            ombro: -0.35, cotovelo: 0.85, alturaBacia: 1.55
+            ombro: -0.35, cotovelo: -0.85, alturaBacia: 1.55
         },
         /*
         `idle` é o sentado com o tronco mais à frente e os braços um pouco
@@ -126,15 +148,15 @@ const CrowdModel = {
         */
         idle: {
             anca: -1.45, joelho: 1.45, tronco: 0.26,
-            ombro: -0.20, cotovelo: 1.05, alturaBacia: 1.53
+            ombro: -0.20, cotovelo: -1.05, alturaBacia: 1.53
         },
         dePe: {
             anca: 0.0, joelho: 0.0, tronco: 0.04,
-            ombro: -0.15, cotovelo: 0.25, alturaBacia: 2.40
+            ombro: -0.15, cotovelo: -0.25, alturaBacia: 2.40
         },
         festa: {
             anca: 0.0, joelho: 0.0, tronco: -0.06,
-            ombro: -2.85, cotovelo: 0.35, alturaBacia: 2.40
+            ombro: -2.85, cotovelo: -0.35, alturaBacia: 2.40
         }
     },
 

@@ -709,6 +709,112 @@ const PlacasPublicidade = {
 };
 if (typeof window !== 'undefined') window.PlacasPublicidade = PlacasPublicidade;
 
+/*
+=============================================================================
+OS CORREDORES DA BANCADA — centrados no meio-campo
+=============================================================================
+Pedido: *"centraliza a passagem de pessoas nas arquibancadas com a linha
+central do campo e aumenta em 1 metro de largura"*.
+
+COMO ERA, e porque é que não estava centrado: os corredores saíam de um módulo
+sobre o ÍNDICE da cadeira, contado desde a ponta da bancada —
+`if (colIdx % 22 >= 20) continue`. Duas colunas vazias a cada 22, com as
+cadeiras a 0.85 m: um corredor de 1.7 m, numa posição que depende de onde a
+contagem começa e que não tem relação nenhuma com o meio do campo. Nas
+bancadas de fundo o passo era outro (`% 20 >= 18`), portanto os quatro lados
+nem concordavam entre si.
+
+COMO É AGORA: a conta é em METROS A PARTIR DO CENTRO. Os corredores ficam em
+`k * espacamento` para k inteiro, e o k = 0 cai exactamente na linha central
+do campo — em z nas bancadas laterais, em x nas de fundo. Uma cadeira é
+saltada quando está a menos de meia largura do centro de um corredor.
+
+A largura passa de 1.7 para 2.7 m, o metro pedido. Em cadeiras isso são ~3
+colunas em vez de 2, mas o número de colunas deixa de ser o parâmetro: manda a
+largura em metros, e mudar o espaçamento das cadeiras não a estraga.
+=============================================================================
+*/
+const CorredoresBancada = {
+    // Largura do corredor, em metros. Era 2 x 0.85 = 1.7.
+    largura: 2.7,
+    // Distância entre centros de corredores. Era 22 x 0.85 = 18.7 nas
+    // laterais e 20 x 0.85 = 17.0 nos fundos; unifica-se nos 18.7.
+    espacamento: 18.7
+};
+if (typeof window !== 'undefined') window.CorredoresBancada = CorredoresBancada;
+
+/*
+=============================================================================
+TÚNEIS DE ACESSO — as bocas por onde o público entra na bancada
+=============================================================================
+Pedido, com fotografia: uns túneis nos corredores, pelo décimo degrau.
+
+Ficam nos CORREDORES e não a meio das cadeiras, que é onde estão num estádio
+a sério: o corredor é o acesso, e o túnel despeja nele. Por isso a largura sai
+do `CorredoresBancada.largura` — se o corredor mudar de largura, a boca
+acompanha e não fica um degrau à vista de cada lado.
+
+`degrau` é a fila onde a boca abre. Com 30 filas de 0.5 m de altura e 1.2 m de
+profundidade cada, o décimo fica a 5.25 m de altura e 12 m para dentro da
+primeira fila — a meia encosta, que é onde as fotografias as mostram.
+
+A boca é uma caixa ESCURA metida para dentro da bancada. Não é um buraco a
+sério na geometria: abrir a malha das filas dava um vão por onde se veria o
+céu por trás. Uma caixa escura recuada lê-se como a entrada de um túnel e não
+precisa de tocar nas filas, que continuam inteiras.
+=============================================================================
+*/
+const TunelBancada = {
+    activo: true,
+    // Era 10; desceu 3 filas a pedido.
+    degrau: 7,
+    altura: 2.2,          // metros, a boca
+    profundidade: 3.0,    // quanto entra para dentro da bancada
+    cor: 0x14161a,        // quase preto: e uma sombra, nao uma parede
+
+    /*
+    AS TRES FOLGAS QUE IMPEDEM O PISCAR.
+
+    Relato: *"a textura ta piscando, tem que afastar um pouco uma da outra"*. E
+    estava, e a conta explica-o: a face da frente da boca ficava 5 cm a frente
+    do degrau e a moldura levava so 7 cm, com 12 cm de espessura — ou seja a
+    moldura ia de 57.36 a 57.48 e a face do degrau estava a 57.40, DENTRO dela.
+    Tres superficies quase no mesmo plano, e o z-buffer nao sabe qual esta a
+    frente.
+
+    Agora cada uma tem a sua distancia, e as tres nao se tocam:
+
+        face do degrau      (a bancada)
+        + folgaFrente       a face escura da boca
+        + folgaMoldura      a moldura, mais a frente de todas
+
+    30 e 12 cm sao folgas grandes de proposito. O z-fighting nao depende so da
+    distancia: depende da razao entre ela e a profundidade da camara, e esta
+    camara chega a ver a 105 m (ver CameraZoom). Folgas de milimetros voltavam
+    a piscar de longe.
+    */
+    /*
+    AS FOLGAS SAO O MINIMO QUE NAO PISCA, e nao mais.
+
+    Estiveram em 0.30 e 0.12, e a moldura ficava 0.48 m a frente da face da
+    bancada (0.30 da boca + 0.12 + meia espessura da propria moldura): lia-se
+    solta, a flutuar a frente do tunel em vez de o emoldurar. Relato: *"a
+    margem da entrada do tunel esta um pouco afastada"*.
+
+    O QUE FAZIA PISCAR NAO ERA A DISTANCIA SER PEQUENA — era a moldura
+    ATRAVESSAR a face do degrau, tres planos no mesmo sitio. Sem sobreposicao,
+    12 e 5 cm bastam, e a moldura encosta ao tunel como deve.
+    */
+    folgaFrente: 0.12,
+    folgaMoldura: 0.05,
+
+    // Uma moldura clara em volta, como o betao da fotografia.
+    moldura: true,
+    corMoldura: 0x9aa0a6,
+    espessuraMoldura: 0.18
+};
+if (typeof window !== 'undefined') window.TunelBancada = TunelBancada;
+
 const CornerFlag = {
     raioArco: 1.0,        // regulamento
     alturaPoste: 1.5,     // regulamento: minimo 1.5 m

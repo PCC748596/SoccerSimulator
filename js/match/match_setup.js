@@ -759,6 +759,34 @@ Object.assign(Match, {
             }
         }
 
+        /*
+        NUM CORREDOR? A conta e em metros a partir do CENTRO do campo, para o
+        corredor k=0 cair na linha central. Ver CorredoresBancada
+        (config/physics.js) e a nota de porque o modulo do indice nao servia.
+        */
+        const CB_ = (typeof CorredoresBancada !== 'undefined')
+            ? CorredoresBancada : { largura: 2.7, espacamento: 18.7 };
+        /*
+        E A GRELHA DAS CADEIRAS E ANCORADA NO CENTRO, nao na ponta.
+
+        Era `for (z = -cornerZ; z <= cornerZ; z += 0.85)`: com cornerZ = 58.5,
+        `-58.5 + k*0.85` nunca da exactamente 0, portanto as cadeiras montavam
+        a cavalo do meio-campo e o corredor central saia com o centro em
+        0.15 m. Ancorada no centro, ha uma cadeira em 0 e o corredor fica
+        simetrico sobre a linha.
+        */
+        const grelha = (limite, fn) => {
+            const n = Math.floor(limite / 0.85);
+            let idx = 0;
+            for (let i = -n; i <= n; i++, idx++) fn(i * 0.85, idx);
+        };
+
+        const noCorredor = (coord) => {
+            const passo = CB_.espacamento;
+            const centro = Math.round(coord / passo) * passo;
+            return Math.abs(coord - centro) < (CB_.largura / 2);
+        };
+
         // Bancada Oeste (Esquerda)
         for (let r = 0; r < rows; r++) {
             const standX = -BANCADA_X - (r * 1.2);
@@ -766,13 +794,11 @@ Object.assign(Match, {
             addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
-            let colIdx = 0;
             // Até onde a esquina começa — ver `cornerZ`.
-            for (let z = -cornerZ; z <= cornerZ; z += 0.85, colIdx++) {
-                // 2 colunas sem cadeiras a cada 20 cadeiras para criar os corredores/escadas do estádio
-                if (colIdx % 22 >= 20) continue;
+            grelha(cornerZ, (z, colIdx) => {
+                if (noCorredor(z)) return;   // corredor centrado no meio-campo
                 addSeatInstance(standX, seatYOffset, z, Math.PI / 2, r, colIdx);
-            }
+            });
         }
 
         // Bancada Este (Direita)
@@ -782,12 +808,11 @@ Object.assign(Match, {
             addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
-            let colIdx = 0;
-            for (let z = -cornerZ; z <= cornerZ; z += 0.85, colIdx++) {
-                // 2 colunas sem cadeiras a cada 20 cadeiras para criar os corredores/escadas do estádio
-                if (colIdx % 22 >= 20) continue;
+            // Até onde a esquina começa — ver `cornerZ`.
+            grelha(cornerZ, (z, colIdx) => {
+                if (noCorredor(z)) return;   // corredor centrado no meio-campo
                 addSeatInstance(standX, seatYOffset, z, -Math.PI / 2, r, colIdx);
-            }
+            });
         }
 
         // Bancada Norte (Fundo)
@@ -797,22 +822,19 @@ Object.assign(Match, {
             addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
-            let colIdx = 0;
-            // Até onde a esquina começa — ver `cornerX`.
-            for (let x = -cornerX; x <= cornerX; x += 0.85, colIdx++) {
-                // 2 colunas sem cadeiras periodicamente
-                if (colIdx % 20 >= 18) continue;
-                {
-                    /*
-                    AS DUAS PRIMEIRAS FILAS ATRÁS DA BALIZA DEIXARAM DE TER
-                    BURACO. Era `Math.abs(x) > 4.5 || r > 1`: um vão de 9.4 m no
-                    meio, que fazia sentido com a bancada a 5.5 m da linha (as
-                    cadeiras tapavam a baliza) e deixou de fazer com ela a 12.
-                    Foi o maior dos vãos medidos.
-                    */
-                    addSeatInstance(x, seatYOffset, standZ, Math.PI, r, colIdx);
-                }
-            }
+            /*
+            Até onde a esquina começa — ver `cornerX`.
+
+            AS DUAS PRIMEIRAS FILAS ATRÁS DA BALIZA DEIXARAM DE TER BURACO. Era
+            `Math.abs(x) > 4.5 || r > 1`: um vão de 9.4 m no meio, que fazia
+            sentido com a bancada a 5.5 m da linha (as cadeiras tapavam a
+            baliza) e deixou de fazer com ela a 12. Foi o maior dos vãos
+            medidos.
+            */
+            grelha(cornerX, (x, colIdx) => {
+                if (noCorredor(x)) return;   // corredor centrado no meio-campo
+                addSeatInstance(x, seatYOffset, standZ, Math.PI, r, colIdx);
+            });
         }
 
         // Bancada Sul (Fundo oposto)
@@ -822,13 +844,133 @@ Object.assign(Match, {
             addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
 
             const seatYOffset = standY + 0.25 + 0.15;
-            let colIdx = 0;
             // Até onde a esquina começa — ver `cornerX`. E sem o buraco das duas
             // primeiras filas atrás da baliza (ver a bancada Norte).
-            for (let x = -cornerX; x <= cornerX; x += 0.85, colIdx++) {
-                // 2 colunas sem cadeiras periodicamente
-                if (colIdx % 20 >= 18) continue;
+            grelha(cornerX, (x, colIdx) => {
+                if (noCorredor(x)) return;   // corredor centrado no meio-campo
                 addSeatInstance(x, seatYOffset, standZ, 0, r, colIdx);
+            });
+        }
+
+        /*
+        OS TÚNEIS DE ACESSO, um por corredor e nas quatro bancadas.
+
+        A posição sai da MESMA conta dos corredores (`noCorredor`/
+        `CorredoresBancada.espacamento`), portanto uma boca cai exactamente no
+        corredor central, sobre a linha do meio-campo, e as outras nos
+        corredores seguintes. Se o espaçamento mudar, as bocas acompanham.
+
+        A profundidade e a altura da fila saem da geometria das bancadas: cada
+        fila tem 1.2 m de profundidade e 0.5 m de altura (ver os `addStepBox`
+        acima), logo o degrau N está a `N * 1.2` para dentro e a
+        `0.25 + N * 0.5` de altura. Ver TunelBancada (config/physics.js).
+        */
+        if (typeof TunelBancada !== 'undefined' && TunelBancada.activo) {
+            const TB = TunelBancada;
+            const larguraTunel = (typeof CorredoresBancada !== 'undefined')
+                ? CorredoresBancada.largura : 2.55;
+            const passoTunel = (typeof CorredoresBancada !== 'undefined')
+                ? CorredoresBancada.espacamento : 18.7;
+
+            const matTunel = new THREE.MeshStandardMaterial({
+                color: TB.cor, roughness: 0.95, metalness: 0.0
+            });
+            const matMoldura = new THREE.MeshStandardMaterial({
+                color: TB.corMoldura, roughness: 0.85
+            });
+
+            /*
+            ONDE A FILA `degrau` ESTÁ, e a face que se vê dela.
+
+            Cada `addStepBox` é centrado em `BANCADA + N*1.2` com 1.2 m de
+            profundidade, portanto a face da fila N que dá para o CAMPO está
+            meio degrau mais perto: `N*1.2 - 0.6`.
+
+            Isto estava errado à primeira: a boca era centrada em `N*1.2` e
+            ficava enterrada dentro do degrau — medido, a caixa a 59.5 m com a
+            face visível do degrau a 57.4 m, ou seja dois metros de betão à
+            frente dela. Não se via nada.
+
+            Agora a face da frente da boca nasce 5 cm À FRENTE dessa face e a
+            caixa entra para dentro: só a face da frente fica exposta, e é ela
+            que se lê como a entrada do túnel. O resto do volume fica dentro da
+            massa dos degraus, escondido.
+            */
+            const dentro = TB.degrau * 1.2 - 0.6 - (TB.folgaFrente || 0.30);
+            const yTunel = 0.25 + TB.degrau * 0.5 + TB.altura / 2;
+
+            /*
+            `eixo` diz em que direcção a bancada cresce ('x' nas laterais, 'z'
+            nos fundos) e `sinal` para que lado. A boca é sempre uma caixa com
+            a LARGURA no eixo do corredor e a PROFUNDIDADE no eixo da bancada.
+            */
+            const addTunel = (eixo, sinal, base, coordCorredor) => {
+                const prof = TB.profundidade;
+                const fora = base + sinal * dentro;
+                const centroProf = fora + sinal * (prof / 2);
+
+                const dims = (eixo === 'x')
+                    ? [prof, TB.altura, larguraTunel]
+                    : [larguraTunel, TB.altura, prof];
+                const boca = new THREE.Mesh(new THREE.BoxGeometry(...dims), matTunel);
+                if (eixo === 'x') boca.position.set(centroProf, yTunel, coordCorredor);
+                else boca.position.set(coordCorredor, yTunel, centroProf);
+                boca.receiveShadow = true;
+                campoGrupo.add(boca);
+
+                if (!TB.moldura) return;
+                /*
+                A MOLDURA E UM ANEL, e nao uma placa.
+
+                Estava uma CAIXA CHEIA de `largura + 2e` por `altura + 2e`,
+                posta a frente da boca: tapava a abertura toda e o tunel lia-se
+                CINZA em vez de escuro. Relato: *"agora ficou cinza"*.
+
+                Sao quatro barras em volta do vao — duas horizontais (por cima e
+                por baixo) e duas verticais (aos lados) — e o meio fica aberto,
+                que e por onde se ve o escuro da boca.
+
+                Fica a FRENTE da boca: o sinal e negativo em relacao ao
+                crescimento da bancada, porque a bancada cresce para fora do
+                campo e a moldura sai para dentro.
+                */
+                const e = TB.espessuraMoldura;
+                const espM = 0.12;
+                const recuo = fora - sinal * ((TB.folgaMoldura || 0.12) + espM / 2);
+                const L = larguraTunel, H = TB.altura;
+
+                // [comprimento ao longo do corredor, altura, desvio lateral, desvio vertical]
+                const barras = [
+                    [L + e * 2, e, 0, (H + e) / 2],    // por cima
+                    [L + e * 2, e, 0, -(H + e) / 2],   // por baixo
+                    [e, H, (L + e) / 2, 0],            // lado
+                    [e, H, -(L + e) / 2, 0]            // outro lado
+                ];
+                for (const [cL, cH, dLat, dVer] of barras) {
+                    const dimsB = (eixo === 'x') ? [espM, cH, cL] : [cL, cH, espM];
+                    const barra = new THREE.Mesh(new THREE.BoxGeometry(...dimsB), matMoldura);
+                    if (eixo === 'x') barra.position.set(recuo, yTunel + dVer, coordCorredor + dLat);
+                    else barra.position.set(coordCorredor + dLat, yTunel + dVer, recuo);
+                    barra.castShadow = true;
+                    campoGrupo.add(barra);
+                }
+            };
+
+            // Os centros dos corredores, a mesma conta do `noCorredor`.
+            const centros = (limite) => {
+                const out = [];
+                const k = Math.floor(limite / passoTunel);
+                for (let i = -k; i <= k; i++) out.push(i * passoTunel);
+                return out;
+            };
+
+            for (const z of centros(cornerZ)) {
+                addTunel('x', -1, -BANCADA_X, z);   // Oeste
+                addTunel('x', 1, BANCADA_X, z);     // Este
+            }
+            for (const x of centros(cornerX)) {
+                addTunel('z', 1, BANCADA_Z, x);     // Norte
+                addTunel('z', -1, -BANCADA_Z, x);   // Sul
             }
         }
 
