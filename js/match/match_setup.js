@@ -299,10 +299,23 @@ Object.assign(Match, {
         */
         if (typeof PlacasPublicidade !== 'undefined' && PlacasPublicidade.activo) {
             const PP = PlacasPublicidade;
-            const compLateral = CAMPO_COMP + 2 * PP.recuo;
-            const compFundo = CAMPO_LARG + 2 * PP.recuo;
             const xLateral = MEIA_LARGURA_CAMPO + PP.recuo;
             const zFundo = LINHA_FUNDO + PP.recuo;
+            /*
+            OS CANTOS ARREDONDAM, como os da bancada. As rectas param a
+            `raioCanto` do vertice e um quarto de circulo fecha o anel — a
+            mesma conta do `cornerX`/`cornerZ` da bancada, mais abaixo.
+
+            As pontas de cada arco caem EM CIMA das duas rectas por
+            construcao, portanto o anel fecha em qualquer `recuo` ou
+            `raioCanto` e nao ha dois numeros a manter a par.
+            */
+            const rc = Math.max(0, Math.min(PP.raioCanto || 0,
+                Math.min(xLateral, zFundo) - 1));
+            const cantoX = xLateral - rc;
+            const cantoZ = zFundo - rc;
+            const compLateral = 2 * cantoZ;
+            const compFundo = 2 * cantoX;
 
             // Uma faixa de blocos de cor, repetida ao longo do painel.
             const cvsPP = document.createElement('canvas');
@@ -348,6 +361,49 @@ Object.assign(Match, {
             // Fundos: correm em X, sem rotacao.
             addPlaca(compFundo, matFundoPP, 0, zFundo, 0);
             addPlaca(compFundo, matFundoPP, 0, -zFundo, 0);
+
+            /*
+            E OS QUATRO ARCOS. Um `CylinderGeometry` aberto e sem tampas e uma
+            parede curva — melhor do que caixinhas em leque, que deixavam
+            arestas visiveis a cada segmento.
+
+            No three.js o angulo do cilindro anda `x = R*sin(t)`,
+            `z = R*cos(t)`: em t=0 aponta a +Z e em t=PI/2 a +X. Logo o canto
+            (+cantoX, +cantoZ) e o sector de 0 a PI/2, e os outros seguem de
+            90 em 90 graus no sentido dos ponteiros.
+
+            A textura repete-se pelo COMPRIMENTO DO ARCO, nao por uma volta
+            inteira: sem isso os blocos de cor esticavam na curva e ficavam com
+            outra largura que nas rectas.
+            */
+            const arco = (cx, cz, thetaStart) => {
+                const geo = new THREE.CylinderGeometry(
+                    rc, rc, PP.altura, 24, 1, true, thetaStart, Math.PI / 2);
+                const tex = new THREE.CanvasTexture(cvsPP);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.ClampToEdgeWrapping;
+                /*
+                O sector cobre um quarto do U do cilindro, portanto para o arco
+                (de comprimento R*PI/2) mostrar N repeticoes da faixa e preciso
+                pedir 4*N ao `repeat`.
+                */
+                const nFaixas = Math.max(1, Math.round(
+                    (rc * Math.PI / 2) / (PP.larguraPainel * nCores)));
+                tex.repeat.set(4 * nFaixas, 1);
+                const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+                    map: tex, roughness: 0.65, side: THREE.DoubleSide
+                }));
+                m.position.set(cx, PP.altura / 2, cz);
+                m.castShadow = true;
+                m.receiveShadow = true;
+                campoGrupo.add(m);
+            };
+            if (rc > 0.01) {
+                arco(cantoX, cantoZ, 0);
+                arco(cantoX, -cantoZ, Math.PI / 2);
+                arco(-cantoX, -cantoZ, Math.PI);
+                arco(-cantoX, cantoZ, 3 * Math.PI / 2);
+            }
         }
 
         const cvsRede = document.createElement('canvas'); cvsRede.width = 32; cvsRede.height = 32; const ctxRede = cvsRede.getContext('2d');

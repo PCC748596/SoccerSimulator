@@ -892,8 +892,26 @@ class FootballPlayer {
         Com destinatário a bola sai a descer (faixa `elevAlvo*`); sem ele é o
         lançamento para o espaço, que sobe. Ver ThrowInModel.
         */
-        const eMin = temAlvo ? T.elevAlvoMin : T.elevMin;
-        const eMax = temAlvo ? T.elevAlvoMax : T.elevMax;
+        /*
+        A FAIXA DE ELEVAÇÃO DEPENDE DA ALTURA DO ALVO, e não só de haver alvo.
+
+        Aos PÉS é rasante ou a descer (a bola cai 1.7 m desde as mãos e isso
+        basta); ao PEITO é com ARCO, porque a queda é só 0.62 m e a rasar o voo
+        encurta tanto que cobrir 10 m exigia 24 m/s. Ver ThrowInModel, com as
+        velocidades medidas por distância.
+
+        O `alvoNoPeito` é calculado mais abaixo por causa do `dist`; sobe para
+        aqui porque agora é ele que escolhe a faixa.
+        */
+        const alvoNoPeito = (temAlvo ? dist : alcance) > T.distanciaAosPes;
+        let eMin, eMax;
+        if (!temAlvo) {
+            eMin = T.elevMin; eMax = T.elevMax;
+        } else if (alvoNoPeito && typeof T.elevPeitoMin === 'number') {
+            eMin = T.elevPeitoMin; eMax = T.elevPeitoMax;
+        } else {
+            eMin = T.elevAlvoMin; eMax = T.elevAlvoMax;
+        }
         const elev = eMin + Math.random() * (eMax - eMin);
 
         /*
@@ -908,7 +926,6 @@ class FootballPlayer {
         A balística com arrasto do ar (velocidadeParaAlturaNoAlvo) garante que a bola
         chega directamente ao alvo (pé ou peito) sem ressaltar nem bater no chão antes.
         */
-        const alvoNoPeito = (temAlvo ? dist : alcance) > T.distanciaAosPes;
         const alturaAlvo = alvoNoPeito ? BallControl.peitoAltura : BallPhysics.raio;
         const alturaSaida = Match.ball.position.y;
 
@@ -923,6 +940,19 @@ class FootballPlayer {
                 : null;
             v = bal ? bal.v : Math.sqrt((alcance * gGrav) / Math.sin(2 * elev));
             angulo = bal ? bal.elev : elev;
+        }
+
+        /*
+        TECTO NA VELOCIDADE DE SAÍDA — a última linha de defesa.
+
+        Os 54 m/s medidos vinham do ramo de recurso acima: com a elevação
+        perto de zero, `sqrt(alcance·g / sin(2·elev))` explode. As faixas de
+        elevação já entregam 6 a 13 m/s em uso normal; isto existe para uma
+        conta que corra mal não virar um canhão. Ver
+        ThrowInModel.velocidadeMaxSaida.
+        */
+        if (typeof T.velocidadeMaxSaida === 'number' && v > T.velocidadeMaxSaida) {
+            v = T.velocidadeMaxSaida;
         }
 
         const horiz = v * Math.cos(angulo);
@@ -3235,6 +3265,33 @@ class FootballPlayer {
         if (typeof Match !== 'undefined') {
             Match.aerialHeaderCount = (Match.aerialHeaderCount || 0) + 1;
             Match.aerialHeaderTimer = HeaderModel.cooldownDisputa;
+        }
+
+        /*
+        O SOM DO TOQUE NA BOLA, que a cabeçada não tinha.
+
+        O chute, o passe, o remate e o toque de condução já o tocavam (ver as
+        chamadas a `EfeitosSonoros.chute` na fsm.js e neste ficheiro); a
+        cabeçada era o único contacto com a bola que saía muda.
+
+        AQUI E NÃO MAIS ABAIXO: este é o único ponto por onde TODAS as
+        cabeçadas passam — é a mesma razão pela qual o contador acima foi
+        movido para fora do `else` (ver a nota dele). A velocidade de SAÍDA só
+        é escrita mais abaixo, e em três ramos diferentes; pôr o som lá dava
+        três chamadas para manter a par, e um ramo novo saía calado.
+
+        A FORÇA VEM DA VELOCIDADE DE CHEGADA, que aqui já se conhece: um
+        cabeceio num cruzamento forte estala, num balão lento é um toque. O
+        `chute()` limita a 0.25..1 por dentro; o piso de 0.45 é para uma
+        cabeçada nunca soar tão fraca como um toque de condução (0.5), porque é
+        a testa a bater e não o pé a acompanhar.
+        */
+        if (typeof EfeitosSonoros !== 'undefined' && EfeitosSonoros.chute &&
+            typeof Match !== 'undefined' && Match.ball) {
+            const vIn = Match.ballVel
+                ? Math.hypot(Match.ballVel.x, Match.ballVel.y, Match.ballVel.z) : 0;
+            EfeitosSonoros.chute(Match.ball.position,
+                Math.max(0.45, Math.min(1, 0.45 + vIn / 30)));
         }
         // De frente para a bola, mesma correcção do controlarNoPeito — sem
         // isto o corpo ficava com a orientação da última corrida, muitas

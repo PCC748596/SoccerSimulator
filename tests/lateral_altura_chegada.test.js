@@ -142,8 +142,37 @@ test('com receptor, o piso do alcanceMin já não atira por cima dele', () => {
         'o alcance apontado tem de distinguir "há receptor" de "não há"');
     assert.ok(/piso = temAlvo \?/.test(corpo),
         'o piso do alcance voltou a ser o mesmo com e sem destinatário');
-    assert.ok(/temAlvo \? T\.elevAlvoMin/.test(corpo),
-        'com destinatário a bola tem de sair na faixa que DESCE (elevAlvo*)');
+    /*
+    A FAIXA DEIXOU DE SER UMA SÓ, e a asserção acompanha.
+
+    Era `temAlvo ? T.elevAlvoMin`: com destinatário, sempre a faixa que desce.
+    Medido em 60 min, a velocidade de saída por distância ao colega mostrou
+    onde isso parte:
+
+        0-5 m     6.0 m/s
+        5-8 m     8.2 m/s
+        8-12 m   24.2 m/s   (máximo 54.1)
+
+    Acima do `distanciaAosPes` (9 m) a bola é atirada ao PEITO, e a queda desde
+    as mãos passa de 1.7 m para 0.62 m. A rasar, isso dá 0.4 s de voo, e cobrir
+    10 m exige 24 m/s. Relato: *"tem cobranças de lateral com jogadores
+    próximos muito fortes"*.
+
+    NÃO HÁ SAÍDA RASANTE PARA ISTO, e foi verificado: apontar sempre aos pés
+    mantendo a faixa que desce ainda pede ~20 m/s a 12 m, porque 1.7 m de queda
+    só dão 0.59 s. Um lançamento longo TEM de ter arco.
+
+    A regra passa a depender da ALTURA DO ALVO e não de haver alvo: aos pés
+    desce (`elevAlvo*`), ao peito arqueia (`elevPeito*`). A intenção do teste —
+    a bola não chegar por cima da cabeça — continua guardada pelo caso do
+    peito acima, e melhorou na medição: 1 de 13 acima de 1.7 m contra 2 de 10.
+    */
+    assert.ok(/alvoNoPeito && typeof T\.elevPeitoMin/.test(corpo),
+        'o lateral ao PEITO tem de sair com arco (elevPeito*)');
+    assert.ok(/eMin = T\.elevAlvoMin/.test(corpo),
+        'o lateral aos PÉS tem de continuar a sair na faixa que DESCE (elevAlvo*)');
+    assert.ok(/velocidadeMaxSaida/.test(corpo),
+        'sem tecto na velocidade de saída, o ramo de recurso volta a dar 54 m/s');
     assert.ok(!/piso = T\.alcanceMin;/.test(corpo),
         'o piso de alcanceMin voltou a ser incondicional');
 });

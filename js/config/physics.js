@@ -500,6 +500,25 @@ const PlacasPublicidade = {
     altura: 1.0,         // metros
     espessura: 0.08,
     corEstrutura: 0x2b2b30,
+    /*
+    OS CANTOS SÃO ARREDONDADOS, como os da bancada — pedido.
+
+    A bancada não fecha em esquina: as rectas param a `RAIO_PRIMEIRA_FILA` do
+    vértice e um quarto de círculo desse raio fecha o anel (ver
+    `buildCorner`/`cornerX`/`cornerZ` no match_setup.js). As placas passam a
+    ter a mesma forma, com a mesma conta.
+
+    `raioCanto` é 6.5, o mesmo raio da primeira fila da bancada, para as duas
+    curvas serem concêntricas e o recinto ler como um só desenho em vez de um
+    rectângulo dentro de um oval.
+
+    A conta que fecha o anel, e que é a mesma da bancada: as rectas vão até
+    `canto = (limite - raioCanto)` em cada eixo, e o arco é centrado em
+    (+-cantoX, +-cantoZ). As pontas dele caem exactamente em cima das duas
+    rectas, em qualquer `recuo` ou `raioCanto` — não há dois números a manter
+    a par, que é o erro que a nota da bancada descreve.
+    */
+    raioCanto: 6.5,
     // Um painel por cada `larguraPainel` metros, em blocos de cor alternados.
     larguraPainel: 4.0,
     cores: ['#1f6fb2', '#e8e8ec', '#c8102e', '#f2c400', '#0f9d58']

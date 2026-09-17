@@ -1140,6 +1140,51 @@ const ThrowInModel = {
     elevAlvoMax: 4 * Math.PI / 180,
 
     /*
+    MAS A FAIXA RASANTE SÓ VALE PARA O LATERAL AOS PÉS.
+
+    Relato: *"tem cobranças de lateral com jogadores próximos muito fortes"*.
+    Medido em 60 min, velocidade de saída por distância ao colega:
+
+        0-5 m     6.0 m/s
+        5-8 m     8.2 m/s
+        8-12 m   24.2 m/s   (máximo 54.1)
+
+    A fronteira é o `distanciaAosPes` (9 m): abaixo dele a bola vai aos PÉS
+    (0.11 m) e cai 1.7 m desde as mãos, o que dá voo e velocidade baixa. Acima
+    vai ao PEITO (1.20 m) e a queda passa a 0.62 m — a rasar, o voo encurta
+    para ~0.4 s e cobrir 10 m exige 24 m/s. A física está certa; o que não
+    está é atirar raso a um alvo ALTO.
+
+    Um lateral ao peito é atirado com ARCO. Com o
+    `velocidadeParaAlturaNoAlvo` a resolver a velocidade para a bola passar à
+    altura pedida na distância pedida, o arco não traz de volta o defeito que
+    a nota acima descreve (chegar por cima da cabeça): a bola chega na mesma a
+    1.20 m, só que a descer de mais alto e muito mais devagar.
+
+        elevação    velocidade para 10 m ao peito
+          0 graus         26.5 m/s
+          4 graus         18.8 m/s
+         15 graus         12.5 m/s
+         20 graus         11.3 m/s
+    */
+    elevPeitoMin: 14 * Math.PI / 180,
+    elevPeitoMax: 22 * Math.PI / 180,
+
+    /*
+    E UM TECTO NA VELOCIDADE DE SAÍDA, que não havia.
+
+    Os 54.1 m/s medidos não saem de nenhuma faixa de elevação: saem do ramo de
+    recurso (`velocidadeDeLancamento`, e depois
+    `sqrt(alcance·g / sin(2·elev))`) quando o solucionador falha. Com a
+    elevação perto de zero esse `sin(2·elev)` vai a zero e a raiz explode.
+
+    18 m/s é o braço humano no limite — um lateral longo de recorde anda pelos
+    17. O tecto é a última linha de defesa contra uma conta que corre mal, e
+    não o mecanismo normal: em uso, as faixas acima já entregam 6 a 13 m/s.
+    */
+    velocidadeMaxSaida: 18.0,
+
+    /*
     ATÉ ONDE CHEGA UM LATERAL, POR STRENGTH — os dois extremos, escritos.
 
     Era `alcanceMax * (1 +/- forcaBraco)`, um multiplicador de +/-25% sobre 18
