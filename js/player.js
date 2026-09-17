@@ -5439,11 +5439,58 @@ class FootballPlayer {
                     (mãos lidas do rig contra o trajecto do frame) em vez de
                     ganhar uma cópia dele para divergir.
                     */
+                    /*
+                    O ENCAIXE AJOELHADO — bola rasteira que vem CONTRA o corpo.
+
+                    Ver GoalkeeperPose.encaixe. Tres condicoes: a bola cruza a
+                    linha abaixo de 1/3 da baliza, vem na direccao dele (angulo
+                    entre a trajectoria e a linha bola->guarda-redes ate 30
+                    graus) e passa-lhe a menos de `lateralMax` do corpo.
+
+                    O ANGULO E A PARTE QUE DISTINGUE este gesto do resto. Uma
+                    bola rasteira que vem AO CORPO agarra-se pondo o corpo
+                    atras dela; a mesma bola a passar de raspao ao lado exige
+                    esticar-se. So a altura nao separava os dois casos, e e por
+                    isso que o gatilho nao e so `interY`.
+
+                    Fica ANTES da barreira de proposito: as duas competem pela
+                    bola baixa e perto, e o pedido e explicito em querer os dois
+                    joelhos dobrados a encaixar, nao a perna esticada a tapar.
+                    */
+                    const EN = GoalkeeperPose.encaixe;
+                    let encaixeOk = false;
+                    if (EN && interY <= EN.alturaMax && Math.abs(lateral) <= EN.lateralMax) {
+                        const bv = Match.ballVel;
+                        const velH = Math.hypot(bv.x, bv.z);
+                        if (velH > 0.5) {
+                            // Direccao da bola, e direccao da bola ATE ele.
+                            const bdx = bv.x / velH, bdz = bv.z / velH;
+                            const px = gkCorpo.position.x - Match.ball.position.x;
+                            const pz = gkCorpo.position.z - Match.ball.position.z;
+                            const dp = Math.hypot(px, pz);
+                            if (dp > 0.1) {
+                                const cos = (bdx * (px / dp)) + (bdz * (pz / dp));
+                                const ang = Math.acos(THREE.MathUtils.clamp(cos, -1, 1));
+                                encaixeOk = (ang <= EN.anguloMaxGraus * Math.PI / 180);
+                            }
+                        }
+                    }
+                    this.gkEncaixe = encaixeOk;
+
                     const RB = GoalkeeperPose.barreira;
-                    this.gkBarreira = !!(RB &&
+                    this.gkBarreira = !this.gkEncaixe && !!(RB &&
                         (this.gkDistRemate || 99) <= RB.distMax &&
                         interY <= RB.alturaMax);
-                    if (this.gkBarreira) {
+
+                    if (this.gkEncaixe) {
+                        // O lado da bola, como na barreira: no referencial do
+                        // MODELO, que esta rodado por lookAt conforme a equipa.
+                        _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
+                        _v2.set(interX - gkCorpo.position.x, 0,
+                            Match.ball.position.z - gkCorpo.position.z);
+                        this.gkLadoBarreira = Math.sign(_v1.x * _v2.x + _v1.z * _v2.z) || 1;
+                        this.gkEstado = 'maos';
+                    } else if (this.gkBarreira) {
                         // O lado da bola, no referencial do MODELO: `lateral` é
                         // em X do mundo, e o modelo está rodado por lookAt.
                         _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
@@ -6266,7 +6313,61 @@ class FootballPlayer {
                     ? Math.sign(passoM) * tectoM : passoM;
             }
 
-            if (this.gkBarreira) {
+            if (this.gkEncaixe) {
+                /*
+                O ENCAIXE AJOELHADO — ver GoalkeeperPose.encaixe e a descricao
+                que o pedido trouxe.
+
+                Os DOIS joelhos dobram e separam-se, o quadril desce, o tronco
+                inclina para a frente e a cabeca olha a bola. Uma perna abre
+                lateralmente, a outra recolhe o joelho para o centro do corpo.
+                Os cotovelos dobram e os dois bracos fecham para dentro, para
+                as maos se encontrarem na bola junto ao chao.
+
+                O que o distingue da barreira, logo abaixo: la a perna ESTICA
+                para tapar campo e os cotovelos ficam direitos, porque o gesto
+                e bloquear. Aqui e AGARRAR, e o corpo poe-se atras da bola.
+
+                `gkLadoBarreira` e o lado da bola no referencial do MODELO (ver
+                a nota dos bracos mais acima, e o calculo na decisao): e ele que
+                decide qual das pernas abre, para o gesto sair certo nas duas
+                equipas.
+                */
+                const EP = GoalkeeperPose.encaixe;
+                const ve = EP.suavizacao;
+                const ladoE = this.gkLadoBarreira || 1;
+
+                gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + EP.altura, ve);
+                gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, EP.pelvisX, ve);
+                gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, 0, ve);
+                gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, EP.chest, ve);
+                if (gkRig.neck) {
+                    gkRig.neck.rotation.x = lerpTo(gkRig.neck.rotation.x, EP.cabeca, ve);
+                }
+
+                // A perna do lado da bola ABRE; a outra recolhe o joelho.
+                const abre = (ladoE > 0) ? 'r' : 'l';
+                const recolhe = (ladoE > 0) ? 'l' : 'r';
+                const sinal = (abre === 'r') ? -1 : 1;   // rLeg abre com z negativo
+                gkRig[abre + 'Leg'].rotation.x = lerpTo(gkRig[abre + 'Leg'].rotation.x, EP.coxaAberta, ve);
+                gkRig[abre + 'Leg'].rotation.z = lerpTo(gkRig[abre + 'Leg'].rotation.z, sinal * EP.aberturaAberta, ve);
+                gkRig[abre + 'Knee'].rotation.x = lerpTo(gkRig[abre + 'Knee'].rotation.x, EP.joelhoAberto, ve);
+                gkRig[recolhe + 'Leg'].rotation.x = lerpTo(gkRig[recolhe + 'Leg'].rotation.x, EP.coxaRecolhida, ve);
+                gkRig[recolhe + 'Leg'].rotation.z = lerpTo(gkRig[recolhe + 'Leg'].rotation.z, -sinal * EP.aberturaRecolhida, ve);
+                gkRig[recolhe + 'Knee'].rotation.x = lerpTo(gkRig[recolhe + 'Knee'].rotation.x, EP.joelhoRecolhido, ve);
+
+                // Os dois bracos para a frente e para baixo, fechados na bola.
+                gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, EP.bracoX, ve);
+                gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, EP.bracoX, ve);
+                gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, EP.bracoZ, ve);
+                gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -EP.bracoZ, ve);
+                gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, EP.cotovelo, ve);
+                gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, EP.cotovelo, ve);
+                // E o pulso vira a palma para cima, a receber — usa a ligacao
+                // nova do punho (ver MaoDetalhada).
+                if (gkRig.lHand) gkRig.lHand.rotation.x = lerpTo(gkRig.lHand.rotation.x, EP.pulsoX, ve);
+                if (gkRig.rHand) gkRig.rHand.rotation.x = lerpTo(gkRig.rHand.rotation.x, EP.pulsoX, ve);
+            } else if (this.gkBarreira) {
                 /*
                 A DEFESA DE PERTO E POR BAIXO — ver GoalkeeperPose.barreira.
 
@@ -6564,6 +6665,7 @@ class FootballPlayer {
                 // A barreira é deste lance e só deste: sem isto a pose
                 // sobrevivia para a defesa seguinte, que pode ser de longe.
                 this.gkBarreira = false;
+                this.gkEncaixe = false;
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
             }

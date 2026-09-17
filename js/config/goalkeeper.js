@@ -120,6 +120,79 @@ const GoalkeeperPose = {
     agora: é ela que diz se houve tempo de reagir.
     =========================================================================
     */
+/*
+    =====================================================================
+    O ENCAIXE AJOELHADO — bola rasteira que vem contra o corpo
+    =====================================================================
+    Pedido, com fotografia: *"defesa com bola rasteira até 1/3 da altura do
+    gol vindo de um ângulo de até 30 graus na direção do goleiro: o goleiro
+    tem que defender com os 2 joelhos dobrados encaixando a bola"*.
+
+    A descrição dada, que é o que estes números tentam escrever:
+
+        "ajoelhado no gramado, tronco inclinado para frente, cabeça olhando
+        para a bola, segurando a bola com as duas mãos junto ao chão. Ambos os
+        joelhos flexionados e separados, quadril baixo, uma perna aberta
+        lateralmente e o outro joelho mais próximo do centro do corpo.
+        Cotovelos flexionados e mãos envolvendo firmemente a bola."
+
+    NÃO É A BARREIRA, e por isso não reaproveita a `barreira` acima: lá a
+    perna ESTICA ao longo do relvado para tapar campo e os braços ficam quase
+    direitos, porque o objectivo é bloquear. Aqui os dois joelhos dobram, o
+    corpo põe-se ATRÁS da bola e as mãos fecham-se nela — o objectivo é
+    agarrar. São gestos diferentes e leem-se diferentes.
+
+    O GATILHO tem duas condições:
+
+      `alturaMax`      a bola cruza a linha abaixo de 1/3 da baliza. 0.81 m é
+                       ALTURA_BALIZA/3, o mesmo corte que o `bandaBaixa` do
+                       GoalkeeperDive já usa para escolher a defesa baixa.
+      `anguloMaxGraus` a bola vem NA DIRECÇÃO dele: ângulo entre a trajectória
+                       e a linha da bola até ao guarda-redes. Até 30 graus ela
+                       vem contra o corpo, e é aí que pôr o corpo atrás dela
+                       ganha a esticar o braço.
+
+    `lateralMax` é o tecto de alcance: mais do que isto de lado e ele não
+    chega ajoelhado, tem de se atirar. Fica acima do `mergulhoLateralMin`
+    (1.0) de propósito — o encaixe rouba à defesa de pé E a um mergulho curto,
+    que é o que a fotografia mostra.
+
+    É uma POSE do ramo 'maos', como a barreira e pela mesma razão: herda o
+    teste de contacto das mãos que já lá está, em vez de ganhar uma cópia dele
+    para divergir.
+    */
+    encaixe: {
+        alturaMax: 0.81,       // ALTURA_BALIZA / 3
+        anguloMaxGraus: 30.0,
+        lateralMax: 1.5,
+
+        altura: -0.55,         // quadril baixo (soma a ALTURA_BASE_Y)
+        chest: 0.45,           // tronco inclinado para a frente
+        cabeca: -0.40,         // cabeça a olhar a bola no chão
+        pelvisX: 0.20,         // bacia a acompanhar o tronco
+
+        /*
+        OS DOIS JOELHOS DOBRADOS E SEPARADOS. A perna ABERTA é a que vai
+        lateralmente; a RECOLHIDA tem o joelho mais perto do centro do corpo.
+        O lado é o da bola (`gkLadoBarreira`, já calculado), para o gesto sair
+        certo nas duas equipas.
+        */
+        coxaAberta: -0.10, joelhoAberto: 1.55, aberturaAberta: 0.50,
+        coxaRecolhida: 0.15, joelhoRecolhido: 1.95, aberturaRecolhida: 0.12,
+
+        /*
+        AS MÃOS JUNTO AO CHÃO E FECHADAS NA BOLA. `bracoX` negativo é para a
+        FRENTE (ver a nota do sinal no JointLimits.shoulder), e `bracoZ`
+        pequeno fecha os dois braços para dentro para as mãos se encontrarem.
+        O cotovelo dobra — ao contrário da barreira, onde fica direito.
+        */
+        bracoX: -0.75, bracoZ: 0.12, cotovelo: -0.85,
+        // O pulso vira a palma para cima, a receber a bola.
+        pulsoX: -0.35,
+
+        suavizacao: 0.45      // entra depressa, como a barreira
+    },
+
     barreira: {
         distMax: 7.0,        // remate de mais longe do que isto não entra aqui
         alturaMax: 0.95,     // e só para bola que cruza a linha abaixo disto
