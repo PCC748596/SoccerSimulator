@@ -912,7 +912,29 @@ Object.assign(Match, {
                 const dims = (eixo === 'x')
                     ? [prof, TB.altura, larguraTunel]
                     : [larguraTunel, TB.altura, prof];
-                const boca = new THREE.Mesh(new THREE.BoxGeometry(...dims), matTunel);
+
+                /*
+                PRETO SO POR DENTRO. A caixa sobressai `folgaFrente` a frente
+                do degrau, portanto as faces LATERAIS dela ficam a vista — e
+                pintadas de preto liam-se como um bloco negro colado a
+                bancada, nao como uma entrada. Relato: *"pinta o tunel por fora
+                da cor da arquibancada, deixa preto so dentro"*.
+
+                Um material POR FACE: escuro so na face que da para o campo (e
+                a que se ve de frente, o vao do tunel), betao nas outras cinco.
+                A ordem dos indices numa BoxGeometry e [+x, -x, +y, -y, +z, -z],
+                e a face virada ao campo depende do lado da bancada:
+
+                    lateral Este  (x cresce para fora)  ->  ve-se o -x, indice 1
+                    lateral Oeste (x decresce)          ->  ve-se o +x, indice 0
+                    fundo Norte   (z cresce)            ->  ve-se o -z, indice 5
+                    fundo Sul     (z decresce)          ->  ve-se o +z, indice 4
+                */
+                const iEscura = (eixo === 'x')
+                    ? (sinal > 0 ? 1 : 0)
+                    : (sinal > 0 ? 5 : 4);
+                const mats = [0, 1, 2, 3, 4, 5].map(i => (i === iEscura) ? matTunel : concreteMat);
+                const boca = new THREE.Mesh(new THREE.BoxGeometry(...dims), mats);
                 if (eixo === 'x') boca.position.set(centroProf, yTunel, coordCorredor);
                 else boca.position.set(coordCorredor, yTunel, centroProf);
                 boca.receiveShadow = true;

@@ -808,9 +808,17 @@ const TunelBancada = {
     folgaFrente: 0.12,
     folgaMoldura: 0.05,
 
-    // Uma moldura clara em volta, como o betao da fotografia.
+    /*
+    A MOLDURA E DA COR DA BANCADA, nao de um cinza proprio.
+
+    Estava em 0x9aa0a6, um cinza inventado a parte. O `concreteMat` das
+    bancadas e 0x94a3b8 (ver createField), e a moldura e betao da mesma
+    estrutura: com duas cinzas diferentes lado a lado, a moldura lia-se como
+    uma peca colada e nao como parte da bancada. Pedido: *"pinta o tunel por
+    fora da cor da arquibancada"*.
+    */
     moldura: true,
-    corMoldura: 0x9aa0a6,
+    corMoldura: 0x94a3b8,
     espessuraMoldura: 0.18
 };
 if (typeof window !== 'undefined') window.TunelBancada = TunelBancada;
