@@ -207,6 +207,64 @@ function togglePainelDireito(forcarMinimizado, evt) {
     if (btn) btn.innerHTML = minimizar ? '&plus;' : '&minus;';
 }
 
+/*
+=============================================================================
+DIA OU NOITE — e sao os holofotes que o dizem
+=============================================================================
+Pedido: *"assim vamos poder regular se o jogo sera de dia ou a noite, usando
+os holofotes"*.
+
+O que muda, e porque cada coisa:
+
+    sol (`dirLight`)   de dia manda na cena; de noite fica num RESIDUO
+                       (Holofotes.noite.solIntensidade) e nao a zero, porque e
+                       ele que projecta as sombras dos jogadores — os holofotes
+                       tem `castShadow = false` de proposito (oito mapas de
+                       sombra por frame nao valem a pena). Com o sol a zero o
+                       jogo ficava sem sombras nenhumas.
+    ambiente           desce, senao de noite tudo continua a ler-se como de
+                       dia mesmo com o sol apagado.
+    ceu                a cor de fundo. E o que mais diz "noite" ao olho.
+    holofotes          acendem: intensidade nas SpotLights e `emissive` no
+                       material das lampadas, que e UM material partilhado
+                       pelas 48 — acendem todas de uma vez.
+
+`window.jogoNoturno` guarda o estado para quem precisar de o ler.
+=============================================================================
+*/
+function definirPeriodo(noite) {
+    const H = (typeof Holofotes !== 'undefined') ? Holofotes : null;
+    if (!H) return;
+    const P = noite ? H.noite : H.dia;
+    window.jogoNoturno = !!noite;
+
+    if (window.dirLightCore) window.dirLightCore.intensity = P.solIntensidade;
+    if (window.ambientLightCore) window.ambientLightCore.intensity = P.ambienteIntensidade;
+    if (window.sceneCore) window.sceneCore.background = new THREE.Color(P.ceu);
+
+    const HF = window.holofotes;
+    if (HF) {
+        for (const l of HF.luzes) l.intensity = P.holofotesAcesos ? H.intensidadeLuz : 0;
+        if (HF.matLampada) {
+            HF.matLampada.color.setHex(P.holofotesAcesos
+                ? H.corLampadaAcesa : H.corLampadaApagada);
+            HF.matLampada.emissive.setHex(P.holofotesAcesos ? H.corLampadaAcesa : 0x000000);
+            HF.matLampada.emissiveIntensity = P.holofotesAcesos ? 1.0 : 0;
+        }
+    }
+
+    const btn = document.getElementById('btn-periodo');
+    if (btn) btn.innerText = noite ? 'Noite' : 'Dia';
+}
+
+function togglePeriodo() {
+    definirPeriodo(!window.jogoNoturno);
+}
+if (typeof window !== 'undefined') {
+    window.definirPeriodo = definirPeriodo;
+    window.togglePeriodo = togglePeriodo;
+}
+
 function toggleOffside() {
     Match.showOffsideLines = !Match.showOffsideLines;
     Match.offsideLineA.visible = Match.showOffsideLines;
@@ -1231,6 +1289,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
+        window.sceneCore = scene;
 
         cameraCore = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
         window.cameraCore = cameraCore;
@@ -1292,6 +1351,8 @@ document.addEventListener("DOMContentLoaded", () => {
         scene.add(dirLight);
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+        // Guardadas para o interruptor dia/noite (ver definirPeriodo).
+        window.ambientLightCore = ambientLight;
         scene.add(ambientLight);
 
         preencherSelectoresDeEquipa();

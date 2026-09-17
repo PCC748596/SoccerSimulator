@@ -764,6 +764,136 @@ céu por trás. Uma caixa escura recuada lê-se como a entrada de um túnel e n�
 precisa de tocar nas filas, que continuam inteiras.
 =============================================================================
 */
+/*
+=============================================================================
+BANCADA EM ANEIS — parede e cobertura em cada um
+=============================================================================
+Pedido, com fotografia de referencia: no vigesimo degrau uma parede de 3 m e
+uma cobertura; depois mais 20 degraus, outra parede e outra cobertura.
+
+E o desenho classico de um estadio de dois aneis: cada anel acaba numa parede
+(a fachada, onde na fotografia estao os paineis publicitarios), a cobertura do
+anel de baixo nasce no topo dessa parede e avanca sobre ele, e o anel seguinte
+assenta em cima.
+
+A GEOMETRIA DE UM DEGRAU manda em tudo: 1.2 m de profundidade e 0.5 m de
+altura (os `addStepBox` do createField). Dai sai, para o anel `t`:
+
+    profundidade do inicio   t * (degraus * 1.2 + espessuraParede)
+    altura do inicio         t * (degraus * 0.5 + alturaParede)
+
+Com 20 degraus e 3 m de parede, o segundo anel comeca a 13 m de altura e 24.6 m
+para dentro da primeira fila; o topo dele fica a 23 m e a cobertura de cima a
+26 m. Um estadio de dois aneis anda por ai.
+
+`coberturaAvanco` e o quanto o telhado sai para DENTRO do campo a partir da
+parede. Nao cobre o anel todo de proposito: na fotografia as primeiras filas
+estao a ceu aberto, e e o que deixa a luz entrar no relvado.
+=============================================================================
+*/
+const BancadaAneis = {
+    aneis: 2,
+    degrausPorAnel: 20,
+
+    alturaParede: 3.0,
+    espessuraParede: 0.6,
+    corParede: 0x7c8794,      // um betao mais escuro que os degraus
+
+    /*
+    ONDE O ANEL DE CIMA COMECA — medido do BORDO da cobertura de baixo.
+
+    Estava errado: o anel de cima nascia atras da parede do de baixo, ou seja
+    `degraus*1.2 + espessuraParede` = 24.6 m da primeira fila. Como a cobertura
+    avanca 16 m para dentro, o bordo dela esta aos 8 m — e o anel de cima ficava
+    **16.6 m atras** dele, empurrado para fora do estadio.
+
+    Num estadio de dois aneis o de cima fica em VOLADURA sobre o de baixo, e a
+    cobertura inferior e o piso dele: o bordo do anel de cima quase alcanca o
+    bordo da cobertura. `recuoSobreCobertura` e o quanto fica atras desse bordo.
+
+        bordo da cobertura      degraus*1.2 - coberturaAvanco  =  8.0 m
+        primeira fila de cima   bordo + recuoSobreCobertura    = 11.0 m
+    */
+    recuoSobreCobertura: 3.0,
+
+    cobertura: true,
+    coberturaAvanco: 16.0,    // metros para dentro do campo, desde a parede
+    coberturaEspessura: 0.45,
+    corCobertura: 0x5b646e,
+    // A face de baixo e mais escura, como um tecto visto de baixo.
+    corCoberturaBaixo: 0x3a4149
+};
+if (typeof window !== 'undefined') window.BancadaAneis = BancadaAneis;
+
+/*
+=============================================================================
+HOLOFOTES — e com eles o jogo de dia ou a noite
+=============================================================================
+Pedido: holofotes na frente das coberturas do anel superior, na linha das
+laterais, para se poder regular se o jogo e de dia ou a noite.
+
+ONDE FICAM: no bordo da cobertura do ULTIMO anel, so nas duas laterais. Nos
+estadios com cobertura os projectores vao presos a essa aresta, virados ao
+relvado — nao em torres nos cantos, que e o desenho antigo.
+
+`fileiras` e quantos conjuntos por lateral, espalhados ao longo do
+comprimento. `lampadasPorFileira` sao as caixas de cada conjunto.
+
+DIA E NOITE, e o que cada um muda:
+
+    de dia    o sol (`dirLight`) forte, ambiente claro, ceu azul.
+              Os holofotes existem e estao APAGADOS — de dia nao se acendem
+              projectores, e ve-se a estrutura deles.
+    de noite  o sol quase desligado (fica um residuo para as sombras nao
+              desaparecerem de todo), ambiente escuro e frio, ceu quase preto,
+              e os holofotes acesos a iluminar o relvado.
+
+O `intensidadeLuz` e por lampada e e baixo de proposito: com quatro conjuntos
+por lateral sao muitas luzes a somar, e cada uma a 1.0 estouraria o relvado.
+=============================================================================
+*/
+const Holofotes = {
+    activo: true,
+    // Quantos conjuntos por lateral, e quantas lampadas em cada.
+    fileiras: 4,
+    lampadasPorFileira: 6,
+
+    // Geometria de uma lampada e da travessa que as segura.
+    lampadaLarg: 0.9, lampadaAlt: 0.7, lampadaProf: 0.35,
+    espacoEntreLampadas: 1.15,
+    travessaEspessura: 0.25,
+
+    corEstrutura: 0x2f3438,
+    corLampadaApagada: 0x6b7178,
+    corLampadaAcesa: 0xfff6d8,
+
+    /*
+    A LUZ. Uma `SpotLight` por conjunto (nao por lampada): seis luzes por
+    conjunto seriam 48 luzes na cena, e o custo de uma luz com sombra e alto.
+    As lampadas sao geometria; quem ilumina e o conjunto.
+    */
+    intensidadeLuz: 0.55,
+    anguloLuz: 0.75,        // radianos, meio-angulo do cone
+    penumbra: 0.4,
+    alcanceLuz: 160,
+    corLuz: 0xf4f7ff,       // branco ligeiramente frio, como halogeneo
+
+    // O estado do mundo em cada modo.
+    dia: {
+        solIntensidade: 0.8,
+        ambienteIntensidade: 0.45,
+        ceu: 0x87CEEB,
+        holofotesAcesos: false
+    },
+    noite: {
+        solIntensidade: 0.08,
+        ambienteIntensidade: 0.16,
+        ceu: 0x0a1018,
+        holofotesAcesos: true
+    }
+};
+if (typeof window !== 'undefined') window.Holofotes = Holofotes;
+
 const TunelBancada = {
     activo: true,
     // Era 10; desceu 3 filas a pedido.

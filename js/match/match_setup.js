@@ -513,7 +513,24 @@ Object.assign(Match, {
         seatGeo.translate(0, -(SEAT_ALT_ANTIGA - SEAT_ALT) / 2, 0);
         const seatMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.1 });
 
-        const maxSeats = 30000;
+        /*
+        O TECTO DOS LUGARES, e ele CORTA EM SILENCIO.
+
+        O `addSeatInstance` faz `if (seatIndex >= maxSeats) return` — passado o
+        tecto, as cadeiras deixam de aparecer e nada o diz. Era 30 000, e com
+        um anel de 30 filas sobrava muito.
+
+        Com dois aneis de 20 filas medem-se 24 528 lugares (10 448 no de baixo,
+        14 080 no de cima — o de cima tem mais porque o arco das esquinas cresce
+        com o raio). Ficavam 1 824 de margem: um terceiro anel, ou so mexer no
+        `RAIO_PRIMEIRA_FILA`, e comecava a faltar cadeiras sem aviso.
+
+        45 000 dao folga para tres aneis. O custo e memoria da InstancedMesh
+        (uma matriz 4x4 e uma cor por lugar, ~80 bytes), ou seja ~1.2 MB a mais
+        no pior caso — e nada em desenho, porque o que nao e preenchido fica
+        com a matriz a zero e nao chega ao ecra.
+        */
+        const maxSeats = 45000;
         const seatMesh = new THREE.InstancedMesh(seatGeo, seatMat, maxSeats);
         seatMesh.castShadow = false;
         seatMesh.receiveShadow = false;
@@ -682,7 +699,33 @@ Object.assign(Match, {
             }
         }
 
-        const rows = 30;
+        /*
+        DEGRAUS DE UM ANEL, e nao da bancada toda. Eram 30 numa tirada; passam
+        a ser os `degrausPorAnel` do BancadaAneis, repetidos por anel, com uma
+        parede e uma cobertura entre eles. Ver BancadaAneis (config/physics.js).
+        */
+        const BA = (typeof BancadaAneis !== 'undefined') ? BancadaAneis : {
+            aneis: 1, degrausPorAnel: 30, alturaParede: 0, espessuraParede: 0,
+            cobertura: false, coberturaAvanco: 0, coberturaEspessura: 0
+        };
+        const rows = BA.degrausPorAnel;
+        const N_ANEIS = Math.max(1, BA.aneis);
+        /*
+        QUANTO CADA ANEL SOBE E RECUA.
+
+        O recuo e medido do BORDO da cobertura do anel de baixo e nao da parede
+        dele: o anel de cima fica em voladura sobre o de baixo, com a cobertura
+        inferior a servir-lhe de piso. Ver BancadaAneis.recuoSobreCobertura,
+        com a medicao do erro que isto corrige (o anel de cima nascia 16.6 m
+        atras do bordo, empurrado para fora do estadio).
+
+        Sem cobertura o recuo volta a ser atras da parede, que e a unica coisa
+        que faz sentido nesse caso.
+        */
+        const PASSO_Y = rows * 0.5 + BA.alturaParede;
+        const PASSO_PROF = (BA.cobertura && BA.coberturaAvanco > 0)
+            ? (rows * 1.2 - BA.coberturaAvanco + (BA.recuoSobreCobertura || 3.0))
+            : (rows * 1.2 + BA.espessuraParede);
 
         /*
         =================================================================
@@ -733,10 +776,19 @@ Object.assign(Match, {
         const cornerX = BANCADA_X - RAIO_PRIMEIRA_FILA;
         const cornerZ = BANCADA_Z - RAIO_PRIMEIRA_FILA;
 
-        function buildCorner(cx, cz, startAngle) {
+        /*
+        A ESQUINA DE UM ANEL. `offProf` e `offY` sao o recuo e a subida do anel
+        — a zero dao a esquina do anel de baixo, exactamente como era.
+
+        O raio cresce com o recuo e nao com uma esquina nova: o arco do anel de
+        cima e concentrico com o de baixo, portanto continua a encostar nas
+        rectas das bancadas desse anel (ver a nota do `cornerX`/`cornerZ`).
+        */
+        function buildCorner(cx, cz, startAngle, offProf, offY) {
+            const oP = offProf || 0, oY = offY || 0;
             for (let r = 0; r < rows; r++) {
-                const R = RAIO_PRIMEIRA_FILA + r * 1.2;
-                const standY = 0.25 + (r * 0.5);
+                const R = RAIO_PRIMEIRA_FILA + oP + r * 1.2;
+                const standY = oY + 0.25 + (r * 0.5);
 
                 const numSteps = Math.max(4, Math.floor(R * (Math.PI / 2) / 2.5));
                 const stepLength = (R * (Math.PI / 2) / numSteps) * 1.05;
@@ -787,69 +839,337 @@ Object.assign(Match, {
             return Math.abs(coord - centro) < (CB_.largura / 2);
         };
 
-        // Bancada Oeste (Esquerda)
-        for (let r = 0; r < rows; r++) {
-            const standX = -BANCADA_X - (r * 1.2);
-            const standY = 0.25 + (r * 0.5);
-            addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
+        /*
+        AS QUATRO BANCADAS, UMA VEZ POR ANEL.
 
-            const seatYOffset = standY + 0.25 + 0.15;
-            // Até onde a esquina começa — ver `cornerZ`.
-            grelha(cornerZ, (z, colIdx) => {
-                if (noCorredor(z)) return;   // corredor centrado no meio-campo
-                addSeatInstance(standX, seatYOffset, z, Math.PI / 2, r, colIdx);
-            });
-        }
+        `offProf` e `offY` sao o recuo e a subida deste anel; a 0 dao
+        exactamente a bancada de sempre, portanto com `aneis: 1` nada disto
+        muda. Ver BancadaAneis.
+        */
+        for (let anel = 0; anel < N_ANEIS; anel++) {
+            const offProf = anel * PASSO_PROF;
+            const offY = anel * PASSO_Y;
 
-        // Bancada Este (Direita)
-        for (let r = 0; r < rows; r++) {
-            const standX = BANCADA_X + (r * 1.2);
-            const standY = 0.25 + (r * 0.5);
-            addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
+            // Bancada Oeste (Esquerda)
+            for (let r = 0; r < rows; r++) {
+                const standX = -BANCADA_X - (offProf + r * 1.2);
+                const standY = offY + 0.25 + (r * 0.5);
+                addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
 
-            const seatYOffset = standY + 0.25 + 0.15;
-            // Até onde a esquina começa — ver `cornerZ`.
-            grelha(cornerZ, (z, colIdx) => {
-                if (noCorredor(z)) return;   // corredor centrado no meio-campo
-                addSeatInstance(standX, seatYOffset, z, -Math.PI / 2, r, colIdx);
-            });
-        }
+                const seatYOffset = standY + 0.25 + 0.15;
+                // Até onde a esquina começa — ver `cornerZ`.
+                grelha(cornerZ, (z, colIdx) => {
+                    if (noCorredor(z)) return;   // corredor centrado no meio-campo
+                    addSeatInstance(standX, seatYOffset, z, Math.PI / 2, r, colIdx);
+                });
+            }
 
-        // Bancada Norte (Fundo)
-        for (let r = 0; r < rows; r++) {
-            const standZ = BANCADA_Z + (r * 1.2);
-            const standY = 0.25 + (r * 0.5);
-            addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
+            // Bancada Este (Direita)
+            for (let r = 0; r < rows; r++) {
+                const standX = BANCADA_X + (offProf + r * 1.2);
+                const standY = offY + 0.25 + (r * 0.5);
+                addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
 
-            const seatYOffset = standY + 0.25 + 0.15;
+                const seatYOffset = standY + 0.25 + 0.15;
+                // Até onde a esquina começa — ver `cornerZ`.
+                grelha(cornerZ, (z, colIdx) => {
+                    if (noCorredor(z)) return;   // corredor centrado no meio-campo
+                    addSeatInstance(standX, seatYOffset, z, -Math.PI / 2, r, colIdx);
+                });
+            }
+
+            // Bancada Norte (Fundo)
+            for (let r = 0; r < rows; r++) {
+                const standZ = BANCADA_Z + (offProf + r * 1.2);
+                const standY = offY + 0.25 + (r * 0.5);
+                addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
+
+                const seatYOffset = standY + 0.25 + 0.15;
+                /*
+                Até onde a esquina começa — ver `cornerX`.
+
+                AS DUAS PRIMEIRAS FILAS ATRÁS DA BALIZA DEIXARAM DE TER BURACO. Era
+                `Math.abs(x) > 4.5 || r > 1`: um vão de 9.4 m no meio, que fazia
+                sentido com a bancada a 5.5 m da linha (as cadeiras tapavam a
+                baliza) e deixou de fazer com ela a 12. Foi o maior dos vãos
+                medidos.
+                */
+                grelha(cornerX, (x, colIdx) => {
+                    if (noCorredor(x)) return;   // corredor centrado no meio-campo
+                    addSeatInstance(x, seatYOffset, standZ, Math.PI, r, colIdx);
+                });
+            }
+
+            // Bancada Sul (Fundo oposto)
+            for (let r = 0; r < rows; r++) {
+                const standZ = -BANCADA_Z - (offProf + r * 1.2);
+                const standY = offY + 0.25 + (r * 0.5);
+                addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
+
+                const seatYOffset = standY + 0.25 + 0.15;
+                // Até onde a esquina começa — ver `cornerX`. E sem o buraco das duas
+                // primeiras filas atrás da baliza (ver a bancada Norte).
+                grelha(cornerX, (x, colIdx) => {
+                    if (noCorredor(x)) return;   // corredor centrado no meio-campo
+                    addSeatInstance(x, seatYOffset, standZ, 0, r, colIdx);
+                });
+            }
+
             /*
-            Até onde a esquina começa — ver `cornerX`.
-
-            AS DUAS PRIMEIRAS FILAS ATRÁS DA BALIZA DEIXARAM DE TER BURACO. Era
-            `Math.abs(x) > 4.5 || r > 1`: um vão de 9.4 m no meio, que fazia
-            sentido com a bancada a 5.5 m da linha (as cadeiras tapavam a
-            baliza) e deixou de fazer com ela a 12. Foi o maior dos vãos
-            medidos.
+            A PAREDE NO FIM DO ANEL — a fachada, 3 m acima do ultimo degrau.
+            E dela que nasce a cobertura, e e nela que ficam os paineis da
+            fotografia de referencia.
             */
-            grelha(cornerX, (x, colIdx) => {
-                if (noCorredor(x)) return;   // corredor centrado no meio-campo
-                addSeatInstance(x, seatYOffset, standZ, Math.PI, r, colIdx);
+            const profFim = offProf + rows * 1.2;
+            const yFim = offY + rows * 0.5;
+            const yParedeMeio = yFim + BA.alturaParede / 2;
+            const matParede = new THREE.MeshStandardMaterial({
+                color: BA.corParede, roughness: 0.9
             });
+            const addParede = (eixo, sinal, base, comprimento) => {
+                const pos = base + sinal * (profFim + BA.espessuraParede / 2);
+                const dims = (eixo === 'x')
+                    ? [BA.espessuraParede, BA.alturaParede, comprimento]
+                    : [comprimento, BA.alturaParede, BA.espessuraParede];
+                const m = new THREE.Mesh(new THREE.BoxGeometry(...dims), matParede);
+                if (eixo === 'x') m.position.set(pos, yParedeMeio, 0);
+                else m.position.set(0, yParedeMeio, pos);
+                // Projecta, mas nao recebe: ver a nota do mergedStepsMesh.
+                m.castShadow = true; m.receiveShadow = false;
+                campoGrupo.add(m);
+            };
+            addParede('x', -1, -BANCADA_X, cornerZ * 2);
+            addParede('x', 1, BANCADA_X, cornerZ * 2);
+            addParede('z', 1, BANCADA_Z, cornerX * 2);
+            addParede('z', -1, -BANCADA_Z, cornerX * 2);
+
+            /*
+            E A COBERTURA, no topo da parede, a AVANCAR sobre o anel.
+
+            `coberturaAvanco` nao cobre o anel todo de proposito: na
+            fotografia as primeiras filas estao a ceu aberto, e e isso que
+            deixa a luz chegar ao relvado.
+
+            Duas faces de cor diferente (`corCobertura` por cima,
+            `corCoberturaBaixo` por baixo), porque um tecto visto de baixo e
+            sempre mais escuro do que visto de cima — com uma cor so, a
+            cobertura lia-se como uma laje a flutuar.
+            */
+            if (BA.cobertura && BA.coberturaAvanco > 0) {
+                const yCob = yFim + BA.alturaParede + BA.coberturaEspessura / 2;
+                const avanco = BA.coberturaAvanco;
+                const matCima = new THREE.MeshStandardMaterial({
+                    color: BA.corCobertura, roughness: 0.85
+                });
+                const matBaixo = new THREE.MeshStandardMaterial({
+                    color: BA.corCoberturaBaixo, roughness: 0.95
+                });
+                const addCobertura = (eixo, sinal, base, comprimento) => {
+                    // Do plano da parede para DENTRO do campo.
+                    const bordoParede = base + sinal * profFim;
+                    const centro = bordoParede - sinal * (avanco / 2);
+                    const dims = (eixo === 'x')
+                        ? [avanco, BA.coberturaEspessura, comprimento]
+                        : [comprimento, BA.coberturaEspessura, avanco];
+                    // [+x,-x,+y,-y,+z,-z]: 2 e o topo, 3 a face de baixo.
+                    const mats = [0,1,2,3,4,5].map(i => (i === 3) ? matBaixo : matCima);
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(...dims), mats);
+                    if (eixo === 'x') m.position.set(centro, yCob, 0);
+                    else m.position.set(0, yCob, centro);
+                    m.castShadow = true; m.receiveShadow = false;
+                    campoGrupo.add(m);
+                };
+                addCobertura('x', -1, -BANCADA_X, cornerZ * 2);
+                addCobertura('x', 1, BANCADA_X, cornerZ * 2);
+                addCobertura('z', 1, BANCADA_Z, cornerX * 2);
+                addCobertura('z', -1, -BANCADA_Z, cornerX * 2);
+            }
+
+            /*
+            E NAS CURVAS TAMBEM — pedido: *"ta faltando o muro e a cobertura
+            nas curvas"*. E estava: as quatro chamadas acima sao das bancadas
+            RECTAS, e as esquinas ficavam sem nada.
+
+            Em SEGMENTOS ao longo do quarto de circulo, e nao numa casca de
+            cilindro: e o padrao que o `buildCorner` ja usa para os degraus, e
+            e o unico que da ESPESSURA a parede. Uma casca de cilindro nao tem
+            espessura, e no encontro com a parede recta (0.6 m) via-se a
+            emenda.
+
+            O raio e o mesmo da parede: `RAIO_PRIMEIRA_FILA + offProf +
+            rows*1.2`, ou seja o fim do ultimo degrau deste anel — as pontas do
+            arco caem em cima das paredes rectas, como os degraus do
+            `buildCorner` caem em cima das filas.
+            */
+            const rArcoFim = RAIO_PRIMEIRA_FILA + offProf + rows * 1.2;
+            const arcoSegs = Math.max(6, Math.floor(rArcoFim * (Math.PI / 2) / 2.0));
+            const arcoLen = (rArcoFim * (Math.PI / 2) / arcoSegs) * 1.06;
+
+            /*
+            OS SEGMENTOS SAO FUNDIDOS, nao sao 560 malhas.
+
+            A primeira versao criava uma `Mesh` por segmento — medidas 280
+            pecas de parede e 280 de cobertura, mais ~1680 materiais, porque os
+            materiais estavam a ser criados DENTRO do ciclo. Isso sao centenas
+            de draw calls por uma geometria que nunca se mexe.
+
+            Junta-se tudo com o `mergeNonIndexedGeometries`, o mesmo que os
+            degraus usam (ver o `mergedStepsMesh` mais abaixo): as quatro
+            esquinas de um anel passam a ser UMA malha por tipo.
+            */
+            const aoLongoDoArco = (destino, cx, cz, ang0, raio, dims, y) => {
+                for (let j = 0; j <= arcoSegs; j++) {
+                    const a = ang0 + (j / arcoSegs) * (Math.PI / 2);
+                    const geo = new THREE.BoxGeometry(...dims).toNonIndexed();
+                    geo.rotateY(-a);
+                    geo.translate(cx + raio * Math.cos(a), y, cz + raio * Math.sin(a));
+                    destino.push(geo);
+                }
+            };
+            const geosParedeArco = [], geosCobArco = [];
+
+            const esquinas = [
+                [-cornerX, cornerZ, Math.PI / 2],
+                [cornerX, cornerZ, 0],
+                [-cornerX, -cornerZ, Math.PI],
+                [cornerX, -cornerZ, 3 * Math.PI / 2]
+            ];
+            const avArco = BA.coberturaAvanco;
+            const yCobArco = yFim + BA.alturaParede + BA.coberturaEspessura / 2;
+            for (const [cx, cz, ang0] of esquinas) {
+                // A parede: espessura no RADIAL, comprimento no TANGENCIAL.
+                aoLongoDoArco(geosParedeArco, cx, cz, ang0, rArcoFim,
+                    [BA.espessuraParede, BA.alturaParede, arcoLen], yParedeMeio);
+
+                if (!BA.cobertura || avArco <= 0) continue;
+                /*
+                A cobertura da curva avanca para DENTRO, ou seja para um raio
+                MENOR — dai o `rArcoFim - avanco/2`.
+
+                A face de baixo NAO leva cor propria aqui, ao contrario da
+                cobertura recta: com a geometria fundida numa malha so, um
+                material por face deixaria de corresponder as faces certas
+                depois da rotacao de cada segmento. Fica a cor do topo, e a
+                diferenca nao se nota porque a curva se ve de lado.
+                */
+                aoLongoDoArco(geosCobArco, cx, cz, ang0, rArcoFim - avArco / 2,
+                    [avArco, BA.coberturaEspessura, arcoLen], yCobArco);
+            }
+
+            const fundirArco = (geos, mat) => {
+                if (!geos.length) return;
+                const g = mergeNonIndexedGeometries(geos);
+                g.computeVertexNormals();
+                const m = new THREE.Mesh(g, mat);
+                m.castShadow = true;
+                m.receiveShadow = false;   // ver a nota do mergedStepsMesh
+                campoGrupo.add(m);
+            };
+            fundirArco(geosParedeArco, matParede);
+            fundirArco(geosCobArco, new THREE.MeshStandardMaterial({
+                color: BA.corCobertura, roughness: 0.85
+            }));
         }
 
-        // Bancada Sul (Fundo oposto)
-        for (let r = 0; r < rows; r++) {
-            const standZ = -BANCADA_Z - (r * 1.2);
-            const standY = 0.25 + (r * 0.5);
-            addStepBox(cornerX * 2, 0.5, 1.2, 0, standY, standZ, 0);
+        /*
+        OS HOLOFOTES, no bordo da cobertura do ULTIMO anel e so nas laterais.
 
-            const seatYOffset = standY + 0.25 + 0.15;
-            // Até onde a esquina começa — ver `cornerX`. E sem o buraco das duas
-            // primeiras filas atrás da baliza (ver a bancada Norte).
-            grelha(cornerX, (x, colIdx) => {
-                if (noCorredor(x)) return;   // corredor centrado no meio-campo
-                addSeatInstance(x, seatYOffset, standZ, 0, r, colIdx);
+        A posicao sai da mesma conta dos aneis: o ultimo anel esta a
+        `(N-1) * PASSO_PROF` de profundidade e `(N-1) * PASSO_Y` de altura, e o
+        bordo da cobertura dele fica `coberturaAvanco` mais para dentro. Se os
+        aneis mudarem, os holofotes acompanham.
+
+        As LAMPADAS sao instanciadas (48 caixas iguais) e as travessas
+        fundidas; as LUZES a serio sao uma por conjunto e nao por lampada, que
+        seria 48 luzes na cena. Ver Holofotes (config/physics.js).
+
+        Guarda-se tudo em `window.holofotes` para o interruptor dia/noite
+        (main.js) poder acender e apagar sem reconstruir nada.
+        */
+        if (typeof Holofotes !== 'undefined' && Holofotes.activo && BA.cobertura) {
+            const H = Holofotes;
+            const tUlt = N_ANEIS - 1;
+            const profBordo = tUlt * PASSO_PROF + rows * 1.2 - BA.coberturaAvanco;
+            const yLuz = tUlt * PASSO_Y + rows * 0.5 + BA.alturaParede;
+
+            const matEstrut = new THREE.MeshStandardMaterial({
+                color: H.corEstrutura, roughness: 0.8, metalness: 0.3
             });
+            /*
+            O material da lampada e guardado a parte: e nele que o interruptor
+            mexe (cor e `emissive`), e por ser UM material as 48 lampadas
+            acendem todas de uma vez.
+            */
+            const matLampada = new THREE.MeshStandardMaterial({
+                color: H.corLampadaApagada, roughness: 0.4, metalness: 0.2,
+                emissive: new THREE.Color(0x000000)
+            });
+
+            const geosTravessa = [];
+            const posLampadas = [];
+            const luzes = [];
+            const larguraConj = H.lampadasPorFileira * H.espacoEntreLampadas;
+
+            for (const sinal of [-1, 1]) {
+                const xConj = sinal * (BANCADA_X + profBordo);
+                for (let f = 0; f < H.fileiras; f++) {
+                    // Espalhados ao longo do comprimento, simetricos sobre z=0.
+                    const frac = (H.fileiras === 1) ? 0.5 : (f + 0.5) / H.fileiras;
+                    const zConj = (frac * 2 - 1) * cornerZ;
+
+                    // A travessa que segura as lampadas.
+                    const gt = new THREE.BoxGeometry(
+                        H.travessaEspessura, H.travessaEspessura, larguraConj).toNonIndexed();
+                    gt.translate(xConj, yLuz - H.lampadaAlt / 2 - H.travessaEspessura / 2, zConj);
+                    geosTravessa.push(gt);
+
+                    for (let i = 0; i < H.lampadasPorFileira; i++) {
+                        const dz = (i - (H.lampadasPorFileira - 1) / 2) * H.espacoEntreLampadas;
+                        posLampadas.push([xConj, yLuz, zConj + dz]);
+                    }
+
+                    /*
+                    UMA SpotLight POR CONJUNTO, apontada ao centro do campo no
+                    z dele: e isso que faz os cones cobrirem o relvado todo em
+                    vez de se somarem no meio.
+
+                    `castShadow` fica FALSE: oito luzes com sombra sao oito
+                    mapas de sombra por frame, e a sombra do jogo ja vem do
+                    `dirLight` (ver main.js). De noite o sol fica com um
+                    residuo justamente para as sombras nao desaparecerem.
+                    */
+                    const luz = new THREE.SpotLight(H.corLuz, 0,
+                        H.alcanceLuz, H.anguloLuz, H.penumbra, 1.0);
+                    luz.position.set(xConj, yLuz, zConj);
+                    luz.target.position.set(0, 0, zConj * 0.5);
+                    luz.castShadow = false;
+                    campoGrupo.add(luz);
+                    campoGrupo.add(luz.target);
+                    luzes.push(luz);
+                }
+            }
+
+            if (geosTravessa.length) {
+                const g = mergeNonIndexedGeometries(geosTravessa);
+                g.computeVertexNormals();
+                const m = new THREE.Mesh(g, matEstrut);
+                m.castShadow = false; m.receiveShadow = false;
+                campoGrupo.add(m);
+            }
+
+            const imL = new THREE.InstancedMesh(
+                new THREE.BoxGeometry(H.lampadaLarg, H.lampadaAlt, H.lampadaProf),
+                matLampada, posLampadas.length);
+            const dL = new THREE.Object3D();
+            posLampadas.forEach((pp, i) => {
+                dL.position.set(pp[0], pp[1], pp[2]);
+                dL.updateMatrix();
+                imL.setMatrixAt(i, dL.matrix);
+            });
+            imL.castShadow = false; imL.receiveShadow = false;
+            campoGrupo.add(imL);
+
+            window.holofotes = { luzes, matLampada, lampadas: imL };
         }
 
         /*
@@ -878,6 +1198,9 @@ Object.assign(Match, {
             const matMoldura = new THREE.MeshStandardMaterial({
                 color: TB.corMoldura, roughness: 0.85
             });
+            // Acumuladores: as bocas por orientacao, e as barras todas juntas.
+            const bocasPorLado = {};
+            const geosMoldura = [];
 
             /*
             ONDE A FILA `degrau` ESTÁ, e a face que se vê dela.
@@ -904,9 +1227,11 @@ Object.assign(Match, {
             nos fundos) e `sinal` para que lado. A boca é sempre uma caixa com
             a LARGURA no eixo do corredor e a PROFUNDIDADE no eixo da bancada.
             */
-            const addTunel = (eixo, sinal, base, coordCorredor) => {
+            const addTunel = (eixo, sinal, base, coordCorredor, dProf, dY) => {
                 const prof = TB.profundidade;
-                const fora = base + sinal * dentro;
+                // `dProf`/`dY` deslocam a boca para o anel a que pertence.
+                const fora = base + sinal * (dentro + (dProf || 0));
+                const yTunelAnel = yTunel + (dY || 0);
                 const centroProf = fora + sinal * (prof / 2);
 
                 const dims = (eixo === 'x')
@@ -933,12 +1258,27 @@ Object.assign(Match, {
                 const iEscura = (eixo === 'x')
                     ? (sinal > 0 ? 1 : 0)
                     : (sinal > 0 ? 5 : 4);
-                const mats = [0, 1, 2, 3, 4, 5].map(i => (i === iEscura) ? matTunel : concreteMat);
-                const boca = new THREE.Mesh(new THREE.BoxGeometry(...dims), mats);
-                if (eixo === 'x') boca.position.set(centroProf, yTunel, coordCorredor);
-                else boca.position.set(coordCorredor, yTunel, centroProf);
-                boca.receiveShadow = true;
-                campoGrupo.add(boca);
+                /*
+                A BOCA E INSTANCIADA, nao e uma Mesh por tunel.
+
+                Eram 48 bocas soltas mais 192 barras de moldura: 240 draw calls
+                por geometria que nunca se mexe. As bocas de uma mesma
+                orientacao sao a MESMA caixa com a mesma tabela de materiais —
+                muda so a posicao —, portanto sao instancias.
+
+                Quatro grupos e nao um: a face escura depende do lado da
+                bancada (`iEscura`), e uma InstancedMesh partilha a tabela de
+                materiais por todas as instancias. As dimensoes tambem diferem
+                entre laterais e fundos, o que daria dois grupos; com a face
+                escura sao quatro.
+                */
+                const chave = eixo + sinal;
+                if (!bocasPorLado[chave]) {
+                    bocasPorLado[chave] = { dims, iEscura, pos: [] };
+                }
+                bocasPorLado[chave].pos.push((eixo === 'x')
+                    ? [centroProf, yTunelAnel, coordCorredor]
+                    : [coordCorredor, yTunelAnel, centroProf]);
 
                 if (!TB.moldura) return;
                 /*
@@ -968,13 +1308,19 @@ Object.assign(Match, {
                     [e, H, (L + e) / 2, 0],            // lado
                     [e, H, -(L + e) / 2, 0]            // outro lado
                 ];
+                /*
+                AS BARRAS SAO FUNDIDAS numa geometria so. Ao contrario das
+                bocas, ha quatro tamanhos diferentes por tunel (duas
+                horizontais e duas verticais), portanto instanciar daria oito
+                grupos; fundir da UMA malha para as 192 barras, e elas nunca se
+                mexem.
+                */
                 for (const [cL, cH, dLat, dVer] of barras) {
                     const dimsB = (eixo === 'x') ? [espM, cH, cL] : [cL, cH, espM];
-                    const barra = new THREE.Mesh(new THREE.BoxGeometry(...dimsB), matMoldura);
-                    if (eixo === 'x') barra.position.set(recuo, yTunel + dVer, coordCorredor + dLat);
-                    else barra.position.set(coordCorredor + dLat, yTunel + dVer, recuo);
-                    barra.castShadow = true;
-                    campoGrupo.add(barra);
+                    const g = new THREE.BoxGeometry(...dimsB).toNonIndexed();
+                    if (eixo === 'x') g.translate(recuo, yTunelAnel + dVer, coordCorredor + dLat);
+                    else g.translate(coordCorredor + dLat, yTunelAnel + dVer, recuo);
+                    geosMoldura.push(g);
                 }
             };
 
@@ -986,22 +1332,72 @@ Object.assign(Match, {
                 return out;
             };
 
-            for (const z of centros(cornerZ)) {
-                addTunel('x', -1, -BANCADA_X, z);   // Oeste
-                addTunel('x', 1, BANCADA_X, z);     // Este
+            /*
+            UM CONJUNTO DE BOCAS POR ANEL — pedido: os tuneis tambem no anel
+            superior.
+
+            O anel `t` esta `t * PASSO_PROF` mais para dentro e
+            `t * PASSO_Y` mais alto (a mesma conta que constroi os degraus), e
+            e isso que se soma a base e a altura da boca. No anel de cima o
+            degrau 7 fica a ~16.9 m de altura, que e onde um estadio de dois
+            aneis tem as entradas do segundo.
+            */
+            for (let t = 0; t < N_ANEIS; t++) {
+                const dProf = t * PASSO_PROF;
+                const dY = t * PASSO_Y;
+                for (const z of centros(cornerZ)) {
+                    addTunel('x', -1, -BANCADA_X, z, dProf, dY);   // Oeste
+                    addTunel('x', 1, BANCADA_X, z, dProf, dY);     // Este
+                }
+                for (const x of centros(cornerX)) {
+                    addTunel('z', 1, BANCADA_Z, x, dProf, dY);     // Norte
+                    addTunel('z', -1, -BANCADA_Z, x, dProf, dY);   // Sul
+                }
             }
-            for (const x of centros(cornerX)) {
-                addTunel('z', 1, BANCADA_Z, x);     // Norte
-                addTunel('z', -1, -BANCADA_Z, x);   // Sul
+
+            // Uma InstancedMesh por orientacao, com as instancias recolhidas.
+            const dummyT = new THREE.Object3D();
+            for (const chave of Object.keys(bocasPorLado)) {
+                const g = bocasPorLado[chave];
+                const mats = [0, 1, 2, 3, 4, 5].map(i =>
+                    (i === g.iEscura) ? matTunel : concreteMat);
+                const im = new THREE.InstancedMesh(
+                    new THREE.BoxGeometry(...g.dims), mats, g.pos.length);
+                g.pos.forEach((pp, i) => {
+                    dummyT.position.set(pp[0], pp[1], pp[2]);
+                    dummyT.updateMatrix();
+                    im.setMatrixAt(i, dummyT.matrix);
+                });
+                im.castShadow = false;
+                im.receiveShadow = false;   // ver a nota do mergedStepsMesh
+                campoGrupo.add(im);
+            }
+
+            if (geosMoldura.length) {
+                const gm = mergeNonIndexedGeometries(geosMoldura);
+                gm.computeVertexNormals();
+                const mm = new THREE.Mesh(gm, matMoldura);
+                mm.castShadow = true;
+                mm.receiveShadow = false;
+                campoGrupo.add(mm);
             }
         }
 
         // O `cornerX`/`cornerZ` já estão calculados lá em cima, com os recuos:
         // é deles que as rectas tiram até onde vão.
-        buildCorner(-cornerX, cornerZ, Math.PI / 2);
-        buildCorner(cornerX, cornerZ, 0);
-        buildCorner(-cornerX, -cornerZ, Math.PI);
-        buildCorner(cornerX, -cornerZ, 3 * Math.PI / 2);
+        /*
+        AS ESQUINAS, UMA VEZ POR ANEL — pedido: o anel de cima tinha quatro
+        buracos nos cantos, porque estas quatro chamadas viviam fora do ciclo
+        dos aneis.
+        */
+        for (let t = 0; t < N_ANEIS; t++) {
+            const oP = t * PASSO_PROF;
+            const oY = t * PASSO_Y;
+            buildCorner(-cornerX, cornerZ, Math.PI / 2, oP, oY);
+            buildCorner(cornerX, cornerZ, 0, oP, oY);
+            buildCorner(-cornerX, -cornerZ, Math.PI, oP, oY);
+            buildCorner(cornerX, -cornerZ, 3 * Math.PI / 2, oP, oY);
+        }
 
         /*
         ADEPTOS. Corre depois de todas as bancadas estarem construídas, porque
@@ -1024,7 +1420,26 @@ Object.assign(Match, {
             const mergedStepsGeo = mergeNonIndexedGeometries(stepGeos);
             mergedStepsGeo.computeVertexNormals();
             const mergedStepsMesh = new THREE.Mesh(mergedStepsGeo, concreteMat);
-            mergedStepsMesh.receiveShadow = true;
+            /*
+            O BETAO DA BANCADA NAO RECEBE SOMBRA — e isso e deliberado.
+
+            Relato: *"so tem umas areas mais escuras"*. A camara de sombra e
+            ortografica e cobre +-70 m (ver o `d` no main.js, escolhido pelos
+            texels por metro no RELVADO). Com os dois aneis a bancada passou a
+            ir a +-94.6 m em x e +-113.6 m em z: mais de metade dela fica FORA
+            da caixa, e amostrar o mapa de sombra fora do alcance dele devolve
+            o texel da borda — bandas escuras onde nao ha nada a fazer sombra.
+
+            As alternativas e porque nao servem: alargar o `d` para 95 baixaria
+            a nitidez no relvado de 14.6 para 10.8 texels/m, e essa nitidez foi
+            escolhida a medir (ver a nota do main.js); e nao ha nada por cima
+            da bancada que precise de lhe fazer sombra a nao ser a propria
+            cobertura, que e o que se perde aqui.
+
+            As cadeiras e os adeptos ja estavam assim (`receiveShadow = false`
+            no seatMesh e no specMesh), pela mesma razao.
+            */
+            mergedStepsMesh.receiveShadow = false;
             mergedStepsMesh.castShadow = false;
             campoGrupo.add(mergedStepsMesh);
         }
