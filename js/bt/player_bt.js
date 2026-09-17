@@ -2760,9 +2760,31 @@ function actGoalkeeperPosition(ctx) {
         ? RepositionPace.velocidadeGK
         : 4.2;
     /*
-    Delega em gkAnchor() (config.js), a mesma função que updateGK() usa. Esta
-    folha nunca corre — update() manda os guarda-redes para updateGK e nunca
-    para runBehaviorTree — mas continua referenciada pela árvore, por isso fica
+    NO CANTO, O MEIO DA BALIZA — ver GkCanto (config/goalkeeper.js), que tem a
+    medição e a razão.
+
+    Esta folha corre num caso só, e é este: o `player.update` corta o
+    `updateGK` enquanto o estado é CORNER_KICK e manda o guarda-redes para a
+    árvore. Com a bola na bandeirola, o `gkAnchor` mais abaixo satura em
+    ±3.16 m — o primeiro poste — e desfazia a reposição no eixo que o
+    `setupSetPiece` acabara de fazer.
+    */
+    if (typeof Match !== 'undefined' && Match.state === 'CORNER_KICK' &&
+        Match.setPieceTeam && Match.setPieceTeam !== p.team &&
+        typeof GkCanto !== 'undefined') {
+        const lado = Math.sign(Match.ball.position.x) || 1;
+        p.dynamicTarget.set(
+            lado * GkCanto.desvioParaOLadoDoCanto,
+            ALTURA_BASE_Y,
+            p.ownGoalZ + GkCanto.avancoDaLinha * p.dirZ);
+        p.fsm.changeState('MOVE_TO_POS');
+        return;
+    }
+
+    /*
+    Delega em gkAnchor() (config.js), a mesma função que updateGK() usa — fora
+    do canto esta folha não chega a correr (o update() manda os guarda-redes
+    para o updateGK), mas continua referenciada pela árvore, por isso fica
     ligada à fórmula real em vez de guardar uma cópia que pode divergir.
     */
     const style = GoalkeeperStyle[p.gkStyle] || GoalkeeperStyle.defensive;

@@ -1415,6 +1415,31 @@ Object.assign(Match, {
             Crowd.build(campoGrupo, lugares);
         }
 
+        /*
+        FUNCIONÁRIOS DO ESTÁDIO — o pessoal de colete laranja (ver staff.js).
+
+        Fica aqui, e não junto das placas lá em cima, porque precisa das duas
+        geometrias ao mesmo tempo: a da BANCADA (`BANCADA_X`, `cornerX`,
+        `RAIO_PRIMEIRA_FILA`, só definidas nesta altura do `createField`) e a
+        das PLACAS. Passam-se os números já usados para as construir em vez de
+        os repetir — quem mudar o `RECUO_LATERAL` ou o
+        `PlacasPublicidade.recuo` arrasta o pessoal com eles.
+        */
+        if (typeof Staff !== 'undefined' && typeof FuncionariosEstadio !== 'undefined' &&
+            FuncionariosEstadio.activo) {
+            const recuoPlacas = (typeof PlacasPublicidade !== 'undefined' &&
+                PlacasPublicidade.activo) ? PlacasPublicidade.recuo : 5.0;
+            Staff.build(campoGrupo, {
+                bancadaX: BANCADA_X,
+                bancadaZ: BANCADA_Z,
+                cantoX: cornerX,
+                cantoZ: cornerZ,
+                raioPrimeiraFila: RAIO_PRIMEIRA_FILA,
+                placaX: MEIA_LARGURA_CAMPO + recuoPlacas,
+                placaZ: LINHA_FUNDO + recuoPlacas
+            });
+        }
+
         // Geometria fundida das bancadas para mínimo de draw calls
         if (stepGeos.length > 0) {
             const mergedStepsGeo = mergeNonIndexedGeometries(stepGeos);

@@ -962,3 +962,130 @@ const CornerFlag = {
     alturaBandeira: 0.30,
     corBandeira: 0xf2c400
 };
+
+/*
+=============================================================================
+FUNCIONÁRIOS DO ESTÁDIO — o pessoal de laranja em volta do recinto
+=============================================================================
+Pedido, com fotografia: uns modelos de roupa laranja a toda a volta do campo,
+a 1 m da arquibancada e afastados 5 m entre si, e mais alguns em vários pontos
+ATRÁS das placas de publicidade.
+
+São dois anéis distintos, e vivem a distâncias diferentes de propósito:
+
+    anel da bancada   `recuoDaBancada` metros à frente da primeira fila, um
+                      a cada `espacamento` metros. É a fila de seguranças de
+                      costas para o público, que é onde eles estão num estádio.
+    grupos das placas `recuoDaPlaca` metros para fora dos painéis (ou seja,
+                      entre a publicidade e a bancada), em pequenos grupos e
+                      não em fila: ali estão os maqueiros, os apanha-bolas e o
+                      pessoal de manutenção, e eles andam aos dois e aos três.
+
+A GEOMETRIA NÃO É COPIADA. O `createField` passa os números que já usou para
+construir as bancadas e as placas (`bancadaX`, `cantoX`, `raioPrimeiraFila`,
+`placaX`...); mexer no `RECUO_LATERAL` ou no `PlacasPublicidade.recuo` arrasta
+o pessoal com eles em vez de os deixar a flutuar no meio do relvado — o erro
+que a nota da `BarreiraCampo` descreve.
+
+O anel fecha nas esquinas com o MESMO raio da primeira fila menos o recuo,
+centrado em (±cantoX, ±cantoZ): concêntrico com a bancada e com as placas, tal
+como elas são entre si.
+=============================================================================
+*/
+const FuncionariosEstadio = {
+    activo: true,
+
+    // --- o anel colado à bancada ---------------------------------------
+    recuoDaBancada: 1.0,    // metros à frente da primeira fila
+    /*
+    ESPAÇAMENTO NO ANEL. Esteve em 5 m — o número do pedido inicial — e eram
+    85 pessoas a toda a volta, uma parede de coletes: *"funcionários de 5 em 5
+    está muito"*. A 12 m são ~35, que é a fila de seguranças de um estádio
+    cheio e não um cordão.
+    */
+    espacamento: 12.0,      // metros entre funcionários ao longo do anel
+
+    /*
+    E VIRADOS PARA O CAMPO, com uns graus de folga.
+
+    Sem a folga são oitenta bonecos alinhados ao milímetro, e lê-se como uma
+    grelha impressa e não como gente de serviço. `variacaoRotacao` é em
+    radianos, o mesmo parâmetro (e a mesma razão) do `CrowdModel`.
+    */
+    variacaoRotacao: 0.30,
+
+    // --- os grupos atrás das placas ------------------------------------
+    grupos: {
+        activo: true,
+        porLadoLateral: 3,     // quantos grupos em cada lateral
+        porLadoFundo: 2,       // e em cada fundo
+        pessoasPorGrupo: 3,
+        // Espaço entre duas pessoas do mesmo grupo, ao longo da linha.
+        passoNoGrupo: 1.3,
+        recuoDaPlaca: 1.4,     // metros para FORA do painel
+        /*
+        METADE SENTADA. Atrás das placas o pessoal passa o jogo sentado em
+        bancos baixos — de pé tapavam a publicidade, que é precisamente o que
+        ninguém faz num estádio. Os de pé continuam a existir para o grupo não
+        ler como um banco corrido.
+        */
+        fraccaoSentados: 0.5,
+        /*
+        O banco por baixo de quem está sentado: uma caixa escura e baixa.
+
+        A ALTURA NÃO ESTÁ AQUI, e é de propósito: sai da própria pose. Na pose
+        `sentado` os pés ficam no relvado e a anca a 0.61 m — escrever a altura
+        à mão dava um banco que não bate com o corpo em cima dele (ou o boneco
+        a flutuar, ou a caixa a sair-lhe pela cintura), e mudar a pose ou a
+        escala do corpo obrigava a vir aqui corrigir. Ver `_geometrias` e a
+        `alturaAssento` em staff.js.
+        */
+        banco: { largura: 0.5, profundidade: 0.4, cor: 0x23262b }
+    },
+
+    /*
+    AS CORES, E SÃO DOIS FARDAMENTOS DIFERENTES.
+
+    O colete é a razão de eles existirem: num estádio o pessoal de serviço
+    veste alta-visibilidade exactamente para se distinguir dos jogadores e do
+    público. Mas não é o mesmo colete para todos, e a diferença é real:
+
+        anel da bancada   LARANJA, e com as calças todas iguais: é um
+                          fardamento, e o que se lê nele é a uniformidade.
+        atrás das placas  AMARELO sobre roupa à civil — pedido: *"os grupos de
+                          fotógrafos e reportes usa um colete amarelo neles com
+                          roupas de cores variadas"*. É o que eles são: não são
+                          funcionários do estádio, são imprensa com um colete
+                          por cima da sua própria roupa, e por isso as calças
+                          saem do baralho `roupasImprensa` em vez de uma cor só.
+
+    `emissiveColete` dá aos dois a leitura de refletor: à noite, com os
+    holofotes, um alta-visibilidade só difuso apagava-se e eles desapareciam. É
+    um âmbar escuro e serve os dois tons — a cor emissiva é do material (uma
+    por malha) e não da instância, portanto um valor mais laranja tingia os
+    coletes amarelos, e um mais amarelo tingia os laranja.
+    */
+    cores: {
+        colete: '#ff7a18',
+        coleteImprensa: '#ffd91c',
+        calcas: '#25272c',
+        emissiveColete: '#4a3200',
+        /*
+        A roupa da imprensa. Tons de gente vestida à civil num relvado —
+        ganga, cáqui, cinza, verde-escuro, bordô —, e nenhum deles perto do
+        equipamento das duas equipas (azul e vermelho vivos): quem está atrás
+        da placa não pode ler-se como um jogador a aquecer.
+        */
+        roupasImprensa: ['#3b4252', '#6b5b45', '#4a4f57', '#2f4034', '#5a3a3a', '#7a7268']
+    },
+
+    /*
+    Pele, cabelo e altura saem do mesmo baralho dos adeptos (CrowdModel): é a
+    mesma gente do mesmo estádio, e ter dois baralhos era garantir que um deles
+    ficava a divergir do outro.
+    */
+    escalaMin: 0.90,
+    escalaMax: 1.05,
+    variacaoCor: 0.10
+};
+if (typeof window !== 'undefined') window.FuncionariosEstadio = FuncionariosEstadio;

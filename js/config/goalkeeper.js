@@ -1509,3 +1509,37 @@ const GkCatchModel = {
     qualidadeBase: 0.62,
     qualidadePorTEC: 0.45
 };
+
+/*
+=============================================================================
+O GUARDA-REDES NO CANTO — no meio da baliza, e não encostado ao primeiro poste
+=============================================================================
+Relato, com fotografia: *"antes do corner, o goleiro tem que se posicionar
+próximo do centro do gol"*.
+
+O QUE O PUNHA NO POSTE era a âncora do jogo corrido. Durante o CORNER_KICK o
+`player.update` manda o guarda-redes para a árvore de comportamento (o
+`updateGK` está cortado nesse estado — ver a nota "E TAMBÉM DURANTE O CANTO"),
+e a folha `actGoalkeeperPosition` pede o ponto ao `gkAnchor(bola.x, bola.z)`.
+Com a bola na bandeirola, `x = ballX * depth/d` satura no limite da baliza:
+±3.16 m, ou seja em cima do primeiro poste, a olhar para o batedor.
+
+O `setupSetPiece` já o repõe no eixo — e a árvore tirava-o de lá no frame
+seguinte. Era a árvore que faltava tapar, e não a reposição.
+
+Onde ele fica agora, que é onde um guarda-redes se põe a esperar um cruzamento:
+
+    `avancoDaLinha` metros à frente da própria linha — longe dela o suficiente
+    para sair na bola, perto o suficiente para recuar a um cruzamento à trave.
+
+    `desvioParaOLadoDoCanto` metros para o lado de onde a bola vem. Não é zero
+    porque nenhum guarda-redes espera um canto exactamente no meio: ganha meio
+    metro para o lado da bola, que é o campo que ele tem de cobrir primeiro. É
+    pequeno de propósito — o pedido é "próximo do centro".
+=============================================================================
+*/
+const GkCanto = {
+    avancoDaLinha: 1.8,
+    desvioParaOLadoDoCanto: 0.6
+};
+if (typeof window !== 'undefined') window.GkCanto = GkCanto;
