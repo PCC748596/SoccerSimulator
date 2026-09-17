@@ -815,6 +815,41 @@ const Officials = {
             return { x: PM.arbitroX * attDir, z: linhaGol - attDir * PM.marcaZ };
         }
 
+        /*
+        CANTO: a MESMA posição do penálti, do lado OPOSTO à cobrança.
+
+        Pedido: *"no corner, o juiz tem que se posicionar do lado oposto à
+        cobrança, na mesma posição do penálti"*. E é a colocação real: dali ele
+        vê o cruzamento a chegar de frente, tem a baliza e o aglomerado todo
+        entre ele e o batedor, e não fica na trajectória de ninguém. Do lado do
+        canto, ficaria atrás da jogada a ver as costas de vinte e dois.
+
+        A diagonal normal (mais abaixo) punha-o a 20-25 m da bola, portanto
+        fora da área e do lado do batedor: a pior das duas coisas.
+
+        AS MEDIDAS SÃO AS DO PENÁLTI, e de propósito — o pedido é explícito em
+        querer a mesma posição, e escrever aqui um x e um z próprios era ter
+        dois sítios a dizer a mesma coisa e a divergir no dia em que um deles
+        mudasse. O único acrescento é o SINAL do x, que passa a ser o contrário
+        do lado do canto.
+
+        O LADO DO CANTO LÊ-SE DO `cantoBolaAlvo` e não da bola: no instante em
+        que o canto é marcado a bola ainda está a rolar para fora do campo (ver
+        o countdown em match_loop.js), e o x dela nessa altura pode já estar do
+        outro lado. O alvo é a quina onde ela vai ser reposta, que é o que
+        define de que lado se bate.
+        */
+        if (typeof Match !== 'undefined' && Match.state === 'CORNER_KICK' &&
+            Match.setPieceTaker && typeof PenaltyModel !== 'undefined') {
+            const PM = PenaltyModel;
+            const attDir = Match.setPieceTaker.dirZ;
+            const linhaGol = attDir * (CAMPO_COMP / 2);
+            const xDoCanto = (Match.cantoBolaAlvo && typeof Match.cantoBolaAlvo.x === 'number')
+                ? Match.cantoBolaAlvo.x : bola.x;
+            const lado = Math.sign(xDoCanto) || 1;
+            return { x: -lado * PM.arbitroX, z: linhaGol - attDir * PM.marcaZ };
+        }
+
         const ax = -(CAMPO_LARG / 2) * R.diagonalX, az = -(CAMPO_COMP / 2) * R.diagonalZ;
         const bx = (CAMPO_LARG / 2) * R.diagonalX, bz = (CAMPO_COMP / 2) * R.diagonalZ;
 

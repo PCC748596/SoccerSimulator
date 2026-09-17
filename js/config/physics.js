@@ -1123,10 +1123,12 @@ metros com a câmara na ponta.
     varre a área de um poste ao outro, e para isso o braço tem de correr ao
     lado da linha e não por cima dela.
 
-`desvioX` é onde a base assenta, para o lado do eixo da baliza; a lança aponta
-para o eixo, portanto a câmara acaba perto do poste — o enquadramento clássico
-de trás da baliza. Ver a vista da câmara dela na tecla 8 (`cameraMode` 'grua',
-match_ui.js).
+A base assenta ao lado do eixo da baliza e a lança aponta para o eixo, com a
+CÂMARA a cair em cima dele: o enquadramento clássico de trás da baliza. A
+distância a que a base fica do eixo não se escreve — é o alcance da lança, e
+sai dela (ver `GruasDeCamera.build`). Ver a vista desta câmara na tecla 8
+(`cameraMode` 'grua', match_ui.js), e a lança a subir com a bola em
+`GruasDeCamera.update`.
 
 A LANÇA NÃO PODE ENTRAR NO CAMPO: a base está `recuoDaPlaca` metros para fora
 dos painéis e o braço corre paralelo à linha, portanto nada disto chega ao
@@ -1137,9 +1139,18 @@ deixar passar uma lança pendurada sobre a pequena área.
 const GruaDeCamera = {
     activo: true,
 
-    // Onde o carrinho assenta: para fora das placas, e ao lado do eixo.
+    /*
+    Onde o carrinho assenta em Z: para fora das placas.
+
+    EM X NÃO HÁ NÚMERO, e é isso que põe a câmara no sítio pedido: *"a câmera
+    da grua deve ficar no alinhamento do centro do gol"*. A base tem de ficar
+    exactamente ao ALCANCE da lança a contar do eixo, senão a câmara fica
+    desalinhada — e o alcance sai do comprimento e da inclinação, que agora
+    muda a toda a hora (ver `alturaMin`/`alturaMax`). Um `desvioX` escrito à
+    mão era um segundo número a ter de concordar com esses dois; é calculado no
+    `GruasDeCamera.build` (js/staff.js).
+    */
     recuoDaPlaca: 2.0,
-    desvioX: 13.0,
 
     /*
     AS MEDIDAS SÃO AS DE UMA JIB, e não de uma grua de obra:
@@ -1157,16 +1168,44 @@ const GruaDeCamera = {
     larguraTorre: 0.30,
     comprimentoLanca: 5.5,
     espessuraLanca: 0.18,
-    /*
-    Quanto a ponta DESCE, em radianos. O pivô roda em X e a lança nasce ao
-    longo de +Z (só depois o grupo inteiro é rodado para ficar paralelo ao
-    fundo), portanto o sinal é POSITIVO para a ponta descer (`y = -z·sin(θ)`) —
-    com o sinal trocado a ponta subia e o contrapeso ia ao chão, que foi o que
-    aconteceu à primeira e o que o teste apanhou.
-    */
-    inclinacaoLanca: 0.10,
     comprimentoContrapeso: 1.6,
     contrapeso: 0.55,
+
+    /*
+    A GRUA SOBE E DESCE COM A BOLA — pedido: *"quanto mais longe a bola
+    estiver, mais alto estará a grua"*.
+
+    É o que um operador de jib faz, e por uma razão de enquadramento: com a
+    bola na área, a câmara desce para a altura dos jogadores e apanha os
+    corpos; com a bola longe, sobe para abrir o plano e não filmar só costas.
+
+        `alturaMin` a bola em cima dele (a `distanciaMin` ou menos)
+        `alturaMax` a bola no outro extremo (a `distanciaMax` ou mais)
+
+    O MAXIMO SUBIU DE 4 PARA 6 M a pedido. A lanca tem 5.5 m e o pivo esta a
+    2.3: para levar a camara aos 6 m ela tem de se erguer 42 graus, e nessa
+    posicao o alcance HORIZONTAL cai de 5.4 para 3.9 m — ou seja o braco
+    encolhe-se para dentro enquanto sobe, como qualquer jib. E por isso que a
+    VISTA (tecla 8) e travada no eixo da baliza e nao segue o x da ponta; ver a
+    nota do `olho` em GruasDeCamera.build.
+
+    A DISTÂNCIA MEDE-SE AO CENTRO DA BALIZA desta grua, e não ao carrinho: é a
+    baliza que ela filma, e é dela que a profundidade do plano depende.
+
+    `distanciaMax` é 75 e não os 106 do campo inteiro: acima disso o lance já
+    não é com ele (a bola está na área do outro lado, onde a outra grua está a
+    filmar) e a altura ficaria colada ao máximo metade do jogo.
+
+    `suavizacao` é a constante da subida, em segundos-ish — ver
+    `fatorSuavizacao` (utils.js), a mesma suavização ao TEMPO que a câmara usa.
+    Sem ela a lança dava saltos a cada passe: a bola muda de distância aos
+    metros por frame, e uma jib não se mexe assim.
+    */
+    alturaMin: 2.0,
+    alturaMax: 6.0,
+    distanciaMin: 16.5,
+    distanciaMax: 75.0,
+    suavizacao: 0.06,
 
     cores: {
         estrutura: 0xe8c11a,   // o amarelo das gruas de televisão

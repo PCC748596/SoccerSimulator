@@ -488,6 +488,55 @@ const GruasDeCamera = {
         };
 
         /*
+        A PENDURA DA CABEÇA. A câmara vive `PENDURA` metros debaixo da ponta da
+        lança, e é essa diferença que se desconta ao inclinar o pivô — a altura
+        pedida é a da CÂMARA e não a da ponta.
+        */
+        const PENDURA = 0.30;
+
+        /*
+        ONDE A BASE ASSENTA EM X — e é uma conta, não um número escrito.
+
+        Pedido: *"a câmera da grua deve ficar no alinhamento do centro do
+        gol"*. A lança corre paralela ao fundo, portanto a câmara está
+        `comprimentoLanca * cos(theta)` metros da base: para ela cair no eixo
+        (x = 0), a base tem de estar exactamente a essa distância dele.
+
+        E O THETA MUDA A TODA A HORA (a lança sobe e desce com a bola), o
+        cosseno com ele: entre os 2 e os 4 m de altura o alcance vai de 5.49 a
+        5.23 m. Usa-se o ângulo do MEIO do percurso, e a câmara passeia ±13 cm
+        em volta do eixo em vez de estar alinhada num extremo e 26 cm fora no
+        outro. À distância a que ela filma a baliza, 13 cm não se vêem — o metro
+        de desalinhamento que o `desvioX: 13` dava, via-se.
+        */
+        /*
+        O ÂNGULO QUE PÕE A CÂMARA A UMA DADA ALTURA — e a pendura roda com a
+        lança, que é a parte que sai errada na conta ingénua.
+
+        A cabeça está em (0, -PENDURA, L) no espaço do pivô; inclinado de θ,
+        isso dá
+
+            y = alturaPivo - PENDURA·cos(θ) - L·sin(θ)
+
+        e não `alturaPivo - PENDURA - L·sin(θ)`. A diferença são 2 cm no
+        extremo de cima — pouco, mas é a diferença entre a altura pedida e a
+        altura obtida, e estas duas contas (aqui e na `update`) têm de ser a
+        MESMA, senão a base fica calculada para uma coisa e a lança faz outra.
+
+        Resolve-se de uma vez: `PENDURA·cos(θ) + L·sin(θ) = R·sin(θ + φ)`, com
+        `R = hypot(L, PENDURA)` e `φ = atan2(PENDURA, L)`.
+        */
+        const R_LANCA = Math.hypot(G.comprimentoLanca, PENDURA);
+        const FASE_LANCA = Math.atan2(PENDURA, G.comprimentoLanca);
+        const anguloPara = (altura) => {
+            const sen = (G.alturaPivo - altura) / R_LANCA;
+            return Math.asin(THREE.MathUtils.clamp(sen, -1, 1)) - FASE_LANCA;
+        };
+        this._anguloPara = anguloPara;
+        const alcance = G.comprimentoLanca *
+            Math.cos(anguloPara((G.alturaMin + G.alturaMax) / 2));
+
+        /*
         UMA GRUA, montada com a lança a apontar para +Z. A baliza do outro lado
         recebe o mesmo grupo rodado meia volta: as contas são as mesmas e não há
         um segundo jogo de sinais para manter a par.
@@ -508,7 +557,14 @@ const GruasDeCamera = {
             */
             const pivo = new THREE.Object3D();
             pivo.position.y = G.alturaPivo;
-            pivo.rotation.x = G.inclinacaoLanca;
+            /*
+            NASCE À ALTURA DO MEIO do percurso, e não num ângulo escrito no
+            config: é a `update` que manda na inclinação a partir da distância
+            da bola, e um ângulo de repouso à parte só se veria no primeiro
+            frame — e seria um terceiro número a ter de concordar com a
+            `alturaMin` e a `alturaMax`.
+            */
+            pivo.rotation.x = anguloPara((G.alturaMin + G.alturaMax) / 2);
             g.add(pivo);
 
             caixa(pivo, matEstrutura, G.espessuraLanca, G.espessuraLanca,
@@ -528,22 +584,18 @@ const GruasDeCamera = {
             const cabeca = new THREE.Object3D();
             cabeca.position.set(0, -pendura, G.comprimentoLanca);
             /*
-            A CÂMARA OLHA PARA O CAMPO, e a lança é que corre ao lado dele: o
-            quarto de volta aqui é o que separa a direcção do BRAÇO da direcção
-            do OLHAR. Vale nas duas balizas — o grupo de cada uma está rodado
-            para o seu lado, e este +90° local resolve-se no +Z de uma e no -Z
-            da outra, que é o relvado em ambos os casos.
+            A CÂMARA OLHA PARA O CAMPO, e a lança é que corre ao lado dele: a
+            rotação da cabeça é o que separa a direcção do BRAÇO da direcção do
+            OLHAR. É só o modelo (a vista da tecla 8 aponta ao sítio da bola),
+            mas uma câmara de cenário virada para a bancada estraga a leitura
+            de tudo o resto.
 
-            É só o modelo: a vista da tecla 8 aponta ao sítio da bola (ver
-            `cameraMode` 'grua'). Mas uma câmara de cenário virada para a
-            bancada estraga a leitura de tudo o resto.
-
-            O SINAL É NEGATIVO nas duas, e a conta é esta: o grupo está rodado
-            +90° na baliza de z negativo e -90° na outra, e -90° locais caem no
-            relvado em ambos os casos (+Z numa, -Z na outra). Com +90° a câmara
-            ficava virada para fora do estádio — foi o que o teste mediu.
+            O ÂNGULO É ESCRITO NO `build`, que é quem sabe de que lado esta grua
+            está: o olhar sai de `grupo + cabeça`, portanto depende da rotação
+            do grupo — e essa mudou de sinal quando a base passou a assentar no
+            alcance da lança. Um ângulo fixo aqui deixou as duas câmaras viradas
+            para fora do estádio, e foi o teste que o apanhou.
             */
-            cabeca.rotation.y = -Math.PI / 2;
             pivo.add(cabeca);
             caixa(cabeca, matCamara, 0.34, 0.26, 0.34, 0, 0, 0);
             const lente = new THREE.Mesh(
@@ -558,26 +610,31 @@ const GruasDeCamera = {
             grua (tecla 8) e é dela que o `build` lê a posição no mundo — sem
             isto, a vista tinha de repetir aqui fora a trigonometria do pivô.
             */
+            /*
+            O OLHO DA CAMARA, meio metro A FRENTE da cabeca.
+
+            Relato, com captura de ecra: *"tem alguma coisa na frente da imagem
+            da camera da grua"* — e uma mancha preta a tapar metade do ecra. Era
+            a PROPRIA CAMARA: a vista estava no centro da cabeca, portanto a
+            caixa dela (34 cm) e a objectiva (que avanca 41 cm) ficavam a
+            envolver o ponto de vista. De dentro de uma caixa preta ve-se preto.
+
+            0.60 m poe o olho a frente da ponta da objectiva com folga. E um
+            no vazio, filho da cabeca: acompanha a rotacao e a subida da lanca
+            sem uma segunda conta a repetir a trigonometria.
+            */
+            const olho = new THREE.Object3D();
+            olho.position.set(0, 0, 0.60);
+            cabeca.add(olho);
+
             g.userData.cabeca = cabeca;
+            g.userData.olho = olho;
+            // E o pivo: e ele que a `update` inclina para a lanca subir e
+            // descer com a bola.
+            g.userData.pivo = pivo;
 
             return g;
         };
-
-        /*
-        A CÂMARA FICA À ALTURA DE UM HOMEM, e a conta é esta: a ponta está
-        `alturaPivo - sin(inclinacao) * comprimentoLanca` (o pivô roda em X e a
-        lança nasce em +Z, logo o seno entra com sinal negativo), e a cabeça
-        pende `PENDURA` debaixo dela. Avisa-se se ela chegar ao chão — é o tipo
-        de coisa que só se vê quando se olha pela câmara da grua, e já ninguém
-        se lembra de ter mexido na inclinação.
-        */
-        const PENDURA = 0.30;
-        const alturaPonta = G.alturaPivo - Math.sin(G.inclinacaoLanca) * G.comprimentoLanca;
-        const alturaCamara = alturaPonta - PENDURA;
-        if (alturaCamara < 0.8 && typeof console !== 'undefined') {
-            console.warn(`GruasDeCamera: a câmara fica a ${alturaCamara.toFixed(2)} m do chão ` +
-                `— a lança está demasiado inclinada ou demasiado comprida`);
-        }
 
         /*
         ATRÁS DE CADA BALIZA E PARALELA AO FUNDO. O `placaZ` já traz o recuo
@@ -592,22 +649,51 @@ const GruasDeCamera = {
         está a baliza que ela filma.
 
         E a câmara guarda-se: é ela que a vista da tecla 8 usa (ver o
-        `cameraMode` 'grua' em match_ui.js). Guardar aqui a posição já
-        calculada é o que evita uma segunda cópia destas contas do outro lado.
+        `cameraMode` 'grua' em match_ui.js). A posição é reescrita a cada frame
+        pela `update`, porque a lança mexe-se.
         */
         this.cameras = [];
+        this._pivos = [];
         const z = geo.placaZ + G.recuoDaPlaca;
         for (const lado of [-1, 1]) {
             const g = montar(PENDURA);
-            const baseX = lado * G.desvioX;
+            // As duas ficam do mesmo lado do estádio visto de cima, como as
+            // duas jibs de uma transmissão: é só simetria.
+            const baseX = -lado * alcance;
             g.rotation.y = (baseX > 0) ? -Math.PI / 2 : Math.PI / 2;
+            /*
+            E A CÂMARA VIRA-SE PARA O RELVADO. O olhar acumula as duas
+            rotações: `grupo + cabeça` tem de dar 0 na baliza de z negativo (o
+            campo está em +Z) e meia volta na outra. Escrito assim, a conta
+            continua certa se a rotação do grupo mudar de sinal outra vez.
+            */
+            g.userData.cabeca.rotation.y =
+                (lado > 0 ? Math.PI : 0) - g.rotation.y;
             g.position.set(baseX, 0, lado * z);
             grupo.add(g);
 
             g.updateMatrixWorld(true);
-            const pos = new THREE.Vector3();
-            g.userData.cabeca.getWorldPosition(pos);
+            const pos = g.userData.olho.getWorldPosition(new THREE.Vector3());
+            /*
+            E A VISTA FICA NO EIXO DA BALIZA, sempre.
+
+            A base assenta no alcance do angulo MEDIO (ver acima), portanto a
+            ponta da lanca recolhe para dentro quando sobe: aos 6 m ela esta
+            1.3 m para fora do eixo. O pedido — *"a camera da grua deve ficar
+            no alinhamento do centro do gol"* — e sobre a IMAGEM, e um metro de
+            desvio ve-se nela. O braco fica onde a mecanica o poe; o olho e
+            travado no eixo.
+            */
+            pos.x = 0;
             this.cameras.push({ pos: pos, ladoZ: lado });
+            this._pivos.push({
+                pivo: g.userData.pivo,
+                cabeca: g.userData.olho,
+                ladoZ: lado,
+                // A altura de onde ela parte, para a suavização ter de onde vir.
+                altura: (G.alturaMin + G.alturaMax) / 2,
+                pendura: PENDURA
+            });
 
             /*
             NADA DISTO ENTRA NO CAMPO. A lança corre paralela ao fundo e a base
@@ -620,6 +706,74 @@ const GruasDeCamera = {
             }
         }
         return 2;
+    },
+
+    /*
+    =========================================================================
+    A LANÇA SOBE E DESCE COM A BOLA
+    =========================================================================
+    Pedido: *"a grua deve subir e descer de acordo com o movimento da bola.
+    Quanto mais longe a bola estiver, mais alto estará a grua"*. É o que um
+    operador de jib faz — com a bola na área desce à altura dos jogadores, com
+    a bola longe sobe para abrir o plano.
+
+    A distância mede-se ao CENTRO DA BALIZA desta grua e não ao carrinho: é a
+    baliza que ela filma, e é dela que a profundidade do plano depende. Entre
+    `distanciaMin` e `distanciaMax` a altura vai de `alturaMin` a `alturaMax`,
+    e fora desse intervalo fica saturada.
+
+    A SUBIDA É SUAVIZADA AO TEMPO, com o mesmo `fatorSuavizacao` da câmara: a
+    bola muda de distância aos metros por frame, e sem isto a lança dava saltos
+    a cada passe. Uma jib não se mexe assim.
+
+    Corre SEMPRE, e não só quando a vista da grua está escolhida: a grua é
+    cenário à vista de todas as outras câmaras, e uma lança congelada ao lado de
+    um jogo a mexer-se lê-se pior do que uma que não mexesse nunca.
+    =========================================================================
+    */
+    update(dt) {
+        const G = (typeof GruaDeCamera !== 'undefined') ? GruaDeCamera : null;
+        if (!G || !G.activo || !this._pivos || !this._pivos.length) return;
+        if (typeof Match === 'undefined' || !Match.ball) return;
+
+        const bola = Match.ball.position;
+        const linha = (typeof LINHA_FUNDO === 'number') ? LINHA_FUNDO : 53;
+        const suave = (typeof fatorSuavizacao === 'function')
+            ? fatorSuavizacao(G.suavizacao, dt || (1 / 60))
+            : 0.06;
+
+        this._pivos.forEach((gr, i) => {
+            // Distância da bola ao centro da baliza que esta grua filma.
+            const dz = bola.z - gr.ladoZ * linha;
+            const d = Math.hypot(bola.x, dz);
+
+            const t = THREE.MathUtils.clamp(
+                (d - G.distanciaMin) / Math.max(0.001, G.distanciaMax - G.distanciaMin), 0, 1);
+            const alvo = G.alturaMin + (G.alturaMax - G.alturaMin) * t;
+
+            gr.altura += (alvo - gr.altura) * suave;
+
+            /*
+            O ângulo que põe a CÂMARA nessa altura. A conta vive no `build`
+            (`_anguloPara`) e é a MESMA que escolheu onde a base assenta: a
+            pendura da cabeça roda com a lança, e duas versões disto davam uma
+            base calculada para uma altura e uma lança a fazer outra.
+            */
+            gr.pivo.rotation.x = this._anguloPara
+                ? this._anguloPara(gr.altura)
+                : 0;
+
+            /*
+            E A POSIÇÃO DA CÂMARA É RELIDA DO MUNDO, não recalculada: a vista da
+            tecla 8 lê `cameras[i].pos`, e se essa posição fosse uma segunda
+            conta feita aqui, o dia em que a geometria da grua mudasse a câmara
+            ficava a flutuar ao lado dela.
+            */
+            gr.pivo.updateMatrixWorld(true);
+            gr.cabeca.getWorldPosition(this.cameras[i].pos);
+            // No eixo da baliza, pela razao que o `build` explica.
+            this.cameras[i].pos.x = 0;
+        });
     }
 };
 

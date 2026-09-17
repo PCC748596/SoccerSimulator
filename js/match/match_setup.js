@@ -1816,10 +1816,31 @@ Object.assign(Match, {
         const skillsA = onzeA || ((typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamA : null);
         const skillsB = onzeB || ((typeof PlayerSkillsData !== 'undefined') ? PlayerSkillsData.teamB : null);
 
+        /*
+        O EQUIPAMENTO E DO CLUBE, e nao do lado do campo.
+
+        Pedido, com fotografias das camisolas do Flamengo e do Fluminense. Os
+        planteis ja eram reais (data/squads.js) e os equipamentos nao: o TeamA
+        era azul e o TeamB vermelho, escolhesse-se quem se escolhesse.
+
+        `uniformeDe` (config/uniformes.js) devolve o desenho do clube pelo nome
+        com que ele vem nos dados, ou `null` — e o null mantem o azul e o
+        vermelho de sempre em quem nao tem desenho feito.
+
+        O GUARDA-REDES FICA DE FORA (o `i === 0`): veste de outra cor por
+        regra, para se distinguir dos dez e dos outros onze. Um equipamento de
+        guarda-redes por clube e outro pedido.
+        */
+        const uniA = (typeof uniformeDe === 'function' && this.equipaInfoA)
+            ? uniformeDe(this.equipaInfoA.nome) : null;
+        const uniB = (typeof uniformeDe === 'function' && this.equipaInfoB)
+            ? uniformeDe(this.equipaInfoB.nome) : null;
+
         for (let i = 0; i < 11; i++) {
             let corCamisa = (i === 0) ? '#f1c40f' : '#3498db';
             let corCalcao = (i === 0) ? '#1e1b18' : '#34495e';
-            let p = new FootballPlayer(i, corCamisa, corCalcao, 'TeamA');
+            let p = new FootballPlayer(i, corCamisa, corCalcao, 'TeamA',
+                (i === 0) ? null : uniA);
             p.skills = skillsA ? skillsA[i] : null;
             // O estilo que o jogador traz nos dados manda sobre o estilo por
             // omissão da posição — ver aplicarPlayingStyle.
@@ -1831,7 +1852,8 @@ Object.assign(Match, {
         for (let i = 0; i < 11; i++) {
             let corCamisa = (i === 0) ? '#e67e22' : '#e74c3c';
             let corCalcao = (i === 0) ? '#111111' : '#ffffff';
-            let p = new FootballPlayer(i + 20, corCamisa, corCalcao, 'TeamB');
+            let p = new FootballPlayer(i + 20, corCamisa, corCalcao, 'TeamB',
+                (i === 0) ? null : uniB);
             p.skills = skillsB ? skillsB[i] : null;
             p.playingStyleFixo = (p.skills && p.skills.estilo) ? p.skills.estilo : null;
             this.opponents.push(p);

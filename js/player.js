@@ -18,10 +18,22 @@ const CAMPOS_CANSAVEIS = {
 };
 
 class FootballPlayer {
-    constructor(id, color1, color2, team) {
+    /*
+    `uniforme` (opcional) e o equipamento do clube — ver Uniformes
+    (config/uniformes.js). Sem ele, `color1`/`color2` mandam como sempre: e o
+    caso do guarda-redes (que veste de outra cor por regra), do arbitro
+    (officials.js) e das equipas genericas.
+    */
+    constructor(id, color1, color2, team, uniforme) {
         this.id = id; this.team = team; this.role = 'def';
         this.hasBall = false;
-        this.corCamisa = color1;
+        this.uniforme = uniforme || null;
+        /*
+        A COR QUE O REPRESENTA quando so cabe uma (disco da vista tactica,
+        etiquetas): a dominante do uniforme, se houver. Ver corDoUniforme.
+        */
+        this.corCamisa = (this.uniforme && typeof corDoUniforme === 'function')
+            ? corDoUniforme(this.uniforme, color1) : color1;
         this.num = 1;
         this.pos = 'GK';
 
@@ -5027,7 +5039,8 @@ class FootballPlayer {
     }
 
     buildBody(corCamisa, corCalcao) {
-        const { corpo, rig, backMat } = construirCorpo(corCamisa, corCalcao, this.aparencia);
+        const { corpo, rig, backMat } = construirCorpo(corCamisa, corCalcao,
+            this.aparencia, this.uniforme);
         this.backMat = backMat;
         return { corpo, rig };
     }
@@ -5228,11 +5241,35 @@ class FootballPlayer {
         this.aplicarAlturaAoCorpo();
 
         const cvsBack = document.createElement('canvas'); cvsBack.width = 512; cvsBack.height = 512; const ctxBack = cvsBack.getContext('2d');
-        ctxBack.fillStyle = this.corCamisa; ctxBack.fillRect(0, 0, 512, 512);
+        /*
+        O PADRAO DA CAMISOLA VAI POR BAIXO DO NUMERO, e e aqui que ele se
+        pinta: as costas sao a unica peca cuja textura depende de algo que o
+        `construirCorpo` nao sabe (o numero e o nome). Sem uniforme, fica a cor
+        lisa de sempre. Ver pintarPadraoDeEquipamento (pose.js).
+        */
+        const pecaCamisa = this.uniforme ? this.uniforme.camisa : null;
+        if (pecaCamisa && typeof pintarPadraoDeEquipamento === 'function') {
+            pintarPadraoDeEquipamento(ctxBack, 512, 512, pecaCamisa, this.corCamisa);
+        } else {
+            ctxBack.fillStyle = this.corCamisa; ctxBack.fillRect(0, 0, 512, 512);
+        }
 
+        /*
+        A COR DO NUMERO SAI DO UNIFORME quando ele existe — branco no Flamengo,
+        verde escuro no Fluminense (pedido). Sem uniforme continua a sair do
+        LADO, que e o que estava aqui: escuro no A, claro no B.
+
+        O CONTORNO NAO E DECORACAO. Sobre um padrao, o numero cai sempre em
+        cima da cor errada em algum ponto das costas — um branco numa faixa
+        vermelha, um verde escuro numa listra grena — e e o contorno que o
+        mantem legivel nas duas.
+        */
         const claro = (this.team !== 'TeamA');
-        const corTexto = claro ? '#ffffff' : '#000000';
-        const corContorno = claro ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.85)';
+        const corTexto = (this.uniforme && this.uniforme.numero)
+            ? this.uniforme.numero : (claro ? '#ffffff' : '#000000');
+        const corContorno = (this.uniforme && this.uniforme.contorno)
+            ? this.uniforme.contorno
+            : (claro ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.85)');
 
         ctxBack.textAlign = 'center';
         ctxBack.textBaseline = 'middle';

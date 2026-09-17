@@ -835,6 +835,7 @@ Object.assign(Match, {
         }
 
         this.updateCrowd(dt);
+        if (typeof GruasDeCamera !== 'undefined') GruasDeCamera.update(dt);
 
         if (medir) {
             this._pf_stats.time += (performance.now() - t0);
@@ -1060,6 +1061,19 @@ Object.assign(Match, {
         mais nada — o movimento todo é no vertex shader.
         */
         if (typeof Crowd !== 'undefined') Crowd.update(dt);
+
+        /*
+        A LANÇA DAS GRUAS DE TELEVISÃO sobe e desce com a bola (js/staff.js).
+        Vive aqui, ao lado do público, porque é a mesma família de coisa: um
+        pedaço de estádio que reage ao lance e não tem nada a ver com as regras
+        do jogo.
+
+        FORA DO `enableCrowd`, de propósito: o `updateCrowd` sai à entrada
+        quando o público está desligado, e as gruas não são público — têm o seu
+        próprio interruptor (`GruaDeCamera.activo`) e desligar as pessoas não é
+        razão para congelar a lança. Por isso a chamada está no `update`, e não
+        aqui dentro.
+        */
 
         /*
         O som do estádio lê o mesmo estado da bancada (js/ambiente_sonoro.js),

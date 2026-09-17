@@ -32,14 +32,97 @@ Devolve `{ corpo, rig, backMat }`:
   `rig`      os nós articulados, que é o que as poses daqui para baixo mexem
   `backMat`  o material das costas, onde o número da camisola é desenhado
 */
-function construirCorpo(corCamisa, corCalcao, aparencia) {
+/*
+O PADRAO DE UMA PECA DE EQUIPAMENTO, pintado num canvas.
+
+As camisolas pedidas tem desenho e nao cor (ver Uniformes em
+config/uniformes.js): faixas horizontais no Flamengo, listras verticais no
+Fluminense. Um `#hex` no material nao as sabe dizer, portanto a peca passa a
+levar textura.
+
+    'faixas'    barras horizontais, alternando as cores
+    'listras'   barras verticais, ciclando as cores
+    'solido'    (ou peca sem padrao) uma cor so
+
+`divisoes` e quantas barras aparecem NA PECA. As faces do tronco sao mapeadas
+0..1 cada uma, portanto e o numero que se conta no ecra — nao ha repeticao de
+textura a multiplicar por tras.
+
+Devolve o proprio ctx pintado, para quem o quiser continuar a desenhar (o
+decote na frente, o numero nas costas).
+*/
+function pintarPadraoDeEquipamento(ctx, largura, altura, peca, corBase) {
+    const cores = (peca && peca.cores && peca.cores.length) ? peca.cores : [corBase];
+    const padrao = (peca && peca.padrao) ? peca.padrao : 'solido';
+
+    if (padrao === 'solido' || cores.length < 2) {
+        ctx.fillStyle = cores[0];
+        ctx.fillRect(0, 0, largura, altura);
+        return ctx;
+    }
+
+    const n = Math.max(2, (peca && peca.divisoes) || cores.length * 2);
+    /*
+    A PRIMEIRA COR PINTA O FUNDO ANTES DAS BARRAS. Com as barras desenhadas
+    lado a lado por arredondamento, sobram linhas de um pixel entre elas — e um
+    pixel transparente numa textura de camisola le-se como uma risca preta.
+    */
+    ctx.fillStyle = cores[0];
+    ctx.fillRect(0, 0, largura, altura);
+
+    const vertical = (padrao === 'listras');
+    const passo = (vertical ? largura : altura) / n;
+    for (let i = 0; i < n; i++) {
+        ctx.fillStyle = cores[i % cores.length];
+        const a = Math.floor(i * passo);
+        const b = Math.ceil((i + 1) * passo);
+        if (vertical) ctx.fillRect(a, 0, b - a, altura);
+        else ctx.fillRect(0, a, largura, b - a);
+    }
+    return ctx;
+}
+if (typeof window !== 'undefined') window.pintarPadraoDeEquipamento = pintarPadraoDeEquipamento;
+
+/*
+`uniforme` (opcional) e o equipamento do clube — ver Uniformes
+(config/uniformes.js). Sem ele, o corpo sai como sempre saiu: camisa e meiao
+da cor `corCamisa`, calcao de `corCalcao`.
+*/
+function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     // Pele e juntas seguem o tom do jogador; as juntas ficam um pouco mais
     // escuras que a pele, para o contorno das articulações não desaparecer.
     const ap = aparencia || escolherAparencia(0, 11, 0);
     const corPele = ap.pele;
     const corJunta = new THREE.Color(corPele).multiplyScalar(0.72).getHex();
     const blockMat = new THREE.MeshStandardMaterial({ color: corPele, roughness: 0.8 }); const jointMat = new THREE.MeshStandardMaterial({ color: corJunta, roughness: 0.6 });
-    const shirtMat = new THREE.MeshStandardMaterial({ color: corCamisa, roughness: 0.9 }); const shortMat = new THREE.MeshStandardMaterial({ color: corCalcao, roughness: 0.9 });
+    /*
+    A CAMISA E O CALCAO SAEM DO UNIFORME, se houver um.
+
+    `pecaCamisa` e `pecaMeiao` sao os desenhos (padrao + cores); o calcao e
+    sempre de uma cor, porque nenhum dos pedidos tem calcao padronizado e uma
+    textura por peca custa memoria de GPU a troco de nada.
+
+    O `shirtMat` leva a textura do padrao TAMBEM nas mangas e nas laterais do
+    tronco: com a textura so na frente, um jogador de perfil aparecia com meia
+    camisola lisa.
+    */
+    const UNI = uniforme || null;
+    const pecaCamisa = UNI ? UNI.camisa : null;
+    const pecaMeiao = UNI ? UNI.meiao : null;
+    const corCalcaoFinal = (UNI && UNI.calcao) ? UNI.calcao : corCalcao;
+    const temPadraoCamisa = !!(pecaCamisa && pecaCamisa.padrao && pecaCamisa.padrao !== 'solido');
+
+    let shirtMat;
+    if (temPadraoCamisa) {
+        const cvsC = document.createElement('canvas'); cvsC.width = 256; cvsC.height = 256;
+        pintarPadraoDeEquipamento(cvsC.getContext('2d'), 256, 256, pecaCamisa, corCamisa);
+        shirtMat = new THREE.MeshStandardMaterial({
+            map: new THREE.CanvasTexture(cvsC), roughness: 0.9
+        });
+    } else {
+        shirtMat = new THREE.MeshStandardMaterial({ color: corCamisa, roughness: 0.9 });
+    }
+    const shortMat = new THREE.MeshStandardMaterial({ color: corCalcaoFinal, roughness: 0.9 });
     const bootMat = new THREE.MeshStandardMaterial({ color: ap.corChuteira, roughness: 0.5 }); const studMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
     const hairMat = new THREE.MeshStandardMaterial({ color: ap.cabelo, roughness: 0.9 });
     /*
@@ -72,16 +155,38 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
 
     const edgeMat = new THREE.LineBasicMaterial({ color: corTinta, linewidth: 2 }); const lineMat = new THREE.LineBasicMaterial({ color: corTinta });
 
+    /*
+    A FRENTE: o padrao do uniforme por BAIXO e o decote por cima. A ordem
+    importa — pintar o decote primeiro e o padrao a seguir tapava-o.
+    */
     const cvsV = document.createElement('canvas'); cvsV.width = 512; cvsV.height = 512; const ctxV = cvsV.getContext('2d');
-    ctxV.fillStyle = corCamisa; ctxV.fillRect(0, 0, 512, 512); ctxV.fillStyle = '#dcdde1'; ctxV.beginPath(); ctxV.moveTo(136, 0); ctxV.lineTo(376, 0); ctxV.lineTo(256, 280); ctxV.fill(); ctxV.strokeStyle = '#2f3640'; ctxV.lineWidth = 12; ctxV.stroke();
+    pintarPadraoDeEquipamento(ctxV, 512, 512, pecaCamisa, corCamisa);
+    ctxV.fillStyle = '#dcdde1'; ctxV.beginPath(); ctxV.moveTo(136, 0); ctxV.lineTo(376, 0); ctxV.lineTo(256, 280); ctxV.fill(); ctxV.strokeStyle = '#2f3640'; ctxV.lineWidth = 12; ctxV.stroke();
 
+    /*
+    AS COSTAS ficam com o mesmo material de sempre — e o `updateShirt`
+    (player.js) que lhes desenha o numero, e e ele que repinta o padrao por
+    baixo dele, porque so lá se sabe qual e o numero.
+    */
     const backMat = new THREE.MeshStandardMaterial({ color: corCamisa, roughness: 0.9 });
     const chestMats = [shirtMat, shirtMat, shirtMat, shirtMat, new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(cvsV) }), backMat];
 
+    /*
+    O MEIAO. Sem uniforme fica o de sempre: a cor da camisa com duas argolas
+    brancas no cano. Com uniforme, o padrao dele manda e as argolas caem — as
+    do Flamengo sao as proprias faixas, e o do Fluminense e branco liso.
+    */
     const cvsS = document.createElement('canvas'); cvsS.width = 256; cvsS.height = 256; const ctxS = cvsS.getContext('2d');
-    ctxS.fillStyle = corCamisa; ctxS.fillRect(0, 0, 256, 256); ctxS.fillStyle = '#ffffff'; ctxS.fillRect(0, 20, 256, 30); ctxS.fillRect(0, 70, 256, 15); ctxS.strokeStyle = '#2f3640'; ctxS.lineWidth = 4; ctxS.strokeRect(0, 0, 256, 256);
+    const corMeiaoBase = (pecaMeiao && pecaMeiao.cores && pecaMeiao.cores.length)
+        ? pecaMeiao.cores[0] : corCamisa;
+    if (pecaMeiao) {
+        pintarPadraoDeEquipamento(ctxS, 256, 256, pecaMeiao, corCamisa);
+    } else {
+        ctxS.fillStyle = corCamisa; ctxS.fillRect(0, 0, 256, 256); ctxS.fillStyle = '#ffffff'; ctxS.fillRect(0, 20, 256, 30); ctxS.fillRect(0, 70, 256, 15);
+    }
+    ctxS.strokeStyle = '#2f3640'; ctxS.lineWidth = 4; ctxS.strokeRect(0, 0, 256, 256);
     const sockTex = new THREE.CanvasTexture(cvsS);
-    const sockMats = [new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ color: corCamisa }), new THREE.MeshStandardMaterial({ color: corCamisa }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex })];
+    const sockMats = [new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ color: corMeiaoBase }), new THREE.MeshStandardMaterial({ color: corMeiaoBase }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex })];
 
     const u = 1.0; const corpo = new THREE.Group();
     const rig = { pelvis: null, chest: null, neck: null, lArm: null, rArm: null, lElbow: null, rElbow: null, lHand: null, rHand: null, lLeg: null, rLeg: null, lKnee: null, rKnee: null, lFoot: null, rFoot: null, olhoEsq: null, olhoDir: null };
