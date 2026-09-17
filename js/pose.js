@@ -100,6 +100,36 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
 
     Em tablets continua tudo desligado, como estava.
     */
+    /*
+    UMA CAIXA COM A PONTA MAIS FINA DO QUE A BASE.
+
+    A geometria continua a ser uma BoxGeometry — só os quatro vértices da ponta
+    são puxados para dentro. Um `CylinderGeometry` afunilado era mais curto de
+    escrever e arredondava o dedo; este modelo é todo de faces planas e um dedo
+    redondo ficava a destoar de tudo o resto.
+
+    A PONTA É O -Y: na mão, o y desce da palma para as unhas (ver criarBraco),
+    portanto pinçam-se os vértices com y negativo. Pinçar os de cima afinava o
+    dedo do lado errado, junto à palma.
+
+    O `computeVertexNormals` no fim não é opcional: sem ele as normais ficam as
+    da caixa recta e as quatro faces laterais apanham luz como se fossem
+    verticais, o que apaga o afunilamento no ecrã.
+    */
+    function caixaAfunilada(w, h, d, afunil) {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const pos = geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            if (pos.getY(i) < 0) {
+                pos.setX(i, pos.getX(i) * afunil);
+                pos.setZ(i, pos.getZ(i) * afunil);
+            }
+        }
+        pos.needsUpdate = true;
+        geo.computeVertexNormals();
+        return geo;
+    }
+
     function criarPeca(geo, mat, castShadow = false) { 
         const m = new THREE.Mesh(geo, mat); 
         m.castShadow = isTouchDevice ? false : castShadow; 
@@ -206,7 +236,126 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
         const elb = new THREE.Group(); elb.position.y = -1.0; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));
         const low = criarPeca(new THREE.BoxGeometry(u * 0.3, u * 0.8, u * 0.3), blockMat, true); low.position.y = -0.4; elb.add(low);
         const handG = new THREE.Group(); handG.position.y = -0.8; elb.add(handG);
-        const mao = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.4, u * 0.2), blockMat); mao.position.y = -0.2; mao.rotation.y = Math.PI / 2; handG.add(mao);
+        /*
+        A MÃO. O `handG` é o pivô e NÃO se move: é dele que o IK dos braços, o
+        `colarBolaAsMaos` e os testes de contacto lêem a posição (ver
+        MaoDetalhada em config/animations.js).
+
+        O `rotation.y = PI/2` é a convenção antiga e fica: põe a largura da
+        palma ao longo de Z do antebraço, que é a orientação com que todas as
+        poses já foram afinadas. Dentro do sub-grupo o referencial é o da mão —
+        x atravessa a palma, y desce pelos dedos, z é a espessura.
+        */
+        const MD = (typeof MaoDetalhada !== 'undefined') ? MaoDetalhada : null;
+
+        /*
+        A JUNTA DO PUNHO, no pivô, como a do cotovelo e a do joelho. Vai no
+        `handG` e não no `maoG` — uma esfera é indiferente à rotação, e assim
+        não depende da convenção de PI/2 da mão.
+
+        É ela que faz a LIGAÇÃO entre o antebraço e a mão girar sem abrir
+        folga, e é o que torna o pulso animável nas defesas do guarda-redes
+        (ver MaoDetalhada.juntaRaio, com os canais já existentes).
+        */
+        if (MD && MD.activo && MD.juntaRaio > 0) {
+            handG.add(criarPeca(new THREE.SphereGeometry(u * MD.juntaRaio, 12, 12), jointMat));
+        }
+
+        const maoG = new THREE.Group(); maoG.rotation.y = Math.PI / 2; handG.add(maoG);
+
+        if (!MD || !MD.activo) {
+            // A laje de sempre, para se poder desligar a mão nova num sítio só.
+            const mao = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.4, u * 0.2), blockMat);
+            mao.position.y = -0.2; maoG.add(mao);
+        } else {
+            /*
+            O PUNHO fica entre o antebraço e a palma, e é mais fino do que
+            ambos (ver MaoDetalhada). Sai do pivô para baixo, portanto o pivô
+            continua no pulso — que é onde a articulação está.
+            */
+            const punhoComp = MD.punhoComp || 0;
+            if (punhoComp > 0) {
+                const punho = criarPeca(new THREE.BoxGeometry(
+                    u * MD.punhoLarg, u * punhoComp, u * MD.punhoEsp), blockMat);
+                punho.position.y = -punhoComp / 2;
+                maoG.add(punho);
+            }
+
+            /*
+            A PALMA E TUDO O QUE LHE ESTÁ PRESO vivem num grupo próprio,
+            deslocado para baixo do punho. Assim os dedos e o polegar continuam
+            a ser posicionados em relação à palma e não ao pulso — mexer no
+            `punhoComp` desloca o conjunto todo sem desalinhar nada.
+            */
+            const palmaG = new THREE.Group();
+            palmaG.position.y = -punhoComp;
+            maoG.add(palmaG);
+
+            const palma = criarPeca(new THREE.BoxGeometry(
+                u * MD.palmaLarg, u * MD.palmaComp, u * MD.palmaEsp), blockMat);
+            palma.position.y = -MD.palmaComp / 2;
+            palmaG.add(palma);
+
+            /*
+            OS DEDOS dividem a largura da palma em partes iguais, com folga
+            entre eles: é a folga que os faz ler como dedos e não como um bloco
+            ranhurado. O primeiro fica centrado na sua fatia, não na borda.
+            */
+            const n = Math.max(1, MD.dedos);
+            const fatia = MD.palmaLarg / n;
+            const dedoLarg = Math.max(0.02, fatia - MD.folgaEntreDedos);
+            const afunil = (typeof MD.dedoAfunil === 'number') ? MD.dedoAfunil : 1;
+            const decaim = (typeof MD.dedoDecaimento === 'number') ? MD.dedoDecaimento : 0;
+            for (let i = 0; i < n; i++) {
+                /*
+                O dedo 0 e o do lado do POLEGAR, e e o mais comprido; dai para o
+                outro lado cada um encurta `dedoDecaimento` (ver MaoDetalhada).
+                */
+                const comp = Math.max(0.03, MD.dedoComp * (1 - decaim * i));
+                const dedo = criarPeca(caixaAfunilada(
+                    u * dedoLarg, u * comp, u * MD.dedoEsp, afunil), blockMat);
+                /*
+                TODOS ARRANCAM DA PALMA. O centro de cada um depende do seu
+                comprimento, senao os mais curtos ficavam a flutuar com uma
+                folga entre a palma e a base do dedo.
+                */
+                dedo.position.set(
+                    u * (-MD.palmaLarg / 2 + fatia * (i + 0.5)),
+                    -(MD.palmaComp + comp / 2),
+                    0);
+                palmaG.add(dedo);
+            }
+
+            /*
+            O POLEGAR APONTA PARA A FRENTE DO CORPO, nas duas mãos.
+
+            Estava espelhado pelo braço (`x < 0 ? -1 : 1`) e saiu errado: com o
+            `maoG` rodado PI/2 em Y, o x LOCAL da mão corre ao longo do Z do
+            corpo, ou seja frente-trás e não lado-a-lado. Espelhar punha um
+            polegar para a frente e o outro PARA TRÁS — que foi o que se viu na
+            mão esquerda.
+
+            A rotação de +PI/2 em Y leva o local +x ao -z do corpo, e o +z do
+            corpo é a frente (a mesma convenção do eixo do tombo no
+            gk_dive.js). Logo a frente é o local -x, igual nas duas mãos: com as
+            palmas voltadas ao corpo, os dois polegares apontam para a frente, e
+            não há nada para espelhar.
+
+            Roda-se em Z para ele abrir da palma, e o pivô fica no encaixe com a
+            palma (o grupo intermédio), senão rodar deslocava-o em vez de o
+            abrir.
+            */
+            const ladoPolegar = -1;
+            const polegarG = new THREE.Group();
+            polegarG.position.set(u * ladoPolegar * MD.palmaLarg / 2, -MD.palmaComp * 0.45, 0);
+            polegarG.rotation.z = ladoPolegar * MD.aberturaPolegar;
+            palmaG.add(polegarG);
+            const polegar = criarPeca(caixaAfunilada(
+                u * MD.polegarLarg, u * MD.polegarComp, u * MD.polegarEsp,
+                (typeof MD.dedoAfunil === 'number') ? MD.dedoAfunil : 1), blockMat);
+            polegar.position.y = -MD.polegarComp / 2;
+            polegarG.add(polegar);
+        }
         grp.rotation.z = x < 0 ? -Math.PI / 16 : Math.PI / 16; chest.add(grp); return { raiz: grp, cotovelo: elb, mao: handG };
     }
 

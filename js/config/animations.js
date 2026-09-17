@@ -563,6 +563,126 @@ O `pesoNumero` é vazio de propósito para a Bauhaus: ela já é pesada, e pedir
 engorda os traços e fecha os contra-formas dos algarismos.
 =============================================================================
 */
+/*
+=============================================================================
+A MÃO — palma, quatro dedos e polegar
+=============================================================================
+Era uma caixa só (`0.35 x 0.4 x 0.2`), uma laje na ponta do antebraço. Passa a
+ter dedos, a partir da referência dada.
+
+O QUE NÃO PODE MUDAR é o pivô. O grupo da mão (`handG`) fica onde estava, a
+`y = -0.8` do cotovelo, porque é dele que meio motor lê a posição da mão:
+o alcance do IK dos braços (ik.js diz `L2 = 0.8`), o `colarBolaAsMaos` e o
+`fecharMaosNaBola` (player.js), o teste de contacto do mergulho (gk_dive.js) e
+o do `resolveBallContact` (match_physics.js). Acrescentar geometria por baixo
+dele não mexe na origem do grupo, portanto nada disso se move.
+
+A mão fica 0.06 mais comprida do que a laje (0.26 de palma + 0.20 de dedo
+contra os 0.40 de antes). É de propósito: uma mão é mais comprida do que larga,
+e a laje não era.
+
+`aberturaPolegar` em radianos: 0 deixa o polegar paralelo aos dedos, mais afasta-o
+da palma. O lado dele é espelhado pelo braço, para as duas mãos não ficarem
+ambas com o polegar do mesmo lado.
+=============================================================================
+*/
+const MaoDetalhada = {
+    activo: true,
+    /*
+    O PUNHO, e ele é MAIS FINO DO QUE O ANTEBRAÇO — pedido.
+
+    O antebraço é `0.30 x 0.30` de secção (ver `low` no criarBraco). Antes não
+    havia punho nenhum: a palma encaixava direita na ponta do antebraço, e como
+    a palma tem 0.35 de largura contra os 0.30 dele, o contorno ALARGAVA no
+    pulso em vez de afunilar.
+
+    0.24 é 80% da secção do antebraço: o pulso estreita visivelmente e a mão
+    volta a abrir depois dele — antebraço, pulso fino, mão larga.
+
+    `punhoComp` é a ALTURA da faixa, e esteve em 0.09: *"o punho está muito
+    grande, reduz pela metade"*, e era na altura. 0.045 é a metade, 1.5 cm no
+    boneco — uma faixa de pulso, não um segmento de braço.
+
+    (Reduzi primeiro a SECÇÃO, de 0.24 para 0.12, e era o eixo errado.)
+
+    `punhoComp` empurra a palma e tudo o que lhe está preso para baixo, e é de
+    propósito: o pivô da mão (`handG`) fica no PULSO, onde a articulação
+    realmente está, e não pode mover-se — meio motor lê a posição da mão dali.
+    */
+    punhoLarg: 0.24, punhoComp: 0.045, punhoEsp: 0.24,
+    /*
+    A JUNTA DO PUNHO — a esfera que faz a ligação girar sem abrir folga.
+
+    O cotovelo e o joelho já têm a deles (`smallJointGeo`, raio 0.15). O punho
+    não tinha nenhuma: o antebraço acabava numa face plana e a mão começava
+    noutra, e ao rodar o pulso as duas faces afastavam-se e via-se por dentro.
+
+    0.12 de raio dá 0.24 de diâmetro, exactamente a secção do punho — o mesmo
+    padrão do cotovelo, cuja esfera (0.15) bate com a secção do antebraço
+    (0.30). Uma esfera que bate com a secção lê-se como articulação; uma maior
+    lê-se como bola.
+
+    Ela é mais ALTA do que a faixa do punho (0.24 contra 0.045) e isso é
+    normal: a do cotovelo também atravessa o braço e o antebraço. É o que fecha
+    a ligação quando o pulso roda.
+
+    É ESTA A LIGAÇÃO que permite animar o pulso nas defesas do guarda-redes. O
+    nó é o `rig.lHand`/`rig.rHand`, e os canais já existem e já estão ligados:
+    `maoLx`/`maoLy`/`maoLz` e `maoRx`/`maoRy`/`maoRz`, amostrados pelo
+    `amostrarClipDefesaGK` e escritos pelo `aplicarPesECabeca`. Os clips
+    GkLowClip/GkJump3Clip/GkJumpClip podem usá-los sem mais nada — só lhes
+    faltam os valores nos keyframes.
+    */
+    juntaRaio: 0.12,
+    // Palma
+    palmaLarg: 0.35, palmaComp: 0.26, palmaEsp: 0.18,
+    /*
+    Dedos ao longo da largura da palma, SEM contar o polegar. Três, portanto
+    quatro dedos ao todo — pedido. Eram quatro mais o polegar, cinco.
+
+    A largura de cada um sai da divisão da palma, não de um número escrito à
+    mão: mudar `dedos` ou `palmaLarg` reajusta-os sozinho e a palma continua
+    cheia de ponta a ponta.
+    */
+    dedos: 3,
+    dedoComp: 0.20, dedoEsp: 0.15,
+    folgaEntreDedos: 0.015,
+    /*
+    OS DEDOS ENCURTAM A PARTIR DO POLEGAR — pedido: o primeiro a seguir ao
+    dedão um pouquinho maior do que o do meio, e esse um pouquinho maior do que
+    o último.
+
+    Uma taxa e não uma lista de comprimentos: com `dedoDecaimento` a 0.08 cada
+    dedo fica 8% mais curto do que o anterior, e a regra continua a valer se
+    mudarem `dedos` de 3 para 4 ou 5. Uma lista escrita à mão ficaria curta no
+    dia em que alguém acrescentasse um dedo.
+
+    O dedo 0 é o mais próximo do polegar — os dois ficam do mesmo lado da palma
+    (ver o cálculo da posição em criarBraco).
+
+        dedo 0   0.200   (o do polegar)
+        dedo 1   0.184
+        dedo 2   0.169
+    */
+    dedoDecaimento: 0.08,
+    /*
+    E A PONTA É MAIS FINA DO QUE A BASE — pedido.
+
+    `dedoAfunil` é quanto da secção da base sobra na ponta: 0.78 deixa a ponta
+    com 78% da largura e da espessura junto à palma. Vale para os dedos e para
+    o polegar.
+
+    Não se faz com um cilindro: a geometria continua a ser uma CAIXA, com os
+    quatro vértices da ponta puxados para dentro (ver `caixaAfunilada` no
+    pose.js). Um cilindro arredondava o dedo e o modelo é todo de faces planas.
+    */
+    dedoAfunil: 0.78,
+    // Polegar
+    polegarLarg: 0.09, polegarComp: 0.17, polegarEsp: 0.15,
+    aberturaPolegar: 0.55
+};
+if (typeof window !== 'undefined') window.MaoDetalhada = MaoDetalhada;
+
 const CamisolaTipografia = {
     fonteNumero: '"Bauhaus 93", "Segoe UI", Arial, sans-serif',
     pesoNumero: '',
