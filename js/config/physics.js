@@ -1018,7 +1018,13 @@ const FuncionariosEstadio = {
     grupos: {
         activo: true,
         porLadoLateral: 3,     // quantos grupos em cada lateral
-        porLadoFundo: 2,       // e em cada fundo
+        /*
+        ATRÁS DAS BALIZAS SÃO MAIS, e é assim num estádio: o fotógrafo quer a
+        cara de quem marca e a bola a entrar, portanto as duas linhas de fundo
+        enchem-se e as laterais têm meia dúzia. Pedido: *"pode colocar mais
+        repórters atrás dos gols"* — eram 2 grupos (6 pessoas) por fundo.
+        */
+        porLadoFundo: 5,       // e em cada fundo
         pessoasPorGrupo: 3,
         // Espaço entre duas pessoas do mesmo grupo, ao longo da linha.
         passoNoGrupo: 1.3,
@@ -1071,6 +1077,12 @@ const FuncionariosEstadio = {
         calcas: '#25272c',
         emissiveColete: '#4a3200',
         /*
+        OS SAPATOS SÃO UM CANAL À PARTE, e não a cor das calças: com os pés no
+        canal do tecido, um fotógrafo de calças cáqui ficava de sapatos cáqui.
+        Escuros nos dois fardamentos — é calçado de trabalho.
+        */
+        sapatos: '#1b1c1f',
+        /*
         A roupa da imprensa. Tons de gente vestida à civil num relvado —
         ganga, cáqui, cinza, verde-escuro, bordô —, e nenhum deles perto do
         equipamento das duas equipas (azul e vermelho vivos): quem está atrás
@@ -1089,3 +1101,78 @@ const FuncionariosEstadio = {
     variacaoCor: 0.10
 };
 if (typeof window !== 'undefined') window.FuncionariosEstadio = FuncionariosEstadio;
+
+/*
+=============================================================================
+GRUAS DE CÂMARA — a lança de televisão atrás de cada baliza
+=============================================================================
+Pedido, com fotografia: *"qual a chance de colocar uma grua atrás de cada gol
+com uma câmera nela?"*. Chance total: é estrutura, não é gente — cinco caixas e
+um cilindro por grua, sem rig, sem animação e sem update por frame.
+
+A PRIMEIRA VERSÃO ERA UM MONSTRO, e a fotografia mostrou-o: *"a grua tá
+gigante"*. Tinha 5.2 m de pivô e 12 m de lança a atravessar o ar por cima da
+baliza — do tamanho de uma grua de obra, e a tapar o que ela existe para
+mostrar. O que está na fotografia é uma **jib de televisão**: um carrinho no
+chão atrás das placas, uma coluna à altura de um homem, e um braço de cinco
+metros com a câmara na ponta.
+
+    E FICA PARALELA À LINHA DE FUNDO, que é a segunda metade do pedido. A lança
+    corre em X, ao longo do fundo, atrás das placas — não aponta para dentro do
+    campo. É o que a foto mostra e é o que faz sentido: uma jib atrás da baliza
+    varre a área de um poste ao outro, e para isso o braço tem de correr ao
+    lado da linha e não por cima dela.
+
+`desvioX` é onde a base assenta, para o lado do eixo da baliza; a lança aponta
+para o eixo, portanto a câmara acaba perto do poste — o enquadramento clássico
+de trás da baliza. Ver a vista da câmara dela na tecla 8 (`cameraMode` 'grua',
+match_ui.js).
+
+A LANÇA NÃO PODE ENTRAR NO CAMPO: a base está `recuoDaPlaca` metros para fora
+dos painéis e o braço corre paralelo à linha, portanto nada disto chega ao
+relvado — o `GruasDeCamera.build` (js/staff.js) confirma-o e avisa, em vez de
+deixar passar uma lança pendurada sobre a pequena área.
+=============================================================================
+*/
+const GruaDeCamera = {
+    activo: true,
+
+    // Onde o carrinho assenta: para fora das placas, e ao lado do eixo.
+    recuoDaPlaca: 2.0,
+    desvioX: 13.0,
+
+    /*
+    AS MEDIDAS SÃO AS DE UMA JIB, e não de uma grua de obra:
+
+        pivô a 2.3 m      a altura de onde o operador a maneja
+        lança de 5.5 m    do pivô à câmara
+        braço de 1.6 m    o lado do contrapeso
+
+    Eram 5.2 / 12.0 / 3.0. A lança de 12 m punha a câmara a 7 m de altura no
+    meio do ar, e de qualquer câmara do jogo lia-se como um andaime.
+    */
+    baseLargura: 1.1,
+    baseAltura: 0.25,
+    alturaPivo: 2.3,
+    larguraTorre: 0.30,
+    comprimentoLanca: 5.5,
+    espessuraLanca: 0.18,
+    /*
+    Quanto a ponta DESCE, em radianos. O pivô roda em X e a lança nasce ao
+    longo de +Z (só depois o grupo inteiro é rodado para ficar paralelo ao
+    fundo), portanto o sinal é POSITIVO para a ponta descer (`y = -z·sin(θ)`) —
+    com o sinal trocado a ponta subia e o contrapeso ia ao chão, que foi o que
+    aconteceu à primeira e o que o teste apanhou.
+    */
+    inclinacaoLanca: 0.10,
+    comprimentoContrapeso: 1.6,
+    contrapeso: 0.55,
+
+    cores: {
+        estrutura: 0xe8c11a,   // o amarelo das gruas de televisão
+        base: 0x3b3f46,
+        contrapeso: 0x2a2d33,
+        camara: 0x15171b
+    }
+};
+if (typeof window !== 'undefined') window.GruaDeCamera = GruaDeCamera;

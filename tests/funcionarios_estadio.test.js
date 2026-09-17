@@ -257,6 +257,63 @@ function construir() {
     }
 }
 
+/* --- 7. Calças compridas, e cada um virado para o seu lado ------------ */
+{
+    // Cinco canais: as pernas saíram da pele para o tecido, e os pés têm
+    // canal próprio.
+    const canais = Object.keys(Staff._geometrias(mod.CrowdModel.poses.dePe));
+    for (const esperado of ['pele', 'camisa', 'calcao', 'cabelo', 'sapato']) {
+        if (!canais.includes(esperado)) erro(`falta o canal ${esperado} no corpo do funcionário`);
+    }
+
+    /*
+    A CANELA NÃO PODE SER PELE. Se as pernas voltarem ao canal da pele, o
+    canal `pele` volta a descer até ao chão — é isso que se mede, e não a cor.
+    */
+    const geos = Staff._geometrias(mod.CrowdModel.poses.dePe);
+    geos.pele.computeBoundingBox();
+    geos.calcao.computeBoundingBox();
+    geos.sapato.computeBoundingBox();
+    // 0.59 m é a mão, que é a peça de pele mais baixa de quem está de pé com
+    // os braços ao lado do corpo; uma canela desceria a 0.1.
+    if (geos.pele.boundingBox.min.y < 0.4) {
+        erro(`a pele desce até y=${geos.pele.boundingBox.min.y.toFixed(2)} — as pernas voltaram a estar à mostra`);
+    }
+    if (geos.calcao.boundingBox.min.y > 0.35) {
+        erro(`as calças acabam em y=${geos.calcao.boundingBox.min.y.toFixed(2)} — não são compridas`);
+    }
+    if (geos.sapato.boundingBox.max.y > 0.25) erro('o sapato não está no chão');
+
+    /*
+    ORIENTAÇÃO: o anel de costas para o campo (vigia o público), a imprensa de
+    frente para ele (filma o jogo). Mede-se a frente do boneco (+Z rodado) e
+    projecta-se na direcção do centro do campo.
+    */
+    const { grupo } = construir();
+    const m = new THREE.Matrix4(), v = new THREE.Vector3();
+    const q = new THREE.Quaternion(), esc = new THREE.Vector3();
+    const frente = new THREE.Vector3();
+    let anelErrado = 0, imprensaErrada = 0, nAnel = 0, nImprensa = 0;
+
+    grupo.children.forEach(im => {
+        if (!im.isInstancedMesh || im.geometry.type === 'BoxGeometry') return;
+        for (let i = 0; i < im.count; i++) {
+            im.getMatrixAt(i, m);
+            m.decompose(v, q, esc);
+            frente.set(0, 0, 1).applyQuaternion(q);
+            // Positivo = a olhar para o centro do campo.
+            const paraOCampo = frente.x * -v.x + frente.z * -v.z;
+            const noAnel = Math.abs(v.x) > GEO.bancadaX - 2 || Math.abs(v.z) > GEO.bancadaZ - 2;
+            if (noAnel) { nAnel++; if (paraOCampo > 0) anelErrado++; }
+            else { nImprensa++; if (paraOCampo < 0) imprensaErrada++; }
+        }
+    });
+
+    if (!nAnel || !nImprensa) erro('não há gente nos dois anéis para comparar a orientação');
+    if (anelErrado) erro(`${anelErrado} funcionários do anel virados para o campo — deviam vigiar o público`);
+    if (imprensaErrada) erro(`${imprensaErrada} repórteres de costas para o campo`);
+}
+
 if (falhas) {
     console.error(`FALHOU: ${falhas} problema(s)`);
     process.exit(1);

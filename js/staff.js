@@ -158,6 +158,41 @@ const Staff = {
     },
 
     /*
+    O CORPO VESTIDO DE TRABALHO: calças compridas e sapatos.
+
+    Pedido: *"eles têm que estar de calças compridas"*. O corpo do público tem
+    a coxa e a canela no canal da PELE (é um adepto de calções), portanto
+    pintar-lhe as calças não era uma cor: era mudar em que canal as pernas
+    caem. O `Crowd._pecas(pose, mapa)` aceita essa troca — as caixas são as
+    mesmas, na mesma ordem, muda só o canal —, e é por isso que não há aqui uma
+    segunda cópia do corpo a divergir da do crowd.js.
+
+        pernas  ->  `calcao`, o canal do tecido. A perna inteira fica da cor
+                    das calças, e o bloco do calção que lá estava passa a ser
+                    a cintura delas.
+        pés     ->  `sapato`, um canal novo e escuro: com os pés no canal das
+                    calças, um fotógrafo de calças cáqui ficava de sapatos
+                    cáqui.
+
+    São cinco canais em vez de quatro — cinco draw calls por pose. A escala é a
+    do corpo dos jogadores e vem de lá (`ESCALA_CORPO`, pose.js), como no
+    crowd.js: escrita à mão, os funcionários ficariam de outro tamanho que todo
+    o mundo assim que ela mudasse.
+    */
+    _geometriasVestidas(pose) {
+        const pecas = Crowd._pecas(pose, { perna: 'calcao', pe: 'sapato' });
+        const escala = (typeof ESCALA_CORPO === 'number') ? ESCALA_CORPO : 1.8 / 5.5;
+        const saida = {};
+        for (const canal in pecas) {
+            if (!pecas[canal].length) continue;
+            const g = mergeNonIndexedGeometries(pecas[canal]);
+            g.scale(escala, escala, escala);
+            saida[canal] = g;
+        }
+        return saida;
+    },
+
+    /*
     Geometrias por canal para uma pose, com os PÉS NO ZERO.
 
     A pose do público está medida para um degrau (ver `alturaBacia` no
@@ -167,7 +202,7 @@ const Staff = {
     canal a canal, senão a cabeça descia até ao chão junto com os pés.
     */
     _geometrias(pose) {
-        const geos = Crowd._geometriasDaPose(pose);
+        const geos = this._geometriasVestidas(pose);
         let minY = Infinity;
         for (const canal in geos) {
             geos[canal].computeBoundingBox();
@@ -202,6 +237,11 @@ const Staff = {
         const imprensa = (tipo === 'imprensa');
         if (canal === 'camisa') {
             return c.set(imprensa ? F.cores.coleteImprensa : F.cores.colete);
+        }
+        if (canal === 'sapato') {
+            c.set(F.cores.sapatos);
+            const ks = 1 + (rnd() - 0.5) * 2 * F.variacaoCor;
+            return c.multiplyScalar(ks);
         }
         if (canal === 'calcao') {
             const baralho = F.cores.roupasImprensa;
@@ -328,11 +368,23 @@ const Staff = {
             }
 
             pontos.forEach((p, i) => {
-                // Virado para o centro do campo: o boneco olha para +Z com
-                // rotY = 0 (a mesma convenção das cadeiras, ver
-                // addSeatInstance), portanto a direcção até à origem é
-                // atan2(-x, -z).
-                const rotY = Math.atan2(-p.x, -p.z) +
+                /*
+                QUEM OLHA PARA ONDE — e são para lados opostos.
+
+                Pedido: *"os funcionários vão ficar virados para o público e
+                não para o campo"*. É o trabalho deles: um segurança vigia a
+                bancada, de costas para o jogo — virado para o relvado estaria
+                a ver o jogo, que é o contrário do que ali faz. A imprensa
+                continua virada para o CAMPO, pela mesma razão ao contrário: é
+                o jogo que eles filmam.
+
+                O boneco olha para +Z com rotY = 0 (a convenção das cadeiras,
+                ver `addSeatInstance`), portanto a direcção até à origem é
+                `atan2(-x, -z)` e a que lhe dá as costas é `atan2(x, z)`.
+                */
+                const paraOPublico = (p.tipo === 'anel');
+                const rotY = (paraOPublico ? Math.atan2(p.x, p.z)
+                                           : Math.atan2(-p.x, -p.z)) +
                     (rnd() - 0.5) * 2 * F.variacaoRotacao;
                 const escala = F.escalaMin + rnd() * (F.escalaMax - F.escalaMin);
 
@@ -397,3 +449,178 @@ const Staff = {
 };
 
 if (typeof window !== 'undefined') window.Staff = Staff;
+
+/*
+=============================================================================
+GRUAS DE CÂMARA — a lança de televisão atrás de cada baliza
+=============================================================================
+Vive aqui e não no `createField` pela mesma razão que o `Staff`: é cenário do
+recinto, construído uma vez, sem nada a correr por frame. E fica neste ficheiro
+porque é do mesmo mundo dos repórteres atrás das placas — a grua é a câmara
+deles, e as duas coisas partilham as medidas das placas.
+
+As medidas e as cores estão no `GruaDeCamera` (config/physics.js), com o
+desenho explicado. Aqui está a montagem: cada grua é um `Group` com a base, a
+torre, a lança por cima da baliza, o contrapeso atrás e a cabeça da câmara na
+ponta — e o grupo é rodado 180° na baliza oposta, em vez de haver duas versões
+das mesmas contas com os sinais trocados.
+=============================================================================
+*/
+const GruasDeCamera = {
+    build(grupo, geo) {
+        const G = (typeof GruaDeCamera !== 'undefined') ? GruaDeCamera : null;
+        if (!G || !G.activo || !grupo || !geo) return 0;
+
+        const matEstrutura = new THREE.MeshStandardMaterial({
+            color: G.cores.estrutura, roughness: 0.55, metalness: 0.25
+        });
+        const matBase = new THREE.MeshStandardMaterial({ color: G.cores.base, roughness: 0.9 });
+        const matPeso = new THREE.MeshStandardMaterial({ color: G.cores.contrapeso, roughness: 0.8 });
+        const matCamara = new THREE.MeshStandardMaterial({ color: G.cores.camara, roughness: 0.4 });
+
+        const caixa = (pai, mat, w, h, d, x, y, z) => {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            m.position.set(x, y, z);
+            m.castShadow = true;
+            m.receiveShadow = false;
+            pai.add(m);
+            return m;
+        };
+
+        /*
+        UMA GRUA, montada com a lança a apontar para +Z. A baliza do outro lado
+        recebe o mesmo grupo rodado meia volta: as contas são as mesmas e não há
+        um segundo jogo de sinais para manter a par.
+        */
+        const montar = (pendura) => {
+            const g = new THREE.Group();
+
+            caixa(g, matBase, G.baseLargura, G.baseAltura, G.baseLargura,
+                0, G.baseAltura / 2, 0);
+            caixa(g, matEstrutura, G.larguraTorre, G.alturaPivo, G.larguraTorre,
+                0, G.alturaPivo / 2, 0);
+
+            /*
+            A LANÇA E O CONTRAPESO SÃO FILHOS DO PIVÔ, e é o pivô que se
+            inclina. Inclinar as duas peças à parte era ter de repetir a
+            trigonometria em cada uma — e a ponta do contrapeso tem de subir
+            exactamente o que a da lança desce, senão a grua fica torta.
+            */
+            const pivo = new THREE.Object3D();
+            pivo.position.y = G.alturaPivo;
+            pivo.rotation.x = G.inclinacaoLanca;
+            g.add(pivo);
+
+            caixa(pivo, matEstrutura, G.espessuraLanca, G.espessuraLanca,
+                G.comprimentoLanca, 0, 0, G.comprimentoLanca / 2);
+            caixa(pivo, matEstrutura, G.espessuraLanca, G.espessuraLanca,
+                G.comprimentoContrapeso, 0, 0, -G.comprimentoContrapeso / 2);
+            caixa(pivo, matPeso, G.contrapeso, G.contrapeso, G.contrapeso,
+                0, 0, -G.comprimentoContrapeso);
+
+            /*
+            A CABEÇA DA CÂMARA pendura-se DEBAIXO da ponta e não em cima dela:
+            é assim que uma grua a leva, e é o que a deixa a olhar para o
+            relvado em vez de para o céu. A objectiva é um cilindro deitado —
+            deitado quer dizer rodado em x, porque um CylinderGeometry nasce ao
+            longo de Y.
+            */
+            const cabeca = new THREE.Object3D();
+            cabeca.position.set(0, -pendura, G.comprimentoLanca);
+            /*
+            A CÂMARA OLHA PARA O CAMPO, e a lança é que corre ao lado dele: o
+            quarto de volta aqui é o que separa a direcção do BRAÇO da direcção
+            do OLHAR. Vale nas duas balizas — o grupo de cada uma está rodado
+            para o seu lado, e este +90° local resolve-se no +Z de uma e no -Z
+            da outra, que é o relvado em ambos os casos.
+
+            É só o modelo: a vista da tecla 8 aponta ao sítio da bola (ver
+            `cameraMode` 'grua'). Mas uma câmara de cenário virada para a
+            bancada estraga a leitura de tudo o resto.
+
+            O SINAL É NEGATIVO nas duas, e a conta é esta: o grupo está rodado
+            +90° na baliza de z negativo e -90° na outra, e -90° locais caem no
+            relvado em ambos os casos (+Z numa, -Z na outra). Com +90° a câmara
+            ficava virada para fora do estádio — foi o que o teste mediu.
+            */
+            cabeca.rotation.y = -Math.PI / 2;
+            pivo.add(cabeca);
+            caixa(cabeca, matCamara, 0.34, 0.26, 0.34, 0, 0, 0);
+            const lente = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.08, 0.30, 12), matCamara);
+            lente.rotation.x = Math.PI / 2;
+            lente.position.set(0, 0, 0.26);
+            lente.castShadow = true;
+            cabeca.add(lente);
+
+            /*
+            A CABEÇA FICA GUARDADA no grupo: é o ponto de vista da câmara da
+            grua (tecla 8) e é dela que o `build` lê a posição no mundo — sem
+            isto, a vista tinha de repetir aqui fora a trigonometria do pivô.
+            */
+            g.userData.cabeca = cabeca;
+
+            return g;
+        };
+
+        /*
+        A CÂMARA FICA À ALTURA DE UM HOMEM, e a conta é esta: a ponta está
+        `alturaPivo - sin(inclinacao) * comprimentoLanca` (o pivô roda em X e a
+        lança nasce em +Z, logo o seno entra com sinal negativo), e a cabeça
+        pende `PENDURA` debaixo dela. Avisa-se se ela chegar ao chão — é o tipo
+        de coisa que só se vê quando se olha pela câmara da grua, e já ninguém
+        se lembra de ter mexido na inclinação.
+        */
+        const PENDURA = 0.30;
+        const alturaPonta = G.alturaPivo - Math.sin(G.inclinacaoLanca) * G.comprimentoLanca;
+        const alturaCamara = alturaPonta - PENDURA;
+        if (alturaCamara < 0.8 && typeof console !== 'undefined') {
+            console.warn(`GruasDeCamera: a câmara fica a ${alturaCamara.toFixed(2)} m do chão ` +
+                `— a lança está demasiado inclinada ou demasiado comprida`);
+        }
+
+        /*
+        ATRÁS DE CADA BALIZA E PARALELA AO FUNDO. O `placaZ` já traz o recuo
+        das placas de publicidade, portanto a grua acompanha-as se elas mudarem
+        de sítio — a mesma regra do `Staff`.
+
+        A lança é montada ao longo de +Z e é o GRUPO que roda um quarto de
+        volta para a pôr ao longo de X: assim a montagem tem um só jogo de
+        contas e o mesmo grupo serve as duas balizas. Uma rotação em Y de `a`
+        leva o +Z local a (sin a, 0, cos a), portanto -90° aponta a lança para
+        -X e +90° para +X — em cada baliza ela aponta para o EIXO, que é onde
+        está a baliza que ela filma.
+
+        E a câmara guarda-se: é ela que a vista da tecla 8 usa (ver o
+        `cameraMode` 'grua' em match_ui.js). Guardar aqui a posição já
+        calculada é o que evita uma segunda cópia destas contas do outro lado.
+        */
+        this.cameras = [];
+        const z = geo.placaZ + G.recuoDaPlaca;
+        for (const lado of [-1, 1]) {
+            const g = montar(PENDURA);
+            const baseX = lado * G.desvioX;
+            g.rotation.y = (baseX > 0) ? -Math.PI / 2 : Math.PI / 2;
+            g.position.set(baseX, 0, lado * z);
+            grupo.add(g);
+
+            g.updateMatrixWorld(true);
+            const pos = new THREE.Vector3();
+            g.userData.cabeca.getWorldPosition(pos);
+            this.cameras.push({ pos: pos, ladoZ: lado });
+
+            /*
+            NADA DISTO ENTRA NO CAMPO. A lança corre paralela ao fundo e a base
+            está fora das placas, portanto a ponta fica no mesmo z da base — se
+            algum dia deixar de ficar, é aqui que se sabe.
+            */
+            if (typeof LINHA_FUNDO === 'number' && Math.abs(pos.z) < LINHA_FUNDO &&
+                typeof console !== 'undefined') {
+                console.warn(`GruasDeCamera: a câmara entrou no campo (z=${pos.z.toFixed(1)})`);
+            }
+        }
+        return 2;
+    }
+};
+
+if (typeof window !== 'undefined') window.GruasDeCamera = GruasDeCamera;

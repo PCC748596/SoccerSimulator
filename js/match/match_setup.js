@@ -1425,16 +1425,30 @@ Object.assign(Match, {
         os repetir — quem mudar o `RECUO_LATERAL` ou o
         `PlacasPublicidade.recuo` arrasta o pessoal com eles.
         */
+        const recuoPlacas = (typeof PlacasPublicidade !== 'undefined' &&
+            PlacasPublicidade.activo) ? PlacasPublicidade.recuo : 5.0;
+
         if (typeof Staff !== 'undefined' && typeof FuncionariosEstadio !== 'undefined' &&
             FuncionariosEstadio.activo) {
-            const recuoPlacas = (typeof PlacasPublicidade !== 'undefined' &&
-                PlacasPublicidade.activo) ? PlacasPublicidade.recuo : 5.0;
             Staff.build(campoGrupo, {
                 bancadaX: BANCADA_X,
                 bancadaZ: BANCADA_Z,
                 cantoX: cornerX,
                 cantoZ: cornerZ,
                 raioPrimeiraFila: RAIO_PRIMEIRA_FILA,
+                placaX: MEIA_LARGURA_CAMPO + recuoPlacas,
+                placaZ: LINHA_FUNDO + recuoPlacas
+            });
+        }
+
+        /*
+        A GRUA DE TELEVISÃO atrás de cada baliza (ver GruaDeCamera). Sai das
+        mesmas medidas das placas, pela mesma razão do `Staff`, mas com o
+        interruptor PRÓPRIO: desligar os funcionários não é razão para desligar
+        as gruas, que não são gente.
+        */
+        if (typeof GruasDeCamera !== 'undefined') {
+            GruasDeCamera.build(campoGrupo, {
                 placaX: MEIA_LARGURA_CAMPO + recuoPlacas,
                 placaZ: LINHA_FUNDO + recuoPlacas
             });

@@ -350,10 +350,22 @@ const Crowd = {
 
     Devolve { pele: [geo...], camisa: [...], calcao: [...], cabelo: [...] }.
     */
-    _pecas(pose) {
+    /*
+    `mapa` (opcional) TROCA O CANAL DAS PERNAS E DOS PÉS, e existe por causa do
+    pessoal do estádio (js/staff.js): um adepto tem as pernas à mostra, um
+    funcionário anda de calças compridas e sapatos. As caixas são as MESMAS, na
+    MESMA ordem — muda só o canal de cor em que cada uma cai, e é por isso que
+    esta é a única maneira de o fazer sem uma segunda cópia do corpo a divergir
+    desta. Sem `mapa`, nada muda para o público.
+    */
+    _pecas(pose, mapa) {
         const u = 1.0;
         const P = pose || CrowdModel.poses.sentado;
+        const canalPerna = (mapa && mapa.perna) || 'pele';
+        const canalPe = (mapa && mapa.pe) || 'pele';
         const canais = { pele: [], camisa: [], calcao: [], cabelo: [] };
+        canais[canalPerna] = canais[canalPerna] || [];
+        canais[canalPe] = canais[canalPe] || [];
 
         const raiz = new THREE.Object3D();
 
@@ -410,15 +422,15 @@ const Crowd = {
         for (const lado of [-1, 1]) {
             const anca = no(pelvis, lado * 0.4, -0.3, 0);
             anca.rotation.x = P.anca;
-            caixa(anca, 'pele', u * 0.45, u * 1.0, u * 0.45, 0, -0.5, 0);
+            caixa(anca, canalPerna, u * 0.45, u * 1.0, u * 0.45, 0, -0.5, 0);
             caixa(anca, 'calcao', u * 0.5, u * 0.5, u * 0.5, 0, -0.25, 0);
 
             const joelho = no(anca, 0, -1.0, 0);
             joelho.rotation.x = P.joelho;
-            caixa(joelho, 'pele', u * 0.35, u * 0.9, u * 0.35, 0, -0.45, 0);
+            caixa(joelho, canalPerna, u * 0.35, u * 0.9, u * 0.35, 0, -0.45, 0);
             // Pé, em pele escura (as chuteiras do modelo não valem a pena a
             // esta distância — um canal a mais por um par de caixas).
-            caixa(joelho, 'pele', u * 0.4, u * 0.25, u * 0.7, 0, -1.0, u * 0.2);
+            caixa(joelho, canalPe, u * 0.4, u * 0.25, u * 0.7, 0, -1.0, u * 0.2);
         }
 
         raiz.updateWorldMatrix(true, true);

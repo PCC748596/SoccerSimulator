@@ -28,6 +28,8 @@ Object.assign(Match, {
             if (e.key === '5') this.setCameraMode('sideline');
             if (e.key === '6') this.setCameraMode('topdown');
             if (e.key === '7') this.setCameraMode('lateraltv');
+            // A câmara da grua de televisão atrás da baliza (ver GruaDeCamera).
+            if (e.key === '8') this.setCameraMode('grua');
             if (e.key === ' ' || e.code === 'Space') {
                 this.togglePause();
                 e.preventDefault();
@@ -285,6 +287,39 @@ Object.assign(Match, {
                     }
                 }
             }
+        } else if (window.cameraMode === 'grua') {
+            /*
+            A CÂMARA DA GRUA (tecla 8). O ponto de vista é a cabeça da jib
+            atrás da baliza — a posição real dela, guardada pelo
+            `GruasDeCamera.build`, e não uma reconstituição destas contas aqui.
+
+            QUAL DAS DUAS: a que está atrás da baliza para onde o jogo vai. Uma
+            é escolhida pelo SINAL do z da bola, que é a mesma regra que uma
+            realização segue — mostra-se a baliza que está a ser atacada, não a
+            que ficou atrás. Sem isto, metade do jogo era visto de 110 m.
+
+            O ZOOM NÃO SE APLICA: as outras vistas multiplicam a posição
+            inteira pelo `cameraZoom`, mas esta é um sítio físico do estádio —
+            multiplicá-lo levava a câmara para fora da grua, e o que se estava
+            a ver deixava de ser a grua.
+            */
+            const GR = (typeof GruasDeCamera !== 'undefined') ? GruasDeCamera : null;
+            const lista = (GR && GR.cameras) ? GR.cameras : null;
+            if (lista && lista.length) {
+                const ladoBola = Math.sign(this.ball.position.z) || 1;
+                const escolhida = lista.find(c => c.ladoZ === ladoBola) || lista[0];
+                targetPos.copy(escolhida.pos);
+            } else {
+                /*
+                Sem gruas construídas (podem estar desligadas no config), a
+                tecla não pode deixar a câmara onde estava a olhar para o nada:
+                fica o ponto onde a grua estaria, atrás da baliza mais perto da
+                bola.
+                */
+                const ladoBola = Math.sign(this.ball.position.z) || 1;
+                targetPos.set(9, 2.0, ladoBola * (CAMPO_COMP / 2 + 7));
+            }
+            lookTarget.copy(this.ball.position);
         } else if (window.cameraMode === 'topdown') {
             const aspect = window.innerWidth / window.innerHeight;
             // Campo deitado: precisamos caber (CAMPO_COMP + margem) na horizontal e (CAMPO_LARG + margem) na vertical
