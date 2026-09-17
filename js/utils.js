@@ -1159,6 +1159,90 @@ Agora a TEC manda na distância, com dispersão à volta dela: técnico alto enc
 a bola ao pé, técnico fraco larga-a longe e disputável. O `gauss` é injectado
 para a função ser pura e testável.
 */
+/*
+=============================================================================
+A ALTURA DE UM JOGADOR, E TUDO O QUE DELA DEPENDE
+=============================================================================
+Três funções e um princípio: a altura decide-se UMA vez por jogador, e todas
+as medidas de corpo saem dela por proporção. Ver AlturaJogador
+(config/physics.js) para a regra e para os números.
+
+Porque é que isto vive num sítio só: o `ALTURA_TESTA` estava espalhado por
+oito chamadas, cada uma a assumir um boneco de 1.855 m. Com alturas
+diferentes, acrescentar a correcção a cada chamada era garantir que uma ficava
+para trás — foi o que aconteceu hoje com as guardas do ciclo de passada e com
+as quatro cópias da escada do passe.
+=============================================================================
+*/
+
+// Ruído determinístico por jogador: a altura não muda entre frames nem entre
+// jogos, e dois jogadores iguais no papel não medem o mesmo.
+function _ruidoAltura(id) {
+    let x = ((id | 0) + 1) * 2654435761 % 4294967296;
+    x ^= x >>> 15; x = (x * 2246822519) % 4294967296;
+    x ^= x >>> 13; x = (x * 3266489917) % 4294967296;
+    x ^= x >>> 16;
+    // -1..1, centrado
+    return ((x / 4294967296) * 2) - 1;
+}
+
+/*
+A altura de um jogador, em metros. Determinística e estável.
+*/
+function alturaDoJogador(p) {
+    const A = (typeof AlturaJogador !== 'undefined') ? AlturaJogador : null;
+    const padrao = (typeof ALTURA_PADRAO === 'number') ? ALTURA_PADRAO : 1.855;
+    if (!A || !A.activo || !p) return padrao;
+    if (typeof p._alturaCache === 'number') return p._alturaCache;
+
+    let h = A.media;
+    h += (A.bonusPosto && A.bonusPosto[p.pos]) || 0;
+    h += (A.bonusEstilo && A.bonusEstilo[p.playingStyle]) || 0;
+
+    /*
+    Os mais rápidos são mais baixos, e os lentos mais altos: o termo é
+    CENTRADO na velocidade de referência (medida nos plantéis, ver
+    AlturaJogador.velocidadeRef). Centrá-lo em 50 punha todos a perder altura,
+    porque ninguém nos plantéis está abaixo disso.
+    */
+    const vel = (typeof p.skillFor === 'function') ? p.skillFor('SPEED') : A.velocidadeRef;
+    const span = A.velocidadeSpan || 12;
+    h -= A.penalVelocidade * ((vel - A.velocidadeRef) / span);
+
+    h += _ruidoAltura(p.id) * A.sigma;
+
+    h = Math.max(A.min, Math.min(A.max, h));
+    p._alturaCache = h;
+    return h;
+}
+
+/*
+A TESTA e o TOPO DA CABEÇA deste jogador, escalados pela altura dele.
+
+As constantes `ALTURA_TESTA` (1.74) e `ALTURA_CABECA` (1.72) são as de um
+boneco de `ALTURA_PADRAO`; aqui saem na proporção da altura real. Sem jogador
+em contexto devolvem a constante, que é o comportamento de sempre.
+*/
+function alturaTestaDe(p) {
+    const base = (typeof ALTURA_TESTA === 'number') ? ALTURA_TESTA : 1.74;
+    const padrao = (typeof ALTURA_PADRAO === 'number') ? ALTURA_PADRAO : 1.855;
+    if (!p) return base;
+    return base * (alturaDoJogador(p) / padrao);
+}
+
+function alturaCabecaDe(p) {
+    const base = (typeof ALTURA_CABECA === 'number') ? ALTURA_CABECA : 1.72;
+    const padrao = (typeof ALTURA_PADRAO === 'number') ? ALTURA_PADRAO : 1.855;
+    if (!p) return base;
+    return base * (alturaDoJogador(p) / padrao);
+}
+
+if (typeof window !== 'undefined') {
+    window.alturaDoJogador = alturaDoJogador;
+    window.alturaTestaDe = alturaTestaDe;
+    window.alturaCabecaDe = alturaCabecaDe;
+}
+
 function quedaNoPeito(tecSkill, gauss) {
     const B = BallControl;
     const tec = Math.max(0, Math.min(100, tecSkill || 0)) / 100;
@@ -1722,7 +1806,12 @@ cabeceio (ver resolveBallContact).
 */
 function distanciaAoCorpo(p, ponto) {
     const base = p.model.position.y;
-    const topo = base + ALTURA_CABECA;
+    /*
+    O TOPO É A CABEÇA DELE. Era o `ALTURA_CABECA` global: um jogador de 1.62 m
+    tinha um segmento de corpo 10 cm mais alto do que ele, e a bola tocava-lhe
+    acima da cabeça. Ver `alturaCabecaDe`, mais acima neste ficheiro.
+    */
+    const topo = base + alturaCabecaDe(p);
     const yContacto = THREE.MathUtils.clamp(ponto.y, base, topo);
     return {
         dist: Math.hypot(
@@ -1867,7 +1956,10 @@ mesma armadilha que a nota do `_gkErroU` descreve.
 */
 function pontoDeCabeceio(p, u, v) {
     if (typeof preverBolaEmAltura !== 'function' || !p || !p.model) return null;
-    const alvo = preverBolaEmAltura(p.model.position.y + ALTURA_TESTA);
+    // A testa DELE, e nao a do boneco de referencia: e este ponto que diz para
+    // onde ele corre para cabecear, e um alto le a bola mais cedo do que um
+    // baixo. Ver alturaTestaDe, mais acima neste ficheiro.
+    const alvo = preverBolaEmAltura(p.model.position.y + alturaTestaDe(p));
     if (!alvo) return null;
 
     const L = (typeof HeaderModel !== 'undefined') ? HeaderModel.leitura : null;

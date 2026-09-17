@@ -209,6 +209,24 @@ function construirCorpo(corCamisa, corCalcao, aparencia) {
     const hF = criarPeca(new THREE.BoxGeometry(u * 0.88, u * 0.15, u * 0.2), hairMat); hF.position.set(0, u * 0.45, u * 0.38);
     hairGrp.add(hT, hB, hL, hR, hF); head.add(hairGrp); neck.add(head);
 
+    /*
+    A PROPORÇÃO EM CABEÇAS — ver ProporcaoCorpo (config/physics.js).
+
+    Escala-se o `head`, e com ele a cara e o cabelo, que são filhos dele. O
+    QUEIXO fica onde está: a caixa da cabeça tem 1.0 de altura centrada em
+    0.575, portanto o queixo está em 0.075, e o novo centro é
+    `0.075 + 0.5*k` — sem isto encolher a cabeça abria um vão no pescoço.
+
+    Pôr `cabecas: 5.04` devolve `k = 1` e nada disto mexe.
+    */
+    if (typeof ProporcaoCorpo !== 'undefined') {
+        const k = ProporcaoCorpo.escalaCabeca;
+        if (Math.abs(k - 1) > 0.001) {
+            head.scale.setScalar(k);
+            head.position.y = 0.075 + 0.5 * k;
+        }
+    }
+
     const jointGeo = new THREE.SphereGeometry(u * 0.2, 16, 16); const smallJointGeo = new THREE.SphereGeometry(u * 0.15, 16, 16);
 
     function criarBraco(x) {
@@ -461,7 +479,20 @@ escrita à mão, com o valor antigo: quando esta mudou de `(1.8/5.5) * 0.9` para
 Agora é uma constante partilhada (`pose.js` carrega antes do `crowd.js`, ver a
 ordem no index.html) e mexer nela mexe nos dois.
 */
-const ESCALA_CORPO = 1.8 / 5.5;
+/*
+A ESCALA DO CORPO SAI DA PROPORÇÃO, para a ALTURA NÃO MUDAR com ela.
+
+Era `1.8 / 5.5` escrito à mão. Encolher a cabeça encurta o modelo em unidades
+locais, e sem recompensar aqui o jogador ficava mais baixo — e com ele a testa,
+que 25 sítios medem por `ALTURA_TESTA` (config/physics.js) em metros absolutos.
+
+Com a compensação, o topo da cabeça e a testa ficam onde estavam e nenhuma
+dessas constantes precisa de mudar. Ver ProporcaoCorpo, com a conta e a
+verificação de que `cabecas: 5.04` reproduz o `1.8 / 5.5` de antes.
+*/
+const ESCALA_CORPO = (typeof ProporcaoCorpo !== 'undefined')
+    ? (ProporcaoCorpo.alturaAlvo / ProporcaoCorpo.totalLocal)
+    : (1.8 / 5.5);
 if (typeof window !== 'undefined') window.ESCALA_CORPO = ESCALA_CORPO;
 
 /*

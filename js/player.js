@@ -3303,9 +3303,15 @@ class FootballPlayer {
         // real, e a bola aparecia a bater quase 1 m acima da cabeça no
         // frame da cabeçada.
         _v1.set(0, 0, 0.22).applyQuaternion(this.model.quaternion);
+        /*
+        A TESTA É A DELE. Era o `ALTURA_TESTA` global, de quando todos mediam
+        1.855 m; com alturas de 1.60 a 2.00 a bola colava-se 10 cm acima da
+        cabeça de um baixo e dentro do peito de um alto. Ver `alturaTestaDe`
+        (utils.js), o único sítio que faz esta conta.
+        */
         Match.ball.position.set(
             this.model.position.x + _v1.x,
-            this.model.position.y + ALTURA_TESTA,
+            this.model.position.y + alturaTestaDe(this),
             this.model.position.z + _v1.z);
 
         /*
@@ -3405,7 +3411,8 @@ class FootballPlayer {
                 const dxC = alvoX - Match.ball.position.x;
                 const dzC = alvoZc - Match.ball.position.z;
                 const distHC = Math.hypot(dxC, dzC);
-                const elevC = elevacaoParaAlvo(distHC, alvoY, pow, ALTURA_TESTA);
+                // A bola parte da testa DELE — ver alturaTestaDe (utils.js).
+                const elevC = elevacaoParaAlvo(distHC, alvoY, pow, alturaTestaDe(this));
                 const eC = (elevC === null) ? -0.05 : elevC;
                 const vhC = pow * Math.cos(eC);
                 Match.ballVel.set(
@@ -3496,7 +3503,7 @@ class FootballPlayer {
             }
 
             const balC = velocidadeDeLancamento(
-                distDesejada, ALTURA_TESTA, BallPhysics.raio, eP, BallPhysics.gravidade);
+                distDesejada, alturaTestaDe(this), BallPhysics.raio, eP, BallPhysics.gravidade);
 
             const vP = THREE.MathUtils.clamp(
                 balC ? balC.v : velocidadeParaAlcance(distDesejada, eP),
@@ -4075,7 +4082,9 @@ class FootballPlayer {
                 bola. Com ALTURA_CABECA o salto levava o TOPO do crânio à bola e
                 ela passava por cima sem contacto.
                 */
-                const subida = prev.y - (ALTURA_BASE_Y + ALTURA_TESTA);
+                // A subida que FALTA a ELE: um central de 1.95 precisa de
+                // saltar menos do que um lateral de 1.62 para a mesma bola.
+                const subida = prev.y - (ALTURA_BASE_Y + alturaTestaDe(this));
                 const halfT = S.duracao * 0.5;
                 const meuXNoPico = this.model.position.x + (this.velocity ? this.velocity.x * halfT : 0);
                 const meuZNoPico = this.model.position.z + (this.velocity ? this.velocity.z * halfT : 0);
@@ -4992,6 +5001,31 @@ class FootballPlayer {
     O `backMat` era escrito aqui em `this`; agora vem devolvido, porque a
     função não tem instância nenhuma para lhe tocar.
     */
+    /*
+    A ALTURA DELE, ESCRITA NA ESCALA DO MODELO.
+
+    O `construirCorpo` deixa o corpo à escala do boneco de referência
+    (`ESCALA_CORPO`, para `ALTURA_PADRAO` metros). Aqui multiplica-se pela
+    razão da altura DESTE jogador, e é isso que o faz medir o que deve.
+
+    Escala uniforme e não só em Y: um jogador de 1.95 m é maior em tudo, não um
+    boneco de 1.75 esticado. É também o que mantém as proporções da cabeça que
+    o ProporcaoCorpo define.
+
+    Não toca no `position.y`: a origem do modelo está nos pés (ver
+    ALTURA_BASE_Y), portanto escalar não o levanta nem o enterra.
+    */
+    aplicarAlturaAoCorpo() {
+        if (!this.model) return;
+        const padrao = (typeof ALTURA_PADRAO === 'number') ? ALTURA_PADRAO : 1.855;
+        const h = (typeof alturaDoJogador === 'function') ? alturaDoJogador(this) : padrao;
+        const base = (typeof ESCALA_CORPO === 'number') ? ESCALA_CORPO : 1;
+        const k = base * (h / padrao);
+        this.model.scale.set(k, k, k);
+        // Guardada para quem precisa dela sem recalcular (ver alturaTestaDe).
+        this.altura = h;
+    }
+
     buildBody(corCamisa, corCalcao) {
         const { corpo, rig, backMat } = construirCorpo(corCamisa, corCalcao, this.aparencia);
         this.backMat = backMat;
@@ -5176,6 +5210,22 @@ class FootballPlayer {
         o pe esquerdo nos postos da esquerda.
         */
         if (typeof pePreferido === 'function') this.pe = pePreferido(this.id, pos);
+
+        /*
+        E A ALTURA TAMBÉM SE RESOLVE AQUI, pela mesma razão que o pé bom: é
+        aqui que o POSTO se conhece.
+
+        No construtor não dá. O `buildBody` corre lá, mas o `this.pos` ainda
+        vale 'GK' para todos e o `playingStyle` é null — a altura sairia do
+        posto errado e ficava em cache. O `_alturaCache` é limpo antes de
+        recalcular, para um jogador que mude de posto a meio do jogo (uma
+        substituição, um recuo táctico) não ficar com a altura do posto
+        anterior.
+
+        Ver AlturaJogador (config/physics.js) e `alturaDoJogador` (utils.js).
+        */
+        this._alturaCache = undefined;
+        this.aplicarAlturaAoCorpo();
 
         const cvsBack = document.createElement('canvas'); cvsBack.width = 512; cvsBack.height = 512; const ctxBack = cvsBack.getContext('2d');
         ctxBack.fillStyle = this.corCamisa; ctxBack.fillRect(0, 0, 512, 512);

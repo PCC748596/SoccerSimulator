@@ -789,7 +789,7 @@ Object.assign(Match, {
         }
 
         if ((bestAltura >= BallControl.peitoYMin && bestAltura <= tectoPeito && best.jumpTimer <= 0) ||
-            (atingiuLimiteCabeca && bestAltura <= (ALTURA_TESTA + HeaderModel.janelaAcima) && best.jumpTimer <= 0)) {
+            (atingiuLimiteCabeca && bestAltura <= (alturaTestaDe(best) + HeaderModel.janelaAcima) && best.jumpTimer <= 0)) {
             /*
             LIMITE DE PEITOS SEGUIDOS. Sem ele, dois jogadores lado a lado
             matavam a bola no peito um ao outro indefinidamente: o
@@ -990,12 +990,22 @@ Object.assign(Match, {
         Agora a bola acima da janela da testa não é tocada por ninguém: cai, e
         quem estiver lá cabeceia-a quando ela chegar à altura certa.
         */
-        if (alturaRealDaBola > ALTURA_TESTA + HeaderModel.janelaAcima) return false;
+        /*
+        A TESTA É A DESTE JOGADOR, e não a do boneco de referência.
+
+        Era o `ALTURA_TESTA` global (1.74 m), de quando todos mediam o mesmo.
+        Com alturas de 1.60 a 2.00 (ver AlturaJogador), a janela do cabeceio
+        de um central de 1.95 fica 12 cm acima da de um lateral de 1.62 — que
+        é o ponto de ter alturas diferentes. Ver `alturaTestaDe` (utils.js),
+        que é o ÚNICO sítio que faz esta conta.
+        */
+        const testaBest = alturaTestaDe(best);
+        if (alturaRealDaBola > testaBest + HeaderModel.janelaAcima) return false;
 
         // A faixa é assimétrica: a cabeça alcança muito mais abaixo da testa
         // (queixo) do que acima dela (crânio). Ver HeaderModel.janelaAbaixo.
-        const naAlturaDaTesta = alturaRealDaBola >= ALTURA_TESTA - HeaderModel.janelaAbaixo &&
-            alturaRealDaBola <= ALTURA_TESTA + HeaderModel.janelaAcima;
+        const naAlturaDaTesta = alturaRealDaBola >= testaBest - HeaderModel.janelaAbaixo &&
+            alturaRealDaBola <= testaBest + HeaderModel.janelaAcima;
         const distHorizontal = Math.hypot(
             this.ball.position.x - best.model.position.x,
             this.ball.position.z - best.model.position.z);

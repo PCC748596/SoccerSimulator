@@ -232,6 +232,170 @@ Altura da TESTA acima da base do modelo.
 põe o centro da cabeça a ~1.64 m e a testa a ~1.75 m. Este valor é o ponto de
 contacto de um cabeceio — ver distanciaAoCorpo() em utils.js.
 */
+/*
+=============================================================================
+PROPORÇÃO DO CORPO, EM CABEÇAS
+=============================================================================
+O cânone de desenho mede a figura em alturas de cabeça, do queixo ao topo do
+crânio. Este modelo nasceu com 5.04 — uma proporção de banda desenhada, cabeça
+grande. Sete é a proporção heróica, a de um atleta desenhado.
+
+AS DUAS MEDIDAS SÃO DO MODELO, medidas e não estimadas (`construirBody` em
+pose.js, com as caixas somadas):
+
+    do pé ao queixo         4.543 unidades locais
+    do queixo ao cabelo     1.125 unidades locais   (a cabeça inteira)
+
+E a conta que sai delas, para N cabeças:
+
+    cabeca·k = (corpo + cabeca·k) / N     =>     k = corpo / ((N-1)·cabeca)
+
+    N = 7      k = 4.543 / (6 x 1.125)   = 0.673
+    N = 5.04   k = 1.000                 <- reproduz o modelo como estava
+
+A segunda linha é a prova da fórmula: pôr `cabecas: 5.04` devolve o modelo
+original sem tocar em mais nada.
+
+A ALTURA TOTAL NÃO MUDA. Encolher a cabeça encurtaria o boneco, e é por isso
+que o `ESCALA_CORPO` (pose.js) passa a sair daqui: reescala o corpo todo para
+a altura ficar nos `alturaAlvo`. Isso é o que mantém válidos os dois números
+mais abaixo — o topo da cabeça e a testa continuam onde estavam, porque o
+boneco continua com a mesma altura. Sem essa compensação, 25 sítios que usam
+`ALTURA_TESTA`/`ALTURA_CABECA` passavam a medir uma cabeça que já não está lá.
+=============================================================================
+*/
+const ProporcaoCorpo = {
+    cabecas: 5.5,
+    // Medidas do modelo, em unidades locais.
+    corpoAteQueixo: 4.543,
+    cabecaCheia: 1.125,
+    // Altura do jogador em metros, que a escala do corpo mantém.
+    alturaAlvo: 1.855,
+
+    // k da fórmula acima: quanto a cabeça encolhe (1.0 = como nasceu).
+    get escalaCabeca() {
+        const n = Math.max(1.5, this.cabecas);
+        return this.corpoAteQueixo / ((n - 1) * this.cabecaCheia);
+    },
+    // Unidades locais do modelo inteiro, já com a cabeça escalada.
+    get totalLocal() {
+        return this.corpoAteQueixo + this.cabecaCheia * this.escalaCabeca;
+    }
+};
+if (typeof window !== 'undefined') window.ProporcaoCorpo = ProporcaoCorpo;
+
+/*
+=============================================================================
+A ALTURA DE CADA JOGADOR — 1.60 a 2.00 m, média 1.75
+=============================================================================
+Todos mediam o mesmo (1.855 m). Passa a haver variação, com a regra do pedido:
+
+    guarda-redes, centrais e pontas-de-lança de referência   mais altos
+    os mais rápidos                                          mais baixos
+    os restantes                                             ~1.75
+
+A conta parte de `media` e soma duas parcelas, uma do POSTO e outra do
+ATRIBUTO, e no fim corta em [`min`, `max`]:
+
+    altura = media + bonusPosto[pos] + bonusVelocidade(speed) + ruido
+
+`bonusVelocidade` é NEGATIVO e cresce com a velocidade: a 50 de SPEED não
+mexe, a 100 tira `penalVelocidade`. É o "os mais rápidos são mais baixos" sem
+proibir um extremo alto — um ponta rápido e alto continua possível, só é raro.
+
+O RUÍDO é por jogador e determinístico (sai do `id`, ver `alturaDoJogador` em
+utils.js): dois jogadores do mesmo posto e da mesma velocidade não podem medir
+exactamente o mesmo, e a altura não pode mudar entre frames nem entre jogos.
+
+ATENÇÃO AO QUE DEPENDE DISTO. O `ALTURA_TESTA` e o `ALTURA_CABECA` abaixo são
+absolutos em metros e valiam para um boneco de 1.855 m. Com alturas
+diferentes, quem os usa tem de usar a versão POR JOGADOR — ver
+`alturaTestaDe`/`alturaCabecaDe` em utils.js, que escalam estes valores pela
+altura de cada um. As constantes ficam como a referência da altura padrão e
+como recurso onde não há jogador em contexto.
+=============================================================================
+*/
+// A altura do boneco de referência, de que ALTURA_TESTA/ALTURA_CABECA são
+// medidas. As alturas por jogador escalam a partir dela.
+const ALTURA_PADRAO = 1.855;
+if (typeof window !== 'undefined') window.ALTURA_PADRAO = ALTURA_PADRAO;
+
+const AlturaJogador = {
+    activo: true,
+    /*
+    O NOMINAL NÃO É O REALIZADO, e por isso está em 1.795 e não em 1.75.
+
+    A média pedida é 1.75. Mas as parcelas não são simétricas sobre os
+    plantéis reais: os postos altos somam mais do que os baixos subtraem, o
+    SPEED é enviesado para cima (mediana 84 contra média 82.4) e o piso de
+    1.60 corta a cauda de baixo. Com `media: 1.75` a média REALIZADA saía em
+    1.712.
+
+    Calibrado contra os 22 jogadores dos plantéis (data/squads.js):
+
+        nominal 1.78  ->  realizada 1.738
+        nominal 1.79  ->  realizada 1.747
+        nominal 1.80  ->  realizada 1.756
+
+    1.795 fica em 1.75 realizada, que é o pedido. Com outros plantéis a média
+    realizada muda — é uma propriedade da amostra, não do modelo, e quem os
+    trocar deve voltar a medir em vez de confiar neste número.
+    */
+    media: 1.795,
+    min: 1.60,
+    max: 2.00,
+
+    /*
+    O bónus do POSTO. Só os três grupos do pedido saem da média; os outros
+    ficam a zero de propósito, para "os demais têm alturas médias de 1.75"
+    ser o que o código faz e não uma aproximação.
+    */
+    bonusPosto: {
+        GK: 0.13,
+        CB: 0.10,
+        // Ponta-de-lança de referência: o posto sozinho não o diz, o ESTILO
+        // sim (ver `bonusEstilo`). CF e SS ficam neutros.
+        CF: 0.0, SS: 0.0
+    },
+    /*
+    E o ESTILO, para o "atacante target". `target_man` é quem joga de costas
+    para a baliza e disputa a bola no ar; é ele que é alto, não o ponta que
+    corre para as costas da defesa.
+    */
+    bonusEstilo: {
+        target_man: 0.11,
+        // Estes vivem do arranque e do espaço curto: ficam baixos.
+        goal_poacher: -0.03,
+        dummy_runner: -0.03
+    },
+
+    /*
+    O TERMO DA VELOCIDADE É CENTRADO, e a referência está MEDIDA.
+
+    Era `(vel - 50) / 50`, ou seja centrado em 50 — e mediu-se o SPEED dos
+    plantéis reais (data/squads.js): mínimo 66, média 82.4, máximo 94, desvio
+    8.7. NINGUÉM está abaixo de 50, portanto todos perdiam altura e ninguém
+    ganhava: a média das alturas saía em 1.673 m em vez de 1.75.
+
+    Centrado na média do SPEED, o rápido perde e o lento ganha, e a média das
+    alturas volta a ser a `media` pedida. `velocidadeRef` é essa média medida;
+    `velocidadeSpan` é o desvio que vale `penalVelocidade` inteiro.
+    */
+    velocidadeRef: 82,
+    velocidadeSpan: 12,
+    penalVelocidade: 0.075,
+
+    /*
+    A dispersão que faz a faixa chegar aos extremos pedidos (1.60 a 2.00).
+
+    Com sigma 0.045 o mais alto do lote media 1.79 e o intervalo nunca se
+    usava. 0.075 é o que abre a faixa: um central lento com ruído positivo
+    passa dos 1.95, um lateral rápido com ruído negativo bate no piso.
+    */
+    sigma: 0.075
+};
+if (typeof window !== 'undefined') window.AlturaJogador = AlturaJogador;
+
 const ALTURA_CABECA = 1.72;
 
 /*

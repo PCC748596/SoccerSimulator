@@ -213,7 +213,9 @@ const Perception = {
         para o ponto onde ela fica à altura da cabeça e cabeceia, em vez de
         ficar parado à espera que ela caia no chão.
         */
-        const alturaTesta = ALTURA_TESTA;
+        // A testa DESTE jogador — ver alturaTestaDe (utils.js) e AlturaJogador.
+        const alturaTesta = (typeof alturaTestaDe === 'function')
+            ? alturaTestaDe(p) : ALTURA_TESTA;
         const janelaCabeca = (typeof HeaderModel !== 'undefined' ? HeaderModel.janelaAbaixo : 0.34);
         const janelaAcimaCabeca = (typeof HeaderModel !== 'undefined' ? HeaderModel.janelaAcima : 0.16);
         const saltoMax = (typeof SaltoCabeceio !== 'undefined' ? SaltoCabeceio.alturaMax : 0.80);
