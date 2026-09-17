@@ -1500,3 +1500,71 @@ const SaidaDeJogo = {
     }
 };
 if (typeof window !== 'undefined') window.SaidaDeJogo = SaidaDeJogo;
+
+/*
+=============================================================================
+MARCACAO PELAS COSTAS — o marcador que esta do lado da PROPRIA baliza
+=============================================================================
+Relato: *"os jogadores com marcacao por tras sem a bola tem que ser mais
+penalizados ao receber passes na defesa e meio campo; estao perdendo demais as
+bolas nesses passes"*.
+
+E verdade e esta medido. Lote de 797 passes em 50 min:
+
+    marcador do recetor              passes   certos
+    livre (>= 5 m)                      422      76%
+    < 2.5 m, do lado de ATAQUE           60      73%
+    < 2.5 m, pelas COSTAS                43      63%
+
+    so defesa e meio, marcador < 5 m
+    pelas costas                        110      67%
+    do lado de ataque                   198      72%
+
+Dez pontos de diferenca no caso apertado, e cinco na media da defesa e do meio.
+A razao e de futebol: quem marca pelas costas esta entre o recetor e a propria
+baliza dele, ja de frente para a bola, e chega-lhe ao corpo no instante em que
+ela pousa. Quem esta do lado de ataque tem de rodar primeiro.
+
+E a nota do passe era CEGA a isto: o `distMarcador` e uma distancia e mais
+nada, igual para os dois casos.
+
+`factorMarcadorAtras` encolhe a distancia EFECTIVA do marcador quando ele esta
+pelas costas — 0.70 faz um marcador a 3.4 m contar como 2.4 m, ou seja desce um
+degrau na escada dos bonus (>=3.5 "livre" passa a <2.5 "marcado de perto").
+Nao inventa uma penalizacao nova: usa a escada que ja existe, que ja esta
+calibrada.
+
+`zonaMaxMarcadorAtras` limita-o a defesa e ao meio, como o pedido diz. No
+ultimo terco perder a bola custa muito menos e o passe para um homem marcado de
+costas e uma jogada legitima — e onde nascem os desvios e as tabelas.
+*/
+const MarcacaoPelasCostas = {
+    factorMarcadorAtras: 0.70,
+    zonaMaxMarcadorAtras: 17.0,   // z no referencial de ataque; a mesma fronteira do ultimo terco
+    /*
+    So conta como "pelas costas" com o marcador mesmo atras, e nao ao lado: o
+    angulo e medido em z de ataque contra a distancia total. 0.35 sao ~20 graus
+    para tras da linha dos ombros.
+    */
+    fraccaoAtras: 0.35
+};
+if (typeof window !== 'undefined') window.MarcacaoPelasCostas = MarcacaoPelasCostas;
+
+/*
+A DISTANCIA EFECTIVA DO MARCADOR, num sitio so.
+
+Quatro funcoes de escolha de alvo repetiam o mesmo ciclo e a mesma escada de
+bonus (findPassTarget, findPassTargetRelaxed e mais duas). Acrescentar a regra
+das costas a cada uma era garantir que uma ficava para tras — foi o que ja
+aconteceu hoje com as guardas do ciclo de passada.
+
+`recetorZAtk` e o z do recetor no referencial de ataque dele, para a regra so
+valer na defesa e no meio.
+*/
+function distanciaEfectivaDoMarcador(distMarcador, marcadorAtras, recetorZAtk) {
+    const M = (typeof MarcacaoPelasCostas !== 'undefined') ? MarcacaoPelasCostas : null;
+    if (!M || !marcadorAtras) return distMarcador;
+    if (typeof recetorZAtk === 'number' && recetorZAtk > M.zonaMaxMarcadorAtras) return distMarcador;
+    return distMarcador * M.factorMarcadorAtras;
+}
+if (typeof window !== 'undefined') window.distanciaEfectivaDoMarcador = distanciaEfectivaDoMarcador;

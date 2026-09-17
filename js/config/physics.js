@@ -473,6 +473,39 @@ const RelvaCores = {
 };
 if (typeof window !== 'undefined') window.RelvaCores = RelvaCores;
 
+/*
+=============================================================================
+PLACAS DE PUBLICIDADE — a cintura que fecha o recinto
+=============================================================================
+Um anel de painéis a toda a volta, `recuo` metros para fora das linhas. Fecha
+nos cantos: os painéis laterais correm em z ao longo de todo o comprimento já
+esticado pelo recuo, e os de fundo correm em x ao longo da largura esticada,
+portanto as quatro pontas encontram-se sem deixar aberturas.
+
+    laterais   x = +-(MEIA_LARGURA_CAMPO + recuo)   comprimento = CAMPO_COMP + 2*recuo
+    fundos     z = +-(LINHA_FUNDO + recuo)          comprimento = CAMPO_LARG + 2*recuo
+
+A relva desenhada vai a +-60 em x e +-70 em z (ver `gramaLarg`/`gramaComp` em
+match_setup.js); com o recuo a 5 m os painéis ficam a +-39 e +-58, bem dentro
+dela. Quem aumentar o recuo tem de esticar a relva também, senão eles ficam a
+flutuar fora do tapete.
+
+As cores são blocos genéricos e alternados, sem marca nenhuma: isto é cenário,
+não publicidade a sério.
+=============================================================================
+*/
+const PlacasPublicidade = {
+    activo: true,
+    recuo: 5.0,          // metros para fora das linhas
+    altura: 1.0,         // metros
+    espessura: 0.08,
+    corEstrutura: 0x2b2b30,
+    // Um painel por cada `larguraPainel` metros, em blocos de cor alternados.
+    larguraPainel: 4.0,
+    cores: ['#1f6fb2', '#e8e8ec', '#c8102e', '#f2c400', '#0f9d58']
+};
+if (typeof window !== 'undefined') window.PlacasPublicidade = PlacasPublicidade;
+
 const CornerFlag = {
     raioArco: 1.0,        // regulamento
     alturaPoste: 1.5,     // regulamento: minimo 1.5 m

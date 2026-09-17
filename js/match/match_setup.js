@@ -283,6 +283,73 @@ Object.assign(Match, {
             campoGrupo.add(bandeira);
         }));
 
+        /*
+        PLACAS DE PUBLICIDADE, a toda a volta e `recuo` metros para fora das
+        linhas. Ver PlacasPublicidade (config/physics.js) para as medidas.
+
+        A textura e desenhada UMA vez e repetida ao longo de cada painel: um
+        canvas por cada faixa de cor daria dezenas de texturas para o mesmo
+        efeito. O `repeat.x` conta quantos paineis cabem no comprimento, para
+        os blocos terem sempre `larguraPainel` metros em qualquer das quatro
+        faixas, e nao esticarem nas compridas e encolherem nas curtas.
+
+        `DoubleSide` porque a camara deste jogo anda a toda a volta e uma placa
+        so tem interesse vista de dentro — mas de fora nao pode desaparecer e
+        deixar ver o recinto vazio.
+        */
+        if (typeof PlacasPublicidade !== 'undefined' && PlacasPublicidade.activo) {
+            const PP = PlacasPublicidade;
+            const compLateral = CAMPO_COMP + 2 * PP.recuo;
+            const compFundo = CAMPO_LARG + 2 * PP.recuo;
+            const xLateral = MEIA_LARGURA_CAMPO + PP.recuo;
+            const zFundo = LINHA_FUNDO + PP.recuo;
+
+            // Uma faixa de blocos de cor, repetida ao longo do painel.
+            const cvsPP = document.createElement('canvas');
+            cvsPP.width = 256; cvsPP.height = 64;
+            const ctxPP = cvsPP.getContext('2d');
+            const nCores = PP.cores.length;
+            for (let i = 0; i < nCores; i++) {
+                ctxPP.fillStyle = PP.cores[i];
+                ctxPP.fillRect(Math.round(i * 256 / nCores), 0,
+                    Math.ceil(256 / nCores), 64);
+            }
+            // Risco escuro em baixo: assenta a placa no chao em vez de a deixar
+            // a brilhar toda igual.
+            ctxPP.fillStyle = 'rgba(0,0,0,0.35)';
+            ctxPP.fillRect(0, 56, 256, 8);
+
+            const fazerMaterial = (comprimento) => {
+                const tex = new THREE.CanvasTexture(cvsPP);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.ClampToEdgeWrapping;
+                tex.repeat.set(Math.max(1, Math.round(comprimento / (PP.larguraPainel * nCores))), 1);
+                return new THREE.MeshStandardMaterial({
+                    map: tex, roughness: 0.65, side: THREE.DoubleSide
+                });
+            };
+
+            const matLateralPP = fazerMaterial(compLateral);
+            const matFundoPP = fazerMaterial(compFundo);
+
+            const addPlaca = (comprimento, mat, x, z, rodaY) => {
+                const m = new THREE.Mesh(
+                    new THREE.BoxGeometry(comprimento, PP.altura, PP.espessura), mat);
+                m.position.set(x, PP.altura / 2, z);
+                m.rotation.y = rodaY;
+                m.castShadow = true;
+                m.receiveShadow = true;
+                campoGrupo.add(m);
+            };
+
+            // Laterais: correm em Z, portanto a caixa roda 90 graus em Y.
+            addPlaca(compLateral, matLateralPP, xLateral, 0, Math.PI / 2);
+            addPlaca(compLateral, matLateralPP, -xLateral, 0, Math.PI / 2);
+            // Fundos: correm em X, sem rotacao.
+            addPlaca(compFundo, matFundoPP, 0, zFundo, 0);
+            addPlaca(compFundo, matFundoPP, 0, -zFundo, 0);
+        }
+
         const cvsRede = document.createElement('canvas'); cvsRede.width = 32; cvsRede.height = 32; const ctxRede = cvsRede.getContext('2d');
         ctxRede.fillStyle = 'rgba(240, 240, 245, 0.35)'; ctxRede.fillRect(0, 0, 32, 32);
         ctxRede.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctxRede.lineWidth = 1.5; ctxRede.strokeRect(0, 0, 32, 32);

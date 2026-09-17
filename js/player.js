@@ -1769,6 +1769,7 @@ class FootballPlayer {
 
             let minOppDist = 999;
             let distMarcador = 999;
+            let marcadorAtras = false;
             for (let i = 0; i < opponents.length; i++) {
                 let opp = opponents[i];
                 if (opp.role === 'gk') continue;
@@ -1785,6 +1786,16 @@ class FootballPlayer {
                 let dMarc = optPos.distanceTo(opp.model.position);
                 if (dMarc < distMarcador) {
                     distMarcador = dMarc;
+                    /*
+                    DE QUE LADO ESTA ELE. `dzMarc` negativo = do lado da
+                    PROPRIA baliza do recetor, ou seja pelas costas: ja de
+                    frente para a bola, chega-lhe ao corpo mal ela pouse.
+                    Ver MarcacaoPelasCostas (config/passing.js).
+                    */
+                    const dzMarc = (opp.model.position.z - optPos.z) * opt.dirZ;
+                    marcadorAtras = (dzMarc < 0) &&
+                        (Math.abs(dzMarc) > dMarc * ((typeof MarcacaoPelasCostas !== 'undefined')
+                            ? MarcacaoPelasCostas.fraccaoAtras : 0.35));
                 }
             }
 
@@ -1796,13 +1807,22 @@ class FootballPlayer {
             let inDefensiveZone = (ownZ * dirZ < -10) || (optPos.z * dirZ < -10); 
             let isDefender = (this.role === 'def' || this.role === 'gk' || opt.role === 'def');
             
-            if (distMarcador >= 5.0) {
+            /*
+            A DISTANCIA QUE CONTA E A EFECTIVA: um marcador pelas costas vale
+            menos metros do que os que tem. Ver MarcacaoPelasCostas, com as
+            taxas medidas — 63% de acerto contra 73% no mesmo aperto.
+            */
+            const distMarcEf = (typeof distanciaEfectivaDoMarcador === 'function')
+                ? distanciaEfectivaDoMarcador(distMarcador, marcadorAtras, optPos.z * dirZ)
+                : distMarcador;
+
+            if (distMarcEf >= 5.0) {
                 // Muito espaço, bónus esmagador (+200 pts) para garantir passe em jogadores livres
                 score += 500;
-            } else if (distMarcador >= 3.5) {
+            } else if (distMarcEf >= 3.5) {
                 // Espaço livre (+200 pts)
                 score += 300;
-            } else if (distMarcador >= 2.5) {
+            } else if (distMarcEf >= 2.5) {
                 score += 200;
             } else {
                 if (inDefensiveZone || isDefender) {
@@ -2266,6 +2286,7 @@ class FootballPlayer {
             _v2.subVectors(optPos, this.model.position).normalize();
             let minOppDist = 999, oppMaisPerto = null;
             let distMarcador = 999;
+            let marcadorAtras = false;
 
             /*
             O corredor de ameaça cresce com a distância do passe: um defesa a
@@ -2296,6 +2317,16 @@ class FootballPlayer {
                 let dMarc = optPos.distanceTo(opp.model.position);
                 if (dMarc < distMarcador) {
                     distMarcador = dMarc;
+                    /*
+                    DE QUE LADO ESTA ELE. `dzMarc` negativo = do lado da
+                    PROPRIA baliza do recetor, ou seja pelas costas: ja de
+                    frente para a bola, chega-lhe ao corpo mal ela pouse.
+                    Ver MarcacaoPelasCostas (config/passing.js).
+                    */
+                    const dzMarc = (opp.model.position.z - optPos.z) * opt.dirZ;
+                    marcadorAtras = (dzMarc < 0) &&
+                        (Math.abs(dzMarc) > dMarc * ((typeof MarcacaoPelasCostas !== 'undefined')
+                            ? MarcacaoPelasCostas.fraccaoAtras : 0.35));
                 }
             }
 
@@ -2373,13 +2404,22 @@ class FootballPlayer {
             const fiab = (typeof FiabilidadePasse !== 'undefined')
                 ? FiabilidadePasse.fiabilidade(dist) : 1.0;
 
-            if (distMarcador >= 5.0) {
+            /*
+            A DISTANCIA QUE CONTA E A EFECTIVA: um marcador pelas costas vale
+            menos metros do que os que tem. Ver MarcacaoPelasCostas, com as
+            taxas medidas — 63% de acerto contra 73% no mesmo aperto.
+            */
+            const distMarcEf = (typeof distanciaEfectivaDoMarcador === 'function')
+                ? distanciaEfectivaDoMarcador(distMarcador, marcadorAtras, optPos.z * dirZ)
+                : distMarcador;
+
+            if (distMarcEf >= 5.0) {
                 // Muito espaço, bónus esmagador para garantir que a bola vá para ele
                 score += 500 * fiab;
-            } else if (distMarcador >= 3.5) {
+            } else if (distMarcEf >= 3.5) {
                 // Espaço livre
                 score += 300 * fiab;
-            } else if (distMarcador >= 2.5) {
+            } else if (distMarcEf >= 2.5) {
                 // Jogador desmarcado
                 score += 200 * fiab;
             } else {
