@@ -44,10 +44,11 @@ const Weather = {
                 ambienteColor: 0xffffff,
                 ambienteIntensidade: 0.50,
                 holofotes: false,
+                holofotesIntensidade: 0,
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.25,
                 nuvensCor: 0xffffff,
-                nuvensQtd: 12,
+                nuvensQtd: 2,
                 chuva: false
             },
             nublado: {
@@ -60,11 +61,12 @@ const Weather = {
                 solPos: [40, 90, 35],
                 ambienteColor: 0xd4e2f0,
                 ambienteIntensidade: 0.45,
-                holofotes: false,
+                holofotes: true,
+                holofotesIntensidade: 0.15,
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.60,
                 nuvensCor: 0xe0e6ed,
-                nuvensQtd: 25,
+                nuvensQtd: 3,
                 chuva: false
             },
             encoberto: {
@@ -77,11 +79,12 @@ const Weather = {
                 solPos: [30, 80, 20],
                 ambienteColor: 0xb0bac4,
                 ambienteIntensidade: 0.38,
-                holofotes: false,
+                holofotes: true,
+                holofotesIntensidade: 0.25,
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.85,
                 nuvensCor: 0x808b96,
-                nuvensQtd: 40,
+                nuvensQtd: 4,
                 chuva: false
             },
             chuva: {
@@ -95,10 +98,11 @@ const Weather = {
                 ambienteColor: 0x6c7b8a,
                 ambienteIntensidade: 0.30,
                 holofotes: true,
+                holofotesIntensidade: 0.5,
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.95,
                 nuvensCor: 0x3a424b,
-                nuvensQtd: 55,
+                nuvensQtd: 5,
                 chuva: true
             }
         },
@@ -114,10 +118,11 @@ const Weather = {
                 ambienteColor: 0x1a2638,
                 ambienteIntensidade: 0.18,
                 holofotes: true,
+                holofotesIntensidade: 0.7, // Holofotes bem mais fortes de noite
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.20,
                 nuvensCor: 0x1f2b3e,
-                nuvensQtd: 10,
+                nuvensQtd: 1,
                 chuva: false
             },
             nublado: {
@@ -131,10 +136,11 @@ const Weather = {
                 ambienteColor: 0x162030,
                 ambienteIntensidade: 0.16,
                 holofotes: true,
+                holofotesIntensidade: 0.7,
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.45,
                 nuvensCor: 0x1c2738,
-                nuvensQtd: 22,
+                nuvensQtd: 3,
                 chuva: false
             },
             encoberto: {
@@ -148,10 +154,11 @@ const Weather = {
                 ambienteColor: 0x121824,
                 ambienteIntensidade: 0.14,
                 holofotes: true,
+                holofotesIntensidade: 0.7,
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.75,
                 nuvensCor: 0x151b26,
-                nuvensQtd: 35,
+                nuvensQtd: 4,
                 chuva: false
             },
             chuva: {
@@ -165,10 +172,11 @@ const Weather = {
                 ambienteColor: 0x0d131d,
                 ambienteIntensidade: 0.12,
                 holofotes: true,
+                holofotesIntensidade: 0.7,
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.95,
                 nuvensCor: 0x0f141e,
-                nuvensQtd: 50,
+                nuvensQtd: 5,
                 chuva: true
             }
         }
@@ -260,13 +268,14 @@ const Weather = {
         const HConfig = (typeof Holofotes !== 'undefined') ? Holofotes : null;
         if (HF && HConfig) {
             const ligarHolofotes = pConfig.holofotes;
+            const intensidade = pConfig.holofotesIntensidade || HConfig.intensidadeLuz;
             for (const l of HF.luzes) {
-                l.intensity = ligarHolofotes ? HConfig.intensidadeLuz : 0;
+                l.intensity = ligarHolofotes ? intensidade : 0;
             }
             if (HF.matLampada) {
                 HF.matLampada.color.setHex(ligarHolofotes ? HConfig.corLampadaAcesa : HConfig.corLampadaApagada);
                 HF.matLampada.emissive.setHex(ligarHolofotes ? HConfig.corLampadaAcesa : 0x000000);
-                HF.matLampada.emissiveIntensity = ligarHolofotes ? 1.0 : 0;
+                HF.matLampada.emissiveIntensity = ligarHolofotes ? (this.periodo === 'noite' ? 2.0 : 1.0) : 0;
             }
         }
 
@@ -285,41 +294,110 @@ const Weather = {
         this.cloudGroup = new THREE.Group();
         this.cloudGroup.name = "Weather_Clouds";
 
-        const cloudGeom = new THREE.DodecahedronGeometry(8, 1);
-        const numClouds = 60;
+        // Geometrias triplicadas (base 6x6x6) para grandes nuvens voxel
+        const boxMainGeom = new THREE.BoxGeometry(6, 6, 6);
+        const boxLargeGeom = new THREE.BoxGeometry(10.5, 10.5, 10.5);
+        const boxSmallGeom = new THREE.BoxGeometry(3, 3, 3);
+        const boxMicroGeom = new THREE.BoxGeometry(1.8, 1.8, 1.8);
+
+        const numClouds = 5;
         this.clouds = [];
 
         for (let i = 0; i < numClouds; i++) {
             const mat = new THREE.MeshLambertMaterial({
                 color: 0xffffff,
                 transparent: true,
-                opacity: 0.5,
-                depthWrite: false
+                opacity: 0.85,
+                alphaTest: 0.05
             });
 
             const cloudCluster = new THREE.Group();
-            const clusterPuffs = 4 + Math.floor(Math.random() * 4);
-            for (let j = 0; j < clusterPuffs; j++) {
-                const mesh = new THREE.Mesh(cloudGeom, mat);
+
+            const tipo = Math.random();
+            let widthBlocks, lengthBlocks, heightBlocks;
+
+            if (tipo < 0.35) {
+                widthBlocks = 6 + Math.floor(Math.random() * 5);
+                lengthBlocks = 6 + Math.floor(Math.random() * 5);
+                heightBlocks = 4 + Math.floor(Math.random() * 4);
+            } else if (tipo < 0.70) {
+                widthBlocks = 10 + Math.floor(Math.random() * 6);
+                lengthBlocks = 4 + Math.floor(Math.random() * 4);
+                heightBlocks = 2 + Math.floor(Math.random() * 3);
+            } else {
+                widthBlocks = 5 + Math.floor(Math.random() * 4);
+                lengthBlocks = 5 + Math.floor(Math.random() * 4);
+                heightBlocks = 3 + Math.floor(Math.random() * 3);
+            }
+
+            const halfW = widthBlocks / 2;
+            const halfL = lengthBlocks / 2;
+
+            for (let bx = -Math.floor(halfW); bx <= Math.floor(halfW); bx++) {
+                for (let bz = -Math.floor(halfL); bz <= Math.floor(halfL); bz++) {
+                    for (let by = 0; by < heightBlocks; by++) {
+                        const distNorm = Math.sqrt((bx / halfW) ** 2 + (bz / halfL) ** 2 + ((by - heightBlocks * 0.3) / (heightBlocks * 0.7)) ** 2);
+
+                        if (distNorm <= 1.0 + Math.random() * 0.3) {
+                            let geom = boxMainGeom;
+                            if (distNorm < 0.4 && Math.random() < 0.35) {
+                                geom = boxLargeGeom;
+                            } else if (distNorm > 0.8 && Math.random() < 0.4) {
+                                geom = boxSmallGeom;
+                            }
+
+                            const mesh = new THREE.Mesh(geom, mat);
+                            mesh.position.set(
+                                bx * 6 + (Math.random() - 0.5) * 1.2,
+                                by * 6 + (Math.random() - 0.5) * 1.2,
+                                bz * 6 + (Math.random() - 0.5) * 1.2
+                            );
+
+                            mesh.castShadow = true;
+                            mesh.receiveShadow = true;
+
+                            cloudCluster.add(mesh);
+                        }
+                    }
+                }
+            }
+
+            const numDebris = 14 + Math.floor(Math.random() * 14);
+            for (let d = 0; d < numDebris; d++) {
+                const geom = (Math.random() < 0.6) ? boxSmallGeom : boxMicroGeom;
+                const mesh = new THREE.Mesh(geom, mat);
+
+                const angle = Math.random() * Math.PI * 2;
+                const radiusX = (halfW * 6) + 3 + Math.random() * 15;
+                const radiusZ = (halfL * 6) + 3 + Math.random() * 15;
+                const posY = Math.random() * (heightBlocks * 6 + 9);
+
                 mesh.position.set(
-                    (Math.random() - 0.5) * 15,
-                    (Math.random() - 0.5) * 4,
-                    (Math.random() - 0.5) * 12
+                    Math.cos(angle) * radiusX,
+                    posY,
+                    Math.sin(angle) * radiusZ
                 );
-                const s = 0.6 + Math.random() * 0.8;
-                mesh.scale.set(s, s * 0.5, s);
+
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
                 cloudCluster.add(mesh);
             }
 
+            // Alturas das nuvens no céu (entre 45m e 85m)
+            const alturaY = 45 + Math.random() * 40;
             cloudCluster.position.set(
-                (Math.random() - 0.5) * 300,
-                35 + Math.random() * 25,
-                (Math.random() - 0.5) * 320
+                (Math.random() - 0.5) * 360,
+                alturaY,
+                (Math.random() - 0.5) * 380
             );
 
+            // Velocidade entre 10 km/h e 30 km/h (convertida para m/s em unidades 3D: 2.78m/s a 8.33m/s)
+            const speedKmh = 10 + Math.random() * 20; // 10 a 30 km/h
+            const speedMs = speedKmh / 3.6;
+
             cloudCluster.userData = {
-                speedX: 1.5 + Math.random() * 2.5,
-                speedZ: (Math.random() - 0.5) * 0.8,
+                speedX: speedMs,
+                speedZ: (Math.random() - 0.5) * 0.5,
                 material: mat
             };
 
@@ -387,8 +465,10 @@ const Weather = {
     },
 
     update(dt) {
-        if (this.cloudGroup && this.cloudGroup.visible) {
-            const boundsX = 170;
+        // Nuvens só se movem em céu limpo (estáticas em nublado, encoberto e chuva)
+        const moverNuvens = (this.condicao === 'limpo');
+        if (this.cloudGroup && this.cloudGroup.visible && moverNuvens) {
+            const boundsX = 260;
             this.clouds.forEach(c => {
                 if (!c.visible) return;
                 c.position.x += c.userData.speedX * dt;
@@ -396,7 +476,7 @@ const Weather = {
 
                 if (c.position.x > boundsX) {
                     c.position.x = -boundsX;
-                    c.position.z = (Math.random() - 0.5) * 320;
+                    c.position.z = (Math.random() - 0.5) * 380;
                 }
             });
         }

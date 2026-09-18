@@ -1129,23 +1129,54 @@ Object.assign(Match, {
                     }
 
                     /*
-                    UMA SpotLight POR CONJUNTO, apontada ao centro do campo no
-                    z dele: e isso que faz os cones cobrirem o relvado todo em
-                    vez de se somarem no meio.
-
-                    `castShadow` fica FALSE: oito luzes com sombra sao oito
-                    mapas de sombra por frame, e a sombra do jogo ja vem do
-                    `dirLight` (ver main.js). De noite o sol fica com um
-                    residuo justamente para as sombras nao desaparecerem.
+                    UMA SpotLight POR CONJUNTO. Os holofotes das pontas apontam
+                    diretamente para a zona do gol e linha de fundo (±53m).
                     */
                     const luz = new THREE.SpotLight(H.corLuz, 0,
                         H.alcanceLuz, H.anguloLuz, H.penumbra, 1.0);
                     luz.position.set(xConj, yLuz, zConj);
-                    luz.target.position.set(0, 0, zConj * 0.5);
+
+                    const ehPonta = (f === 0 || f === H.fileiras - 1);
+                    if (ehPonta) {
+                        luz.target.position.set(0, 1.0, Math.sign(zConj) * LINHA_FUNDO);
+                    } else {
+                        luz.target.position.set(0, 0, zConj * 0.4);
+                    }
+
                     luz.castShadow = false;
                     campoGrupo.add(luz);
                     campoGrupo.add(luz.target);
                     luzes.push(luz);
+                }
+            }
+
+            /*
+            HOLOFOTES DE FUNDO — direcionados exclusivamente para as balizas e grande área.
+            3 conjuntos de holofotes no topo da cobertura das bancadas Norte e Sul (-18m, 0m, +18m).
+            */
+            for (const sinalZ of [-1, 1]) {
+                const zConj = sinalZ * (BANCADA_Z + profBordo);
+                const targetZ = sinalZ * LINHA_FUNDO;
+
+                for (const xOffset of [-18, 0, 18]) {
+                    const gt = new THREE.BoxGeometry(
+                        larguraConj, H.travessaEspessura, H.travessaEspessura).toNonIndexed();
+                    gt.translate(xOffset, yLuz - H.lampadaAlt / 2 - H.travessaEspessura / 2, zConj);
+                    geosTravessa.push(gt);
+
+                    for (let i = 0; i < H.lampadasPorFileira; i++) {
+                        const dx = (i - (H.lampadasPorFileira - 1) / 2) * H.espacoEntreLampadas;
+                        posLampadas.push([xOffset + dx, yLuz, zConj]);
+                    }
+
+                    const luzGol = new THREE.SpotLight(H.corLuz, 0,
+                        H.alcanceLuz, 0.85, H.penumbra, 1.0);
+                    luzGol.position.set(xOffset, yLuz, zConj);
+                    luzGol.target.position.set(xOffset * 0.3, 1.2, targetZ);
+                    luzGol.castShadow = false;
+                    campoGrupo.add(luzGol);
+                    campoGrupo.add(luzGol.target);
+                    luzes.push(luzGol);
                 }
             }
 
