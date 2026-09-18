@@ -85,10 +85,37 @@ Pedido, com fotografias das camisolas: *"Uniforme 1 Flamengo-RJ: preta e vermelh
 - **`pesos` foi o que as larguras diferentes exigiram**, e mudou a conta do padrão: era um passo fixo (`total / n`), passou a **fracção acumulada** — soma-se o peso de cada barra, divide-se pelo total e cada uma ocupa a sua fatia. Com pesos iguais dá exactamente o passo constante de antes, e o teste fixa isso (as faixas do Flamengo continuam a sair todas com 100 px em 500).
 - **O disco da vista táctica deixou de sair da primeira cor da camisa** (`corPrincipal`, novo). Quando as faixas mudaram de ordem para dar três pretas, a primeira cor passou a ser o preto — e um disco preto com o contorno preto do TeamA é um disco que não se vê. A ordem das cores serve o desenho; a cor por que o clube se reconhece de longe é outra coisa e passou a ser escrita à parte.
 
+- **O Grémio entra na tabela**: *"igual à tricolor do Fluminense mas em preto, branco e azul claro; short preto, meião preto"*. É o mesmo DESENHO — mesmo padrão, mesmos pesos, mesmas doze listras — com outras três cores, e o teste fixa essa igualdade: se um dia os pesos do Fluminense mudarem, ele manda mudar os dois. As largas são o preto e o azul, com o branco no papel de filete que tem na camisola do Fluminense. O número ficou branco com contorno escuro (não foi pedido): sobre listras pretas e azuis é a única das três cores da camisola que se lê nas duas.
 - **TERCEIRA passagem dos uniformes: as barras da bainha.** (a) *"coloca uma barra vermelha na parte de baixo do uniforme do Flamengo"* — com cinco faixas e a primeira preta, a de baixo também sai preta, e a barra devolve o vermelho ao fundo da camisola. (b) *"as faixas grená e verde do Fluminense são mais largas"*, segunda vez: os pesos foram de 1.7/1.7/0.6 a **2.6/2.6/0.5**, e a risca branca passa a ser o filete que separa as duas faixas em vez de uma terceira listra (medido na pintura: 60 e 59 px de cor contra 12 px de branco). (c) *"coloca uma barra verde no short também"*.
 - **A `barra` é uma FRACÇÃO da peça e não píxeis**, e essa é a parte que se erra sem dar por isso: a mesma peça é pintada num canvas de 256 (laterais, meião, calção) e num de 512 (frente e costas), e uma barra em píxeis saía com espessuras diferentes na MESMA camisola. É pintada por cima de tudo o resto, nas últimas linhas do canvas — o topo da textura é o ombro (é lá que a gola é desenhada), portanto o fim é a bainha.
 - **O calção passou a poder ser uma PEÇA e não só uma cor**, para levar a barra verde: `calcao: '#17171b'` (uma cor, sem textura, como o Flamengo) ou `calcao: { cores: [...], barra: {...} }` (o Fluminense). Um calção de uma cor não gasta canvas nenhum.
 - Teste: `tests/uniformes_clubes.test.js` — a tabela medida contra o pedido (vermelho e preto mesmo, tricolor com as três cores, o número verde E escuro), a direcção das barras num ctx de canvas de mentira, o fundo que impede a linha de um pixel entre barras arredondadas, as três ligações (o `createTeams` a buscar pelo nome, o corpo a receber o desenho, o número a sair da cor do clube), a contagem 3+2 das faixas medida na PINTURA (e a maioria a ser a preta), as larguras do tricolor medidas em píxeis, e a gola redonda — que é desenhada dentro do `construirCorpo` e por isso se verifica no código, com o raio travado abaixo de um quarto da textura para o V não voltar com outra forma.
+
+#### Mais 50% de dribles no último terço — e o gatilho não era o que parecia
+
+Pedido: *"tem que aumentar os dribles no último terço em 50%"*.
+
+- **A árvore parecia ser quem decide os dribles, e não é.** O `podeDriblar` (player_bt.js) tem um ramo próprio para o último terço — mais permissivo em quatro contas — e essas constantes estavam escritas à mão no meio da função. Movi-as para o config (`DribbleModel.ultimoTerco`), afinei-as com folga (barreira técnica 60→52, distância de engajamento 5.5→6.4, tolerâncias de espaço 5.0/2.6→4.2/2.2, bónus 1.35→1.60) e medi: **zero diferença — os números saíram idênticos nas três sementes**.
+- **O gatilho que conta está na FSM**: no estado CARRY, a condução vira 1x1 quando o adversário mais próximo entra dentro do `DribbleModel.triggerDist`. É daí que saem quase todos os dribles do jogo. Passou a ser 3.2 m em todo o campo e **4.4 m no último terço** (`ultimoTerco.triggerDist`), através de um `gatilhoDribleDe(p)` que é o único sítio onde a distinção vive.
+- **Medido com `tools/headless/dribles_ultimo_terco.js`, 8 sementes × 30 min** (as três primeiras davam +50% e as duas seguintes davam zero — a variância entre sementes é grande e teria enganado quem parasse nas três):
+
+    | | dribles no último terço |
+    |---|---|
+    | antes (3.2 m) | 80 |
+    | agora (4.4 m) | **119** (+49%) |
+
+- A ferramenta imprime também os dribles FORA do terço, que é a outra metade do pedido: se os dois subissem juntos, o que tinha mudado era a vontade de driblar em todo o lado e não o que foi pedido.
+
+#### O avançado que toca para trás e fica a ver
+
+Relato: *"o CF toca pra trás e para de correr para frente. Fica parado olhando a jogada."*
+
+- **Medido primeiro** (`tools/headless/cf_depois_do_passe.js`, 30 min): depois de um passe para trás de um CF/ST, a mediana são **11.7 m ganhos em 3 s a 5.7 m/s** — no geral ele corre. Metade dos "parados" da primeira medição eram o **jogo parado** (uma falta, um lateral), e por isso a ferramenta passou a contar só frames em PLAY. Feita essa limpeza sobram **7% dos casos** com mais de 40% da janela abaixo de 0.5 m/s, a arrastar-se a 2.6 m/s enquanto o `MOVE_TO_POS` o leva de volta à posição dele. É isso que se vê no ecrã.
+- **A causa não é um bloqueio, é um DADO**: o arranque para o espaço (`podeInfiltrar`) é sorteado a 5% por tick para um avançado, e **nada ligava o "acabei de passar" ao "arranco"**. Num apoio de costas a corrida a seguir não é uma hipótese — é o propósito do passe.
+- **`RunIntoSpaceModel.arranqueAposPasse`**: quem descarrega para trás (ou na horizontal) a partir do meio-campo ganha uma janela de 1.6 s em que o arranque é garantido — salta o sorteio e o arrefecimento da corrida anterior. A marca é posta no `initiatePass`, que é onde se sabe para onde o passe vai.
+- **E esta corrida NÃO aposta além da linha de fora-de-jogo**, ao contrário da infiltração: fica `folgaSegura` (2.5 m) aquém dela. Quem acabou de dar a bola vai oferecer-se para a receber, não atacar as costas da defesa.
+- **Medido depois**: frames parado de 6% para **1%** (mediana), casos com mais de 40% parado de 7% para **2%**, avanço mediano de 11.7 para **14.4 m**.
+- **O QUE ISTO CUSTA, e fica registado porque não está resolvido:** os impedimentos sobem. Baseline 0.89 por 90 (3 sementes, `impedimentos_lote.js`); com a janela, entre 3.1 e 4.9 conforme a afinação. Tentei três variantes (com risco, sem risco, com folga; janela 1.6 e 0.8) e a ordem entre elas **não é estável** — a 0.8 s deu MAIS impedimentos do que a 1.6 s, o que não pode ser verdade e só diz que 3 sementes × 15 min é ruído a mais para afinar isto. O que é consistente em todas as variantes é a direcção: mais corridas, mais fora-de-jogo. Fica ligado porque resolve o relato, e o `janela: 0` desliga-o sem mais nada.
 
 #### A camisola do guarda-redes é de manga comprida
 

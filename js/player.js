@@ -190,6 +190,11 @@ class FootballPlayer {
         this.runTimer = 0;
         this.runCarrier = null;
         this.runCooldown = 0;
+        /*
+        Segundos em que a corrida para o espaco esta GARANTIDA, logo a seguir a
+        um apoio de costas. Ver RunIntoSpaceModel.arranqueAposPasse.
+        */
+        this.arrancarAposPasse = 0;
         // Espera depois de uma tentativa de corte — ver CorteModel.
         this.corteCooldown = 0;
 
@@ -2832,6 +2837,29 @@ class FootballPlayer {
             this.showActionBanner('PASS');
         }
         this.passTarget = targetPlayer;
+
+        /*
+        QUEM DESCARREGA PARA TRAS ARRANCA A SEGUIR — ver
+        `RunIntoSpaceModel.arranqueAposPasse` (config/passing.js), que tem a
+        medicao e o relato.
+
+        A marca fica aqui, no instante em que o passe e decidido, porque e
+        aqui que se sabe PARA ONDE ele vai. O `podeInfiltrar` consome-a; o
+        `update` conta-lhe o tempo.
+        */
+        {
+            const A = (typeof RunIntoSpaceModel !== 'undefined')
+                ? RunIntoSpaceModel.arranqueAposPasse : null;
+            if (A && targetPlayer && targetPlayer.model && this.role !== 'gk') {
+                const dz = (targetPlayer.model.position.z - this.model.position.z) * this.dirZ;
+                const meuAvanco = this.model.position.z * this.dirZ;
+                const paraTras = !A.soParaTras || dz <= (A.margemFrente || 1.0);
+                if (paraTras && meuAvanco >= (A.avancoMinimo || 0)) {
+                    this.arrancarAposPasse = A.janela;
+                }
+            }
+        }
+
         
         let _v1 = _p_v3;
         if ((this.isThroughBall || this.isPasseEspaco) && this.throughBallTarget) {
@@ -3587,6 +3615,10 @@ class FootballPlayer {
         // arrefecimento tem de correr JUSTAMENTE quando ele ja nao esta a
         // correr.
         if (this.runCooldown > 0) this.runCooldown = Math.max(0, this.runCooldown - dt);
+        // A janela de arranque depois de um apoio de costas (ver initiatePass).
+        if (this.arrancarAposPasse > 0) {
+            this.arrancarAposPasse = Math.max(0, this.arrancarAposPasse - dt);
+        }
         // A espera entre cortes corre com o jogo, como as outras — ver CorteModel.
         if (this.corteCooldown > 0) this.corteCooldown = Math.max(0, this.corteCooldown - dt);
 

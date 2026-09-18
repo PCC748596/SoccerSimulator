@@ -189,6 +189,53 @@ test('a cor que representa o clube não é a primeira da camisa, é a dominante'
     assert.strictEqual(corDoUniforme({ camisa: { cores: ['#123456'] } }, '#000'), '#123456');
 });
 
+test('Grêmio: o desenho do tricolor, em preto, branco e azul claro', () => {
+    /*
+    Pedido: *"igual à tricolor do Fluminense mas em preto, branco e azul
+    claro. Short preto, meião preto"*. "Igual" é sobre o DESENHO, e é isso que
+    se fixa aqui: mesmo padrão, mesmos pesos, mesmo número de listras. Se um
+    dia os do Fluminense mudarem, este teste manda mudar os dois.
+    */
+    const g = uniformeDe('Grêmio-RS');
+    const f = uniformeDe('Fluminense-RJ');
+    assert.ok(g, 'o Grêmio não está na tabela');
+
+    assert.strictEqual(g.camisa.padrao, f.camisa.padrao);
+    assert.deepStrictEqual(g.camisa.pesos, f.camisa.pesos);
+    assert.strictEqual(g.camisa.divisoes, f.camisa.divisoes);
+
+    const canal = (hex, i) => (parseInt(hex.slice(1), 16) >> (8 * (2 - i))) & 255;
+    const lum = (hex) => (0.2126 * canal(hex, 0) + 0.7152 * canal(hex, 1) + 0.0722 * canal(hex, 2)) / 255;
+
+    const preto = g.camisa.cores.find(c => lum(c) < 0.15);
+    const branco = g.camisa.cores.find(c => canal(c, 0) > 220 && canal(c, 1) > 220 && canal(c, 2) > 220);
+    /*
+    O azul tem de ser AZUL e não um cinzento com um ponto a mais no canal do
+    azul: o preto #15151a tem b > r e passaria por um teste ingénuo. Pede-se
+    uma diferença real entre o azul e o vermelho.
+    */
+    const azul = g.camisa.cores.find(c => canal(c, 2) - canal(c, 0) > 40);
+    assert.ok(preto && branco && azul, `faltam cores em ${g.camisa.cores}`);
+    // Azul CLARO: o azul escuro do outro tricolor não serve.
+    assert.ok(lum(azul) > 0.35, `o azul ${azul} não é claro`);
+
+    /*
+    As duas LARGAS são o preto e o azul, e o branco é o filete entre elas — o
+    mesmo papel que tem na camisola do Fluminense.
+    */
+    const largas = [g.camisa.cores[0], g.camisa.cores[1]];
+    assert.ok(largas.includes(preto) && largas.includes(azul),
+        'as listras largas do Grêmio deviam ser o preto e o azul');
+
+    // Calção e meião pretos (pedido).
+    const kc = (typeof g.calcao === 'string') ? g.calcao : g.calcao.cores[0];
+    assert.ok(lum(kc) < 0.15, `calção ${kc} não é preto`);
+    assert.ok(lum(g.meiao.cores[0]) < 0.15, `meião ${g.meiao.cores[0]} não é preto`);
+
+    // E o azul é a cor que o representa no disco da vista táctica.
+    assert.strictEqual(corDoUniforme(g, '#000000'), azul);
+});
+
 /* --- O padrão pinta na direcção certa --------------------------------- */
 
 test('faixas são horizontais e listras são verticais', () => {

@@ -155,6 +155,39 @@ const Uniformes = {
         corPrincipal: '#7a1b2b',
         numero: '#0b4728',
         contorno: 'rgba(255,255,255,0.85)'
+    },
+
+    /*
+    GRÉMIO. Pedido: *"igual à tricolor do Fluminense mas em preto, branco e
+    azul claro. Short preto, meião preto."*
+
+    É o mesmo DESENHO — listras verticais com os mesmos pesos, duas faixas
+    largas separadas por uma risca branca fina — com outras três cores. Por
+    isso os números são os do Fluminense: mudar aqui a largura das listras
+    seria deixar de ser "igual à tricolor", que é o que foi pedido.
+
+    QUAIS SÃO AS LARGAS: o preto e o azul. A analogia com o Fluminense manda —
+    lá o branco é o filete entre o grená e o verde, e aqui é o mesmo papel. É
+    também o que faz a camisola ler-se como a do Grémio: azul e preto a
+    alternar, com o branco a separá-los.
+
+    O número fica BRANCO com contorno escuro (não foi pedido): sobre listras
+    pretas e azuis é a única das três cores da camisola que se lê nas duas.
+    */
+    'Grêmio-RS': {
+        camisa: {
+            padrao: 'listras',
+            cores: ['#15151a', '#4aa3e0', '#f2f2f2'],
+            pesos: [2.6, 2.6, 0.5],
+            divisoes: 12
+        },
+        // O azul é a cor por que o clube se reconhece de longe — ver
+        // corPrincipal no Flamengo, e a razão de não ser a primeira da lista.
+        corPrincipal: '#4aa3e0',
+        calcao: '#15151a',
+        meiao: { padrao: 'solido', cores: ['#15151a'] },
+        numero: '#ffffff',
+        contorno: 'rgba(0,0,0,0.8)'
     }
 };
 

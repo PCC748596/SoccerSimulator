@@ -2425,8 +2425,19 @@ function podeInfiltrar(ctx) {
     // Se já está a infiltrar, mantém a corrida enquanto tiver timer
     if (p.fsm.currentState === 'RUN_INTO_SPACE' && p.runTimer > 0) return true;
 
+    /*
+    QUEM ACABOU DE DESCARREGAR PARA TRAS ARRANCA, sem esperar pelo dado nem
+    pelo arrefecimento — ver RunIntoSpaceModel.arranqueAposPasse
+    (config/passing.js). A janela e curta e e posta no `initiatePass`.
+
+    O arrefecimento e saltado de proposito: ele acaba de dar a bola e o que o
+    impedia de ir era ter corrido ha pouco, que e exactamente o caso em que
+    esta jogada acontece.
+    */
+    const arrancaAposPasse = (p.arrancarAposPasse > 0);
+
     // Se está em cooldown, não pode arrancar já
-    if (p.runCooldown > 0) return false;
+    if (!arrancaAposPasse && p.runCooldown > 0) return false;
 
     const bola = Match.ball.position;
     const avancoBola = bola.z * p.dirZ;
@@ -2460,6 +2471,17 @@ function podeInfiltrar(ctx) {
         return false;
     }
 
+    /*
+    Acabou de tocar para tras: vai, sem sorteio. As condicoes de cima
+    (fora-de-jogo, distancia a bola, nao estar recuado de mais) ja passaram.
+
+    SO OS AVANCADOS, e o relato e sobre eles: *"o CF toca pra tras e para de
+    correr para frente"*. Dado a toda a gente, isto enche o ultimo terco de
+    corridas — medido, os impedimentos quintuplicaram e os remates cairam,
+    porque quem descarrega a meio-campo passava a ir atras da propria bola.
+    */
+    if (arrancaAposPasse && isAttacker) return true;
+
     // Probabilidade de arrancar baseada na posição (tabelas e infiltrações)
     let chance = 0.02;
     if (isAttacker) chance = 0.05;
@@ -2481,6 +2503,33 @@ OffsideModel). Devolve null quando não há linha publicada, que é o que a
 function linhaLidaPor(p, risco) {
     const bb = (typeof TeamAI !== 'undefined') ? TeamAI.get(p.team) : null;
     if (!bb || typeof bb.offsideLimitDir !== 'number') return null;
+    /*
+    A CORRIDA DO APOIO DE COSTAS NAO APOSTA ALEM DA LINHA.
+
+    O `riscoAlemDaLinha` e a aposta do avancado que arranca ANTES do passe —
+    ver a nota dele no RunIntoSpaceModel. A corrida que se segue a um passe
+    para tras e outra coisa: ele acabou de DAR a bola, vai oferecer-se para a
+    receber de volta, e ir buscar fora-de-jogo ali nao e ousadia nenhuma.
+
+    Medido: com a janela do arranque a apostar como as outras, os impedimentos
+    passaram de 0.89 para 4.88 por 90 (tools/headless/impedimentos_lote.js, 3
+    sementes) e os remates CAIRAM — a corrida matava o ataque em vez de o
+    abrir.
+    */
+    const A_POS = (typeof RunIntoSpaceModel !== 'undefined')
+        ? RunIntoSpaceModel.arranqueAposPasse : null;
+    const arrancaAposPasse = (p.arrancarAposPasse > 0);
+    if (arrancaAposPasse) {
+        /*
+        E FICA AQUEM DELA, `folgaSegura` metros. Sem risco nenhum ainda davam
+        3.12 impedimentos por 90 contra 0.89 de antes, e os remates cairam 17%:
+        o alvo encosta-se a linha (que sobe durante a corrida) e ele fica
+        pendurado nela. Uma corrida de APOIO pede a bola ao pe, nao nas costas
+        da defesa.
+        */
+        const folga = (A_POS && typeof A_POS.folgaSegura === 'number') ? A_POS.folgaSegura : 0;
+        return bb.offsideLimitDir + (p.offsideBias || 0) - folga;
+    }
     const extra = risco
         ? ((typeof RunIntoSpaceModel !== 'undefined' && RunIntoSpaceModel.riscoAlemDaLinha) || 0)
         : 0;

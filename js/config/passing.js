@@ -1205,6 +1205,52 @@ const RunIntoSpaceModel = {
     margemLinha: 2.0,
     duracao: 4.0,
     arrefecimento: 3.0,
+
+    /*
+    =====================================================================
+    QUEM TOCA PARA TRAS ARRANCA — a corrida que se segue ao apoio
+    =====================================================================
+    Relato: *"o CF toca pra tras e para de correr para frente. Fica parado
+    olhando a jogada."*
+
+    MEDIDO ANTES (tools/headless/cf_depois_do_passe.js, 30 min): depois de um
+    passe para tras de um CF/ST, a mediana e 11.7 m ganhos em 3 s a 5.7 m/s —
+    ou seja, no GERAL ele corre. Mas em 7% dos casos passa mais de 40% desses
+    tres segundos abaixo de 0.5 m/s, a arrastar-se a 2.6 m/s enquanto o
+    `MOVE_TO_POS` o leva de volta a posicao dele. E o que se ve no ecra.
+
+    A CAUSA nao e um bloqueio, e um DADO: o arranque para o espaco
+    (`podeInfiltrar`, player_bt.js) e sorteado a 5% por tick para um avancado,
+    e nada liga o "acabei de passar" ao "arranco". So que num apoio de costas
+    a corrida a seguir nao e uma hipotese — e o proposito do passe. Quem
+    descarrega para tras vai buscar a devolucao ou ataca o espaco que abriu.
+
+    `janela` e quanto tempo depois do passe ele tem o arranque GARANTIDO: o
+    sorteio e saltado e o arrefecimento da corrida anterior tambem. As
+    condicoes que protegem o jogo continuam todas de pe — o fora-de-jogo
+    (`avancoDeInfiltracao`), a distancia a bola, e nao estar recuado de mais.
+
+    `soParaTras` limita isto ao passe que motivou o pedido: para tras ou na
+    horizontal. Quem passa PARA A FRENTE ja adiantou a jogada e nao tem de
+    arrancar atras dela.
+    =====================================================================
+    */
+    arranqueAposPasse: {
+        janela: 1.6,
+        /*
+        Quantos metros AQUEM da linha de fora-de-jogo o alvo desta corrida
+        fica. E o que a distingue da infiltracao: aquela aposta alem da linha
+        (`riscoAlemDaLinha`), esta pede a bola ao pe.
+        */
+        folgaSegura: 2.5,
+        soParaTras: true,
+        // Passe "para tras" e tudo o que nao avance mais do que isto, em
+        // metros, no referencial de ataque de quem passa.
+        margemFrente: 1.0,
+        // E so vale a partir do meio-campo: um central a sair a jogar nao vai
+        // atras do proprio passe.
+        avancoMinimo: 0.0
+    },
     ocupacaoMax: 0.35,
 
     /*
