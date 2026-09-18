@@ -250,6 +250,7 @@ const Weather = {
 
         // 3. Luz solar/lunar
         if (this.dirLight) {
+            this.baseSolIntensidade = pConfig.solIntensidade;
             this.dirLight.intensity = pConfig.solIntensidade;
             this.dirLight.color.setHex(pConfig.solColor);
             if (pConfig.solPos) {
@@ -391,13 +392,13 @@ const Weather = {
                 (Math.random() - 0.5) * 380
             );
 
-            // Velocidade entre 10 km/h e 30 km/h (convertida para m/s em unidades 3D: 2.78m/s a 8.33m/s)
-            const speedKmh = 10 + Math.random() * 20; // 10 a 30 km/h
+            // Velocidade reduzida pela metade: 5 a 15 km/h (1.39m/s a 4.17m/s em unidades 3D)
+            const speedKmh = 5 + Math.random() * 10; // 5 a 15 km/h
             const speedMs = speedKmh / 3.6;
 
             cloudCluster.userData = {
                 speedX: speedMs,
-                speedZ: (Math.random() - 0.5) * 0.5,
+                speedZ: (Math.random() - 0.5) * 0.25,
                 material: mat
             };
 
@@ -465,20 +466,43 @@ const Weather = {
     },
 
     update(dt) {
-        // Nuvens só se movem em céu limpo (estáticas em nublado, encoberto e chuva)
-        const moverNuvens = (this.condicao === 'limpo');
-        if (this.cloudGroup && this.cloudGroup.visible && moverNuvens) {
+        if (window.isPaused) return;
+
+        let maxSombra = 0;
+
+        // Nuvens se movem em céu limpo e nublado (estáticas apenas em encoberto e chuva)
+        const moverNuvens = (this.condicao === 'limpo' || this.condicao === 'nublado');
+        if (this.cloudGroup && this.cloudGroup.visible) {
             const boundsX = 260;
             this.clouds.forEach(c => {
                 if (!c.visible) return;
-                c.position.x += c.userData.speedX * dt;
-                c.position.z += c.userData.speedZ * dt;
 
-                if (c.position.x > boundsX) {
-                    c.position.x = -boundsX;
-                    c.position.z = (Math.random() - 0.5) * 380;
+                if (moverNuvens) {
+                    c.position.x += c.userData.speedX * dt;
+                    c.position.z += c.userData.speedZ * dt;
+
+                    if (c.position.x > boundsX) {
+                        c.position.x = -boundsX;
+                        c.position.z = (Math.random() - 0.5) * 380;
+                    }
+                }
+
+                // Calcula quanto a nuvem está cobrindo o centro do estádio (X: -80..80, Z: -70..70)
+                const distX = Math.abs(c.position.x);
+                const distZ = Math.abs(c.position.z);
+                if (distX < 85 && distZ < 75) {
+                    const fatorX = Math.max(0, 1 - distX / 85);
+                    const fatorZ = Math.max(0, 1 - distZ / 75);
+                    const fator = fatorX * fatorZ;
+                    if (fator > maxSombra) maxSombra = fator;
                 }
             });
+        }
+
+        // Diminuição dinâmica da luminosidade (~0.2) durante a passagem da nuvem
+        if (this.dirLight && this.baseSolIntensidade !== undefined) {
+            const solAlvo = Math.max(0.05, this.baseSolIntensidade - (0.20 * maxSombra));
+            this.dirLight.intensity += (solAlvo - this.dirLight.intensity) * Math.min(1.0, dt * 2.5);
         }
 
         if (this.rainParticles && this.rainParticles.visible) {
