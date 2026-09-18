@@ -267,34 +267,34 @@ test('faixas são horizontais e listras são verticais', () => {
 
 test('no tricolor, o grená e o verde são mais largos que o branco', () => {
     /*
-    Pedido. As larguras vêm dos `pesos` da peça, e o que se mede é a largura
-    PINTADA — é a única forma de apanhar um peso que não chegue ao desenho.
+    Pedido. O que se mede é a tinta que cada cor apanha na peça, e não os
+    rectângulos pintados: com o padrão centrado o deslocamento é circular e
+    uma das listras é desenhada em DUAS metades, uma em cada borda — contar
+    rectângulos dava larguras médias falsas (medido: 48 contra 59 na mesma
+    camisola).
     */
     const peca = Uniformes['Fluminense-RJ'].camisa;
     const [grena, verde, branco] = peca.cores;
-    const c = ctxFalso();
-    pintar(c, 512, 512, peca, '#000000');
 
-    const larguraDe = (cor) => {
-        const b = barrasDoPadrao(c, peca).filter(r => r.cor === cor);
-        assert.ok(b.length, `a cor ${cor} não foi pintada`);
-        return b.reduce((a, r) => a + r.w, 0) / b.length;
+    const W = 512;
+    const px = new Array(W).fill(null);
+    const ctx = {
+        fillStyle: null,
+        fillRect(x, y, w) {
+            for (let k = Math.max(0, x); k < Math.min(W, x + w); k++) px[k] = this.fillStyle;
+        }
     };
+    pintar(ctx, W, W, peca, '#000000');
 
-    const lG = larguraDe(grena), lV = larguraDe(verde), lB = larguraDe(branco);
-    assert.ok(lG > lB, `grená ${lG.toFixed(1)} px não é mais largo que o branco ${lB.toFixed(1)}`);
-    assert.ok(lV > lB, `verde ${lV.toFixed(1)} px não é mais largo que o branco ${lB.toFixed(1)}`);
-    // E as duas cores largas são iguais entre si.
-    assert.ok(Math.abs(lG - lV) < 2, `grená e verde com larguras diferentes (${lG} / ${lV})`);
+    const tinta = (cor) => px.filter(v => v === cor).length;
+    const lG = tinta(grena), lV = tinta(verde), lB = tinta(branco);
 
-    // As barras continuam a cobrir a peça de ponta a ponta.
-    const ordenadas = barrasDoPadrao(c, peca).sort((a, b) => a.x - b.x);
-    let fim = 0;
-    for (const b of ordenadas) {
-        assert.ok(b.x <= fim, `buraco entre ${fim} e ${b.x}`);
-        fim = Math.max(fim, b.x + b.w);
-    }
-    assert.strictEqual(fim, 512);
+    assert.ok(lG > lB * 2, `grená com ${lG} px contra ${lB} do branco`);
+    assert.ok(lV > lB * 2, `verde com ${lV} px contra ${lB} do branco`);
+    // As duas cores largas ficam com a mesma tinta.
+    assert.ok(Math.abs(lG - lV) <= 4, `grená e verde com áreas diferentes (${lG} / ${lV})`);
+    // E a camisola fica toda pintada.
+    assert.strictEqual(px.filter(v => v === null).length, 0, 'sobraram píxeis por pintar');
 });
 
 test('sem pesos, as barras ficam todas iguais', () => {
@@ -378,6 +378,70 @@ test('o calção com desenho passa a ser uma peça, e sem desenho continua a ser
         'o construirCorpo deixou de aceitar o calção como peça');
     assert.ok(/pintarPadraoDeEquipamento\(cvsK\.getContext\('2d'\)/.test(srcPose),
         'o calção com desenho não é pintado');
+});
+
+test('as tricolores têm 12 listras, com uma LARGA alinhada no meio', () => {
+    /*
+    Pedido: *"ajusta as camisas tricolores para 12 listras mas com uma grossa
+    alinhada no meio da camisa"*. É como uma camisola às riscas se desenha: a
+    listra central no eixo do peito, e as outras a crescer para os dois lados.
+
+    Mede-se a PINTURA e não o config: o que interessa é o pixel do meio da
+    textura cair dentro de uma barra larga cujo centro é o centro da peça.
+    Aqui o ctx falso pinta uma linha de píxeis, que é o que um padrão vertical
+    precisa.
+    */
+    const W = 512;
+    const pintarLinha = (peca) => {
+        const px = new Array(W).fill(null);
+        const ctx = {
+            fillStyle: null,
+            fillRect(x, y, w) {
+                for (let k = Math.max(0, x); k < Math.min(W, x + w); k++) px[k] = this.fillStyle;
+            }
+        };
+        pintar(ctx, W, W, peca, '#000000');
+        return px;
+    };
+    const segmentos = (px) => {
+        const out = [];
+        let cor = px[0], ini = 0;
+        for (let k = 1; k <= W; k++) {
+            if (k === W || px[k] !== cor) { out.push({ cor, ini, fim: k, larg: k - ini }); cor = px[k]; ini = k; }
+        }
+        return out;
+    };
+
+    for (const nome of ['Fluminense-RJ', 'Grêmio-RS']) {
+        const peca = uniformeDe(nome).camisa;
+        assert.strictEqual(peca.divisoes, 12, `${nome}: pediram-se 12 listras`);
+        assert.strictEqual(peca.centrada, true, `${nome}: a listra do meio não está centrada`);
+
+        const px = pintarLinha(peca);
+        assert.strictEqual(px.filter(v => v === null).length, 0,
+            `${nome}: o deslocamento deixou a camisola por pintar`);
+
+        const segs = segmentos(px);
+        const central = segs.find(g => g.ini <= W / 2 && g.fim > W / 2);
+        assert.ok(central, `${nome}: nada cobre o meio da camisola`);
+
+        // A do meio é uma das LARGAS: mais larga do que a média.
+        const maisLarga = Math.max(...segs.map(g => g.larg));
+        assert.ok(central.larg >= maisLarga * 0.9,
+            `${nome}: a listra do meio tem ${central.larg} px e a mais larga tem ${maisLarga}`);
+        // E está mesmo centrada: o meio dela é o meio da peça.
+        assert.ok(Math.abs((central.ini + central.fim) / 2 - W / 2) <= 1,
+            `${nome}: a listra do meio está em ${(central.ini + central.fim) / 2}, e o meio é ${W / 2}`);
+
+        /*
+        O deslocamento é circular, portanto UMA das doze listras fica partida
+        entre as duas bordas — as duas metades da mesma. É por isso que se
+        contam 13 segmentos e não 12.
+        */
+        assert.strictEqual(segs.length, 13, `${nome}: ${segs.length} segmentos, esperados 13`);
+        assert.strictEqual(segs[0].cor, segs[segs.length - 1].cor,
+            `${nome}: as duas bordas deviam ser as metades da mesma listra`);
+    }
 });
 
 /* --- As ligações existem ---------------------------------------------- */

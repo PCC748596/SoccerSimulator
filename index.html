@@ -277,6 +277,26 @@
 
                 <hr class="linha-sep">
 
+                <label>Clima & Iluminação</label>
+                <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 11px; margin-bottom: 2px;">Período</label>
+                        <select id="sel-weather-periodo" onchange="Weather.setPeriodo(this.value)" style="width: 100%;">
+                            <option value="dia" selected>Dia</option>
+                            <option value="noite">Noite</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 11px; margin-bottom: 2px;">Tempo</label>
+                        <select id="sel-weather-condicao" onchange="Weather.setCondicao(this.value)" style="width: 100%;">
+                            <option value="limpo" selected>Céu Limpo</option>
+                            <option value="nublado">Nublado</option>
+                            <option value="encoberto">Encoberto</option>
+                            <option value="chuva">Chuva (Fechado)</option>
+                        </select>
+                    </div>
+                </div>
+
                 <label>Visibilidade</label>
                 <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
                     <button type="button" class="btn-sector" id="btn-offside" onclick="toggleOffside()">OffSide:
@@ -522,6 +542,7 @@
     <script src="js/bt/btDebug.js"></script>
 
     <script src="js/match/match_replay.js"></script>
+    <script src="js/weather.js"></script>
     <script src="js/main.js"></script>
     <script src="js/touch_controls.js"></script>
 

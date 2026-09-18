@@ -867,6 +867,8 @@ function animate(time) {
     // de simulação — a câmara (ver Match.updateCamera).
     window.lastFrameDelta = delta;
 
+    if (typeof Weather !== 'undefined') Weather.update(delta);
+
     fpsFrames++;
     if (time - fpsLastTime >= 1000) {
         let fps = Math.round((fpsFrames * 1000) / (time - fpsLastTime));
@@ -1358,6 +1360,7 @@ document.addEventListener("DOMContentLoaded", () => {
         preencherSelectoresDeEquipa();
         ligarActualizacaoDoElenco();
         Match.init(scene);
+        if (typeof Weather !== 'undefined') Weather.init(scene, cameraCore);
         
         if (isTouchDevice) {
             Match.setSpeed(0.9);

@@ -110,14 +110,55 @@ function pintarPadraoDeEquipamento(ctx, largura, altura, peca, corBase) {
 
     const vertical = (padrao === 'listras');
     const total = vertical ? largura : altura;
-    let acumulado = 0;
+
+    /*
+    UMA BARRA LARGA ALINHADA COM O MEIO DA PECA (`peca.centrada`).
+
+    Pedido: *"as camisas tricolores com 12 listras, mas com uma grossa alinhada
+    no meio da camisa"*. E como uma camisola as riscas e desenhada: a listra
+    central esta no eixo do peito, e as outras crescem para os dois lados a
+    partir dela. Sem isto, onde cai o corte depende de quantas listras cabem e
+    dos pesos delas — o meio calhava numa risca fina ou a meio de uma larga.
+
+    A CONTA: mede-se o centro da primeira barra MAIS LARGA e desloca-se o
+    padrao todo pelo que falta para ele cair no meio da peca. O deslocamento e
+    circular — a barra que sai por uma borda volta a entrar pela outra —, e e
+    isso que mantem a peca coberta de ponta a ponta com o mesmo desenho.
+    */
+    let deslocamento = 0;
+    if (peca && peca.centrada) {
+        let melhor = 0, pesoMax = -1, inicio = 0, inicioMelhor = 0;
+        for (let i = 0; i < n; i++) {
+            if (pesos[i] > pesoMax) { pesoMax = pesos[i]; melhor = i; inicioMelhor = inicio; }
+            inicio += pesos[i];
+        }
+        void melhor;
+        deslocamento = (somaPesos / 2) - (inicioMelhor + pesoMax / 2);
+    }
+
+    /*
+    Cada barra e pintada em unidades de peso e so no fim convertida em pixeis.
+    Com o deslocamento, uma barra pode ficar a cavalo da borda: nesse caso e
+    desenhada duas vezes, uma de cada lado, que e o que fecha o anel sem
+    deixar a fatia de fora.
+    */
+    const pintar = (iniUnid, fimUnid, cor) => {
+        ctx.fillStyle = cor;
+        for (const desvio of [-somaPesos, 0, somaPesos]) {
+            const a0 = iniUnid + desvio, b0 = fimUnid + desvio;
+            if (b0 <= 0 || a0 >= somaPesos) continue;
+            const a = Math.floor(total * (Math.max(0, a0) / somaPesos));
+            const b = Math.ceil(total * (Math.min(somaPesos, b0) / somaPesos));
+            if (b <= a) continue;
+            if (vertical) ctx.fillRect(a, 0, b - a, altura);
+            else ctx.fillRect(0, a, largura, b - a);
+        }
+    };
+
+    let acumulado = deslocamento;
     for (let i = 0; i < n; i++) {
-        ctx.fillStyle = cores[i % cores.length];
-        const a = Math.floor(total * (acumulado / somaPesos));
+        pintar(acumulado, acumulado + pesos[i], cores[i % cores.length]);
         acumulado += pesos[i];
-        const b = Math.ceil(total * (acumulado / somaPesos));
-        if (vertical) ctx.fillRect(a, 0, b - a, altura);
-        else ctx.fillRect(0, a, largura, b - a);
     }
     pintarBarra();
     return ctx;

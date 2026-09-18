@@ -32,6 +32,11 @@ uma FRACÇÃO da peça e não píxeis: a mesma peça é pintada em canvas de 256
 512 conforme onde é usada, e uma barra em píxeis saía com espessuras diferentes
 na mesma camisola.
 
+`centrada` (opcional) alinha a barra mais LARGA com o meio da peça, deslocando
+o padrão todo em círculo — é como uma camisola às riscas se desenha, com a
+listra central no eixo do peito e as outras a crescer para os dois lados. Sem
+ela, onde o meio cai depende de quantas barras cabem e dos pesos delas.
+
 `pesos` (opcional) dá LARGURAS DIFERENTES a cada cor do ciclo. Pedido: *"na
 camisa tricolor as faixas grená e verde escuro são mais largas que as
 brancas"*. Sem ele as barras são todas iguais, que é o que basta para as faixas
@@ -138,7 +143,14 @@ const Uniformes = {
             padrao: 'listras',
             cores: ['#7a1b2b', '#0f6b3a', '#f2f2f2'],
             pesos: [2.6, 2.6, 0.5],
-            divisoes: 12
+            /*
+            DOZE LISTRAS COM UMA LARGA NO MEIO — pedido. As doze já lá
+            estavam; o que faltava era o alinhamento: com o padrão a começar
+            na borda esquerda, o eixo do peito calhava numa risca branca fina.
+            Ver `centrada` no cabeçalho.
+            */
+            divisoes: 12,
+            centrada: true
         },
         /*
         O CALÇÃO É BRANCO COM UMA BARRA VERDE (pedido). É uma peça e não uma
@@ -179,7 +191,10 @@ const Uniformes = {
             padrao: 'listras',
             cores: ['#15151a', '#4aa3e0', '#f2f2f2'],
             pesos: [2.6, 2.6, 0.5],
-            divisoes: 12
+            // Doze listras com a larga no meio, como a do Fluminense — é o
+            // mesmo desenho, e o teste obriga os dois a andar a par.
+            divisoes: 12,
+            centrada: true
         },
         // O azul é a cor por que o clube se reconhece de longe — ver
         // corPrincipal no Flamengo, e a razão de não ser a primeira da lista.
