@@ -159,6 +159,30 @@ const Uniformes = {
 };
 
 /*
+=============================================================================
+O UNIFORME DO GUARDA-REDES
+=============================================================================
+Ele não veste o do clube, e não é uma omissão: veste de outra cor por regra,
+para se distinguir dos dez e dos outros onze. As cores continuam a vir do
+`createTeams` (amarelo de um lado, laranja do outro); o que este uniforme
+acrescenta é o que a camisola dele tem de diferente.
+
+    MANGA COMPRIDA — pedido: *"ajusta a camisa do goleiro para manga
+    comprida"*. É a camisola dele em qualquer estádio, e uma das coisas que o
+    faz ler como guarda-redes de longe.
+
+Não leva `camisa` nem `calcao`: sem eles, o `construirCorpo` usa as cores que o
+`createTeams` lhe passa, e o número continua a sair do LADO como sempre. É de
+propósito que isto é um objecto quase vazio — o dia em que houver equipamento
+de guarda-redes por clube, é aqui que ele entra, e o resto do caminho já está
+feito.
+=============================================================================
+*/
+const UniformeGuardaRedes = {
+    mangaComprida: true
+};
+
+/*
 O uniforme de uma equipa, pelo NOME com que ela vem nos dados
 (`SquadsData.equipas[].nome`, que é o `teamName` do assets/teams.json).
 
@@ -191,6 +215,7 @@ function corDoUniforme(uniforme, porOmissao) {
 
 if (typeof window !== 'undefined') {
     window.Uniformes = Uniformes;
+    window.UniformeGuardaRedes = UniformeGuardaRedes;
     window.uniformeDe = uniformeDe;
     window.corDoUniforme = corDoUniforme;
 }

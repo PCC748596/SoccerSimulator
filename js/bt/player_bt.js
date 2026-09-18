@@ -1564,14 +1564,22 @@ function podeDriblar(ctx) {
     // Se a tendência for menor que 1.0, o jogador pode "desistir" da ideia do drible por mentalidade
     if (mult < 1.0 && Math.random() > mult) return false;
 
-    // No último terço ofensivo (zoneAhead >= 15 ou campo ofensivo avançado), os jogadores
-    // são incentivados a tentar o 1v1 com mais ousadia
+    /*
+    No último terço ofensivo (zoneAhead >= 15 ou campo ofensivo avançado) ele
+    tenta o 1v1 com mais ousadia. As quatro contas que isso abre vivem no
+    `DribbleModel.ultimoTerco` (config/player_behavior.js), com a medição e o
+    pedido que as motivou — estavam escritas à mão aqui no meio, e não havia
+    como as afinar sem as ir procurar.
+    */
+    const UT = (typeof DribbleModel !== 'undefined' && DribbleModel.ultimoTerco)
+        ? DribbleModel.ultimoTerco
+        : { tecMin: 60, distEngajar: 5.5, espacoAtras: 5.0, larguraAtras: 2.6, bonus: 1.35 };
     const noUltimoTerco = (ctx.zoneAhead !== undefined && ctx.zoneAhead >= 15) || (p.model.position.z * p.dirZ > 17);
-    const bonusUltimoTerco = noUltimoTerco ? 1.35 : 1.0;
+    const bonusUltimoTerco = noUltimoTerco ? UT.bonus : 1.0;
 
     // Regra 4: Adversário próximo, espaço atrás do adversário - Driblar
-    // No último terço a barreira técnica necessária é mais baixa (ex: 60-65 em vez de 75)
-    let baseTec = (noUltimoTerco ? 60 : 72) / Math.max(0.5, mult * bonusUltimoTerco);
+    // No último terço a barreira técnica necessária é mais baixa.
+    let baseTec = (noUltimoTerco ? UT.tecMin : 72) / Math.max(0.5, mult * bonusUltimoTerco);
     const tec = p.skillFor ? p.skillFor('TEC') : ctx.skillTec;
     if (tec < baseTec) return false;
 
@@ -1584,7 +1592,7 @@ function podeDriblar(ctx) {
 
     // Verificar se há adversário próximo à sua frente bloqueando a passagem
     // No último terço a janela de distância para engajar o drible é mais ampla (até 5.5m)
-    const maxEngageDist = noUltimoTerco ? 5.5 : 4.8;
+    const maxEngageDist = noUltimoTerco ? UT.distEngajar : 4.8;
     let oppProximo = null;
     let menorDist = Infinity;
     for (const opp of ctx.opponents) {
@@ -1608,8 +1616,8 @@ function podeDriblar(ctx) {
     const oppZ = oppProximo.model.position.z;
     const oppX = oppProximo.model.position.x;
     let espacoAtrasLivre = true;
-    const distAtrasTol = noUltimoTerco ? 5.0 : 6.5;
-    const dxAtrasTol = noUltimoTerco ? 2.6 : 3.2;
+    const distAtrasTol = noUltimoTerco ? UT.espacoAtras : 6.5;
+    const dxAtrasTol = noUltimoTerco ? UT.larguraAtras : 3.2;
 
     for (const opp2 of ctx.opponents) {
         if (opp2 === oppProximo || opp2.role === 'gk') continue;

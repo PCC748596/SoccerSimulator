@@ -1830,7 +1830,13 @@ Object.assign(Match, {
         O GUARDA-REDES FICA DE FORA (o `i === 0`): veste de outra cor por
         regra, para se distinguir dos dez e dos outros onze. Um equipamento de
         guarda-redes por clube e outro pedido.
+
+        Mas leva o uniforme DELE (`UniformeGuardaRedes`), que e o que lhe da a
+        manga comprida — ver config/uniformes.js. Sem `camisa` nem `calcao` lá
+        dentro, as cores continuam a ser as que estas duas linhas lhe dao.
         */
+        const uniGK = (typeof UniformeGuardaRedes !== 'undefined')
+            ? UniformeGuardaRedes : null;
         const uniA = (typeof uniformeDe === 'function' && this.equipaInfoA)
             ? uniformeDe(this.equipaInfoA.nome) : null;
         const uniB = (typeof uniformeDe === 'function' && this.equipaInfoB)
@@ -1840,7 +1846,7 @@ Object.assign(Match, {
             let corCamisa = (i === 0) ? '#f1c40f' : '#3498db';
             let corCalcao = (i === 0) ? '#1e1b18' : '#34495e';
             let p = new FootballPlayer(i, corCamisa, corCalcao, 'TeamA',
-                (i === 0) ? null : uniA);
+                (i === 0) ? uniGK : uniA);
             p.skills = skillsA ? skillsA[i] : null;
             // O estilo que o jogador traz nos dados manda sobre o estilo por
             // omissão da posição — ver aplicarPlayingStyle.
@@ -1853,7 +1859,7 @@ Object.assign(Match, {
             let corCamisa = (i === 0) ? '#e67e22' : '#e74c3c';
             let corCalcao = (i === 0) ? '#111111' : '#ffffff';
             let p = new FootballPlayer(i + 20, corCamisa, corCalcao, 'TeamB',
-                (i === 0) ? null : uniB);
+                (i === 0) ? uniGK : uniB);
             p.skills = skillsB ? skillsB[i] : null;
             p.playingStyleFixo = (p.skills && p.skills.estilo) ? p.skills.estilo : null;
             this.opponents.push(p);

@@ -148,6 +148,20 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     camisola lisa.
     */
     const UNI = uniforme || null;
+    /*
+    MANGA COMPRIDA — e o que distingue a camisola do guarda-redes.
+
+    Pedido: *"ajusta a camisa do goleiro para manga comprida"*. E a camisola
+    dele em qualquer estadio: manga comprida com o cotovelo protegido, e e uma
+    das coisas que o faz ler como guarda-redes de longe, com o equipamento de
+    outra cor.
+
+    Vem do `uniforme` como uma bandeira e nao de um argumento proprio: o
+    guarda-redes ja recebe um uniforme so dele (ver UniformeGuardaRedes em
+    config/uniformes.js), e um segundo parametro para a mesma decisao era mais
+    um sitio por onde ela se podia perder.
+    */
+    const mangaComprida = !!(UNI && UNI.mangaComprida);
     const pecaCamisa = UNI ? UNI.camisa : null;
     const pecaMeiao = UNI ? UNI.meiao : null;
     /*
@@ -442,9 +456,32 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         */
         const grp = new THREE.Group(); grp.position.set(x, 0.75, 0);
         const up = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 1.0, u * 0.35), blockMat, true); up.position.y = -0.5;
-        const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 0.5, u * 0.4), shirtMat); manga.position.y = 0.25; up.add(manga); grp.add(up);
+        /*
+        A MANGA. Curta cobre a metade de cima do braco (0.5 de 1.0); comprida
+        cobre-o inteiro e continua no antebraco, ate ao pulso — ver
+        `mangaComprida`.
+
+        As medidas saem das pecas que ela veste e nao de numeros novos: o braco
+        de cima e 1.0 de altura e 0.35 de lado, o antebraco 0.8 e 0.30. A manga
+        leva 0.05 a mais de lado em cada peca, que e a folga que a faz ler como
+        pano por cima do braco em vez de tinta nele.
+        */
+        const alturaManga = mangaComprida ? 1.0 : 0.5;
+        const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * alturaManga, u * 0.4), shirtMat);
+        manga.position.y = mangaComprida ? 0.0 : 0.25;
+        up.add(manga); grp.add(up);
         const elb = new THREE.Group(); elb.position.y = -1.0; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));
         const low = criarPeca(new THREE.BoxGeometry(u * 0.3, u * 0.8, u * 0.3), blockMat, true); low.position.y = -0.4; elb.add(low);
+        /*
+        A METADE DE BAIXO DA MANGA COMPRIDA, no antebraco. Fica filha do `low`
+        e nao do `elb`: assim dobra com o cotovelo em vez de atravessar o braco
+        quando ele se dobra — e o cotovelo do guarda-redes dobra o tempo todo.
+        */
+        if (mangaComprida) {
+            const mangaBaixo = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.8, u * 0.35), shirtMat);
+            mangaBaixo.position.y = 0.0;
+            low.add(mangaBaixo);
+        }
         const handG = new THREE.Group(); handG.position.y = -0.8; elb.add(handG);
         /*
         A MÃO. O `handG` é o pivô e NÃO se move: é dele que o IK dos braços, o

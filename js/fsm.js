@@ -845,6 +845,31 @@ function temGestoComClip(estado) {
         estado === 'CROSS' || estado === 'BALL_CONTROL_RIGHT';
 }
 
+
+/*
+A QUE DISTANCIA DO ADVERSARIO A CONDUCAO VIRA 1x1.
+
+E `DribbleModel.triggerDist` em todo o campo, e `ultimoTerco.triggerDist` no
+terco final — ver DribbleModel (config/player_behavior.js), que tem a medicao.
+
+ESTE E O GATILHO QUE CONTA, e foi preciso medir para o saber: o ramo `Driblar`
+da arvore (`podeDriblar`, player_bt.js) parece ser quem decide os dribles, mas
+os que acontecem em jogo saem quase todos DAQUI — do CARRY, quando o adversario
+mais proximo entra dentro do gatilho. Afinar so o ramo da arvore nao mexeu um
+unico drible em 90 minutos medidos.
+*/
+function gatilhoDribleDe(p) {
+    const D = (typeof DribbleModel !== 'undefined') ? DribbleModel : null;
+    if (!D) return 3.2;
+    const UT = D.ultimoTerco;
+    if (UT && typeof UT.triggerDist === 'number' && p && p.model) {
+        const terco = (typeof CAMPO_COMP === 'number' ? CAMPO_COMP : 106) / 6;
+        if (p.model.position.z * p.dirZ > terco) return UT.triggerDist;
+    }
+    return D.triggerDist;
+}
+if (typeof window !== 'undefined') window.gatilhoDribleDe = gatilhoDribleDe;
+
 class PlayerFSM {
     constructor(player) {
         this.p = player; this.currentState = 'IDLE'; this.timer = 0;
@@ -1710,7 +1735,7 @@ class PlayerFSM {
                     } else if (nearestOppDist > 5) {
                         // 5 a 10 metros — toque curto
                         leadDist = CarryModel.touchShort;
-                    } else if (nearestOppDist > DribbleModel.triggerDist) {
+                    } else if (nearestOppDist > gatilhoDribleDe(p)) {
                         // 0 a 5 metros — toque muito curto, bola junto ao pé
                         leadDist = CarryModel.touchShort * 0.5;
                     } else {

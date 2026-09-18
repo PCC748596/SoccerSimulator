@@ -90,6 +90,14 @@ Pedido, com fotografias das camisolas: *"Uniforme 1 Flamengo-RJ: preta e vermelh
 - **O calção passou a poder ser uma PEÇA e não só uma cor**, para levar a barra verde: `calcao: '#17171b'` (uma cor, sem textura, como o Flamengo) ou `calcao: { cores: [...], barra: {...} }` (o Fluminense). Um calção de uma cor não gasta canvas nenhum.
 - Teste: `tests/uniformes_clubes.test.js` — a tabela medida contra o pedido (vermelho e preto mesmo, tricolor com as três cores, o número verde E escuro), a direcção das barras num ctx de canvas de mentira, o fundo que impede a linha de um pixel entre barras arredondadas, as três ligações (o `createTeams` a buscar pelo nome, o corpo a receber o desenho, o número a sair da cor do clube), a contagem 3+2 das faixas medida na PINTURA (e a maioria a ser a preta), as larguras do tricolor medidas em píxeis, e a gola redonda — que é desenhada dentro do `construirCorpo` e por isso se verifica no código, com o raio travado abaixo de um quarto da textura para o V não voltar com outra forma.
 
+#### A camisola do guarda-redes é de manga comprida
+
+Pedido: *"ajusta a camisa do goleiro para manga comprida"*. É a camisola dele em qualquer estádio, e uma das coisas que o faz ler como guarda-redes de longe, com o equipamento de outra cor.
+
+- **A manga passou a ser uma medida e não uma peça fixa**: a curta cobre metade do braço de cima (0.5 de 1.0), a comprida cobre-o inteiro e continua no antebraço até ao pulso. As medidas saem das peças que ela veste — o braço de cima tem 1.0 de altura e 0.35 de lado, o antebraço 0.8 e 0.30 — mais 0.05 de folga em cada, que é o que a faz ler como pano por cima do braço em vez de tinta nele.
+- **A manga de baixo é filha do ANTEBRAÇO e não do cotovelo.** Pendurada no cotovelo, atravessava o braço sempre que ele dobrava — e o cotovelo de um guarda-redes dobra o tempo todo.
+- **A bandeira vem do uniforme** (`UniformeGuardaRedes.mangaComprida`, config/uniformes.js) e não de um argumento próprio do `construirCorpo`: o guarda-redes já recebia um uniforme só dele, e um segundo parâmetro para a mesma decisão era mais um sítio por onde ela se podia perder. O uniforme dele é **quase vazio de propósito** — sem `camisa` nem `calcao`, as cores continuam a ser as que o `createTeams` lhe dá (amarelo de um lado, laranja do outro) e o número continua a sair do lado. No dia em que houver equipamento de guarda-redes por clube, é ali que entra, e o resto do caminho já está feito.
+
 #### O árbitro no canto: na posição do penálti, do lado oposto à cobrança
 
 Pedido: *"no corner, o juiz tem que se posicionar do lado oposto à cobrança, na mesma posição do penálti"*.

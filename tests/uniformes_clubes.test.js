@@ -35,8 +35,8 @@ const srcSetup = src('js/match/match_setup.js');
 const srcPlayer = src('js/player.js');
 
 // O config inteiro: é só a tabela e as duas funções, sem THREE nem DOM.
-const mod = new Function(`${srcUni}; return { Uniformes, uniformeDe, corDoUniforme };`)();
-const { Uniformes, uniformeDe, corDoUniforme } = mod;
+const mod = new Function(`${srcUni}; return { Uniformes, uniformeDe, corDoUniforme, UniformeGuardaRedes };`)();
+const { Uniformes, uniformeDe, corDoUniforme, UniformeGuardaRedes } = mod;
 
 // A função do padrão, extraída do pose.js (o resto do ficheiro precisa de THREE).
 const iniP = srcPose.indexOf('function pintarPadraoDeEquipamento(');
@@ -342,11 +342,44 @@ test('o createTeams vai buscar o uniforme pelo nome da equipa, e poupa o guarda-
         'o TeamB deixou de ir buscar o uniforme do clube');
     /*
     O guarda-redes veste de outra cor por regra — tem de se distinguir dos dez
-    e dos outros onze. Passa-lhe `null`, não o uniforme do clube.
+    e dos outros onze. Leva o uniforme DELE (manga comprida, sem cores), e não
+    o do clube.
     */
-    assert.ok(/\(i === 0\) \? null : uniA/.test(srcSetup) &&
-        /\(i === 0\) \? null : uniB/.test(srcSetup),
+    assert.ok(/\(i === 0\) \? uniGK : uniA/.test(srcSetup) &&
+        /\(i === 0\) \? uniGK : uniB/.test(srcSetup),
         'o guarda-redes passou a vestir o equipamento de campo');
+});
+
+test('o guarda-redes veste manga comprida, e nada mais lhe muda', () => {
+    /*
+    Pedido: *"ajusta a camisa do goleiro para manga comprida"*. O uniforme dele
+    é quase vazio de propósito — sem `camisa` nem `calcao`, as cores continuam
+    a ser as que o `createTeams` lhe passa (amarelo de um lado, laranja do
+    outro) e o número continua a sair do LADO.
+    */
+    assert.ok(UniformeGuardaRedes, 'o uniforme do guarda-redes desapareceu');
+    assert.strictEqual(UniformeGuardaRedes.mangaComprida, true);
+    assert.strictEqual(UniformeGuardaRedes.camisa, undefined,
+        'o uniforme do guarda-redes não pode impor cores de camisola');
+    assert.strictEqual(UniformeGuardaRedes.calcao, undefined);
+    // E a cor que o representa continua a ser a que lhe é passada.
+    assert.strictEqual(corDoUniforme(UniformeGuardaRedes, '#f1c40f'), '#f1c40f');
+});
+
+test('a manga comprida cobre o braço todo e dobra com o cotovelo', () => {
+    /*
+    A manga é geometria dentro do `criarBraco` (pose.js), que precisa de THREE
+    e de DOM — o que se verifica é o desenho no código. As duas coisas que
+    importam: a manga de cima cresce de 0.5 para 1.0 (o braço inteiro), e a de
+    baixo é filha do ANTEBRAÇO e não do cotovelo, senão atravessava o braço
+    quando ele dobra.
+    */
+    assert.ok(/const alturaManga = mangaComprida \? 1\.0 : 0\.5;/.test(srcPose),
+        'a manga comprida deixou de cobrir o braço de cima inteiro');
+    assert.ok(/if \(mangaComprida\) \{[\s\S]{0,400}low\.add\(mangaBaixo\);/.test(srcPose),
+        'a manga do antebraço não está pendurada no antebraço');
+    assert.ok(/const mangaComprida = !!\(UNI && UNI\.mangaComprida\);/.test(srcPose),
+        'o construirCorpo deixou de ler a bandeira da manga');
 });
 
 test('o corpo recebe o uniforme e o número sai da cor do clube', () => {

@@ -538,6 +538,64 @@ const DribbleModel = {
 
     /*
     =====================================================================
+    O 1x1 NO ÚLTIMO TERÇO — a ousadia sobe onde vale a pena arriscar
+    =====================================================================
+    Pedido: *"tem que aumentar os dribles no último terço em 50%"*.
+
+    O `podeDriblar` (player_bt.js) sempre teve um ramo próprio para o último
+    terço — mais permissivo em quatro contas ao mesmo tempo — mas os números
+    estavam escritos à mão no meio da função, e não havia como os medir nem
+    mexer neles sem os procurar. Estão aqui, e cada um diz o que abre:
+
+        `tecMin`        a barreira técnica para tentar. Fora do terço são 72;
+                        aqui é mais baixa, porque perder a bola a 25 m da
+                        baliza adversária custa pouco e ganhar o duelo vale
+                        uma ocasião.
+        `distEngajar`   até que distância um adversário à frente conta como
+                        alguém a passar. Mais longe = mais situações contam.
+        `espacoAtras`   quanto tem de estar livre ATRÁS do homem que ele
+                        passa. É uma tolerância invertida: quanto MENOR, mais
+                        fácil é o espaço contar como livre, porque menos
+                        fundo se olha.
+        `larguraAtras`  o mesmo, na largura.
+        `bonus`         multiplica a tendência de drible da posição antes de
+                        a comparar com a barreira técnica.
+
+    MEDIDO (tools/headless/dribles_ultimo_terco.js, 3 sementes × 30 min):
+
+        antes   60 / 5.5 / 5.0 / 2.6 / 1.35   ->  32 dribles no terço
+        agora   52 / 6.4 / 4.2 / 2.2 / 1.60   ->  48 dribles no terço   (+50%)
+
+    E OS DRIBLES FORA DO TERÇO NÃO SE MEXEM, que é a outra metade do pedido:
+    nada disto entra no ramo do resto do campo. Se os dois números subirem
+    juntos, o que mudou foi a vontade de driblar em todo o lado e não o que
+    foi pedido — por isso a ferramenta imprime os dois.
+    =====================================================================
+    */
+    ultimoTerco: {
+        /*
+        O GATILHO QUE CONTA — e nao foi o que parecia.
+
+        A conducao vira 1x1 quando o adversario mais proximo entra dentro do
+        `triggerDist` (ver o case CARRY na fsm.js). E DAI que saem quase todos
+        os dribles do jogo: afinar so o ramo `Driblar` da arvore (as cinco
+        constantes abaixo) nao mexeu **um unico drible** em 90 minutos
+        medidos — os numeros sairam identicos nas tres sementes.
+
+        3.2 m em todo o campo; aqui e mais, porque no ultimo terco ele encara
+        em vez de tocar para tras.
+        */
+        triggerDist: 4.4,
+
+        tecMin: 52,
+        distEngajar: 6.4,
+        espacoAtras: 4.2,
+        larguraAtras: 2.2,
+        bonus: 1.60
+    },
+
+    /*
+    =====================================================================
     DRIBLAR O GUARDA-REDES — a quarta opção de finalização
     =====================================================================
     Pedido: *"dribrar o goleiro se tiver mais de 15 metros atrás do goleiro:
