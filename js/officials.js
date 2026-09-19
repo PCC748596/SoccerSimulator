@@ -1154,10 +1154,12 @@ const Officials = {
                 rig.rLeg.rotation.z = lerpTo(rig.rLeg.rotation.z, 0);
             }
         } else {
-            const ossos = ['lLeg', 'rLeg', 'lKnee', 'rKnee', 'lArm', 'rArm', 'lElbow', 'rElbow'];
+            const ossos = ['lLeg', 'rLeg', 'lKnee', 'rKnee', 'lArm', 'rArm'];
             for (let i = 0; i < ossos.length; i++) {
                 rig[ossos[i]].rotation.x = lerpTo(rig[ossos[i]].rotation.x, 0, 0.2);
             }
+            rig.lElbow.rotation.x = lerpTo(rig.lElbow.rotation.x, -0.3, 0.2);
+            rig.rElbow.rotation.x = lerpTo(rig.rElbow.rotation.x, -0.3, 0.2);
             rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, 0, 0.2);
             // Fecha também a abdução do passo lateral, senão ficava de pernas
             // abertas ao parar.

@@ -69,10 +69,19 @@ function pintarPadraoDeEquipamento(ctx, largura, altura, peca, corBase) {
     */
     const barra = (peca && peca.barra) ? peca.barra : null;
     const pintarBarra = () => {
-        if (!barra || !barra.cor) return;
-        const h = Math.max(1, Math.round(altura * (barra.altura || 0.1)));
-        ctx.fillStyle = barra.cor;
-        ctx.fillRect(0, altura - h, largura, h);
+        if (!barra) return;
+        const coresBarra = Array.isArray(barra.cores) && barra.cores.length > 0
+            ? barra.cores
+            : (barra.cor ? [barra.cor] : []);
+        if (coresBarra.length === 0) return;
+        const hTotal = Math.max(coresBarra.length, Math.round(altura * (barra.altura || 0.1)));
+        const nSub = coresBarra.length;
+        for (let i = 0; i < nSub; i++) {
+            const y0 = Math.round(altura - hTotal + (i * hTotal) / nSub);
+            const y1 = Math.round(altura - hTotal + ((i + 1) * hTotal) / nSub);
+            ctx.fillStyle = coresBarra[i];
+            ctx.fillRect(0, y0, largura, y1 - y0);
+        }
     };
 
     if (padrao === 'solido' || cores.length < 2) {
@@ -420,14 +429,41 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     braços) levam +0.225 para compensar a origem ter descido de 1.25
     para 1.025 — a pose fica idêntica à de antes.
     */
-    const chest = criarPeca(new THREE.BoxGeometry(u * 1.4, u * 1.45, u * 0.75), blockMat);
+    /*
+    CAIXA DO TÓRAX: a parte de cima é 25% menor que a de baixo na largura (X).
+    Para evitar a distorção afim/diagonal da textura (que em trapézios de 2 triângulos
+    entorta listras e números para o lado ao cruzar a diagonal), a geometria é
+    subdividida ao longo de X e Y, e o afunilamento é interpolado suavemente
+    da base até o topo:
+        fator = 1.0 - (1.0 - afunilTopoX) * t
+    onde t vai de 0 na base a 1 no topo. Desta forma, para qualquer altura Y,
+    o centro da textura (U=0.5) fica exatamente em X=0 e as listras, faixas,
+    gola e número do uniforme mantêm-se retas e perfeitamente simétricas sem
+    desvio para o lado.
+    */
+    function caixaTorax(w, h, d, afunilTopoX = 0.75, segs = 16) {
+        const geo = new THREE.BoxGeometry(w, h, d, segs, segs, 1);
+        const pos = geo.attributes.position;
+        const yMin = -h / 2;
+        for (let i = 0; i < pos.count; i++) {
+            const y = pos.getY(i);
+            const t = Math.max(0, Math.min(1, (y - yMin) / h));
+            const fator = 1.0 - (1.0 - afunilTopoX) * t;
+            pos.setX(i, pos.getX(i) * fator);
+        }
+        pos.needsUpdate = true;
+        geo.computeVertexNormals();
+        return geo;
+    }
+
+    const chest = criarPeca(caixaTorax(u * 1.4, u * 1.45, u * 0.75, 0.75), blockMat);
     chest.position.y = 1.025;
     /*
     A SOMBRA DO TRONCO vive aqui. Era a caixa da pélvis que a projectava e ela
     deixou de existir; sem esta linha o jogador passa a fazer sombra de pernas
     e cabeça com um buraco no meio.
     */
-    chest.add(criarPeca(new THREE.BoxGeometry(u * 1.45, u * 1.5, u * 0.8), chestMats, true));
+    chest.add(criarPeca(caixaTorax(u * 1.45, u * 1.5, u * 0.8, 0.75), chestMats, true));
     /*
     SEM BAINHA. A camisa acaba no peito — pedido: *"ajusta a cor da camisa só
     no peito"*.
@@ -511,7 +547,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * alturaManga, u * 0.4), shirtMat);
         manga.position.y = mangaComprida ? 0.0 : 0.25;
         up.add(manga); grp.add(up);
-        const elb = new THREE.Group(); elb.position.y = -1.0; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));
+        const elb = new THREE.Group(); elb.position.y = -1.0; elb.rotation.x = -0.3; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));
         const low = criarPeca(new THREE.BoxGeometry(u * 0.3, u * 0.8, u * 0.3), blockMat, true); low.position.y = -0.4; elb.add(low);
         /*
         A METADE DE BAIXO DA MANGA COMPRIDA, no antebraco. Fica filha do `low`
@@ -726,8 +762,10 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
 
     // As mãos entram no rig: o IK precisa da ponta da cadeia, e o teste
     // de defesa lê a posição REAL dela no mundo (ver js/gk_dive.js).
-    const bracoEsq = criarBraco(0.8); rig.lArm = bracoEsq.raiz; rig.lElbow = bracoEsq.cotovelo; rig.lHand = bracoEsq.mao;
-    const bracoDir = criarBraco(-0.8); rig.rArm = bracoDir.raiz; rig.rElbow = bracoDir.cotovelo; rig.rHand = bracoDir.mao;
+    // Conexão dos braços acompanha o topo do tórax (25% menor em largura: 0.8 * 0.75 = 0.60)
+    const xOmbro = 0.8 * 0.75;
+    const bracoEsq = criarBraco(xOmbro); rig.lArm = bracoEsq.raiz; rig.lElbow = bracoEsq.cotovelo; rig.lHand = bracoEsq.mao;
+    const bracoDir = criarBraco(-xOmbro); rig.rArm = bracoDir.raiz; rig.rElbow = bracoDir.cotovelo; rig.rHand = bracoDir.mao;
     const pernaEsq = criarPerna(0.4); rig.lLeg = pernaEsq.raiz; rig.lKnee = pernaEsq.joelho; rig.lFoot = pernaEsq.pe;
     rig.lBota = pernaEsq.pe.userData.chuteira;
     const pernaDir = criarPerna(-0.4); rig.rLeg = pernaDir.raiz; rig.rKnee = pernaDir.joelho; rig.rFoot = pernaDir.pe;

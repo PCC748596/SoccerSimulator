@@ -83,21 +83,12 @@ const Uniformes = {
         vezes e a segunda duas. Por isso o preto vem primeiro na lista: trocar
         a ordem é trocar quem fica com três.
 
-        O pedido dizia "duas brancas"; ficam VERMELHAS, que é a outra cor do
-        uniforme 1 que ele próprio descreveu ("preta e vermelha") e a que está
-        na fotografia da camisola. Para as ter brancas de verdade, é trocar
-        `#c8102e` por `#f2f2f2` aqui — e mais nada.
-        */
-        /*
-        E UMA BARRA VERMELHA NA BAINHA (pedido). Com cinco faixas e a primeira
-        preta, a de baixo tambem sai preta — a barra devolve o vermelho ao
-        fundo da camisola, que e o remate que a fotografia mostra.
-
-        `altura` e uma fraccao da peca: 0.10 sao os ultimos 10% da textura.
+        TODAS DO MESMO TAMANHO — pedido: *"As faixas na camisa do Flamengo são
+        todas do mesmo tamanho. Ajusta"*. As 5 faixas dividem a altura do tronco
+        em fatias rigorosamente iguais, sem barra na bainha encurtando a última.
         */
         camisa: {
-            padrao: 'faixas', cores: ['#17171b', '#c8102e'], divisoes: 5,
-            barra: { cor: '#c8102e', altura: 0.10 }
+            padrao: 'faixas', cores: ['#17171b', '#c8102e'], divisoes: 5
         },
         /*
         A COR QUE O REPRESENTA no disco da vista táctica e nas etiquetas é o
@@ -109,7 +100,16 @@ const Uniformes = {
         também o vermelho que identifica o clube de longe.
         */
         corPrincipal: '#c8102e',
-        calcao: '#17171b',
+        /*
+        CALÇÃO BRANCO COM BARRA VERMELHO E PRETO — pedido: *"Ajusta o calção do
+        Flamengo para branco com barra vermelho e preto"*.
+        O calção é branco (#f2f2f2) com barra na bainha com as cores vermelho e preto.
+        */
+        calcao: {
+            padrao: 'solido',
+            cores: ['#f2f2f2'],
+            barra: { cor: '#c8102e', cores: ['#c8102e', '#17171b'], altura: 0.16 }
+        },
         meiao: { padrao: 'faixas', cores: ['#17171b', '#c8102e'], divisoes: 6 },
         numero: '#ffffff',
         contorno: 'rgba(0,0,0,0.8)'
@@ -120,47 +120,44 @@ const Uniformes = {
     é a ordem e a finura que fazem a camisola ler-se como ela, e não o facto de
     lá estarem as três cores.
 
-    Calção e meião brancos, e o número em verde escuro (pedido): sobre listras
-    que incluem o branco, o verde escuro é a única das três cores da camisola
-    que se lê em todas as outras.
+    Calção verde com barra branca e meião branco, e o número em verde escuro:
+    sobre listras que incluem o branco, o verde escuro é a única das três cores
+    da camisola que se lê em todas as outras.
     */
     'Fluminense-RJ': {
         /*
-        AS LISTRAS NÃO SÃO TODAS DA MESMA LARGURA — pedido: *"as faixas grená e
-        verde escuro são mais largas que as brancas"*. É o que está na
-        fotografia: duas faixas de cor separadas por uma risca branca fina.
+        AS LISTRAS NÃO SÃO TODAS DA MESMA LARGURA — pedido: *"Entre as cores na
+        camisa tricolor tem a faixa branca mais fina. Ajusta. Em todas as camisas
+        tricolores é assim. EX: Na camisa do fluminense RJ: grená, branco, verde,
+        branco, grená, branco…..etc"*.
 
-        Os pesos são relativos e seguem a ordem das cores. Estiveram em
-        1.7/1.7/0.6 e voltou o mesmo pedido — *"as faixas grená e verde do
-        Fluminense são mais largas"* —, portanto vão a **2.6/2.6/0.5**: as
-        faixas de cor ficam cinco vezes mais largas que a risca branca, que
-        passa a ser o filete que as separa em vez de uma terceira listra.
+        O ciclo é grená, branco (fino), verde, branco (fino). As faixas de cor
+        grená e verde têm peso 2.6 e a risca branca tem peso 0.5, ficando como
+        o filete que separa cada cor da outra.
 
-        Com doze barras, a camisola fica com quatro ciclos de
-        grená/verde/branco.
+        Com doze barras e ciclo de 4, a camisola fica com três ciclos completos
+        grená/branco/verde/branco.
         */
         camisa: {
             padrao: 'listras',
-            cores: ['#7a1b2b', '#0f6b3a', '#f2f2f2'],
-            pesos: [2.6, 2.6, 0.5],
+            cores: ['#7a1b2b', '#f2f2f2', '#0f6b3a', '#f2f2f2'],
+            pesos: [2.6, 0.5, 2.6, 0.5],
             /*
             DOZE LISTRAS COM UMA LARGA NO MEIO — pedido. As doze já lá
-            estavam; o que faltava era o alinhamento: com o padrão a começar
-            na borda esquerda, o eixo do peito calhava numa risca branca fina.
-            Ver `centrada` no cabeçalho.
+            estavam; o alinhamento com centrada garante a listra grená larga
+            no centro do peito.
             */
             divisoes: 12,
             centrada: true
         },
         /*
-        O CALÇÃO É BRANCO COM UMA BARRA VERDE (pedido). É uma peça e não uma
-        cor — ver o `pecaCalcao` no construirCorpo; a barra fica na bainha, com
-        o mesmo verde das listras da camisola.
+        O CALÇÃO É VERDE COM BARRA BRANCA — pedido: *"O calção do Fluminense pra
+        verde com barra branca"*. Fica na bainha, invertendo a barra e o fundo.
         */
         calcao: {
             padrao: 'solido',
-            cores: ['#f2f2f2'],
-            barra: { cor: '#0f6b3a', altura: 0.16 }
+            cores: ['#0f6b3a'],
+            barra: { cor: '#f2f2f2', altura: 0.16 }
         },
         meiao: { padrao: 'solido', cores: ['#f2f2f2'] },
         // O grená é a dominante do tricolor — ver corPrincipal no Flamengo.
@@ -189,8 +186,8 @@ const Uniformes = {
     'Grêmio-RS': {
         camisa: {
             padrao: 'listras',
-            cores: ['#15151a', '#4aa3e0', '#f2f2f2'],
-            pesos: [2.6, 2.6, 0.5],
+            cores: ['#15151a', '#f2f2f2', '#4aa3e0', '#f2f2f2'],
+            pesos: [2.6, 0.5, 2.6, 0.5],
             // Doze listras com a larga no meio, como a do Fluminense — é o
             // mesmo desenho, e o teste obriga os dois a andar a par.
             divisoes: 12,

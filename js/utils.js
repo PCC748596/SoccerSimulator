@@ -26,10 +26,21 @@ function createSpectatorGeometry() {
     const u = 1.0;
     const pelvis = new THREE.BoxGeometry(u * 1.3, u * 0.6, u * 0.8).toNonIndexed(); pelvis.translate(0, 2.6, 0);
     // Tronco numa peça só, como nos jogadores (ver criarModelo em player.js).
-    const chest = new THREE.BoxGeometry(u * 1.4, u * 1.45, u * 0.75).toNonIndexed(); chest.translate(0, 3.625, 0);
+    // Parte de cima 25% menor que a de baixo na largura (X).
+    // Subdivisão e interpolação linear contínua para evitar distorções diagonais.
+    const chestGeo = new THREE.BoxGeometry(u * 1.4, u * 1.45, u * 0.75, 16, 16, 1);
+    const pChest = chestGeo.attributes.position;
+    const yMinChest = -(u * 1.45) / 2;
+    for (let i = 0; i < pChest.count; i++) {
+        const t = Math.max(0, Math.min(1, (pChest.getY(i) - yMinChest) / (u * 1.45)));
+        pChest.setX(i, pChest.getX(i) * (1.0 - 0.25 * t));
+    }
+    pChest.needsUpdate = true;
+    chestGeo.computeVertexNormals();
+    const chest = chestGeo.toNonIndexed(); chest.translate(0, 3.625, 0);
     const head = new THREE.BoxGeometry(u * 0.8, u * 1.0, u * 0.85).toNonIndexed(); head.translate(0, 4.975, 0);
-    const lArm = new THREE.BoxGeometry(u * 0.45, u * 1.1, u * 0.45).toNonIndexed(); lArm.translate(u * 0.9, 3.65, 0);
-    const rArm = new THREE.BoxGeometry(u * 0.45, u * 1.1, u * 0.45).toNonIndexed(); rArm.translate(-u * 0.9, 3.65, 0);
+    const lArm = new THREE.BoxGeometry(u * 0.45, u * 1.1, u * 0.45).toNonIndexed(); lArm.translate(u * (0.9 * 0.75), 3.65, 0);
+    const rArm = new THREE.BoxGeometry(u * 0.45, u * 1.1, u * 0.45).toNonIndexed(); rArm.translate(-u * (0.9 * 0.75), 3.65, 0);
     const legs = new THREE.BoxGeometry(u * 1.3, u * 0.5, u * 1.6).toNonIndexed(); legs.translate(0, 2.1, 0.4);
     const merged = mergeNonIndexedGeometries([pelvis, chest, head, lArm, rArm, legs]);
     merged.scale(1.8 / 5.5, 1.8 / 5.5, 1.8 / 5.5);

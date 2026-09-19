@@ -360,7 +360,7 @@ const GoalkeeperPose = {
         abertura: 0.07,
         bracoZ: 0.45,
         bracoX: -0.10,
-        cotovelo: -0.15,
+        cotovelo: -0.30,
         altura: 0.0
     },
 

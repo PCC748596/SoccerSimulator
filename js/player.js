@@ -1757,8 +1757,8 @@ class FootballPlayer {
             rig.lArm.rotation.set(0, 0, Math.PI / 16);
             rig.rArm.rotation.set(0, 0, -Math.PI / 16);
             
-            rig.lElbow.rotation.set(0, 0, 0);
-            rig.rElbow.rotation.set(0, 0, 0);
+            rig.lElbow.rotation.set(-0.3, 0, 0);
+            rig.rElbow.rotation.set(-0.3, 0, 0);
             
             rig.lLeg.rotation.set(0, 0, Math.PI / 32);
             rig.rLeg.rotation.set(0, 0, -Math.PI / 32);
@@ -4643,8 +4643,8 @@ class FootballPlayer {
             rig.rElbow.rotation.z = lerpTo(rig.rElbow.rotation.z, 0, 0.25);
             
             if (speed < 0.1) {
-                rig.lElbow.rotation.x = lerpTo(rig.lElbow.rotation.x, 0, 0.25);
-                rig.rElbow.rotation.x = lerpTo(rig.rElbow.rotation.x, 0, 0.25);
+                rig.lElbow.rotation.x = lerpTo(rig.lElbow.rotation.x, -0.3, 0.25);
+                rig.rElbow.rotation.x = lerpTo(rig.rElbow.rotation.x, -0.3, 0.25);
             }
         }
 
@@ -4884,6 +4884,7 @@ class FootballPlayer {
             } else {
                 rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, 0); rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, 0);
                 rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, Math.PI / 12); rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -Math.PI / 12);
+                rig.lElbow.rotation.x = lerpTo(rig.lElbow.rotation.x, -0.3); rig.rElbow.rotation.x = lerpTo(rig.rElbow.rotation.x, -0.3);
                 rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, 0); rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, 0);
                 rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, 0); rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 0);
                 rig.lLeg.rotation.z = lerpTo(rig.lLeg.rotation.z, Math.PI / 32); rig.rLeg.rotation.z = lerpTo(rig.rLeg.rotation.z, -Math.PI / 32);

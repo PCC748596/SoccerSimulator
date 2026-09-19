@@ -47,7 +47,7 @@ const GaitModel = {
         joelhoOscila: 0.0,
         pe: 0.0,
         braco: 0.0,
-        cotovelo: -0.22,      // os braços ficam como estão de pé
+        cotovelo: -0.30,      // os braços ficam ligeiramente para a frente de pé (idle)
         tronco: 0.0,
         ressalto: 0.0,
         /*
