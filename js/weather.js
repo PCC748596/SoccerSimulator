@@ -25,6 +25,7 @@ const Weather = {
 
     cloudGroup: null,
     clouds: [],
+    baseSolIntensidade: undefined,   // intensidade do Sol/Lua do preset ativo, antes da sombra das nuvens
     rainParticles: null,
     rainCount: 3500,
     rainSpeed: 45,
@@ -396,9 +397,13 @@ const Weather = {
             const speedKmh = 5 + Math.random() * 10; // 5 a 15 km/h
             const speedMs = speedKmh / 3.6;
 
+            // Dimensões reais do aglomerado (blocos base de 6 unidades), usadas
+            // para que uma nuvem grande faça mais sombra do que uma pequena
             cloudCluster.userData = {
                 speedX: speedMs,
                 speedZ: (Math.random() - 0.5) * 0.25,
+                larguraX: widthBlocks * 6,
+                larguraZ: lengthBlocks * 6,
                 material: mat
             };
 
@@ -466,12 +471,13 @@ const Weather = {
     },
 
     update(dt) {
-        if (window.isPaused) return;
-
         let maxSombra = 0;
 
-        // Nuvens se movem em céu limpo e nublado (estáticas apenas em encoberto e chuva)
-        const moverNuvens = (this.condicao === 'limpo' || this.condicao === 'nublado');
+        // Nuvens só se movem em céu limpo e nublado (estáticas em encoberto e chuva).
+        // Em pausa o céu congela, mas a luz continua a convergir (ver mais abaixo).
+        const moverNuvens = !window.isPaused
+            && (this.condicao === 'limpo' || this.condicao === 'nublado');
+
         if (this.cloudGroup && this.cloudGroup.visible) {
             const boundsX = 260;
             this.clouds.forEach(c => {
@@ -487,23 +493,37 @@ const Weather = {
                     }
                 }
 
-                // Calcula quanto a nuvem está cobrindo o centro do estádio (X: -80..80, Z: -70..70)
+                // A sombra só faz sentido para nuvens que passam: em encoberto e chuva
+                // as nuvens estão paradas e escurecer aqui daria um escurecimento
+                // permanente somado ao preset, que já é escuro por si.
+                if (!moverNuvens) return;
+
+                // Quanto está a nuvem a cobrir o centro do campo (X: -85..85, Z: -75..75),
+                // alargado pelo tamanho real do aglomerado
+                const alcanceX = 85 + c.userData.larguraX * 0.5;
+                const alcanceZ = 75 + c.userData.larguraZ * 0.5;
                 const distX = Math.abs(c.position.x);
                 const distZ = Math.abs(c.position.z);
-                if (distX < 85 && distZ < 75) {
-                    const fatorX = Math.max(0, 1 - distX / 85);
-                    const fatorZ = Math.max(0, 1 - distZ / 75);
+                if (distX < alcanceX && distZ < alcanceZ) {
+                    const fatorX = Math.max(0, 1 - distX / alcanceX);
+                    const fatorZ = Math.max(0, 1 - distZ / alcanceZ);
                     const fator = fatorX * fatorZ;
                     if (fator > maxSombra) maxSombra = fator;
                 }
             });
         }
 
-        // Diminuição dinâmica da luminosidade (~0.2) durante a passagem da nuvem
+        // Escurecimento dinâmico durante a passagem da nuvem. É uma FRAÇÃO da
+        // intensidade do preset (~21%), não um valor absoluto: 0.20 fixo apagava
+        // quase por completo a Lua (0.12) e a chuva de dia (0.25).
         if (this.dirLight && this.baseSolIntensidade !== undefined) {
-            const solAlvo = Math.max(0.05, this.baseSolIntensidade - (0.20 * maxSombra));
+            const solAlvo = this.baseSolIntensidade * (1 - 0.21 * maxSombra);
             this.dirLight.intensity += (solAlvo - this.dirLight.intensity) * Math.min(1.0, dt * 2.5);
         }
+
+        // A chuva também congela em pausa, mas só depois de a luz convergir,
+        // para não deixar o lerp preso a meio da transição.
+        if (window.isPaused) return;
 
         if (this.rainParticles && this.rainParticles.visible) {
             const attr = this.rainGeometry.attributes.position;
