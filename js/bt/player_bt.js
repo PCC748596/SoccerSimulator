@@ -3366,14 +3366,43 @@ function tratarBolaParada(p) {
         vaivém possível porque nenhum alvo da forma cai dentro da pequena
         área.
         */
-        const equipaQueBate = Match.setPieceTeam;
-        if (p.role !== 'gk' && equipaQueBate && p !== Match.setPieceTaker && p.model) {
-            const dirBate = (equipaQueBate === 'TeamA') ? 1 : -1;
-            const linhaZ = -dirBate * (CAMPO_COMP / 2);
-            const fundo = (p.model.position.z - linhaZ) * dirBate;
-            const naPequena = fundo >= -1.0 && fundo <= Area.pequenaProfundidade &&
-                Math.abs(p.model.position.x) <= Area.pequenaMeiaLargura;
-            if (naPequena) {
+        /*
+        SEGUNDA PASSAGEM, e a regra generalizou-se.
+
+        A versão de cima resgatava só quem estivesse dentro da PEQUENA ÁREA. O
+        relato seguinte mostrou o mesmo defeito uns metros mais ao largo:
+        *"depois do corner, os jogadores do time que vai bater o tiro de meta
+        não saem de perto do goleiro"*.
+
+        Medido com `tools/scratch/tiro_meta_apos_canto.js` (60 min), jogadores
+        de campo a menos de 16 m do próprio guarda-redes, por segundo de
+        espera:
+
+            segundo      após canto     outros tiros de meta
+            0-1 s           6.9                 3.1
+            2-3 s           3.4                 0.2
+            4-5 s           2.4                 0.4
+            6-7 s           3.5                 0.8
+
+        Nos tiros de meta normais a área esvazia-se; a seguir a um canto não —
+        e ainda PIORA depois dos 4 s. Apanhados aos 6 s, estavam todos em
+        `SET_PIECE_WAIT` com o alvo ainda a 9 a 15 m (um deles a 0.9 m do
+        guarda-redes com 14.9 m por andar).
+
+        A causa é a mesma: quem sai do `MOVE_TO_POS` a meio do caminho é
+        estacionado onde está, e a montagem só mexe em quem está em
+        `MOVE_TO_POS`. Em vez de listar os sítios onde não se pode parar
+        (pequena área, ao pé do guarda-redes, e o que vier a seguir), a regra
+        passa a ser a óbvia: **só se espera QUANDO SE CHEGOU**.
+
+        O limiar é o mesmo que a montagem usa para parar quem chega
+        (`formaDoTiroDeMeta`, 1.5 m), com folga para não oscilar na fronteira.
+        Sem alvo escrito não há nada a exigir, e o comportamento é o antigo.
+        */
+        const CHEGOU = 2.0;
+        if (p.role !== 'gk' && p !== Match.setPieceTaker && p.model && p.dynamicTarget) {
+            const falta = p.model.position.distanceTo(p.dynamicTarget);
+            if (falta > CHEGOU) {
                 if (s !== 'MOVE_TO_POS') fsm.changeState('MOVE_TO_POS');
                 return;
             }

@@ -3778,7 +3778,33 @@ class FootballPlayer {
         if (this.role !== 'gk') this.avaliarSaltoDeCabeceio(dt);
 
         if (this.hasBall) {
-            if (this.role === 'gk' && (this.gkEstado === 'segurando' || this.gkEstado === 'apanhar' || this.gkEstado === 'chutando' || this.gkEstado === 'lancando')) {
+            /*
+            A MEIO DO MERGULHO, QUEM MANDA NA BOLA É O `GkDive`.
+
+            Relato: *"ele não está segurando a bola. A bola toca na mão do
+            goleiro e ela vai instantaneamente para o gramado"*.
+
+            E ia mesmo. O `GkDive.update` prende a bola à mão que a agarrou
+            (ver a linha `Match.ball.position.copy` no gk_dive.js), mas
+            `gkEstado` durante o gesto é `'mergulho'`, que não está na lista
+            aqui abaixo — portanto a bola caía no ramo GENÉRICO do fim deste
+            bloco, o do jogador de campo, que a põe 0.6 m à frente do corpo e
+            faz `position.y = BallPhysics.raio`. Ou seja: o mergulho punha-a na
+            mão e esta linha, uns micros depois e no mesmo frame, atirava-a
+            para a relva.
+
+            Medido com `tools/scratch/gk_bola_na_mao.js`, nos frames de
+            mergulho com a bola JÁ AGARRADA: **55 de 55 com a bola no chão**,
+            altura média 0.110 m (o raio da bola, exactamente) e a 0.64 m da
+            mão que supostamente a segurava.
+
+            Aqui não se lhe toca: o gesto do mergulho já a colocou, e é ele
+            que a leva até ao fim da queda e do levantar.
+            */
+            if (this.role === 'gk' && this.gkEstado === 'mergulho' &&
+                this.dive && this.dive.agarrou) {
+                // nada a fazer: a bola está na mão, posta pelo GkDive.
+            } else if (this.role === 'gk' && (this.gkEstado === 'segurando' || this.gkEstado === 'apanhar' || this.gkEstado === 'chutando' || this.gkEstado === 'lancando')) {
                 // GR segura a bola nas mãos, junto ao PEITO (não à cintura) —
                 // não ao nível do pé como no dribble de um jogador de campo
                 // (senão fica só pousada no chão à frente dele).
