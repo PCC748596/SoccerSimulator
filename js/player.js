@@ -7028,7 +7028,13 @@ class FootballPlayer {
             let gkSkill = this.skillFor('GK');
 
             if (t < 0.3) {
-                let jumpH = 0.8 + ((gkSkill - 50) / 50) * 0.6;
+                /*
+                O SALTO ALTO, também 25% mais baixo — mesmo pedido que baixou
+                o `vySubidaMax` do mergulho (ver GoalkeeperDive). Aqui o
+                número JÁ É a altura, portanto multiplica-se por 0.75 e não
+                pela raiz: era 0.80 m com GK 50 e 1.40 m com GK 100.
+                */
+                let jumpH = (0.8 + ((gkSkill - 50) / 50) * 0.6) * 0.75;
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + jumpH, 0.25);
 
                 /*

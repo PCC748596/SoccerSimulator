@@ -465,6 +465,17 @@ function pickChaser(bb) {
     Serve tambem a conducao: o toque a frente poe `intendedReceiver` no proprio
     condutor, e assim continua a ser ele a ir buscar a bola.
     */
+    /*
+    O sinal e o PLANO, e nao a flag `Match.faltaDirecta`: medido, essa esta
+    `false` (ou por definir) durante o voo -- so se acende noutro ramo -- e
+    exigi-la aqui anulava o portao por completo.
+    */
+    if (typeof Match !== 'undefined' && Match.faltaDirectaPlano &&
+        !Match.faltaDirectaPlano.tocada) {
+        bb.chaser = null;
+        return;
+    }
+
     if (Match.intendedReceiver && Match.intendedReceiver.team === bb.team &&
         bb.outfield.indexOf(Match.intendedReceiver) !== -1) {
         if (typeof MatchStats !== 'undefined' && bb.chaser &&
@@ -488,6 +499,32 @@ function pickChaser(bb) {
             (bb.carrier && bb.carrier.role === 'gk')
     });
     if (!podeIr) { bb.chaser = null; return; }
+
+    /*
+    FALTA DIRECTA EM VOO: ninguém vai atrás da bola até ela tocar em algo.
+
+    Pedido: *"durante a falta directa tem 2 jogadores tentando correr atrás da
+    bola. A menos que o goleiro rebata a bola ou ela pegue na trave ou em algum
+    outro jogador"*.
+
+    Medido com `tools/scratch/falta_corrida_no_voo.js` (40 min, 52 faltas),
+    contando o `chaser` ELEITO enquanto a bola voa e antes de qualquer
+    contacto:
+
+        média de perseguidores por frame   1.54
+        faltas com 1 ou mais                52 / 52
+        faltas com 2 ou mais                29 / 52
+
+    A primeira versão desta medição contava "quem se move na direcção da
+    bola" e dava 3.4 — mas numa falta a bola voa para a baliza, portanto toda
+    a gente que converge para a área entrava na conta, com estados
+    `MOVE_TO_POS` e `MARKING` que são deslocamento normal e não perseguição.
+    O número que interessa é o do perseguidor eleito, que é quem corre mesmo
+    atrás dela.
+
+    A bandeira `tocada` é posta no `Match.update` (ver o bloco do
+    `faltaDirectaPlano` em match_loop.js), pela mudança de rumo da bola.
+    */
 
     const prevChaser = bb.chaser;
 

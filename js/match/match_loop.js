@@ -273,6 +273,48 @@ Object.assign(Match, {
             const plano = this.faltaDirectaPlano;
             plano.tempo += dt;
 
+            /*
+            A BOLA JÁ TOCOU EM ALGUMA COISA?
+
+            Relato, com captura: *"durante a falta directa tem 2 jogadores
+            tentando correr atrás da bola. Isso não faz sentido. A menos que o
+            goleiro rebata a bola ou ela pegue na trave ou em algum outro
+            jogador"*. Quem lê esta bandeira é o `pickChaser` (team_bt.js):
+            enquanto a bola vai a caminho e intacta, ninguém é mandado atrás
+            dela; depois de um desvio, tudo volta ao normal.
+
+            Detecta-se pela DIRECÇÃO: guarda-se o rumo com que a bola partiu e
+            marca-se o toque quando ele muda de forma brusca. Serve para os
+            três casos do pedido — guarda-redes, poste e qualquer jogador — sem
+            ter de ir pôr uma bandeira em cada um deles.
+            */
+            {
+                const vx = this.ballVel.x, vz = this.ballVel.z;
+                const n = Math.hypot(vx, vz);
+                if (!plano.tocada && n > 0.5) {
+                    /*
+                    Compara-se com o rumo do FRAME ANTERIOR, e nao com o do
+                    lancamento: a falta directa tem folha seca (ver
+                    `baterFaltaDirecta`), portanto a bola curva de proposito e
+                    ao fim do voo ja se afastou muito da direccao inicial.
+                    Medido contra o rumo inicial, a curva sozinha marcava
+                    `tocada` e o portao abria a meio do voo -- ficavam 6 de 20
+                    faltas com dois perseguidores.
+
+                    Um desvio acontece num frame; uma curva sao poucos graus
+                    por frame. 0.985 sao ~10 graus num frame a 60 Hz.
+                    */
+                    if (plano.rumo &&
+                        (plano.rumo.x * vx + plano.rumo.z * vz) / n < 0.985) {
+                        plano.tocada = true;
+                    }
+                    plano.rumo = { x: vx / n, z: vz / n };
+                }
+                // Bola parada também acaba a espera: não há voo nenhum a
+                // proteger e alguém tem de a ir buscar.
+                if (n <= 0.5 && plano.rumo) plano.tocada = true;
+            }
+
             if (!plano.saltou && plano.tempo >= DF.atrasoSaltoBarreira) {
                 plano.saltou = true;
                 (this.faltaDirectaBarreira || []).forEach(p => {

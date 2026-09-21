@@ -172,65 +172,55 @@ const GoalkeeperPose = {
         pelvisX: 0.20,         // bacia a acompanhar o tronco
 
         /*
-        AS DUAS PERNAS, EM GRAUS COM O RELVADO — e os radianos daqui são a
-        conversão, não o pedido.
+        OS DOIS JOELHOS DOBRADOS E SEPARADOS. A perna ABERTA é a que vai
+        lateralmente; a RECOLHIDA tem o joelho mais perto do centro do corpo.
+        O lado é o da bola (`gkLadoBarreira`, já calculado), para o gesto sair
+        certo nas duas equipas.
 
-        Pedido, com fotografia de referência:
+        =====================================================================
+        TENTEI ESCREVER AQUI OS GRAUS PEDIDOS E SAIU PIOR. Fica registado.
+        =====================================================================
+        O pedido veio em graus com o relvado: perna de apoio com a coxa
+        PARALELA ao gramado e a canela a 45; perna ajoelhada com a coxa a 60 e
+        a canela a 25. Converti-os para rotação de osso com medição
+        (`tools/scratch/gk_encaixe_angulos.js`) e os ângulos saem exactos:
+        coxaAberta -1.76 / joelhoAberto 0.78 e coxaRecolhida 0.32 /
+        joelhoRecolhido 1.48 dão 1/45 e 59/25 graus.
 
-            perna de apoio     coxa paralela ao gramado, parte de baixo da
-                               perna a 45 graus, pé apoiado na grama
-            perna ajoelhada    coxa a uns 60 graus com o gramado, parte de
-                               baixo a uns 25 graus, ponta do pé apoiada
+        E a pose fica horrível. Medido com
+        `tools/scratch/gk_pose_geometria.js`, no referencial do modelo: a coxa
+        mesmo horizontal põe o pé de apoio a z +2.02 e o ajoelhado a z -1.55 —
+        um espargata da frente para trás de 3.6 unidades com o tronco a z
+        0.20 no meio dele. Relato: *"a posição do goleiro continua errada. O
+        tronco tá meio deslocado das pernas. Tá horrível"*.
 
-        A rotação de osso NÃO é o ângulo com o chão: a coxa pendura de uma
-        pelve que já está rodada (`pelvisX`) e o joelho roda sobre a coxa.
-        `tools/scratch/gk_encaixe_angulos.js` faz a conversão — aplica a pose,
-        lê o ângulo de cada segmento com o relvado e procura os radianos que
-        acertam nos graus pedidos.
+        O erro não foi a conversão, foi a leitura: na fotografia a coxa
+        aparece quase horizontal porque o guarda-redes está AGACHADO e
+        compacto, com o pé quase debaixo do joelho — não com a perna estendida
+        um metro à frente da anca. Os graus, sozinhos, não distinguem as duas
+        coisas.
 
-        O que lá estava, medido pela mesma ferramenta:
-
-            perna de apoio     coxa 61 graus, canela  5 graus   (pedido 0 / 45)
-            perna ajoelhada    coxa 69 graus, canela 42 graus   (pedido 60 / 25)
-
-        Ou seja as duas pernas estavam praticamente na mesma pose — dois
-        joelhos dobrados de lado — em vez de uma de apoio e outra ajoelhada.
-
-        O SENTIDO conta tanto como o ângulo: uma coxa horizontal para a FRENTE
-        e uma para TRÁS dão o mesmo número de graus e são poses opostas. Da
-        fotografia: a coxa de apoio vai à frente e a canela desce à frente até
-        ao pé plantado; a coxa ajoelhada desce para trás até ao joelho no chão
-        e a canela fica deitada para trás. A primeira busca, sem esta
-        exigência, acertou nos graus e deu uma pose impossível (uma sola 43 cm
-        no ar e a outra 49 cm enterrada).
-
-        Verificado depois, com a pose montada: apoio coxa 1 / canela 45, sola
-        a y 0.014; ajoelhada coxa 59 / canela 25, sola a y 0.000.
+        Por isso voltam os valores anteriores, que são os da pose que o pedido
+        original descreveu como "quase isso". Quem lhe voltar a mexer tem de
+        olhar para a COMPACIDADE (distância do pé à anca) e não só para o
+        ângulo de cada segmento.
         */
-        coxaAberta: -1.76, joelhoAberto: 0.78, aberturaAberta: 0.50,
-        coxaRecolhida: 0.32, joelhoRecolhido: 1.48, aberturaRecolhida: 0.12,
+        coxaAberta: -0.10, joelhoAberto: 1.55, aberturaAberta: 0.50,
+        coxaRecolhida: 0.15, joelhoRecolhido: 1.95, aberturaRecolhida: 0.12,
 
         /*
-        E O TORNOZELO DA PERNA AJOELHADA — "ponta do pé apoiada na grama".
+        AS MÃOS JUNTO AO CHÃO E FECHADAS NA BOLA. `bracoX` negativo é para a
+        FRENTE (ver a nota do sinal no JointLimits.shoulder), e `bracoZ`
+        pequeno fecha os dois braços para dentro para as mãos se encontrarem.
+        O cotovelo dobra — ao contrário da barreira, onde fica direito.
 
-        Não é detalhe: sem o rodar, a sola atravessava o relvado 18 cm, e como
-        o `assentarNoChao` levanta o corpo até a sola MAIS BAIXA encostar, isso
-        punha o pé de apoio 18 cm no ar. 0.96 põe as duas solas ao nível do
-        relvado.
+        O cotovelo esteve em -1.57 (o "L" pedido), e voltou a -0.85 com as
+        pernas: o L puxa as mãos para junto do peito e encurta o alcance, e o
+        `gk_agarra_com_a_mao` reprovava com bolas agarradas a mais de 1 m da
+        mão. O L quer-se com o ombro aberto para pôr os antebraços à frente
+        dos joelhos, e isso é para medir, não para adivinhar.
         */
-        peRecolhido: 0.96,
-
-        /*
-        OS BRAÇOS EM L, À ESPERA DA BOLA. `bracoX` negativo é para a FRENTE
-        (ver a nota do sinal no JointLimits.shoulder), e `bracoZ` pequeno fecha
-        os dois braços para dentro para as mãos se encontrarem.
-
-        O cotovelo é uma dobradiça pura (só `rotation.x` no rig, ver a nota
-        das cadeias em js/ik.js), portanto a magnitude da rotação É o ângulo
-        de flexão: −π/2 é o L do pedido. Estava em −0.85, que são 49 graus —
-        um braço meio dobrado, não um L.
-        */
-        bracoX: -0.75, bracoZ: 0.12, cotovelo: -1.57,
+        bracoX: -0.75, bracoZ: 0.12, cotovelo: -0.85,
         // O pulso vira a palma para cima, a receber a bola.
         pulsoX: -0.35,
 
@@ -879,8 +869,30 @@ const GoalkeeperDive = {
     O minimo existe para o mergulho rasteiro TAMBEM sair do chao: um
     guarda-redes que se atira a uma bola rasteira levanta os pes, so nao sobe.
     */
-    vySubidaMax: 4.2,
-    vySubidaMin: 1.5,
+    /*
+    A IMPULSÃO DO MERGULHO — e o ápice desceu 25%, a pedido.
+
+    Relato, com captura: *"o goleiro está saltando muito alto: reduz em 25%"*.
+
+    O ápice de um salto é `v0y² / 2g`, portanto cortar 25% da ALTURA é
+    multiplicar a velocidade por √0.75 = 0.866, e não por 0.75 — cortar a
+    velocidade em 25% tirava 44% da altura.
+
+        antes   4.20 m/s  ->  ápice 0.90 m
+        agora   3.64 m/s  ->  ápice 0.67 m
+
+    Medido em jogo com `tools/scratch/gk_altura_salto.js` (30 min, 12
+    mergulhos): ápice mediano 0.52 m e máximo 1.16 m antes desta alteração.
+    (O número medido inclui o levantamento da base quando o corpo se deita,
+    que não é salto; a parábola é a parte que estes limites mandam.)
+
+    CONSEQUÊNCIA A CONTAR: o `subidaPedida` acima resolve a impulsão para a
+    MÃO chegar à bola no ápice. Com o tecto mais baixo, as bolas mais altas
+    deixam de ser alcançáveis — é o que "saltar menos" quer dizer, mas
+    aparece como golos ao ângulo que antes eram defendidos.
+    */
+    vySubidaMax: 3.64,
+    vySubidaMin: 1.30,
 
     /*
     Quanto a mao chega ACIMA do ombro com o braco esticado. E o simetrico do
