@@ -81,7 +81,7 @@ const GaitModel = {
     trote: {
         vel: 4.5,
         passada: 2.90,
-        anca: 0.56,           // ver a nota da `anca` em `correr`
+        anca: 0.67,           // ver a nota da `anca` em `correr`
         joelhoBase: 0.12,
         joelhoOscila: 1.15,
         pe: 0.30,
@@ -103,20 +103,27 @@ const GaitModel = {
         a distância pé-a-pé na direção da marcha, a 8 m/s:
 
             anca 1.20  ->  1.54 m   (o que estava)
+            anca 0.97  ->  1.37 m   <- escolhido
             anca 0.85  ->  1.26 m
-            anca 0.74  ->  1.14 m   <- escolhido, −0.40 m
+            anca 0.74  ->  1.14 m   (−0.40 m, ficou curto de mais)
             anca 0.70  ->  1.10 m
 
-        E o TROTE teve de descer com ele: a 0.78 ficava ACIMA da corrida, ou
-        seja as pernas abriam mais a trotar do que a sprintar. 0.56 mantém a
-        progressão andar -> trote -> correr que havia antes.
+        Os 40 cm pedidos deram 0.74, e à vista a passada ficou curta: *"a
+        passada ficou um pouco curta; aumenta um pouco, faz um meio termo
+        entre o que estava e o que foi modificado"*. 0.97 é o ponto médio
+        entre os dois — −17 cm em vez de −40.
+
+        E o TROTE desce com ele: a 0.78 ficava ACIMA da corrida, ou seja as
+        pernas abriam mais a trotar do que a sprintar. 0.67 (o mesmo meio
+        termo, de 0.78 para 0.56) mantém a progressão andar -> trote ->
+        correr que havia antes.
 
         A `passada` (metros por ciclo) NÃO mudou: é a cadência, não a
         amplitude. Com o passo visualmente mais curto e a mesma cadência, o
         pé desliza um pouco mais no relvado; quem quiser o pé outra vez
         colado à passada mexe aqui, e volta a correr a medição.
         */
-        anca: 0.74,
+        anca: 0.97,
         joelhoBase: 0.20,
         joelhoOscila: 1.95,   // calcanhar quase ao rabo
         pe: 0.45,

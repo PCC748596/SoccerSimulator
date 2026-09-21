@@ -162,7 +162,6 @@ console.log(LF + '3 — e sobe quem está enterrado');
 console.log(LF + '4 — o que escreve a própria altura não é assentado');
 {
     const casos = [
-        ['a correr (fase de voo)', { joelho: 0.6, velocidade: 7.0 }],
         ['a saltar', { joelho: 0.6, jumpTimer: 0.3 }],
         ['num carrinho', { joelho: 0.6, estado: 'SLIDE_TACKLE' }]
     ];
@@ -175,6 +174,48 @@ console.log(LF + '4 — o que escreve a própria altura não é assentado');
             erro(nome + ': a altura foi mexida, e esse estado escreve-a ele próprio');
         } else ok(nome + ': altura intacta');
     }
+}
+
+/*
+A CORRIDA É O CASO DE MEIO TERMO, e já cá estava como "altura intacta".
+
+Estava a pedir de mais. Acima da `velMax` o assento tem de deixar o corpo
+SUBIR do chão — é a fase de voo —, mas não tem de deixar a bota afundar-se
+no relvado: bota enterrada não é fase de voo nenhuma. O `return` seco
+desligava os dois sentidos, e era isso que dava o relato *"tem jogador
+enfiando quase toda chuteira na grama durante a corrida"* (medição por faixa
+de velocidade na nota do `assentarNoChao`, no player.js).
+
+Repare-se que o próprio fixture deste teste nasce ENTERRADO: com
+`model.position.y = ALTURA_BASE_Y` a sola fica a -0.044 mesmo com as pernas
+direitas. Era sobre essa pose que a versão antiga afirmava "altura intacta",
+ou seja afirmava que estava certo não corrigir uma bota 4 cm dentro do chão.
+*/
+console.log(LF + '4b — a correr: sobe quem enterra, mas ninguém é empurrado para baixo');
+{
+    // Sola no AR (fase de voo): ninguém lhe toca.
+    const voo = jogador({ joelho: 0.6, velocidade: 7.0 });
+    voo.model.position.y += 0.30;
+    voo.model.updateMatrixWorld(true);
+    const solaNoAr = alturaDaSola(voo);
+    const antes = voo.model.position.y;
+    assentarAte(voo, 10);
+    if (!(solaNoAr > 0.01)) {
+        erro('o caso da fase de voo tinha de começar com a sola no ar (está em ' + solaNoAr.toFixed(3) + ')');
+    } else if (Math.abs(voo.model.position.y - antes) > 1e-9) {
+        erro('a correr com a sola no ar: o corpo foi puxado para baixo e a fase de voo morreu');
+    } else ok('a correr com a sola no ar: altura intacta');
+
+    // Sola ENTERRADA: sobe até encostar, mesmo a correr.
+    const fundo = jogador({ joelho: 0.6, velocidade: 7.0 });
+    const solaAntes = alturaDaSola(fundo);
+    assentarAte(fundo, 60);
+    const solaDepois = alturaDaSola(fundo);
+    if (!(solaAntes < -0.01)) {
+        erro('o caso da bota enterrada tinha de começar enterrado (está em ' + solaAntes.toFixed(3) + ')');
+    } else if (solaDepois < -0.01) {
+        erro('a correr com a bota enterrada: ficou a ' + solaDepois.toFixed(3) + ', tinha de subir até ao relvado');
+    } else ok('a correr com a bota enterrada: sobe até encostar');
 }
 
 console.log(LF + '5 — a correcção tem tecto');

@@ -1623,8 +1623,8 @@ Object.assign(Match, {
     */
     formaDoLivreDeImpedimento: function (team, taker) {
         const S = (typeof OffsideRestartShape !== 'undefined') ? OffsideRestartShape : {
-            linhaDefesa: 21.5, espacoParaOsMedios: 15.0, avancadosAlemDoMeio: 5.0,
-            blocoAdversario: 30.0, largura: 1.0
+            defesaAtrasDaBola: 8.0, mediosAFrenteDaBola: 10.0, avancadosAFrenteDaBola: 26.0,
+            blocoAdversario: 26.0, largura: 1.0
         };
         const bate = (team === 'TeamA') ? this.players : this.opponents;
         const marca = (team === 'TeamA') ? this.opponents : this.players;
@@ -1646,13 +1646,14 @@ Object.assign(Match, {
         };
 
         /*
-        QUEM BATE: três profundidades, medidas no referencial de ataque dele.
-        `linhaDefesa` conta da própria linha de fundo (por isso o −LINHA_FUNDO);
-        os avançados contam do meio-campo, já do outro lado.
+        QUEM BATE: três profundidades, medidas no referencial de ataque dele e
+        A PARTIR DA BOLA — ver o cabeçalho do OffsideRestartShape para a
+        medição que obrigou a tirar isto das linhas absolutas do campo.
         */
-        const zDefesa = -LINHA_FUNDO + S.linhaDefesa;
-        const zMedios = zDefesa + S.espacoParaOsMedios;
-        const zAvancados = S.avancadosAlemDoMeio;
+        const bolaAtk = this.ball.position.z * attDir;
+        const zDefesa = bolaAtk - S.defesaAtrasDaBola;
+        const zMedios = bolaAtk + S.mediosAFrenteDaBola;
+        const zAvancados = bolaAtk + S.avancadosAFrenteDaBola;
         const porRole = { def: zDefesa, mid: zMedios, atk: zAvancados };
 
         for (const p of bate) {
@@ -1662,17 +1663,28 @@ Object.assign(Match, {
         }
 
         /*
-        QUEM MARCA: do meio-campo para trás, na própria metade — "marcando a
-        partir da linha de meio-campo". Mantém a ordem em profundidade da
-        formação dele, para os avançados ficarem à frente dos centrais.
+        QUEM MARCA: entre a BOLA e a própria baliza. A linha da frente nasce à
+        distância regulamentar da bola e o bloco estende-se para trás a partir
+        daí; mantém a ordem em profundidade da formação dele, para os avançados
+        ficarem à frente dos centrais.
+
+        Ancorava no MEIO-CAMPO, e era metade do defeito: com a bola no terço
+        ofensivo de quem cobra, este bloco ficava 40 a 50 m atrás dela — a
+        outra metade do "uns de um lado do campo e outros do outro".
         */
+        const minDist = (typeof FreeKickModel !== 'undefined' && FreeKickModel.afastaAdversarios)
+            ? FreeKickModel.afastaAdversarios : 9.15;
+        const bola = this.ball.position;
+
         const campoM = marca.filter(p => p && p.role !== 'gk' && p.model);
         if (!campoM.length) return;
         const zs = campoM.map(p => p.baseTarget.z * p.dirZ);
         const zMin = Math.min(...zs), zMax = Math.max(...zs);
         const span = (zMax - zMin) || 1;
 
-        const frenteDeles = (S.avancoAlemDoMeio || 0);
+        // A bola no referencial de ataque DELES, menos a distância da Lei 13.
+        const dirM = campoM[0].dirZ;
+        const frenteDeles = (bola.z * dirM) - minDist;
         for (const p of campoM) {
             // v = 0 no mais recuado da formação, 1 no mais adiantado.
             const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;
@@ -1681,14 +1693,12 @@ Object.assign(Match, {
         }
 
         /*
-        OS 9.15 m, DEPOIS DE TUDO. Esta montagem é a última a correr, portanto
-        o afastamento que o ramo do livre faz mais acima já passou — e com o
-        bloco a avançar para lá do meio-campo há fora-de-jogos perto da linha
-        média em que alguém cairia dentro da distância regulamentar.
+        OS 9.15 m, DEPOIS DE TUDO — rede de segurança. A linha da frente já
+        nasce à distância certa, mas o `clamp` às linhas do campo (dentro do
+        `colocar`) pode aproximar alguém quando a bola está encostada a um
+        canto, e o afastamento que o ramo do livre faz mais acima corre ANTES
+        desta montagem.
         */
-        const minDist = (typeof FreeKickModel !== 'undefined' && FreeKickModel.afastaAdversarios)
-            ? FreeKickModel.afastaAdversarios : 9.15;
-        const bola = this.ball.position;
         for (const p of campoM) {
             const dx = p.model.position.x - bola.x;
             const dz = p.model.position.z - bola.z;

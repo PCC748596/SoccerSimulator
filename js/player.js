@@ -540,7 +540,32 @@ class FootballPlayer {
             (this.gkEstado === 'mergulho' || this.gkEstado === 'salto_alto')) return;
         const st = this.fsm ? this.fsm.currentState : null;
         if (st === 'SLIDE_TACKLE') return;
-        if (this.velocity.length() > A.velMax) return;
+        /*
+        ACIMA DA `velMax` O ASSENTO NÃO DESLIGA — fica só num sentido.
+
+        Era um `return` seco, com a razão certa: a correr há fase de voo, e
+        forçar a sola ao relvado a 8 m/s era colar ao chão um gesto que tem de
+        sair dele. Só que o `return` desligava os DOIS sentidos, e o de baixo
+        não tem fase de voo nenhuma: bota enterrada é sempre defeito.
+
+        Relato, com fotografias: *"tem jogador enfiando quase toda chuteira na
+        grama durante a corrida"*. Medido com
+        `tools/scratch/pe_enterrado_jogo.js`, percentagem de leituras com a
+        sola abaixo do relvado, por faixa de velocidade:
+
+            0-1 m/s   5.3%        4-5 m/s   30.7%
+            1-2 m/s   1.5%        5-6 m/s   25.5%
+            2-3 m/s   1.1%        6-7 m/s   20.0%
+            3-4 m/s  11.5%        7-8 m/s   16.4%
+
+        O degrau cai exactamente na `velMax` (4.0). Abaixo dela o assento
+        corrige e sobra 1-2%; acima ninguém corrige nada.
+
+        Agora, acima da `velMax`, só passa a correcção que SOBE o corpo
+        (`chao < 0`, ou seja sola enterrada). A que o desceria — a que
+        mataria a fase de voo — continua a não correr.
+        */
+        const soASubir = (this.velocity.length() > A.velMax);
 
         const solaY = (bota) => {
             const geo = bota.geometry;
@@ -562,6 +587,7 @@ class FootballPlayer {
 
         const chao = Math.min(solaY(this.rig.lBota), solaY(this.rig.rBota));
         if (!isFinite(chao)) return;
+        if (soASubir && chao >= 0) return;
         const correccao = THREE.MathUtils.clamp(-chao, -A.correccaoMax, A.correccaoMax);
         this.model.position.y += correccao * A.suavizacao;
     }

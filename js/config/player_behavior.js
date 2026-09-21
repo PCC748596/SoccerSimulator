@@ -1138,30 +1138,65 @@ As linhas saem do `role` da formação (def/mid/atk), portanto isto não é um
 mesmas três profundidades continuam a valer.
 =============================================================================
 */
+/*
+=============================================================================
+A COBRANÇA DO IMPEDIMENTO — AS TRÊS LINHAS ANCORADAS NA BOLA
+=============================================================================
+TUDO AQUI SE MEDE A PARTIR DA BOLA, e é a correção de fundo desta montagem.
+
+As linhas eram ABSOLUTAS: a de trás a 21.5 m da própria linha de fundo, os
+médios 15 m à frente dela, os avançados 5 m para lá do meio-campo; e o bloco
+de quem marca ancorado no meio-campo. Nenhum dos números olhava para onde a
+bola estava — portanto a montagem só fazia sentido quando o impedimento
+calhava perto dessas linhas.
+
+Relato, com captura de ecrã: *"o posicionamento dos jogadores na cobrança de
+impedimento ainda não faz sentido; tem BUG, uns jogadores de um lado do campo
+e outros do outro"*. Medido com `tools/scratch/impedimento_sintetico.js`, que
+provoca a cobrança em vários pontos e lê a distância à bola (média de cada
+equipa, e quantos ficam na metade do campo oposta à da bola):
+
+        bola z    quem COBRA          quem MARCA
+         -40      54 m,  7/10         36 m,  2/10
+         -20      37 m,  7/10         20 m,  2/10
+           0      22 m,  0/10         17 m,  0/10
+         +20      17 m,  2/10         30 m,  8/10
+         +40      26 m,  2/10         49 m,  8/10
+
+Ou seja: o defeito nunca foi corrigido, só mudou de sítio. No centro do campo
+a montagem lia-se bem — e era exatamente esse o único caso que o teste
+`impedimento_montagem` exercitava, com a bola sempre em z = -attDir * 30.
+
+Agora as três linhas de quem cobra saem da BOLA, e o bloco de quem marca
+também: a sua linha da frente nasce aos 9.15 m regulamentares da bola, do lado
+da própria baliza, e o bloco estende-se para trás a partir daí.
+=============================================================================
+*/
 const OffsideRestartShape = {
-    // Metros da PRÓPRIA linha de fundo, para a linha mais recuada.
-    linhaDefesa: 21.5,
-    // E as outras duas, cada uma medida da anterior.
-    espacoParaOsMedios: 15.0,
-    // Esta é medida do meio-campo, já no campo adversário.
-    avancadosAlemDoMeio: 5.0,
+    /*
+    QUEM COBRA — três linhas, no referencial de ataque dele e medidas da bola.
+    A de trás fica ATRÁS da bola (há sempre a opção de recomeçar para trás),
+    as outras duas à frente. Os espaçamentos são os de antes — 18 m da linha
+    de trás aos médios, 16 dos médios aos avançados —, o que muda é o ponto
+    de onde se contam.
+    */
+    defesaAtrasDaBola: 8.0,
+    mediosAFrenteDaBola: 10.0,
+    avancadosAFrenteDaBola: 26.0,
 
     /*
     QUEM MARCA. Era "do meio-campo para trás", à letra do primeiro pedido, e a
     resposta a ver o resultado foi *"na cobrança do impedimento o time
-    adversário pode avançar um pouco mais. Tá muito recuado."*
+    adversário pode avançar um pouco mais. Tá muito recuado."* — depois disso
+    passou a ancorar no meio-campo, que é o que esta correção tira.
 
-    `avancoAlemDoMeio` é quanto a linha da frente dele passa do meio-campo para
-    o lado de quem bate; `blocoAdversario` é a profundidade do bloco, medida
-    dessa linha para trás. Com 8 e 26, o bloco vai de +8 a −18 no referencial
-    de ataque dele — a marcar já dentro do campo do adversário, e não à espera
-    na própria metade.
-
-    Os 9.15 m da Lei 13 continuam garantidos: quem calhar mais perto do que
-    isso é empurrado para fora no fim da montagem (ver
-    `formaDoLivreDeImpedimento`), que é a última a correr.
+    `blocoAdversario` é a profundidade do bloco, medida da linha da frente
+    para trás. Essa linha já não é o meio-campo: é a distância regulamentar à
+    bola (`FreeKickModel.afastaAdversarios`, 9.15 m), portanto o bloco fica
+    sempre entre a bola e a própria baliza e à distancia da Lei 13, esteja a
+    bola onde estiver. O empurrão dos 9.15 m no fim da montagem (ver
+    `formaDoLivreDeImpedimento`) fica como rede de segurança.
     */
-    avancoAlemDoMeio: 8.0,
     blocoAdversario: 26.0,
 
     // Quanto do x do posto se mantém. 1.0 = a largura da formação, tal e qual.

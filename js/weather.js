@@ -26,6 +26,15 @@ const Weather = {
     cloudGroup: null,
     clouds: [],
     baseSolIntensidade: undefined,   // intensidade do Sol/Lua do preset ativo, antes da sombra das nuvens
+    /*
+    OPACIDADE DA SOMBRA DAS NUVENS — 0.20 é 20%.
+
+    As nuvens já não entram no mapa de sombras (ver `_criarNuvens`); o que
+    faz a sombra delas é este escurecimento da luz direcional, aplicado como
+    FRAÇÃO da intensidade do preset e não como valor absoluto — 0.20 fixo
+    apagava quase por completo a Lua (0.12) e a chuva de dia (0.25).
+    */
+    opacidadeSombraNuvem: 0.20,
     rainParticles: null,
     rainCount: 3500,
     rainSpeed: 45,
@@ -355,8 +364,33 @@ const Weather = {
                                 bz * 6 + (Math.random() - 0.5) * 1.2
                             );
 
-                            mesh.castShadow = true;
-                            mesh.receiveShadow = true;
+                            /*
+                            A NUVEM NÃO ENTRA NO MAPA DE SOMBRAS.
+
+                            Relato: *"as sombras das nuvens estão muito hard;
+                            gostaria de só uma opacidade de 20% nas sombras"*.
+                            E estavam: cada caixa da nuvem projetava no mesmo
+                            mapa de sombras dos jogadores, a 100% e com recorte
+                            duro — o `alphaTest` da matéria dá uma sombra
+                            binária, a opacidade dela não conta para nada.
+
+                            Não há opacidade de sombra por objeto: a dureza é
+                            da LUZ, e o `shadow.intensity` do Three só existe
+                            da r165 para cima — o jogo corre com a r128 do CDN
+                            (ver index.html). Baixar o contraste pela luz
+                            apagaria também as sombras dos jogadores.
+
+                            Por isso a nuvem sai do mapa e a sombra dela passa
+                            a ser o escurecimento suave da luz à passagem, a
+                            20% (ver `opacidadeSombraNuvem` e o `update`).
+                            De caminho poupa-se o mapa: são centenas de caixas
+                            por nuvem que deixam de ser desenhadas nele.
+
+                            `receiveShadow` cai pela mesma razão — não há nada
+                            por cima das nuvens que lhes faça sombra.
+                            */
+                            mesh.castShadow = false;
+                            mesh.receiveShadow = false;
 
                             cloudCluster.add(mesh);
                         }
@@ -380,8 +414,9 @@ const Weather = {
                     Math.sin(angle) * radiusZ
                 );
 
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
+                // Mesma razão do corpo da nuvem, acima.
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
                 cloudCluster.add(mesh);
             }
 
@@ -513,11 +548,14 @@ const Weather = {
             });
         }
 
-        // Escurecimento dinâmico durante a passagem da nuvem. É uma FRAÇÃO da
-        // intensidade do preset (~21%), não um valor absoluto: 0.20 fixo apagava
-        // quase por completo a Lua (0.12) e a chuva de dia (0.25).
+        /*
+        A SOMBRA DA NUVEM, agora que ela não entra no mapa de sombras: um
+        escurecimento suave da luz direcional à passagem. Ver
+        `opacidadeSombraNuvem` lá em cima para o valor e o porquê da fração.
+        */
         if (this.dirLight && this.baseSolIntensidade !== undefined) {
-            const solAlvo = this.baseSolIntensidade * (1 - 0.21 * maxSombra);
+            const op = (typeof this.opacidadeSombraNuvem === 'number') ? this.opacidadeSombraNuvem : 0.20;
+            const solAlvo = this.baseSolIntensidade * (1 - op * maxSombra);
             this.dirLight.intensity += (solAlvo - this.dirLight.intensity) * Math.min(1.0, dt * 2.5);
         }
 
