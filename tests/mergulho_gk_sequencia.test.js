@@ -113,8 +113,20 @@ console.log(LF + '3 — no impulso os dois braços vão atrás');
         erro('o braço líder não foi para trás no impulso');
     } else if (Math.abs(B.traseiro.rotation.x - S.impulso.traseiroX) > 0.05) {
         erro('o braço de trás não foi para trás no impulso');
-    } else if (!(S.impulso.liderX < 0 && S.impulso.traseiroX < 0)) {
-        erro('"atrás" é x negativo no rig: o config está a mandá-los à frente');
+    } else if (!(S.impulso.liderX > 0 && S.impulso.traseiroX > 0)) {
+        /*
+        ESTA LINHA AFIRMAVA O CONTRÁRIO, e estava errada — o mesmo engano que
+        o teste 5 já tinha apanhado na fase 'chao', com a medição feita em
+        `tools/scratch/braco_convencao.js`:
+
+            ombro.x = -0.90  ->  mão 1.41 m À FRENTE do peito
+            ombro.x = +0.90  ->  mão 1.41 m ATRÁS
+
+        Logo "atrás" é x POSITIVO. O teste exigia x negativo e o config
+        obedecia, e o resultado em jogo era o guarda-redes a sair do chão com
+        os dois braços à frente do peito, dobrados.
+        */
+        erro('"atrás" é x POSITIVO no rig: o config está a mandá-los à frente');
     } else ok('os dois braços carregam o gesto antes da saída');
 
     // E o tronco torce para o lado do mergulho.

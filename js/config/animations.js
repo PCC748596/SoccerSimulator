@@ -52,10 +52,28 @@ const ActionAnimClips = {
     gkThrowBaixo: { duration: 0.85, contactTime: 6 / 9 },
     // Arremesso lateral (ver ThrowInClip): a bola sai no frame 6 de 10.
     throwIn: { duration: 0.90, contactTime: 5 / 9 },
-    // Remate (ver ShotClip). Contacto no frame 8 de 12 (t = 7/11 ≈ 0.64),
-    // ou seja ~0.32 s depois de o BT decidir rematar — tempo real de armar a
-    // perna. Antes o remate inteiro durava 0.2 s e eram duas poses.
-    shot: { duration: 0.50, contactTime: 7 / 11 },
+    /*
+    REMATE (ver ShotClip). Contacto no frame 7 de 12 (t = 6/11 ≈ 0.545), ou
+    seja ~0.27 s depois de o BT decidir rematar — tempo real de armar a perna.
+
+    ERA O FRAME 8, E A BOLA SAÍA TARDE. Relato: *"na hora do chute, quando o
+    pé pega na bola a bola não sai chutada; a bola sai depois que o pé está
+    mais na frente"*. Medido com `tools/scratch/remate_pe_chute.js` (600 s de
+    jogo) e com `tools/scratch/remate_pe_estatico.js` (pose a pose), no
+    referencial do jogador e em metros — `peZ - bolaZ`, positivo = o pé já
+    passou a bola:
+
+        frame 6 (norm 0.455)   -0.49
+        frame 7 (norm 0.545)   -0.05   <- o pé está NA bola
+        frame 8 (norm 0.636)   +0.39   <- era aqui que ela saía
+
+    Em jogo dava +0.43 m em 9 remates de 9: quase meio metro de pé passado
+    pela bola antes de ela arrancar. O cruzamento real é em norm ≈ 0.56, e o
+    `ActionState` dispara no primeiro frame em que `norm` passa o
+    `contactTime` — portanto 6/11 (0.545) cai em cima dele com a margem de um
+    frame a favor.
+    */
+    shot: { duration: 0.50, contactTime: 6 / 11 },
     // Domínio de bola orientado pela direita (ver BallControlRightClip)
     // Contacto e toque de saída no frame 5 de 8 (t = 4/7 ≈ 0.57)
     ballControlRight: { duration: 0.36, contactTime: 4 / 7 },
@@ -131,9 +149,9 @@ Três coisas vieram de lá e não estavam no clip:
      4  armação máxima, braço contrário bem aberto
      5  bacia inicia a rotação para a frente
      6  chicote: a coxa acelera, o joelho ainda flectido
-     7  extensão rápida da tíbia, pé quase na bola
-     8  CONTACTO — perna esticada, tornozelo travado, corpo por cima da bola
-     9  pós-impacto, a perna continua pela inércia
+     7  CONTACTO — perna esticada, tornozelo travado, corpo por cima da bola
+     8  pós-impacto imediato, a perna varre para a frente
+     9  a perna continua pela inércia
     10  follow-through alto, bacia fechada
     11  desaceleração, o pé desce
     12  recuperação, de novo em postura de jogo
@@ -141,7 +159,13 @@ Três coisas vieram de lá e não estavam no clip:
 */
 const ShotClip = {
     pernaChute: 'r',
-    contactFrame: 8,
+    /*
+    O CONTACTO É NO FRAME 7, e não no 8 — é onde o pé está mesmo em cima da
+    bola. A medição está na entrada `shot` do ActionAnimClips, aqui ao lado.
+    Tem de andar a par do `contactTime` de lá: um manda a bola sair, o outro
+    desenha o pé na bola.
+    */
+    contactFrame: 7,
 
     /*
     A ÚLTIMA PASSADA — o pé de apoio planta-se AO LADO da bola.
@@ -184,11 +208,27 @@ const ShotClip = {
         { leanZ: -0.24, pelvisY: 0.24, chest: 0.33, chestY: -0.24, coxaChute: 0.75, joelhoChute: 1.92, coxaApoio: 0.05, joelhoApoio: 0.40, bracoLx: -0.80, bracoLz: 1.72, bracoRx: 0.50, bracoRz: -0.58, cotoveloL: -0.20, cotoveloR: -0.84, altura: -0.02 },
         // 6  chicote: a coxa acelera, o joelho ainda flectido
         { leanZ: -0.22, pelvisY: 0.08, chest: 0.28, chestY: -0.10, coxaChute: 0.22, joelhoChute: 1.55, coxaApoio: 0.05, joelhoApoio: 0.34, bracoLx: -0.55, bracoLz: 1.45, bracoRx: 0.26, bracoRz: -0.62, cotoveloL: -0.24, cotoveloR: -0.70, altura: -0.01 },
-        // 7  extensão rápida da tíbia, pé quase na bola
-        { leanZ: -0.18, pelvisY: -0.06, chest: 0.20, chestY: 0.04, coxaChute: -0.35, joelhoChute: 0.75, coxaApoio: 0.06, joelhoApoio: 0.28, bracoLx: -0.22, bracoLz: 1.20, bracoRx: -0.05, bracoRz: -0.64, cotoveloL: -0.26, cotoveloR: -0.52, altura: 0.00 },
-        // 8  CONTACTO — perna esticada, tornozelo travado, corpo por cima da bola
+        /*
+        7  CONTACTO — perna esticada, tornozelo travado, corpo por cima da bola.
+
+        Era a "extensão rápida da tíbia, pé quase na bola", com o joelho ainda
+        a 0.75 rad. Como o contacto passou para aqui (ver a nota do `shot` no
+        ActionAnimClips), este keyframe tem de ser a batida: joelho quase
+        estendido — o `pose_partilhada` exige < 0.5 rad — e a coxa recuada o
+        suficiente para o pé ficar EM CIMA da bola e não à frente dela.
+
+        Varrido com `tools/scratch/remate_frame7_varrer.js`, com a bola em
+        z = 0.10 (ShotClip.plantar.avanco); `peZ - bolaZ` em metros:
+
+            coxa -0.35  joelho 0.75   -0.05   (o que estava, joelho dobrado)
+            coxa -0.25  joelho 0.30   +0.00   <- escolhido, pé na bola
+            coxa -0.25  joelho 0.10   +0.06
+            coxa -0.15  joelho 0.10   -0.02   (coxa recuada de mais)
+        */
+        { leanZ: -0.18, pelvisY: -0.06, chest: 0.20, chestY: 0.04, coxaChute: -0.25, joelhoChute: 0.30, coxaApoio: 0.06, joelhoApoio: 0.28, bracoLx: -0.22, bracoLz: 1.20, bracoRx: -0.05, bracoRz: -0.64, cotoveloL: -0.26, cotoveloR: -0.52, altura: 0.00 },
+        // 8  pós-impacto imediato: a perna varre para a frente
         { leanZ: -0.16, pelvisY: -0.16, chest: 0.12, chestY: 0.14, coxaChute: -0.72, joelhoChute: 0.10, coxaApoio: 0.06, joelhoApoio: 0.24, bracoLx: 0.05, bracoLz: 1.10, bracoRx: -0.28, bracoRz: -0.66, cotoveloL: -0.26, cotoveloR: -0.42, altura: 0.02 },
-        // 9  pós-impacto, a perna continua pela inércia e o tronco começa a abrir
+        // 9  a perna continua pela inércia e o tronco começa a abrir
         { leanZ: -0.15, pelvisY: -0.24, chest: 0.00, chestY: 0.22, coxaChute: -1.30, joelhoChute: 0.08, coxaApoio: 0.07, joelhoApoio: 0.18, bracoLx: 0.24, bracoLz: 1.00, bracoRx: 0.06, bracoRz: -0.70, cotoveloL: -0.24, cotoveloR: -0.34, altura: 0.08 },
         // 10 FASE FINAL: perna alta e TRONCO PARA TRÁS (chest < 0), ainda inclinado
         { leanZ: -0.14, pelvisY: -0.30, chest: -0.12, chestY: 0.28, coxaChute: -1.85, joelhoChute: 0.05, coxaApoio: 0.09, joelhoApoio: 0.14, bracoLx: 0.40, bracoLz: 0.95, bracoRx: 0.36, bracoRz: -0.74, cotoveloL: -0.20, cotoveloR: -0.26, altura: 0.15 },

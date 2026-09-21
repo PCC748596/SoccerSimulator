@@ -1191,9 +1191,25 @@ const GoalkeeperDive = {
         que cai. Escreve os dois: ainda não há contacto nenhum a proteger.
         */
         impulso: {
-            liderX: -0.55, liderZ: 0.90,
-            traseiroX: -0.70, traseiroZ: 0.55,
-            cotovelo: -0.55,
+            /*
+            O SINAL ESTAVA TROCADO AQUI TAMBÉM, e era a outra metade do mesmo
+            defeito do `chao` (ver a nota lá em baixo). No rig,
+            `ombro.rotation.x` NEGATIVO leva a mão À FRENTE. Esta pose — cujo
+            próprio comentário diz "os dois braços vão ATRÁS" — usava -0.55 e
+            -0.70, ou seja punha-os à frente do corpo, dobrados sobre o peito,
+            no instante mais visível do gesto. Relato, com fotografias: *"na
+            hora do pulo os braços do goleiro estão pra frente do corpo"*.
+
+            Magnitudes mantidas; muda o sinal.
+            */
+            liderX: 0.55, liderZ: 0.90,
+            traseiroX: 0.70, traseiroZ: 0.55,
+            /*
+            E o cotovelo abre: -0.55 rad são 31° de flexão, que no balanço de
+            saída lê como braço encolhido. Nas fotografias de referência o
+            braço vai quase esticado desde a saída do chão.
+            */
+            cotovelo: -0.20,
             /*
             A partir desta fracção da fase, os braços deixam o balanço e vão
             à bola por IK (ver a nota na fase 'impulso' do gk_dive.js). O
@@ -1205,7 +1221,7 @@ const GoalkeeperDive = {
             lado do mergulho já está aberto do tronco. 0.55 rad são 31 graus,
             que à vista é um braço ao lado do corpo.
             */
-            fracIK: 0.35
+            fracIK: 0.30
         },
 
         /*
@@ -1213,8 +1229,14 @@ const GoalkeeperDive = {
         tronco, e não atravessado à frente do peito.
         */
         voo: {
-            traseiroX: -0.25, traseiroZ: 1.35,
-            cotovelo: -0.15,
+            /*
+            Aqui o sinal já estava certo: no início da queda os braços vão à
+            FRENTE, na direção da bola (x negativo). O que faltava era a
+            EXTENSÃO — o cotovelo a -0.15 ainda deixava o braço encolhido, e
+            a referência é o braço esticado, aberto do tronco.
+            */
+            traseiroX: -0.25, traseiroZ: 1.45,
+            cotovelo: -0.08,
             // Antes disto os dois braços continuam a ir à bola.
             fracIKTraseiro: 0.6
         },

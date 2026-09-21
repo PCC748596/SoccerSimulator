@@ -201,7 +201,20 @@ const ShootingModel = {
     frenteAFrente: {
         corredorMeiaLargura: 4.0,
         recuoAtras: 2.0,
-        distanciaIdeal: 11.0,
+        /*
+        ONDE SE REMATA NO FRENTE A FRENTE — e é ANTES DA MARCA DO PENÁLTI.
+
+        Estava em 11.0, que é exatamente a distância da marca à linha de golo
+        (ver o alvo `marca_penalti` na lista de alvos, mesma constante). Como
+        o `emZonaDeRemate` só deixa rematar com `ff.dist <= distanciaIdeal`, o
+        avançado conduzia a bola até à própria marca antes de bater — com o
+        guarda-redes a fechar o ângulo todo esse caminho. Pedido: *"no cara a
+        cara faz o jogador chutar antes da marca do penálti"*.
+
+        14 m: três metros antes da marca e ainda bem dentro da grande área
+        (16.5 m de profundidade), que o teste `remate_frente_a_frente` exige.
+        */
+        distanciaIdeal: 14.0,
         distanciaMax: 30.0,
 
         /*
