@@ -1,5 +1,5 @@
 /*
-ATE 70 GRAUS PASSA-SE SEM RODAR; ACIMA DISSO RODA-SE UM GIRO FIXO DE 30.
+ATE 70 GRAUS PASSA-SE SEM RODAR; ACIMA DISSO RODA-SE DE 30 EM 30 ATE CABER.
 
 Pedido: "ajusta para que os passes ate 70 graus para cada lado da linha de
 deslocamento possam ser feitos sem que o jogador tenha que girar para a
@@ -14,17 +14,27 @@ O que havia:
   - e quando rodava, o `case 'PASS'` (fsm.js) fazia slerp do corpo ate ficar
     de frente PARA O ALVO -- zero graus, e nao os 70 do pedido.
 
-SEGUNDA PASSAGEM -- a regra de cima mudou.
+SEGUNDA PASSAGEM -- a regra de cima mudou, e a terceira corrigiu-a.
 
 Pedido seguinte: *"quando um jogador for dar um passe com mais de 70 graus de
 angulo para um lado ou para o outro ele deve primeiro girar uns 30 graus para o
 lado do passe para depois dar o passe"*.
 
-Ou seja o giro passou a ser CONSTANTE (`PassModel.giroGraus`), e nao uma
-correccao que depende de quanto se excedeu o limite. As duas regras coincidem
-exactamente a 100 graus (100 - 70 = 30); fora disso divergem, e a diferenca
-maior esta no passe para tras -- a regra antiga rodava 110 graus, esta roda 30.
-O limite dos 70 continua a ser o que decide SE se roda.
+Isso foi lido como "roda 30 graus e passa dai", e o teste passou a exigir
+exactamente isso -- um giro fixo de um passo. Estava errado, e o esclarecimento
+diz porque: *"e pra girar de 30 em 30 graus ate ficar numa posicao que consiga
+dar o passe. Nao e para girar somente 30 graus. O giro e justamente para que a
+animacao fique coerente com a direccao do passe. Nao adianta a animacao estar
+para um lado e o passe para o outro"*.
+
+Com um passo so, um passe nas costas deixava o corpo a 150 graus do alvo: o
+boneco virado para um lado e a bola a sair para o outro, que e exactamente o
+que a regra existe para evitar.
+
+`giroGraus` e portanto o PASSO. O numero de passos e o minimo que poe o que
+sobra dentro do limite, e a invariante que este teste guarda e essa: depois do
+giro, o alvo esta SEMPRE dentro dos 70 graus. O limite continua a ser o que
+decide SE se roda.
 
 A geometria vive no `direccaoDoCorpoNoPasse` (utils.js), pura e com os angulos
 injectados, para se poder varrer sem montar um jogo.
@@ -69,61 +79,91 @@ test('o giro fixo existe na configuracao e sao 30 graus', () => {
     assert.strictEqual(PassModel.giroGraus, 30);
 });
 
-test('acima de 70 roda sempre os mesmos 30 graus, para o lado do passe', () => {
+/*
+A INVARIANTE, e e a razao de ser da regra: depois do giro o passe TEM de caber
+na janela. Com um passo so isto reprovava a 101 graus e acima.
+*/
+test('depois do giro o passe cabe sempre na janela dos 70', () => {
     const frente = dir(0);
-    const giro = PassModel.giroGraus;
-    for (const g of [75, 90, 100, 120, 179]) {
+    const lim = PassModel.anguloLivreGraus;
+    for (const g of [71, 75, 90, 100, 101, 120, 150, 179, 180]) {
         for (const s of [1, -1]) {
             const alvo = dir(g * s);
             const novo = direccaoDoCorpoNoPasse(frente, alvo,
-                PassModel.anguloLivreGraus * GRAU, giro * GRAU);
+                lim * GRAU, PassModel.giroGraus * GRAU);
             assert.ok(novo, `a ${g * s} graus nao mandou rodar`);
+            const sobra = anguloEntre(novo, alvo);
+            assert.ok(sobra <= lim + 0.5,
+                `a ${g * s} graus o corpo ficou a ${sobra.toFixed(1)} do alvo: ` +
+                `a animacao aponta para um lado e a bola sai para o outro`);
+        }
+    }
+});
 
-            // O giro e o mesmo, venha o passe a 75 ou a 179 graus.
+test('e roda sempre um MULTIPLO do passo, para o lado do passe', () => {
+    const frente = dir(0);
+    const passo = PassModel.giroGraus;
+    for (const g of [71, 75, 90, 100, 101, 120, 150, 179, 180]) {
+        for (const s of [1, -1]) {
+            const alvo = dir(g * s);
+            const novo = direccaoDoCorpoNoPasse(frente, alvo,
+                PassModel.anguloLivreGraus * GRAU, passo * GRAU);
             const rodou = anguloEntre(frente, novo);
-            assert.ok(Math.abs(rodou - giro) < 0.5,
-                `a ${g * s} graus rodou ${rodou.toFixed(1)} em vez de ${giro}`);
 
-            // E e PARA O LADO DO PASSE: fica mais perto do alvo do que estava.
+            const passos = rodou / passo;
+            assert.ok(Math.abs(passos - Math.round(passos)) < 0.02,
+                `a ${g * s} graus rodou ${rodou.toFixed(1)}, que nao e multiplo de ${passo}`);
+
+            // Para o lado do passe: fica mais perto do alvo do que estava.
             const antes = anguloEntre(frente, alvo);
             const depois = anguloEntre(novo, alvo);
             assert.ok(depois < antes - 0.5,
                 `a ${g * s} graus rodou para o lado errado ` +
                 `(${antes.toFixed(1)} -> ${depois.toFixed(1)} graus do alvo)`);
-            assert.ok(Math.abs(depois - (antes - giro)) < 0.5,
-                `a ${g * s} graus ficou a ${depois.toFixed(1)} do alvo, esperado ` +
-                `${(antes - giro).toFixed(1)}`);
         }
     }
 });
 
 /*
-A 100 GRAUS AS DUAS REGRAS COINCIDEM, e vale a pena o teste dize-lo: e o unico
-angulo em que rodar "o minimo ate aos 70" e rodar "30 fixos" dao o mesmo.
+E RODA O MINIMO NECESSARIO -- um passo a menos ja nao chegava. Sem isto, a
+regra podia satisfazer as duas acima girando sempre 180 graus.
 */
-test('a 100 graus o passe fica exactamente nos 70, como na regra antiga', () => {
+test('nao roda mais passos do que os precisos', () => {
     const frente = dir(0);
-    const novo = direccaoDoCorpoNoPasse(frente, dir(100),
-        PassModel.anguloLivreGraus * GRAU, PassModel.giroGraus * GRAU);
-    assert.ok(Math.abs(anguloEntre(novo, dir(100)) - 70) < 0.5,
-        'a 100 graus o passe devia acabar nos 70 do corpo');
+    const lim = PassModel.anguloLivreGraus, passo = PassModel.giroGraus;
+    for (const g of [71, 100, 101, 120, 180]) {
+        const alvo = dir(g);
+        const novo = direccaoDoCorpoNoPasse(frente, alvo, lim * GRAU, passo * GRAU);
+        const rodou = anguloEntre(frente, novo);
+        const esperado = Math.ceil((g - lim) / passo) * passo;
+        assert.ok(Math.abs(rodou - esperado) < 0.5,
+            `a ${g} graus rodou ${rodou.toFixed(1)}, esperado ${esperado}`);
+    }
 });
 
-test('o passe exactamente para tras roda para um dos lados, e so o giro fixo', () => {
+/*
+OS NUMEROS DO PEDIDO, escritos a mao para se lerem sem contas: quantos passos e
+quanto sobra em cada caso.
+*/
+test('a tabela do pedido bate certo', () => {
     const frente = dir(0);
-    const novo = direccaoDoCorpoNoPasse(frente, dir(180),
-        PassModel.anguloLivreGraus * GRAU, PassModel.giroGraus * GRAU);
-    assert.ok(novo, 'com o alvo nas costas nao mandou rodar');
-    /*
-    A regra antiga rodava os 110 que faltavam para o passe ficar nos 70. Esta
-    roda o giro fixo e deixa a linha de passe nos 150 -- ele passa de costas na
-    mesma, so com o corpo aberto para o lado certo. E o que o pedido descreve.
-    */
-    const rodou = anguloEntre(frente, novo);
-    assert.ok(Math.abs(rodou - PassModel.giroGraus) < 0.5,
-        `com o alvo nas costas rodou ${rodou.toFixed(1)} em vez de ${PassModel.giroGraus}`);
-    assert.ok(Math.abs(anguloEntre(novo, dir(180)) - 150) < 0.5,
-        'com o alvo nas costas a linha de passe devia ficar nos 150 graus');
+    const lim = PassModel.anguloLivreGraus * GRAU, passo = PassModel.giroGraus * GRAU;
+    const esperado = [
+        // alvo, giro total, o que sobra
+        [75, 30, 45],
+        [100, 30, 70],
+        [101, 60, 41],
+        [120, 60, 60],
+        [150, 90, 60],
+        [180, 120, 60]
+    ];
+    for (const [g, giro, sobra] of esperado) {
+        const novo = direccaoDoCorpoNoPasse(frente, dir(g), lim, passo);
+        assert.ok(Math.abs(anguloEntre(frente, novo) - giro) < 0.5,
+            `a ${g} graus o giro devia ser ${giro}`);
+        assert.ok(Math.abs(anguloEntre(novo, dir(g)) - sobra) < 0.5,
+            `a ${g} graus deviam sobrar ${sobra}`);
+    }
 });
 
 /*

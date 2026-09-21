@@ -6637,6 +6637,15 @@ class FootballPlayer {
                 gkRig[recolhe + 'Leg'].rotation.x = lerpTo(gkRig[recolhe + 'Leg'].rotation.x, EP.coxaRecolhida, ve);
                 gkRig[recolhe + 'Leg'].rotation.z = lerpTo(gkRig[recolhe + 'Leg'].rotation.z, -sinal * EP.aberturaRecolhida, ve);
                 gkRig[recolhe + 'Knee'].rotation.x = lerpTo(gkRig[recolhe + 'Knee'].rotation.x, EP.joelhoRecolhido, ve);
+                /*
+                A ponta do pé ajoelhado apoiada no relvado — ver
+                GoalkeeperPose.encaixe.peRecolhido para o porquê de isto não
+                ser decoração (sem ele o `assentarNoChao` levantava o corpo).
+                */
+                if (gkRig[recolhe + 'Foot'] && typeof EP.peRecolhido === 'number') {
+                    gkRig[recolhe + 'Foot'].rotation.x =
+                        lerpTo(gkRig[recolhe + 'Foot'].rotation.x, EP.peRecolhido, ve);
+                }
 
                 // Os dois bracos para a frente e para baixo, fechados na bola.
                 gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, EP.bracoX, ve);
@@ -6985,12 +6994,34 @@ class FootballPlayer {
             contrário de um `!this.hasBall`, que descreve só o caso de hoje.
             */
             if (tM >= GoalkeeperPose.maosDur && this.gkEstado === 'maos') {
-                // A barreira é deste lance e só deste: sem isto a pose
-                // sobrevivia para a defesa seguinte, que pode ser de longe.
-                this.gkBarreira = false;
-                this.gkEncaixe = false;
-                this.gkEstado = 'idle';
-                this.resetBonesToDefault();
+                /*
+                NO ENCAIXE SÓ SE LEVANTA COM A BOLA — ver
+                GoalkeeperPose.encaixe.esperaMax, que tem o pedido e a razão
+                do tecto. Sem isto ele ajoelhava-se, a bola chegava, e ele
+                levantava-se por cima dela porque o gesto tinha dado a hora.
+
+                A espera acaba com a bola agarrada, com ela fora de alcance
+                (já não há nada para encaixar) ou ao fim do tecto — um
+                guarda-redes que nunca sai de um estado trava o jogo, que é o
+                que a nota aqui em cima descreve.
+                */
+                let aindaAEncaixar = false;
+                if (this.gkEncaixe && !this.hasBall) {
+                    const EN2 = GoalkeeperPose.encaixe;
+                    const tecto = (typeof EN2.esperaMax === 'number') ? EN2.esperaMax : 1.2;
+                    const raio = (typeof EN2.esperaRaio === 'number') ? EN2.esperaRaio : 2.2;
+                    aindaAEncaixar = (tM < GoalkeeperPose.maosDur + tecto) &&
+                        !!Match.ball &&
+                        Match.ball.position.distanceTo(gkCorpo.position) <= raio;
+                }
+                if (!aindaAEncaixar) {
+                    // A barreira é deste lance e só deste: sem isto a pose
+                    // sobrevivia para a defesa seguinte, que pode ser de longe.
+                    this.gkBarreira = false;
+                    this.gkEncaixe = false;
+                    this.gkEstado = 'idle';
+                    this.resetBonesToDefault();
+                }
             }
         } else if (this.gkEstado === 'salto_alto') {
             this.gkTempoMergulho += dt; let t = this.gkTempoMergulho;

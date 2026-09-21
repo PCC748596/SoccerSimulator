@@ -1355,7 +1355,29 @@ function tratarJogadaCombinada(ctx) {
         };
         p.esperarDevolucao = { alvo: tab.alvo, timer: J.tabelinha.duracaoPedido };
 
-        aplicarMiraDoPasse(p, PassTypes.DIRECT, null);
+        /*
+        O PRIMEIRO TOQUE DA TABELINHA VAI PARA O ESPAÇO, e não aos pés.
+
+        Pedido: *"tabelas têm que ser com passes into space e não passes
+        diretos"*. Estava `PassTypes.DIRECT` com ponto nulo — a bola ia aos
+        pés do parceiro, ele parava para a receber, e a tabelinha lia-se como
+        dois passes soltos em vez de uma jogada corrida.
+
+        O segundo toque (a DEVOLUÇÃO, no ramo 1 lá em cima) já ia para o
+        espaço combinado, com `PassTypes.LEADING` e o `alvo` do arranque; o
+        que faltava era o primeiro.
+
+        `pontoPara` resolve o ponto no leque já validado do parceiro (pontos
+        com linha de passe livre e sem adversário em cima) e, se não houver
+        nenhum, cai sozinho para DIRECT — a tabelinha não morre por não haver
+        espaço, só deixa de ser no espaço.
+        */
+        const advsTab = (p.team === 'TeamA') ? Match.opponents : Match.players;
+        const leque = PassTypes.pontosPorMate(p);
+        const miraTab = PassTypes.pontoPara(
+            PassTypes.SPACE, (leque && leque[tab.mate.id]) || [],
+            tab.mate, p.targetGoalZ, advsTab);
+        aplicarMiraDoPasse(p, miraTab.tipo, miraTab.ponto);
         p.initiatePass(tab.mate);
         if (typeof MatchStats !== 'undefined' && MatchStats[p.team] &&
             MatchStats[p.team].tabelinhas !== undefined) MatchStats[p.team].tabelinhas++;

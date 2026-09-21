@@ -87,8 +87,8 @@ const PassModel = {
     acima de 90 corrigia-se a mais.
 
     Agora é um limite só, lido dos dois sítios: abaixo dele não se roda nada.
-    Acima dele rodava-se o MÍNIMO que punha a linha de passe no limite; passou
-    a ser o giro fixo do `giroGraus`, aqui ao lado. A geometria está no
+    Acima dele roda-se em passos de `giroGraus` (aqui ao lado) até a linha de
+    passe voltar a caber dentro deste limite. A geometria está no
     `direccaoDoCorpoNoPasse` (utils.js).
 
     A referência é a linha de DESLOCAMENTO quando ele corre (é o que o pedido
@@ -97,20 +97,22 @@ const PassModel = {
     anguloLivreGraus: 70,
 
     /*
-    E QUANTO SE RODA QUANDO SE PASSA DESSE LIMITE.
+    O PASSO DO GIRO — roda-se de 30 em 30 até o passe caber na janela.
 
-    Pedido: *"quando um jogador for dar um passe com mais de 70 graus de
-    ângulo para um lado ou para o outro ele deve primeiro girar uns 30 graus
-    para o lado do passe para depois dar o passe"*.
+    Pedido: *"é pra girar de 30 em 30 graus até ficar numa posição que
+    consiga dar o passe. Não é para girar somente 30 graus. O giro é
+    justamente para que a animação fique coerente com a direção do passe"*.
 
-    É um giro CONSTANTE, e substitui a regra anterior — "roda-se o mínimo que
-    põe a linha de passe nos 70 graus" —, que fazia o giro depender de quanto
-    se excedia: 5 graus num passe a 75, 110 graus num passe nas costas.
+    Isto é o PASSO, não o total. O número de passos é o mínimo que põe o
+    que sobra dentro do `anguloLivreGraus`, portanto o corpo acaba SEMPRE
+    numa posição de onde o passe se pode dar — que é o ponto todo da regra.
+    Com 70 e 30: um passe a 75 graus dá um passo (sobra 45), a 120 dá dois
+    (sobra 60), nas costas dá quatro (sobra 60).
 
-    Consequência a ter em conta: um passe muito para trás deixa de ficar
-    alinhado a 70 graus. A 180 graus, o corpo abre 30 e a linha de passe fica
-    nos 150 — ele passa de costas na mesma, só com o corpo aberto para o lado
-    certo. É o que o pedido descreve.
+    Duas regras anteriores, e porque nenhuma servia: a primeira rodava o
+    MÍNIMO até aos 70, o que dava giros de 5 graus e de 110 conforme o passe;
+    a segunda rodava UM passo de 30 e mais nada, o que deixava o boneco
+    virado para um lado com a bola a sair para o outro.
     */
     giroGraus: 30,
 

@@ -3229,31 +3229,43 @@ function direccaoDoCorpoNoPasse(frente, alvo, limiteRad, giroRad) {
     if (ang <= limiteRad) return null;
 
     /*
-    ACIMA DO LIMITE RODA-SE UM GIRO FIXO PARA O LADO DO PASSE.
+    RODA-SE DE `giroRad` EM `giroRad` ATÉ O PASSE CABER NA JANELA.
 
-    Era outra regra: rodava-se o ALVO de volta até à linha do limite, ou seja
-    o corpo virava o MÍNIMO que punha o passe exactamente nos 70 graus. Um
-    passe a 75 graus dava um giro de 5; um passe nas costas dava um giro de
-    110.
+    `giroRad` é o PASSO, e não o total — foi o que eu tinha percebido mal.
+    Pedido, já esclarecido: *"é pra girar de 30 em 30 graus até ficar numa
+    posição que consiga dar o passe. Não é para girar somente 30 graus. O giro
+    é justamente para que a animação fique coerente com a direção do passe.
+    Não adianta a animação estar para um lado e o passe para o outro"*.
 
-    Pedido: *"quando um jogador for dar um passe com mais de 70 graus de
-    ângulo para um lado ou para o outro ele deve primeiro girar uns 30 graus
-    para o lado do passe para depois dar o passe"*. É um giro CONSTANTE, e não
-    uma correcção que depende de quanto se excedeu: o jogador abre o corpo um
-    bocado para o lado de onde vai sair a bola, e passa daí.
+    E é essa a invariante que aqui interessa: quando isto devolve uma
+    direcção, o alvo fica SEMPRE dentro do limite dela. Um único passo de 30
+    graus não garantia nada — um passe nas costas ficava a 150 graus do
+    corpo, com o boneco virado para um lado e a bola a sair para o outro.
 
-    Roda-se portanto a FRENTE, não o alvo. O sentido é o que aproxima do
-    alvo: testam-se os dois e fica o que der maior produto interno com ele —
-    sem isto, o passe exactamente nas costas (onde o produto externo é zero)
+    Número de passos: o mínimo que põe o que sobra dentro do limite,
+
+        passos = ceil((ang - limite) / passo)
+
+    o que dá, com limite 70 e passo 30: 75 graus -> 1 passo (sobra 45); 100
+    -> 1 (sobra 70); 120 -> 2 (sobra 60); 180 -> 4 (sobra 60). O giro
+    continua a ser sempre um múltiplo do passo, que é o que o pedido pede.
+
+    Roda-se a FRENTE, não o alvo. O sentido é o que aproxima do alvo:
+    testam-se os dois e fica o que der maior produto interno com ele — sem
+    isto, o passe exactamente nas costas (onde o produto externo é zero)
     escolhia um lado ao acaso.
 
-    `giroRad` limitado por `ang` para o corpo nunca passar do alvo; com o
-    limite nos 70 e o giro nos 30 isso não chega a acontecer, mas a função é
-    pura e não tem de confiar em quem a chama. Sem `giroRad`, comporta-se
-    como antes.
+    O total é limitado por `ang` para o corpo nunca passar do alvo. Sem
+    `giroRad`, roda-se o mínimo até ao limite, como a regra mais antiga.
     */
-    const giro = Math.min(
-        (typeof giroRad === 'number' && giroRad >= 0) ? giroRad : limiteRad, ang);
+    const passo = (typeof giroRad === 'number' && giroRad > 0) ? giroRad : 0;
+    let giro;
+    if (passo > 0) {
+        const passos = Math.ceil((ang - limiteRad) / passo - 1e-9);
+        giro = Math.min(passos * passo, ang);
+    } else {
+        giro = Math.min(limiteRad, ang);
+    }
     const c = Math.cos(giro), sN = Math.sin(giro);
     const a = { x: fx * c + fz * sN, z: -fx * sN + fz * c };
     const b = { x: fx * c - fz * sN, z: fx * sN + fz * c };

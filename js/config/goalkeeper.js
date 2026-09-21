@@ -172,25 +172,90 @@ const GoalkeeperPose = {
         pelvisX: 0.20,         // bacia a acompanhar o tronco
 
         /*
-        OS DOIS JOELHOS DOBRADOS E SEPARADOS. A perna ABERTA é a que vai
-        lateralmente; a RECOLHIDA tem o joelho mais perto do centro do corpo.
-        O lado é o da bola (`gkLadoBarreira`, já calculado), para o gesto sair
-        certo nas duas equipas.
+        AS DUAS PERNAS, EM GRAUS COM O RELVADO — e os radianos daqui são a
+        conversão, não o pedido.
+
+        Pedido, com fotografia de referência:
+
+            perna de apoio     coxa paralela ao gramado, parte de baixo da
+                               perna a 45 graus, pé apoiado na grama
+            perna ajoelhada    coxa a uns 60 graus com o gramado, parte de
+                               baixo a uns 25 graus, ponta do pé apoiada
+
+        A rotação de osso NÃO é o ângulo com o chão: a coxa pendura de uma
+        pelve que já está rodada (`pelvisX`) e o joelho roda sobre a coxa.
+        `tools/scratch/gk_encaixe_angulos.js` faz a conversão — aplica a pose,
+        lê o ângulo de cada segmento com o relvado e procura os radianos que
+        acertam nos graus pedidos.
+
+        O que lá estava, medido pela mesma ferramenta:
+
+            perna de apoio     coxa 61 graus, canela  5 graus   (pedido 0 / 45)
+            perna ajoelhada    coxa 69 graus, canela 42 graus   (pedido 60 / 25)
+
+        Ou seja as duas pernas estavam praticamente na mesma pose — dois
+        joelhos dobrados de lado — em vez de uma de apoio e outra ajoelhada.
+
+        O SENTIDO conta tanto como o ângulo: uma coxa horizontal para a FRENTE
+        e uma para TRÁS dão o mesmo número de graus e são poses opostas. Da
+        fotografia: a coxa de apoio vai à frente e a canela desce à frente até
+        ao pé plantado; a coxa ajoelhada desce para trás até ao joelho no chão
+        e a canela fica deitada para trás. A primeira busca, sem esta
+        exigência, acertou nos graus e deu uma pose impossível (uma sola 43 cm
+        no ar e a outra 49 cm enterrada).
+
+        Verificado depois, com a pose montada: apoio coxa 1 / canela 45, sola
+        a y 0.014; ajoelhada coxa 59 / canela 25, sola a y 0.000.
         */
-        coxaAberta: -0.10, joelhoAberto: 1.55, aberturaAberta: 0.50,
-        coxaRecolhida: 0.15, joelhoRecolhido: 1.95, aberturaRecolhida: 0.12,
+        coxaAberta: -1.76, joelhoAberto: 0.78, aberturaAberta: 0.50,
+        coxaRecolhida: 0.32, joelhoRecolhido: 1.48, aberturaRecolhida: 0.12,
 
         /*
-        AS MÃOS JUNTO AO CHÃO E FECHADAS NA BOLA. `bracoX` negativo é para a
-        FRENTE (ver a nota do sinal no JointLimits.shoulder), e `bracoZ`
-        pequeno fecha os dois braços para dentro para as mãos se encontrarem.
-        O cotovelo dobra — ao contrário da barreira, onde fica direito.
+        E O TORNOZELO DA PERNA AJOELHADA — "ponta do pé apoiada na grama".
+
+        Não é detalhe: sem o rodar, a sola atravessava o relvado 18 cm, e como
+        o `assentarNoChao` levanta o corpo até a sola MAIS BAIXA encostar, isso
+        punha o pé de apoio 18 cm no ar. 0.96 põe as duas solas ao nível do
+        relvado.
         */
-        bracoX: -0.75, bracoZ: 0.12, cotovelo: -0.85,
+        peRecolhido: 0.96,
+
+        /*
+        OS BRAÇOS EM L, À ESPERA DA BOLA. `bracoX` negativo é para a FRENTE
+        (ver a nota do sinal no JointLimits.shoulder), e `bracoZ` pequeno fecha
+        os dois braços para dentro para as mãos se encontrarem.
+
+        O cotovelo é uma dobradiça pura (só `rotation.x` no rig, ver a nota
+        das cadeias em js/ik.js), portanto a magnitude da rotação É o ângulo
+        de flexão: −π/2 é o L do pedido. Estava em −0.85, que são 49 graus —
+        um braço meio dobrado, não um L.
+        */
+        bracoX: -0.75, bracoZ: 0.12, cotovelo: -1.57,
         // O pulso vira a palma para cima, a receber a bola.
         pulsoX: -0.35,
 
         suavizacao: 0.45,     // entra depressa, como a barreira
+
+        /*
+        SÓ SE LEVANTA DEPOIS DE ENCAIXAR A BOLA (pedido).
+
+        O gesto das mãos acabava ao fim de `GoalkeeperPose.maosDur`, tivesse
+        ele agarrado a bola ou não — via-se o guarda-redes ajoelhar-se, a bola
+        chegar, e ele levantar-se por cima dela.
+
+        MAS COM TECTO, e por uma razão escrita já aí ao lado no `updateGK`: um
+        guarda-redes que nunca sai de um estado trava o jogo. Se a bola for
+        desviada ou passar ao lado, ninguém a vem buscar e ele ficaria
+        ajoelhado para sempre. Por isso a espera acaba quando a bola sai do
+        `esperaRaio` (já não há nada para encaixar) ou ao fim de `esperaMax`
+        segundos, o que vier primeiro.
+
+        `esperaRaio` 2.2 m é pouco mais do que o alcance dos braços nesta pose
+        (o `raioEncaixe` é 0.52 e ele está ajoelhado): dá para a bola ainda a
+        chegar e não dá para uma bola que já se foi.
+        */
+        esperaMax: 1.2,
+        esperaRaio: 2.2,
 
         /*
         O CORPO, PARA O TESTE DE CONTACTO — e é obrigatório, como na barreira.
