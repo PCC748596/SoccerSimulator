@@ -3216,7 +3216,7 @@ linha de passe na borda do cone. Nunca vira de frente para o alvo.
 Pura, para a geometria se poder varrer sem montar um jogo
 (tests/passe_sem_girar.test.js).
 */
-function direccaoDoCorpoNoPasse(frente, alvo, limiteRad) {
+function direccaoDoCorpoNoPasse(frente, alvo, limiteRad, giroRad) {
     const nf = Math.hypot(frente.x, frente.z);
     const na = Math.hypot(alvo.x, alvo.z);
     if (nf < 1e-9 || na < 1e-9) return null;
@@ -3229,15 +3229,35 @@ function direccaoDoCorpoNoPasse(frente, alvo, limiteRad) {
     if (ang <= limiteRad) return null;
 
     /*
-    Roda-se o ALVO de volta pelo limite, e o sentido é o que aproxima da
-    frente actual. Testam-se os dois e fica o que der maior produto interno
-    com ela — sem isto, o passe exactamente nas costas (onde o produto externo
-    é zero) escolhia um lado ao acaso.
+    ACIMA DO LIMITE RODA-SE UM GIRO FIXO PARA O LADO DO PASSE.
+
+    Era outra regra: rodava-se o ALVO de volta até à linha do limite, ou seja
+    o corpo virava o MÍNIMO que punha o passe exactamente nos 70 graus. Um
+    passe a 75 graus dava um giro de 5; um passe nas costas dava um giro de
+    110.
+
+    Pedido: *"quando um jogador for dar um passe com mais de 70 graus de
+    ângulo para um lado ou para o outro ele deve primeiro girar uns 30 graus
+    para o lado do passe para depois dar o passe"*. É um giro CONSTANTE, e não
+    uma correcção que depende de quanto se excedeu: o jogador abre o corpo um
+    bocado para o lado de onde vai sair a bola, e passa daí.
+
+    Roda-se portanto a FRENTE, não o alvo. O sentido é o que aproxima do
+    alvo: testam-se os dois e fica o que der maior produto interno com ele —
+    sem isto, o passe exactamente nas costas (onde o produto externo é zero)
+    escolhia um lado ao acaso.
+
+    `giroRad` limitado por `ang` para o corpo nunca passar do alvo; com o
+    limite nos 70 e o giro nos 30 isso não chega a acontecer, mas a função é
+    pura e não tem de confiar em quem a chama. Sem `giroRad`, comporta-se
+    como antes.
     */
-    const c = Math.cos(limiteRad), sN = Math.sin(limiteRad);
-    const a = { x: ax * c + az * sN, z: -ax * sN + az * c };
-    const b = { x: ax * c - az * sN, z: ax * sN + az * c };
-    return (a.x * fx + a.z * fz >= b.x * fx + b.z * fz) ? a : b;
+    const giro = Math.min(
+        (typeof giroRad === 'number' && giroRad >= 0) ? giroRad : limiteRad, ang);
+    const c = Math.cos(giro), sN = Math.sin(giro);
+    const a = { x: fx * c + fz * sN, z: -fx * sN + fz * c };
+    const b = { x: fx * c - fz * sN, z: fx * sN + fz * c };
+    return (a.x * ax + a.z * az >= b.x * ax + b.z * az) ? a : b;
 }
 
 function desvioDeBloqueio(o) {

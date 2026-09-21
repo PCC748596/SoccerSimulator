@@ -86,14 +86,33 @@ const PassModel = {
     zero graus. Ou seja: entre 70 e 90 passava-se torto sem corrigir nada, e
     acima de 90 corrigia-se a mais.
 
-    Agora é um limite só, lido dos dois sítios: abaixo dele não se roda nada;
-    acima, roda-se o MÍNIMO que põe a linha de passe exactamente no limite.
-    A geometria está no `direccaoDoCorpoNoPasse` (utils.js).
+    Agora é um limite só, lido dos dois sítios: abaixo dele não se roda nada.
+    Acima dele rodava-se o MÍNIMO que punha a linha de passe no limite; passou
+    a ser o giro fixo do `giroGraus`, aqui ao lado. A geometria está no
+    `direccaoDoCorpoNoPasse` (utils.js).
 
     A referência é a linha de DESLOCAMENTO quando ele corre (é o que o pedido
     diz) e a frente do corpo quando está parado.
     */
     anguloLivreGraus: 70,
+
+    /*
+    E QUANTO SE RODA QUANDO SE PASSA DESSE LIMITE.
+
+    Pedido: *"quando um jogador for dar um passe com mais de 70 graus de
+    ângulo para um lado ou para o outro ele deve primeiro girar uns 30 graus
+    para o lado do passe para depois dar o passe"*.
+
+    É um giro CONSTANTE, e substitui a regra anterior — "roda-se o mínimo que
+    põe a linha de passe nos 70 graus" —, que fazia o giro depender de quanto
+    se excedia: 5 graus num passe a 75, 110 graus num passe nas costas.
+
+    Consequência a ter em conta: um passe muito para trás deixa de ficar
+    alinhado a 70 graus. A 180 graus, o corpo abre 30 e a linha de passe fica
+    nos 150 — ele passa de costas na mesma, só com o corpo aberto para o lado
+    certo. É o que o pedido descreve.
+    */
+    giroGraus: 30,
 
     /*
     QUANTO VALE UM COMPANHEIRO EM CORRIDA DE INFILTRACAO na escolha do passe.

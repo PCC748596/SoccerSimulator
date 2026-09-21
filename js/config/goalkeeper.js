@@ -1496,8 +1496,20 @@ const GkCatchModel = {
 
     0.55 = `raioMao` (0.42, o mesmo do mergulho) + o raio da bola. É o contacto
     a sério: a luva na bola.
+
+    E ESTAVA EM 0.95 — a conclusão acima nunca chegou à constante.
+
+    As duas linhas nasceram no MESMO commit (a162eaa): o comentário a fechar
+    em "0.55 = raioMao + o raio da bola" e a linha a seguir a escrever 0.95.
+    A nota do `alcanceSaida`, mais acima neste ficheiro, também cita "o
+    alcance de pé (`GkCatchModel.alcanceContacto`, 0.55)" — ou seja, o resto
+    do ficheiro sempre assumiu 0.55.
+
+    0.95 são quase o dobro do alcance de contacto do mergulho (0.53), medido
+    da MÃO; com o braço esticado dá uma bola visívelmente longe da luva a
+    contar como defesa, que é exactamente o relato que este bloco cita.
     */
-    alcanceContacto: 0.95,
+    alcanceContacto: 0.55,
 
     // Nunca é certo nem impossível.
     minAgarra: 0.05,

@@ -2976,6 +2976,10 @@ class FootballPlayer {
             const limiteRad = ((typeof PassModel !== 'undefined' &&
                 typeof PassModel.anguloLivreGraus === 'number')
                 ? PassModel.anguloLivreGraus : 70) * Math.PI / 180;
+            // E o giro fixo para o lado do passe — ver PassModel.giroGraus.
+            const giroRad = ((typeof PassModel !== 'undefined' &&
+                typeof PassModel.giroGraus === 'number')
+                ? PassModel.giroGraus : 30) * Math.PI / 180;
 
             const speed = this.velocity.length();
             const frente = (speed > 0.1)
@@ -2983,7 +2987,8 @@ class FootballPlayer {
                 : { x: _vFrenteCorpo.x, z: _vFrenteCorpo.z };
 
             const novaFrente = (typeof direccaoDoCorpoNoPasse === 'function')
-                ? direccaoDoCorpoNoPasse(frente, { x: dx / normDir, z: dz / normDir }, limiteRad)
+                ? direccaoDoCorpoNoPasse(frente, { x: dx / normDir, z: dz / normDir },
+                    limiteRad, giroRad)
                 : null;
 
             this.turnForPass = !!novaFrente;

@@ -172,6 +172,45 @@ const CorteModel = {
 if (typeof window !== 'undefined') window.CorteModel = CorteModel;
 
 const SlideTackleModel = {
+    /*
+    =========================================================================
+    EM QUE DIRECÇÃO SE DÁ O CARRINHO
+    =========================================================================
+    Pedido: *"os jogadores estão dando o carrinho em uma direção estranha. O
+    carrinho deve sempre ser dado na direção perpendicular à direção da bola
+    para o gol, tentando cortar a linha de ataque. Não faz muito sentido dar
+    um carrinho paralelo à linha da bola para o gol. A não ser um carrinho de
+    frente num ângulo de até uns 30 graus para cada lado da direção do
+    atacante. Todos os outros (31-90) devem ser dados a 90 graus da direção da
+    bola com o gol."*
+
+    O que havia era um `lookAtBola` e mais nada: o defensor virava-se para a
+    bola e deslizava em linha recta até ela. A direcção do carrinho era
+    portanto a recta defensor-bola, que não tem relação nenhuma com a linha
+    de ataque.
+
+    Medido com `tools/scratch/carrinho_angulo.js` (30 min, 34 carrinhos), o
+    ângulo entre o deslize e a linha BOLA->BALIZA, onde 90 é cortar a linha:
+
+        0-15 graus   9      45-60 graus  7
+        15-30 graus  3      60-75 graus  2
+        30-45 graus  8      75-90 graus  5
+
+        quase paralelos à linha de ataque (<30):  35%
+        a cortar mesmo (>60):                     21%
+
+    Um em cada três carrinhos ia quase ao longo da linha de ataque — que é o
+    que o relato descreve.
+
+    `anguloFrontalGraus` é a excepção do pedido: com o defensor a chegar de
+    frente ao atacante, dentro deste cone, o carrinho fica como está — é o
+    carrinho frontal, e esse faz sentido na linha. Fora do cone, o deslize
+    passa a ser perpendicular à linha bola-baliza, no sentido que leva o
+    defensor A CORTAR (o que aponta para o lado da bola).
+    =========================================================================
+    */
+    anguloFrontalGraus: 30,
+
     lancamento: 0.15,
     deslize: 0.95,
     paragem: 1.45,

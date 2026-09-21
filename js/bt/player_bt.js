@@ -1901,6 +1901,68 @@ function actCarry(ctx) {
    SEM BOLA
    ========================================================================= */
 
+/*
+A DIRECÇÃO DO CARRINHO: a cortar a linha de ataque, menos se for frontal.
+
+Escrito à parte de propósito — é geometria pura e assim dá-se-lhe a volta num
+teste sem montar um jogo. Devolve o nome do caso, que é o que o teste lê.
+*/
+function direccaoDoCarrinho(p) {
+    const S = (typeof SlideTackleModel !== 'undefined') ? SlideTackleModel : null;
+    if (!p || !p.model || !Match.ball) return 'sem_dados';
+
+    const alvo = Match.ballCarrier;
+    const bola = Match.ball.position;
+
+    // A frente actual, que o `lookAtBola` acabou de apontar à bola.
+    _v2.set(0, 0, 1).applyQuaternion(p.model.quaternion);
+    _v2.y = 0;
+    const nf = Math.hypot(_v2.x, _v2.z);
+    if (nf < 1e-6) return 'sem_frente';
+    const fx = _v2.x / nf, fz = _v2.z / nf;
+
+    /*
+    CARRINHO FRONTAL: o defensor vem de frente para o atacante. Mede-se o
+    deslize contra a direcção DELE invertida — 0 graus é ir de encontro a
+    quem vem. Dentro do cone, não se mexe.
+    */
+    const cone = (S && typeof S.anguloFrontalGraus === 'number') ? S.anguloFrontalGraus : 30;
+    if (alvo && alvo.model) {
+        let ax, az;
+        if (alvo.velocity && alvo.velocity.lengthSq() > 0.1) { ax = alvo.velocity.x; az = alvo.velocity.z; }
+        else {
+            _v3.set(0, 0, 1).applyQuaternion(alvo.model.quaternion);
+            ax = _v3.x; az = _v3.z;
+        }
+        const na = Math.hypot(ax, az);
+        if (na > 1e-6) {
+            const cosF = (fx * -ax + fz * -az) / na;
+            if (cosF >= Math.cos(cone * Math.PI / 180)) return 'frontal';
+        }
+    }
+
+    /*
+    FORA DO CONE: perpendicular à linha BOLA->BALIZA que o atacante ataca.
+    Sem portador, a baliza de referência é a que o defensor defende.
+    */
+    const golZ = (alvo && typeof alvo.targetGoalZ === 'number')
+        ? alvo.targetGoalZ : -p.targetGoalZ;
+    let lx = 0 - bola.x, lz = golZ - bola.z;
+    const nl = Math.hypot(lx, lz);
+    if (nl < 1e-6) return 'sem_linha';
+    lx /= nl; lz /= nl;
+
+    // As duas perpendiculares; fica a que leva o defensor PARA a bola.
+    const px = bola.x - p.model.position.x, pz = bola.z - p.model.position.z;
+    const a = { x: lz, z: -lx };
+    const b = { x: -lz, z: lx };
+    const perp = (a.x * px + a.z * pz >= b.x * px + b.z * pz) ? a : b;
+
+    _v1.set(p.model.position.x + perp.x, p.model.position.y, p.model.position.z + perp.z);
+    lookAtBola(p.model, _v1);
+    return 'a_cortar';
+}
+
 function actSlideTackle(ctx) {
     const p = ctx.p;
     /*
@@ -1927,6 +1989,17 @@ function actSlideTackle(ctx) {
     }
     _v1.y = p.model.position.y;
     lookAtBola(p.model, _v1);
+
+    /*
+    E AGORA A DIRECÇÃO DO DESLIZE — ver SlideTackleModel.anguloFrontalGraus
+    para o pedido e para a medição.
+
+    O `lookAtBola` acima aponta-o à bola, e é dessa frente que o
+    `case 'SLIDE_TACKLE'` tira a direcção. Fica como está no carrinho FRONTAL
+    (defensor a chegar de frente ao atacante, dentro do cone); nos outros o
+    deslize passa a ser perpendicular à linha bola-baliza, a cortar.
+    */
+    direccaoDoCarrinho(p);
 
     /*
     A VELOCIDADE DO DESLIZE FIXA-SE AQUI, e não no `case 'SLIDE_TACKLE'`.
@@ -3240,6 +3313,49 @@ function tratarBolaParada(p) {
             fsm.changeState('SET_PIECE_WAIT');
         }
     } else if (Match.state === 'GOAL_KICK') {
+        /*
+        NINGUÉM DE PÉ DENTRO DA PEQUENA ÁREA, e era aqui que eles ficavam.
+
+        Relato: *"tem jogadores ficando dentro da pequena área no tiro de
+        meta"*. A montagem (`formaDoTiroDeMeta`) dá a toda a gente um alvo
+        fora da área e mete-os em `MOVE_TO_POS`; o problema é o que acontece
+        a quem sai desse estado a meio do caminho. Este ramo preservava
+        `MOVE_TO_POS` mas ESTACIONAVA em `SET_PIECE_WAIT` qualquer outro
+        estado — onde quer que o jogador estivesse, incluindo em cima da
+        bola. E quem está em `SET_PIECE_WAIT` já não é tocado pela montagem
+        (ela só mexe em quem está em `MOVE_TO_POS`), portanto ficava lá o
+        lance inteiro.
+
+        Medido com `tools/scratch/tiro_meta_em_jogo.js`, jogadores de campo
+        dentro da pequena área por frame, ao longo dos 8 s de espera:
+
+            0-1 s  1.27 (pior 7)      4-5 s  0.80 (pior 5)
+            1-2 s  0.81 (pior 5)      6-7 s  0.80 (pior 5)
+            2-3 s  0.80 (pior 5)      8-9 s  1.38 (pior 5)
+
+        Não decai — estabiliza. E são sempre os da equipa que BATE (CM, CB,
+        RM, LM), em `SET_PIECE_WAIT` a 2.7-5.3 m da linha de fundo com o alvo
+        deles a 13-14 m dali. A pilha da transição apontou para esta linha
+        (`tools/scratch/tiro_meta_quem_para.js`).
+
+        Quem estiver lá dentro volta a `MOVE_TO_POS`: no frame seguinte a
+        montagem reescreve-lhe o alvo (sempre fora da área — a linha mais
+        recuada é a dos defesas, a 16 m da linha de fundo) e ele sai. Não há
+        vaivém possível porque nenhum alvo da forma cai dentro da pequena
+        área.
+        */
+        const equipaQueBate = Match.setPieceTeam;
+        if (p.role !== 'gk' && equipaQueBate && p !== Match.setPieceTaker && p.model) {
+            const dirBate = (equipaQueBate === 'TeamA') ? 1 : -1;
+            const linhaZ = -dirBate * (CAMPO_COMP / 2);
+            const fundo = (p.model.position.z - linhaZ) * dirBate;
+            const naPequena = fundo >= -1.0 && fundo <= Area.pequenaProfundidade &&
+                Math.abs(p.model.position.x) <= Area.pequenaMeiaLargura;
+            if (naPequena) {
+                if (s !== 'MOVE_TO_POS') fsm.changeState('MOVE_TO_POS');
+                return;
+            }
+        }
         if (s !== 'SET_PIECE_TAKER' && s !== 'SET_PIECE_WAIT' && s !== 'MOVE_TO_POS') {
             fsm.changeState('SET_PIECE_WAIT');
         }
