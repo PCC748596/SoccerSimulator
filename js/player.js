@@ -7790,7 +7790,9 @@ class FootballPlayer {
         do x da bola, tratado lá dentro.
         */
         if (typeof GkDive !== 'undefined' && GkDive.espalmar) {
-            GkDive.espalmar(this, this.dive || null, decisao.qualidade);
+            // A bandeira do tiro forte de perto vale tambem na defesa de pe
+            // e no salto, nao so no mergulho.
+            GkDive.espalmar(this, this.dive || null, decisao.qualidade, decisao.semAgarrar);
         } else {
             Match.ballVel.z *= -0.4;
             Match.ballVel.x += (Math.random() - 0.5) * 6;

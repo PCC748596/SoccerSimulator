@@ -735,7 +735,7 @@ const GkDive = {
             return;
         }
 
-        this.espalmar(p, d, decisao.qualidade);
+        this.espalmar(p, d, decisao.qualidade, decisao.semAgarrar);
     },
 
     /*
@@ -752,13 +752,20 @@ const GkDive = {
     mesmo instante: a mão está na linha de golo, e sem isso ela atravessava o
     plano ainda dentro dos postes nos milissegundos seguintes — golo.
     */
-    espalmar(p, d, qualidade) {
+    espalmar(p, d, qualidade, semAgarrar) {
         const D = GoalkeeperDive;
         const bola = Match.ball.position;
         const folgaPoste = (LARGURA_BALIZA / 2) - Math.abs(bola.x);
         const alta = bola.y > D.espalmarAltaY;
 
-        const destino = destinoDaEspalmada({
+        /*
+        TIRO FORTE DE PERTO VAI PARA CANTO, sempre — ver
+        `GkCatchModel.semAgarrar`. Aqui não há sorteio de destino nem conta de
+        colocação: a bola vem com energia a mais e de perto de mais, e o que um
+        guarda-redes faz é tirá-la do caminho. Devolvê-la ao miólo seria
+        oferecer a recarga à boca da baliza.
+        */
+        const destino = semAgarrar ? 'canto' : destinoDaEspalmada({
             qualidade: qualidade,
             podeSair: alta || (folgaPoste < D.espalmarForaMargem)
         });
@@ -775,8 +782,17 @@ const GkDive = {
                 Match.ballVel.x = ladoPoste * D.espalmarLateral;
                 Match.ballVel.y = Math.max(Match.ballVel.y, 2.0);
             }
-            // Sentido de z MANTIDO: atravessa a linha de fundo por fora.
-            Match.ballVel.z *= D.espalmarForaZ;
+            /*
+            Sentido de z MANTIDO: atravessa a linha de fundo por fora.
+
+            No tiro forte de perto o z NÃO se trava. Medido: com o corte a 45%
+            e os 5 m/s de lateral, 6 de 9 destas bolas saam pela LINHA
+            LATERAL em vez da de fundo -- iam de lado antes de chegar à linha,
+            e o desfecho era um lançamento, não um canto. Como a bola vem a
+            22+ m/s, guardar o z inteiro tira-a por fora do poste quase no
+            mesmo instante, que é o que o pedido quer.
+            */
+            Match.ballVel.z *= semAgarrar ? 1.0 : D.espalmarForaZ;
         } else if (destino === 'lateral') {
             // Para o lado e para cima, de volta ao campo mas longe do miolo.
             Match.ballVel.z *= -0.5;

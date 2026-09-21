@@ -3323,8 +3323,15 @@ function resolverDefesaGK(o) {
     distancia a que o remate saiu -- quem chama passa o `gkDistRemate`.
     */
     const SA = M.semAgarrar;
+    /*
+    A bandeira sai também no resultado: quem espalma precisa de saber que este
+    foi um tiro forte de perto, para o mandar para fora em vez de o devolver
+    ao miolo (ver `GkDive.espalmar` e a nota do `semAgarrar` no config).
+    */
+    let semAgarrar = false;
     if (SA && typeof o.dist === 'number' && o.dist <= SA.distMax && v >= SA.velMin) {
         pAgarra = 0;
+        semAgarrar = true;
     }
 
     /*
@@ -3358,6 +3365,7 @@ function resolverDefesaGK(o) {
         resultado: resultado,
         pAgarra: pAgarra,
         pRoca: pRoca,
+        semAgarrar: semAgarrar,
         qualidade: qualidadeEspalmada(tec)
     };
 }

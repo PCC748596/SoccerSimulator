@@ -1481,7 +1481,24 @@ const GkCatchModel = {
     a depender da velocidade e da extensao, e o que sobra e espalmada.
     =====================================================================
     */
-    semAgarrar: { distMax: 8.0, velMin: 22.0 },
+    /*
+    E ESSE REMATE VAI PARA CANTO — a segunda metade da regra, que faltava.
+
+    Pedido: *"chute forte de muito perto o goleiro tem que colocar para
+    escanteio"*, ajustado a seguir para *"menos de 6 metros"*.
+
+    O que existia era só a primeira metade: nesta faixa a hipótese de AGARRAR
+    passa a zero. Para onde a bola ia continuava a ser decidido pela coloçaão
+    do remate — `espalmarForaMargem` (2.4 m do poste) ou `espalmarAltaY` —, e
+    um remate forte de perto pelo MEIO voltava ao campo como rebote.
+
+    Agora a faixa força o destino: quem defende um tiro assim não o segura
+    nem o devolve ao miolo, manda-o para fora. Ver `GkDive.espalmar`.
+
+    `distMax` 8.0 -> 6.0 a pedido. É a distância a que o REMATE SAIU
+    (`gkDistRemate`), não a que a bola está quando lhe toca.
+    */
+    semAgarrar: { distMax: 6.0, velMin: 22.0 },
     /*
     Probabilidade base por TIPO de defesa, a v = vRef e extensão 0. É a mesma
     estrutura que as quatro fórmulas antigas tinham, agora explícita e com o
