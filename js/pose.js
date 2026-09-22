@@ -456,8 +456,51 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         return geo;
     }
 
+    /*
+    =========================================================================
+    O TRONCO RODA PELA CINTURA, E NAO PELO SEU PROPRIO MEIO
+    =========================================================================
+    `rig.chest` — o no que todas as poses rodam — e este Group, posto na
+    CINTURA (y 0.275 no espaco da anca, a altura exacta onde a bainha da
+    camisa encontra o topo do calcao). A malha do tronco pendura-se nele
+    0.75 acima, portanto com rotacao zero fica em 0.275 + 0.75 = 1.025, que
+    e onde sempre esteve: a pose neutra nao mexe um milimetro.
+
+    ERA A MALHA QUE RODAVA, E RODAVA A MEIO DE SI PROPRIA. Com o pivo em
+    1.025 e a bainha em 0.275, qualquer inclinacao do tronco levantava e
+    empurrava a PROPRIA COSTURA, com 0.75 unidades (0.245 m) de braco de
+    alavanca. Relato: *"o corpo esta descolado das pernas"*. Medido, o buraco
+    nas costas entre a bainha e o calcao:
+
+        chest 0.00   fecha (sobrepoe 8 mm)
+        chest 0.20   0.057 m
+        chest 0.40   0.110 m
+        chest 0.80   0.216 m
+
+    Nao era de um clip: era de todos. O tiro de meta abria 0.135 m no frame
+    1, o PlayerKickClip 0.121 m, e o mesmo valia para a corrida, o remate,
+    as defesas e o arbitro — qualquer pose com o tronco inclinado.
+
+    Com o pivo na cintura o braco de alavanca da costura passa a ser ZERO: a
+    bainha fica cravada no topo do calcao seja qual for o angulo, que e como
+    uma camisa se comporta.
+
+    QUEM ADICIONA FILHOS AO TRONCO adiciona-os a MALHA (`chest`), e nao a
+    este Group: os offsets do pescoco, da casca e dos bracos continuam a ser
+    medidos a partir do meio do tronco, como estavam.
+
+    UM EFEITO A CONHECER: `rig.chest.matrixWorld` passa a ter origem na
+    cintura. O unico sitio que o le e o `gk_dive.js`, para projectar o alvo
+    das maos para o plano a frente do peito; com o tronco inclinado `a`, esse
+    plano desloca-se 0.245*sin(a) metros. Os valores de `chest` do mergulho
+    sao pequenos (-0.1 a 0.5), e e um limite de seguranca e nao uma pose.
+    =========================================================================
+    */
+    const cintura = new THREE.Group(); cintura.position.y = 0.275;
+    pelvis.add(cintura); rig.chest = cintura;
+
     const chest = criarPeca(caixaTorax(u * 1.4, u * 1.45, u * 0.75, 0.75), blockMat);
-    chest.position.y = 1.025;
+    chest.position.y = 1.025 - 0.275;
     /*
     A SOMBRA DO TRONCO vive aqui. Era a caixa da pélvis que a projectava e ela
     deixou de existir; sem esta linha o jogador passa a fazer sombra de pernas
@@ -472,7 +515,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     do peito acaba em 0.275 no espaço da anca e o calção das coxas sobe até
     0.30, portanto a costura fecha sem ela.
     */
-    pelvis.add(chest); rig.chest = chest;
+    cintura.add(chest);
     const neck = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.15, u * 0.35), blockMat); neck.position.y = 0.8; chest.add(neck); rig.neck = neck;
     const head = criarPeca(new THREE.BoxGeometry(u * 0.8, u * 1.0, u * 0.85), blockMat, true); head.position.y = 0.575;
 
@@ -1161,11 +1204,12 @@ function aplicarPoseChuteChaoGR(rig, K, corpo, opts) {
 }
 
 /*
-POSE DO CHUTE DE BOLA PARADA — PlayerKickClip.
+POSE DO CHUTE DE BOLA PARADA — PlayerKickClip e GoalKickClip.
 
-A ÚNICA pose de chute de bola parada: tiro de meta, falta e penálti passam
-todos por aqui. Não chama nem é chamada por `aplicarPoseRemate` (o remate de
-jogo corrido) nem por `aplicarPoseChuteChaoGR` (o clip antigo do guarda-redes).
+As poses de chute de bola parada passam todas por aqui: o tiro de meta pelo
+GoalKickClip, a falta e o penálti pelo PlayerKickClip. Não chama nem é chamada
+por `aplicarPoseRemate` (o remate de jogo corrido) nem por
+`aplicarPoseChuteChaoGR` (o clip antigo do guarda-redes).
 
 ESCREVE O ESQUELETO INTEIRO, sempre, a partir do keyframe. Não há
 `poseAnterior` nem `peso` como no `aplicarPoseChuteChaoGR`: a aproximação é
@@ -1173,8 +1217,8 @@ parte do clip, portanto não há segunda animação de onde misturar. Era essa
 mistura que punha o ciclo de corrida a escrever as pernas por baixo do gesto,
 com a passada a alternar de perna enquanto o chute decorria.
 
-PERNA DE CHUTE FIXA. `PlayerKickClip.pernaChute` é lido UMA vez aqui e vale
-para os quatro keyframes. Não há ramo nenhum que troque de perna a meio.
+PERNA DE CHUTE FIXA. O `pernaChute` do clip é lido UMA vez por quem chama e
+vale para os quatro keyframes. Não há ramo nenhum que troque de perna a meio.
 
 PIVÔ NO PÉ DE APOIO: o pé de apoio está em x = ±0.4 no espaço local da bacia
 (geometria do rig, ver buildBody em player.js), e o `leanZ` roda o corpo em
@@ -1184,10 +1228,20 @@ nas imagens 1 e 3, com o corpo inclinado sobre a perna plantada.
 `corpo` é o Group do jogador, para a altura; pode vir a nulo (o editor de
 animação posiciona o corpo por fora).
 */
-function aplicarPosePlayerKick(rig, K, corpo) {
+/*
+O ESCRITOR PARTILHADO das poses de bola parada — PlayerKickClip (falta e
+penálti) e GoalKickClip (tiro de meta). Recebe a perna de chute em vez de a ir
+buscar a um clip, e é só isso que os separa aqui.
+
+PARTILHAR O ESCRITOR NÃO É PARTILHAR O GESTO: os NÚMEROS vivem cada um no seu
+clip e divergem à vontade no editor. O que se partilha é a mecânica do rig — o
+pivô no pé de apoio, que canal vai a que osso — e essa tem mesmo de ser a
+mesma nos dois, senão o mesmo keyframe desenhava dois bonecos diferentes.
+*/
+function escreverPoseBolaParada(rig, K, corpo, pernaChute) {
     if (!rig || !K) return;
 
-    const chuteR = (PlayerKickClip.pernaChute === 'r');
+    const chuteR = (pernaChute === 'r');
     const pernaC = chuteR ? rig.rLeg : rig.lLeg;
     const joelhoC = chuteR ? rig.rKnee : rig.lKnee;
     const pernaA = chuteR ? rig.lLeg : rig.rLeg;
@@ -1235,6 +1289,26 @@ function aplicarPosePlayerKick(rig, K, corpo) {
     aplicarPesECabeca(rig, K);
 
     if (corpo) corpo.position.y = ALTURA_BASE_Y + (K.altura || 0);
+}
+
+/*
+POSE DO CHUTE DE BOLA PARADA GENÉRICO — PlayerKickClip. Falta e penálti.
+O tiro de meta tem a sua, logo abaixo.
+*/
+function aplicarPosePlayerKick(rig, K, corpo) {
+    escreverPoseBolaParada(rig, K, corpo, PlayerKickClip.pernaChute);
+}
+
+/*
+POSE DO TIRO DE META — GoalKickClip, os 4 keyframes GoalKick1 a 4.
+
+Entrada própria, e não uma chamada ao `aplicarPosePlayerKick`: quem afina o
+tiro de meta no editor mexe neste clip e em mais nenhum, e o dia em que o
+gesto precisar de algo que a falta não tem (a bola levantada, por exemplo) é
+aqui que se acrescenta.
+*/
+function aplicarPoseGoalKick(rig, K, corpo) {
+    escreverPoseBolaParada(rig, K, corpo, GoalKickClip.pernaChute);
 }
 
 /*
@@ -1310,16 +1384,16 @@ function amostrarClipChuteChaoGR(norm) {
 }
 
 /*
-Amostra o PlayerKickClip — o chute de bola parada — num tempo normalizado
-0..1. São 4 keyframes, portanto `pos = norm * 3` e a interpolação linear
-percorre 0->1, 1->2 e 2->3 em terços iguais do gesto.
+Amostra um clip de bola parada — PlayerKickClip ou GoalKickClip — num tempo
+normalizado 0..1. São 4 keyframes, portanto `pos = norm * 3` e a interpolação
+linear percorre 0->1, 1->2 e 2->3 em terços iguais do gesto.
 
-Amostrador PRÓPRIO, e não uma chamada ao do clip antigo: os dois clips não têm
-de continuar a ter os mesmos canais, e partilhar o amostrador era garantir que
-qualquer canal novo aqui tinha de ser acrescentado lá também.
+NÃO amostra o clip antigo do guarda-redes (GoalkeeperGroundKickClip), que tem
+o seu: os canais não têm de continuar a ser os mesmos, e partilhar o amostrador
+era garantir que qualquer canal novo aqui tinha de ser acrescentado lá também.
 */
-function amostrarClipPlayerKick(norm) {
-    const fr = PlayerKickClip.frames;
+function amostrarClipBolaParada(clip, norm) {
+    const fr = clip.frames;
     const n = fr.length;
     const pos = THREE.MathUtils.clamp(norm, 0, 1) * (n - 1);
     const i = Math.min(n - 2, Math.floor(pos));
@@ -1330,6 +1404,8 @@ function amostrarClipPlayerKick(norm) {
         const vb = (b[k] !== undefined) ? b[k] : 0;
         return va + (vb - va) * u;
     };
+    // Ver a nota dos canais opcionais, no fim desta função.
+    const mixOpc = (k) => (a[k] === undefined && b[k] === undefined) ? undefined : mix(k);
     return {
         /*
         O AVANCO E A FRACCAO DO CAMINHO JA ANDADO, 0..1 — nao sao metros.
@@ -1361,8 +1437,53 @@ function amostrarClipPlayerKick(norm) {
         peRx: mix('peRx'),
         peLx: mix('peLx'),
         cabecaX: mix('cabecaX'),
-        altura: mix('altura')
+        altura: mix('altura'),
+        /*
+        OS CANAIS OPCIONAIS — mãos, giro dos pés e giro da cabeça.
+
+        `mixOpc` devolve `undefined` quando NENHUM dos dois keyframes vizinhos
+        traz o canal, e é essa a parte que interessa: o `aplicarPesECabeca`
+        distingue `undefined` de zero e, no primeiro caso, deixa o osso como
+        está. Devolver zero aqui era escrever zero por cima do REPOUSO, e o
+        repouso do `peLy` não é zero — os pés nascem virados para fora
+        (`peG.rotation.y = +-PI/16`, ver `criarPerna`). Um clip que não fale
+        dos pés passaria a endireitá-los sem o pedir.
+
+        Também é o que deixa o PlayerKickClip, que não traz nenhum destes
+        canais, a comportar-se exactamente como antes.
+
+        Existem porque o editor os escreve: rodar uma mão ou um pé no gizmo
+        gravava o canal no keyframe e o amostrador deitava-o fora a caminho do
+        rig — a rotação via-se no editor e desaparecia no jogo.
+        */
+        peLy: mixOpc('peLy'),
+        peRy: mixOpc('peRy'),
+        maoLx: mixOpc('maoLx'),
+        maoLy: mixOpc('maoLy'),
+        maoLz: mixOpc('maoLz'),
+        maoRx: mixOpc('maoRx'),
+        maoRy: mixOpc('maoRy'),
+        maoRz: mixOpc('maoRz'),
+        cabecaY: mixOpc('cabecaY')
     };
+}
+
+/*
+Amostra o PlayerKickClip — o chute de bola parada da falta e do penálti.
+*/
+function amostrarClipPlayerKick(norm) {
+    return amostrarClipBolaParada(PlayerKickClip, norm);
+}
+
+/*
+Amostra o GoalKickClip — o TIRO DE META, 4 keyframes (GoalKick1 a 4).
+
+Os dois clips têm hoje os mesmos canais e por isso o amostrador é um só. O que
+não é partilhado são os NÚMEROS: cada clip tem a sua tabela de keyframes e
+afina-se sozinho no editor de animação.
+*/
+function amostrarClipGoalKick(norm) {
+    return amostrarClipBolaParada(GoalKickClip, norm);
 }
 
 /*

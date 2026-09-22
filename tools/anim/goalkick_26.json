@@ -1,0 +1,71 @@
+{
+ "nome": "GoalKick4 — contacto, vista de lado (frame 3)",
+ "imagem": "referencias/goalkick_26.png",
+ "bola": [
+  33,
+  106,
+  12
+ ],
+ "juntas": {
+  "cabeca": [
+   107,
+   22
+  ],
+  "pescoco": [
+   106,
+   39
+  ],
+  "anca": [
+   105,
+   66
+  ],
+  "ombroE": [
+   92,
+   40
+  ],
+  "cotoveloE": [
+   77,
+   39
+  ],
+  "maoE": [
+   66,
+   38
+  ],
+  "ombroD": [
+   120,
+   40
+  ],
+  "cotoveloD": [
+   135,
+   41
+  ],
+  "maoD": [
+   145,
+   40
+  ],
+  "joelhoChute": [
+   82,
+   82
+  ],
+  "tornozeloChute": [
+   66,
+   106
+  ],
+  "bicoChute": [
+   56,
+   112
+  ],
+  "joelhoApoio": [
+   130,
+   67
+  ],
+  "tornozeloApoio": [
+   150,
+   63
+  ],
+  "bicoApoio": [
+   158,
+   62
+  ]
+ }
+}

@@ -1,0 +1,72 @@
+{
+ "nome": "GoalKick1 — corrida de aproximacao (frame 0)",
+ "imagem": "referencias/goalkick_24.png",
+ "frente": "esquerda",
+ "bola": [
+  42,
+  109,
+  11
+ ],
+ "juntas": {
+  "cabeca": [
+   120,
+   24
+  ],
+  "pescoco": [
+   122,
+   37
+  ],
+  "anca": [
+   127,
+   62
+  ],
+  "ombroE": [
+   119,
+   40
+  ],
+  "cotoveloE": [
+   112,
+   57
+  ],
+  "maoE": [
+   107,
+   66
+  ],
+  "ombroD": [
+   126,
+   40
+  ],
+  "cotoveloD": [
+   124,
+   62
+  ],
+  "maoD": [
+   117,
+   85
+  ],
+  "joelhoChute": [
+   145,
+   82
+  ],
+  "tornozeloChute": [
+   157,
+   107
+  ],
+  "bicoChute": [
+   164,
+   114
+  ],
+  "joelhoApoio": [
+   122,
+   85
+  ],
+  "tornozeloApoio": [
+   134,
+   107
+  ],
+  "bicoApoio": [
+   133,
+   117
+  ]
+ }
+}

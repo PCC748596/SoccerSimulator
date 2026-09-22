@@ -91,15 +91,33 @@ const CLIPS = {
         amostrar: (t) => amostrarClipChuteGR(t)
     },
     /*
-    O GESTO ÚNICO DE BOLA PARADA. Tiro de meta, falta e penálti passam todos
-    por aqui — 4 keyframes, um por imagem de referência (GoalKick1 a 4).
+    OS DOIS GESTOS DE BOLA PARADA, um por lance: `GoalKickClip` para o tiro de
+    meta, `PlayerKickClip` para a falta e o penálti. Os dois têm 4 keyframes,
+    um por imagem de referência (GoalKick1 a 4), e os dois se afinam sozinhos.
 
-    A entrada antiga (`GoalkeeperGroundKickClip`, logo abaixo) fica na lista de
-    propósito: serve para comparar os dois lado a lado no editor. Já não há
-    ninguém no jogo a chamá-la.
+    A entrada antiga (`GoalkeeperGroundKickClip`, mais abaixo) fica na lista de
+    propósito: serve para comparar lado a lado no editor. Já não há ninguém no
+    jogo a chamá-la.
     */
+    /*
+    O TIRO DE META, gesto próprio — 4 keyframes, um por imagem de referência
+    (GoalKick1 a 4). É o que o guarda-redes faz no estado 'tiro_meta'.
+
+    Separado do `PlayerKickClip` logo abaixo de propósito: afinar aqui não pode
+    mexer na falta nem no penálti, que continuam naquele.
+    */
+    GoalKickClip: {
+        rotulo: 'Tiro de meta (GoalKick 1-4)',
+        clip: () => GoalKickClip,
+        duracao: () => ActionAnimClips.goalKick.duration,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseGoalKick(rig, K, corpo);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipGoalKick(t)
+    },
     PlayerKickClip: {
-        rotulo: 'Chute de bola parada (GoalKick 1-4)',
+        rotulo: 'Falta e penálti (bola parada)',
         clip: () => PlayerKickClip,
         duracao: () => ActionAnimClips.playerKick.duration,
         aplicar: (rig, corpo, K) => {
@@ -964,9 +982,10 @@ const Editor = {
 
         const perna = (lado) => {
             if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' ||
-                c === 'PlayerKickClip' || c === 'GoalkeeperKickClip') {
+                c === 'PlayerKickClip' || c === 'GoalKickClip' || c === 'GoalkeeperKickClip') {
                 const ehChute = (lado === 'r') === chuteR;
-                const temZ = (c === 'GoalkeeperGroundKickClip' || c === 'PlayerKickClip');
+                const temZ = (c === 'GoalkeeperGroundKickClip' || c === 'PlayerKickClip' ||
+                    c === 'GoalKickClip');
                 return ehChute
                     ? { x: 'coxaChute', z: (temZ ? 'coxaChuteZ' : null) }
                     : { x: 'coxaApoio' };
@@ -980,7 +999,7 @@ const Editor = {
         };
         const joelho = (lado) => {
             if (c === 'ShotClip' || c === 'PassClip' || c === 'GoalkeeperGroundKickClip' ||
-                c === 'PlayerKickClip' || c === 'GoalkeeperKickClip') {
+                c === 'PlayerKickClip' || c === 'GoalKickClip' || c === 'GoalkeeperKickClip') {
                 return ((lado === 'r') === chuteR) ? { x: 'joelhoChute' } : { x: 'joelhoApoio' };
             }
             if (c === 'ThrowInClip') {
@@ -1002,7 +1021,8 @@ const Editor = {
         switch (nomeJunta) {
             case 'pelvis':
                 if (c === 'ShotClip' || c === 'PassClip' || c === 'BallControlRightClip') return { y: 'pelvisY', z: 'leanZ', posY: 'altura' };
-                if (c === 'GoalkeeperGroundKickClip' || c === 'PlayerKickClip') return { x: 'pitchX', z: 'leanZ', posY: 'altura' };
+                if (c === 'GoalkeeperGroundKickClip' || c === 'PlayerKickClip' ||
+                    c === 'GoalKickClip') return { x: 'pitchX', z: 'leanZ', posY: 'altura' };
                 if (c === 'ThrowInClip') return { x: 'pelvisX', posY: 'altura' };
                 return { posY: 'altura' };
             case 'chest':

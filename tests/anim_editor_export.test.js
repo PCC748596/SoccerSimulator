@@ -55,7 +55,7 @@ function framesDoConfig(nome) {
 }
 
 const CLIPS = ['ShotClip', 'GoalkeeperKickClip', 'GoalkeeperGroundKickClip',
-    'PlayerKickClip',
+    'PlayerKickClip', 'GoalKickClip',
     'GoalkeeperThrowClip', 'ThrowInClip', 'BallControlRightClip'];
 
 /*

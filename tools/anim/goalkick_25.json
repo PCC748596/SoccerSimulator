@@ -1,0 +1,67 @@
+{
+ "nome": "GoalKick3 — armacao, vista de costas (frame 2)",
+ "imagem": "referencias/goalkick_25.png",
+ "frente": "direita",
+ "juntas": {
+  "cabeca": [
+   116,
+   29
+  ],
+  "pescoco": [
+   116,
+   41
+  ],
+  "anca": [
+   110,
+   72
+  ],
+  "ombroE": [
+   107,
+   45
+  ],
+  "cotoveloE": [
+   92,
+   54
+  ],
+  "maoE": [
+   75,
+   57
+  ],
+  "ombroD": [
+   126,
+   45
+  ],
+  "cotoveloD": [
+   139,
+   54
+  ],
+  "maoD": [
+   152,
+   60
+  ],
+  "joelhoChute": [
+   80,
+   80
+  ],
+  "tornozeloChute": [
+   47,
+   90
+  ],
+  "bicoChute": [
+   37,
+   94
+  ],
+  "joelhoApoio": [
+   99,
+   106
+  ],
+  "tornozeloApoio": [
+   95,
+   130
+  ],
+  "bicoApoio": [
+   92,
+   136
+  ]
+ }
+}

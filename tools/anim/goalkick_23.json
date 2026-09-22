@@ -1,0 +1,71 @@
+{
+ "nome": "GoalKick2 — planta o pe de apoio (frame 1)",
+ "imagem": "referencias/goalkick_23.png",
+ "bola": [
+  46,
+  100,
+  10
+ ],
+ "juntas": {
+  "cabeca": [
+   111,
+   18
+  ],
+  "pescoco": [
+   107,
+   30
+  ],
+  "anca": [
+   97,
+   62
+  ],
+  "ombroE": [
+   99,
+   34
+  ],
+  "cotoveloE": [
+   104,
+   45
+  ],
+  "maoE": [
+   106,
+   52
+  ],
+  "ombroD": [
+   112,
+   34
+  ],
+  "cotoveloD": [
+   116,
+   44
+  ],
+  "maoD": [
+   113,
+   52
+  ],
+  "joelhoChute": [
+   92,
+   86
+  ],
+  "tornozeloChute": [
+   84,
+   108
+  ],
+  "bicoChute": [
+   80,
+   112
+  ],
+  "joelhoApoio": [
+   76,
+   82
+  ],
+  "tornozeloApoio": [
+   69,
+   104
+  ],
+  "bicoApoio": [
+   65,
+   109
+  ]
+ }
+}

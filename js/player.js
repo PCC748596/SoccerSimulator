@@ -5897,6 +5897,7 @@ class FootballPlayer {
                                 this.gkKickTipo = 'chao';
                                 this.gkTempoMergulho = 0;
                                 this.gkKickNorm = 0;
+                                this.gkKickClipNome = 'playerKick';
                                 this.gkKickAction = new ActionState('playerKick', {
                                     onContact: () => this.aliviarForaDaArea()
                                 });
@@ -6566,7 +6567,19 @@ class FootballPlayer {
             this.gkKickTipo = 'chao';
             this.gkTempoMergulho = 0;
             this.gkKickNorm = 0;
-            this.gkKickAction = new ActionState('playerKick', {
+            /*
+            O CLIP DO TIRO DE META E SO DELE: `goalKick` (GoalKickClip, os 4
+            keyframes GoalKick1 a 4). Era o `playerKick`, partilhado com a
+            falta e com o penalti — afinar o tiro de meta mexia nos tres.
+
+            O `gkKickClipNome` diz ao ramo do desenho (ver o chute do chao em
+            `animarGuardaRedes`) qual dos dois amostrar. Os outros dois chutos
+            de pe do guarda-redes — o alivio fora da area e o recuo de urgencia
+            — ficam no `playerKick`: nao sao tiros de meta, nao ha bola parada
+            nem corrida de aproximacao.
+            */
+            this.gkKickClipNome = 'goalKick';
+            this.gkKickAction = new ActionState('goalKick', {
                 onContact: () => {
                     this.kickFromGround();
                     if (typeof EventBus !== 'undefined') {
@@ -7520,9 +7533,11 @@ class FootballPlayer {
                 }
             } else if (isGroundKick) {
                 /*
-                TIRO DE META — o MESMO gesto de bola parada da falta e do
-                penalti (PlayerKickClip, 4 keyframes das imagens de
-                referencia). Era o GoalkeeperGroundKickClip, exclusivo do
+                CHUTE DE PE DO GUARDA-REDES. O tiro de meta anima-se pelo
+                GoalKickClip (4 keyframes, as imagens GoalKick1 a 4); o alivio
+                fora da area e o recuo de urgencia pelo PlayerKickClip, o
+                gesto de bola parada generico. Era o mesmo clip para os tres, e
+                antes disso o GoalkeeperGroundKickClip, exclusivo do
                 guarda-redes, com a pose da corrida misturada por cima durante
                 os primeiros GK_GROUND_KICK_BLEND segundos.
 
@@ -7537,7 +7552,16 @@ class FootballPlayer {
                 nao muda de golpe (ver o slerp mais abaixo). Deslocacao e
                 rotacao, nunca ossos.
                 */
-                const K = amostrarClipPlayerKick(normK);
+                /*
+                QUAL DOS DOIS CLIPS. O tiro de meta tem o seu (`GoalKickClip`);
+                o alivio fora da area e o recuo de urgencia continuam no
+                `PlayerKickClip`, que e tambem o da falta e do penalti. Quem
+                arrancou o gesto deixou o nome em `gkKickClipNome`.
+                */
+                const ehTiroDeMeta = (this.gkKickClipNome === 'goalKick');
+                const K = ehTiroDeMeta
+                    ? amostrarClipGoalKick(normK)
+                    : amostrarClipPlayerKick(normK);
 
                 /*
                 O CORPO ANDA AO RITMO DO `avanco` DO CLIP.
@@ -7558,7 +7582,8 @@ class FootballPlayer {
                     gkCorpo.position.z = B.origemZ + (B.plantZ - B.origemZ) * B.w;
                 }
 
-                aplicarPosePlayerKick(gkRig, K, gkCorpo);
+                if (ehTiroDeMeta) aplicarPoseGoalKick(gkRig, K, gkCorpo);
+                else aplicarPosePlayerKick(gkRig, K, gkCorpo);
             } else {
                 // CHUTÃO DAS MÃOS (Punt em jogo corrido)
                 const K = amostrarClipChuteGR(normK);
@@ -7944,6 +7969,7 @@ class FootballPlayer {
         this.gkKickTipo = 'chao';
         this.gkTempoMergulho = 0;
         this.gkKickNorm = 0;
+        this.gkKickClipNome = 'playerKick';
         this.gkKickAction = new ActionState('playerKick', {
             onContact: () => {
                 this.kickFromGround();

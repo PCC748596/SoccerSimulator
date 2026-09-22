@@ -108,7 +108,22 @@ const ActionAnimClips = {
     0.55 s dá aos 4 keyframes 0.183 s entre cada um. Quem quiser o gesto mais
     lento mexe aqui, e volta a correr os dois testes.
     */
-    playerKick: { duration: 0.55, contactTime: 1 }
+    playerKick: { duration: 0.55, contactTime: 1 },
+    /*
+    TIRO DE META (ver GoalKickClip) — gesto PRÓPRIO, separado do `playerKick`.
+
+    Era o `playerKick` a servir os três lances de bola parada (tiro de meta,
+    falta e penálti) com um clip só. Partilhar era garantir que afinar o tiro
+    de meta mexia na falta e no penálti — e os três não são o mesmo gesto: o
+    tiro de meta tem a corrida de aproximação mais longa e o batedor levanta a
+    bola, a falta e o penálti batem-na rasa a poucos passos.
+
+    Mesma contagem e mesmo contacto do `playerKick` porque o gesto ARRANCA daí:
+    4 keyframes (as imagens GoalKick1 a 4) e o contacto no último, portanto
+    `contactTime` 1 e nenhum follow-through. Os números divergem a partir daqui
+    conforme se afinam no editor de animação, e é isso que se queria.
+    */
+    goalKick: { duration: 0.55, contactTime: 1 }
 };
 
 /*
@@ -565,6 +580,167 @@ const PlayerKickClip = {
         { avanco: 1.00, leanZ: -0.10, pitchX: 0.15, chest: -0.10, coxaChute: -0.70, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 0.75, joelhoApoio: 0.45, bracoLx: 0.00, bracoLz: 1.55, bracoRx: -0.10, bracoRz: -1.55, cotoveloL: -0.05, cotoveloR: -0.05, peRx: -0.25, peLx: -0.35, cabecaX: -0.20, altura: 0.18 }
     ]
 };
+
+/*
+=============================================================================
+GOAL_KICK_CLIP — TIRO DE META, 13 keyframes
+=============================================================================
+O gesto do tiro de meta, e só dele. Vive à parte do PlayerKickClip (a falta e
+o penálti) de propósito: afinar um não pode mexer no outro.
+
+=============================================================================
+DE ONDE VÊM ESTES NÚMEROS
+=============================================================================
+Do TRAÇADO das quatro imagens de referência, e não de leitura a olho. Cada
+imagem levou um esqueleto por cima — linhas rectas por segmento (coxa, canela,
+pé, tronco, braço, antebraço, cabeça) e um círculo em cada junção — e os
+ângulos saíram medidos daí. Ver `tools/anim/` , que guarda as fichas com as
+coordenadas das junções e o traçado de cada imagem.
+
+ANTES DISSO FORAM TRÊS VERSÕES ERRADAS, todas escritas a adivinhar a pose a
+partir das imagens e a validá-la com números que não mostram o que se vê:
+uma pôs o jogador a flutuar meio metro no ar, outra deitou-o de bruços a 77
+graus, e a terceira deixou o frame do contacto com as pernas a 22 graus uma da
+outra — um homem parado. Relato: *"Vc não consegue identificar os frames
+corretamente."* Estava certo.
+
+A ORDEM É A DAS IMAGENS COMO CHEGARAM: GoalKick1, 2, 3 e 4 nos principais 1,
+5, 9 e 13. Dada pelo autor, e repetida depois de eu a ter trocado.
+
+COMO EU A TROQUEI, para não se repetir: comparei a distância do jogador à
+bola em PÍXEIS — ~50 px numa imagem, ~85 px na outra — e concluí que a mais
+longe vinha primeiro. A conta não vale nada, porque as imagens têm ZOOMS
+DIFERENTES: uma tem 153 px de largura e a outra 199. Distâncias em píxeis só
+se comparam DENTRO da mesma imagem.
+
+    1  GoalKick1   a chegada, VISTA DE COSTAS: tronco à frente, pé de apoio
+                   plantado ao lado da bola, perna de chute atrás e no ar
+    5  GoalKick2   corrida: de pé, perna de chute atrás e quase esticada,
+                   com o pé no chão
+    9  GoalKick3   armação, VISTA DE COSTAS: perna de chute 77 graus atrás e
+                   ESTICADA (não é o calcanhar no glúteo — medido, o joelho
+                   tem 10 graus de flexão), braços abertos PARA OS LADOS
+   13  GoalKick4   CONTACTO, vista de lado: pernas abertas 143 graus, pé de
+                   chute no relvado junto à bola, perna de apoio atrás e
+                   QUASE HORIZONTAL (88 graus), um braço à frente e o outro
+                   atrás, tronco a prumo
+
+DUAS ARMADILHAS DA LEITURA, que já me apanharam as duas:
+
+  . A VISTA MUDA DE IMAGEM PARA IMAGEM. Nas 23, 24 e 26 o jogador vai para a
+    ESQUERDA; na 25 está de costas. Um braço que se estende para o lado da
+    imagem é `bracoLx` numa vista de lado e `bracoLz` numa vista de costas —
+    são canais diferentes e dão poses diferentes.
+  . NÃO HÁ UM PÉ QUE SEJA SEMPRE O QUE ASSENTA. No contacto é o pé de CHUTE
+    (o de apoio está no ar atrás); nos outros é o de apoio. Por isso o
+    `altura` resolve-se pelo pé MAIS BAIXO, e não por um escolhido à mão.
+    Quando era escolhido à mão, o principal 1 acabou com o pé de chute
+    0.135 m DENTRO do relvado.
+
+=============================================================================
+O `altura` RESOLVE-SE, NÃO SE ESCOLHE
+=============================================================================
+Desloca o corpo 1:1 em y, e os ângulos das pernas já mudaram a distância da
+anca ao pé — portanto o valor sai de uma conta: `altura -= (y_do_pé_mais_baixo
+- ALTURA_BASE_Y)`. Escolhido a olho, punha o jogador 0.646 m no ar no frame do
+contacto (*"o jogador aparece flutuando"*).
+
+Varrido o gesto em 41 amostras da interpolação, o pé de baixo afunda no
+máximo 0.021 m — 2 cm, invisível.
+
+Ângulos face à vertical, POSITIVO = para TRÁS do jogador. A conversão para o
+rig é `coxa_rig = ângulo_medido - pitchX`, porque o `pitchX` roda a anca e
+leva as coxas com ela (medido: `pitchX` +0.5 leva o pé 0.426 m para trás).
+
+O `maoRx` E O `peLy` VÊM DO EDITOR, e são canais opcionais: o amostrador só
+os devolve quando algum keyframe os traz, senão deixa o osso no repouso. Isso
+importa no `peLy`, cujo repouso NÃO é zero — os pés nascem virados para fora
+(`peG.rotation.y = +-PI/16 = 0.196`, ver `criarPerna` em pose.js). Estão nos
+TREZE keyframes de propósito: postos só num, o pé e o pulso voltavam ao
+repouso a meio do gesto e viam-se a rodar sozinhos.
+
+=============================================================================
+TREZE KEYFRAMES, QUATRO DELES PRINCIPAIS
+=============================================================================
+Os PRINCIPAIS são o 1, o 5, o 9 e o 13 — um por imagem de referência. Os nove
+do meio nasceram interpolados linearmente entre eles, portanto o gesto que
+saiu daqui é EXACTAMENTE o mesmo que os 4 keyframes davam: confirmado, o pé
+mais baixo varre os mesmos valores antes e depois de expandir.
+
+Não são enchimento. Existem para se poderem afinar à mão no editor um a um,
+que é o que a interpolação linear não sabe fazer — uma perna que acelera, um
+braço que trava, o tronco que roda mais depressa a meio do que no fim. Enquanto
+ninguém lhes tocar, não mudam nada; a partir do momento em que se mexe num, é
+esse keyframe que manda no seu instante.
+
+QUEM AFINAR UM PRINCIPAL tem de repensar os interpolados à volta dele, que já
+não estarão na linha entre os dois. O `tools/anim/README.md` tem o caminho.
+
+CONTACTO NO ÚLTIMO KEYFRAME (`contactFrame: 13`, t = 1.0): não há
+follow-through, a bola sai no instante em que o gesto acaba.
+=============================================================================
+*/
+const GoalKickClip = {
+    pernaChute: 'r',
+    contactFrame: 13,
+    frames: [
+        // ===== PRINCIPAL 1 — GoalKick1 =====
+        // A chegada, VISTA DE COSTAS: tronco 19 graus à frente, pé de apoio
+        // plantado ao lado da bola (a coxa fica a 1 grau da vertical no
+        // mundo), perna de chute 33 graus atrás com o pé a 0.24 m do chão.
+        //
+        // ESTA IMAGEM É A MENOS LEGÍVEL DAS QUATRO — 32 KB contra os 47 KB
+        // das outras, mais pequena e mais escura — e a ANCA não se distingue
+        // nela. Marcá-la a olho deu duas poses erradas seguidas (uma a cair
+        // para trás, outra com o pé de chute 0.135 m DENTRO do relvado).
+        // Esta foi construída só do que a imagem mostra sem dúvida: corpo à
+        // frente, apoio plantado, chute atrás e no ar, braços baixos junto ao
+        // corpo — e conferida na vista de costas, que é a da fotografia.
+        { avanco: 0.00, leanZ: -0.14, pitchX: 0.28, chest: 0.06, coxaChute: 0.30, joelhoChute: 0.50, coxaChuteZ: -0.08, coxaApoio: -0.30, joelhoApoio: 0.45, bracoLx: 0.20, bracoLz: 0.28, bracoRx: 0.20, bracoRz: -0.28, cotoveloL: -0.75, cotoveloR: -0.75, peRx: -0.25, peLx: -0.15, cabecaX: -0.25, altura: -0.00, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 2 — interpolado entre os principais 1 e 5.
+        { avanco: 0.11, leanZ: -0.13, pitchX: 0.25, chest: 0.06, coxaChute: 0.34, joelhoChute: 0.42, coxaChuteZ: -0.07, coxaApoio: -0.32, joelhoApoio: 0.52, bracoLx: 0.06, bracoLz: 0.40, bracoRx: 0.09, bracoRz: -0.26, cotoveloL: -0.73, cotoveloR: -0.83, peRx: -0.23, peLx: -0.22, cabecaX: -0.21, altura: -0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 3 — interpolado entre os principais 1 e 5.
+        { avanco: 0.23, leanZ: -0.12, pitchX: 0.21, chest: 0.05, coxaChute: 0.37, joelhoChute: 0.35, coxaChuteZ: -0.07, coxaApoio: -0.33, joelhoApoio: 0.58, bracoLx: -0.09, bracoLz: 0.52, bracoRx: -0.03, bracoRz: -0.23, cotoveloL: -0.72, cotoveloR: -0.91, peRx: -0.20, peLx: -0.28, cabecaX: -0.17, altura: -0.02, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 4 — interpolado entre os principais 1 e 5.
+        { avanco: 0.34, leanZ: -0.11, pitchX: 0.18, chest: 0.04, coxaChute: 0.41, joelhoChute: 0.28, coxaChuteZ: -0.06, coxaApoio: -0.34, joelhoApoio: 0.65, bracoLx: -0.23, bracoLz: 0.64, bracoRx: -0.14, bracoRz: -0.20, cotoveloL: -0.70, cotoveloR: -0.99, peRx: -0.17, peLx: -0.35, cabecaX: -0.14, altura: -0.03, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 2 — GoalKick2 =====
+        // Corrida: coxa de chute 34 graus atrás, quase esticada; coxa de
+        // apoio 12 graus à frente com o joelho a 41 graus, a receber o peso.
+        // Cabeça a 1.40 m, de pé. Os braços, os cotovelos e o pé de apoio
+        // deste keyframe foram afinados à mão no editor e ficam como vieram.
+        //
+        // O pé de chute DESCE de 0.24 para 0.12 m entre o principal 1 e este,
+        // e é assim de propósito: na imagem 2 o pé de trás está no chão.
+        { avanco: 0.45, leanZ: -0.10, pitchX: 0.15, chest: 0.04, coxaChute: 0.44, joelhoChute: 0.20, coxaChuteZ: -0.05, coxaApoio: -0.36, joelhoApoio: 0.72, bracoLx: -0.38, bracoLz: 0.76, bracoRx: -0.25, bracoRz: -0.18, cotoveloL: -0.69, cotoveloR: -1.07, peRx: -0.15, peLx: -0.42, cabecaX: -0.10, altura: -0.04, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 6 — interpolado entre os principais 5 e 9.
+        { avanco: 0.55, leanZ: -0.12, pitchX: 0.14, chest: 0.04, coxaChute: 0.67, joelhoChute: 0.20, coxaChuteZ: -0.07, coxaApoio: -0.22, joelhoApoio: 0.58, bracoLx: -0.34, bracoLz: 0.83, bracoRx: -0.14, bracoRz: -0.40, cotoveloL: -0.60, cotoveloR: -0.90, peRx: -0.20, peLx: -0.32, cabecaX: -0.10, altura: -0.04, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 7 — interpolado entre os principais 5 e 9.
+        { avanco: 0.65, leanZ: -0.13, pitchX: 0.14, chest: 0.04, coxaChute: 0.90, joelhoChute: 0.19, coxaChuteZ: -0.10, coxaApoio: -0.09, joelhoApoio: 0.43, bracoLx: -0.29, bracoLz: 0.91, bracoRx: -0.03, bracoRz: -0.61, cotoveloL: -0.52, cotoveloR: -0.73, peRx: -0.25, peLx: -0.21, cabecaX: -0.10, altura: -0.04, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 8 — interpolado entre os principais 5 e 9.
+        { avanco: 0.75, leanZ: -0.14, pitchX: 0.13, chest: 0.03, coxaChute: 1.12, joelhoChute: 0.18, coxaChuteZ: -0.13, coxaApoio: 0.05, joelhoApoio: 0.29, bracoLx: -0.24, bracoLz: 0.98, bracoRx: 0.09, bracoRz: -0.83, cotoveloL: -0.43, cotoveloR: -0.57, peRx: -0.30, peLx: -0.10, cabecaX: -0.10, altura: -0.03, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 3 — GoalKick3 =====
+        // Armação: `coxaChute` 1.35 leva o pé a 0.82 m do chão e 0.91 m
+        // atrás, com o joelho quase direito (0.18) — medido no traçado, a
+        // flexão do joelho é de 10 graus, não é o calcanhar no glúteo.
+        // Braços abertos PARA OS LADOS (`bracoLz` 1.05): é uma vista de
+        // costas, e um braço que se estende para o lado da imagem é abertura
+        // lateral e não recuo.
+        { avanco: 0.85, leanZ: -0.16, pitchX: 0.12, chest: 0.03, coxaChute: 1.35, joelhoChute: 0.18, coxaChuteZ: -0.15, coxaApoio: 0.19, joelhoApoio: 0.15, bracoLx: -0.20, bracoLz: 1.05, bracoRx: 0.20, bracoRz: -1.05, cotoveloL: -0.35, cotoveloR: -0.40, peRx: -0.35, peLx: 0.00, cabecaX: -0.10, altura: -0.03, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 10 — interpolado entre os principais 9 e 13.
+        { avanco: 0.89, leanZ: -0.14, pitchX: 0.09, chest: 0.03, coxaChute: 0.77, joelhoChute: 0.23, coxaChuteZ: -0.10, coxaApoio: 0.53, joelhoApoio: 0.17, bracoLx: -0.56, bracoLz: 0.88, bracoRx: 0.53, bracoRz: -0.88, cotoveloL: -0.29, cotoveloR: -0.33, peRx: -0.31, peLx: -0.06, cabecaX: -0.07, altura: -0.12, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 11 — interpolado entre os principais 9 e 13.
+        { avanco: 0.93, leanZ: -0.12, pitchX: 0.06, chest: 0.03, coxaChute: 0.20, joelhoChute: 0.28, coxaChuteZ: -0.05, coxaApoio: 0.86, joelhoApoio: 0.18, bracoLx: -0.92, bracoLz: 0.70, bracoRx: 0.85, bracoRz: -0.70, cotoveloL: -0.23, cotoveloR: -0.25, peRx: -0.28, peLx: -0.13, cabecaX: -0.05, altura: -0.21, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 12 — interpolado entre os principais 9 e 13.
+        { avanco: 0.96, leanZ: -0.10, pitchX: 0.03, chest: 0.03, coxaChute: -0.38, joelhoChute: 0.32, coxaChuteZ: 0.00, coxaApoio: 1.20, joelhoApoio: 0.20, bracoLx: -1.28, bracoLz: 0.53, bracoRx: 1.18, bracoRz: -0.53, cotoveloL: -0.16, cotoveloR: -0.17, peRx: -0.24, peLx: -0.19, cabecaX: -0.03, altura: -0.30, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 4 — GoalKick4 — CONTACTO =====
+        // As pernas abrem 143 graus (`coxaChute` -0.96 à frente contra
+        // `coxaApoio` 1.54 atrás, esta última quase horizontal). Quem assenta
+        // no relvado é o PÉ DE CHUTE; o de apoio está a 0.49 m no ar, como na
+        // imagem. Um braço à frente e outro atrás, à altura do ombro.
+        { avanco: 1.00, leanZ: -0.08, pitchX: 0.00, chest: 0.03, coxaChute: -0.96, joelhoChute: 0.37, coxaChuteZ: 0.05, coxaApoio: 1.54, joelhoApoio: 0.22, bracoLx: -1.64, bracoLz: 0.35, bracoRx: 1.50, bracoRz: -0.35, cotoveloL: -0.10, cotoveloR: -0.10, peRx: -0.20, peLx: -0.25, cabecaX: 0.00, altura: -0.39, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 }
+    ]
+};
+
 
 /*
 =============================================================================
