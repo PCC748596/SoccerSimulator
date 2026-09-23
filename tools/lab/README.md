@@ -27,6 +27,8 @@ directório de onde se chama não importa.
 | `infil_lanc.js` | infiltrações que receberam bola: conta cada arranque de `RUN_INTO_SPACE` e vê se aquele jogador chegou a ser destinatário de um passe e a tocar na bola | segundos de jogo |
 | `diag_inf.js` | porque é que o ramo do passe para quem infiltra quase nunca dispara | segundos de jogo (300) |
 | `diag_inf2.js` | segunda passagem sobre a mesma pergunta do `diag_inf.js` | segundos de jogo (300) |
+| `adiantar_a_bola.js` | posses de atacante no meio-campo adversário: quanto espaço tinha à frente, se entrou em condução e quantos metros progrediu | segundos (600), semente (1) |
+| `cabeceio_na_area.js` | cabeceios dentro da grande área: quantos vão à baliza e quantos saem em passe, por distância | segundos (900), semente (1), nº forçados (400), `--marcado` |
 | `dois_toques.js` | reposições em que o próprio batedor voltou a tocar na bola antes de outro jogador — a regra dos dois toques | segundos (600), semente (1), `--forcar`, `--sem-regra` |
 | `lote_tmp.js` | lote de jogos completos, para estatística sobre várias partidas | nº de jogos (4), duração em segundos (1080) |
 
@@ -62,3 +64,15 @@ repor. A condição passa a existir sempre, e aí a diferença mede-se:
 A lição: quando a medição em jogo livre dá o mesmo antes e depois, o problema
 costuma ser a **frequência do cenário**, não a ausência do defeito. Criar a
 condição vale mais do que correr mais horas à espera dela.
+
+## Medir o jogo com a conta do jogo
+
+O `adiantar_a_bola.js` replica a conta do espaço à frente que o `PlayerContext`
+faz, e isso é uma armadilha conhecida: na primeira versão trazia a fórmula
+**copiada**, e quando o jogo passou a calcular o corredor de outra maneira a
+medição continuou a medir a antiga. O resultado deu a entender que a correcção
+não tinha feito nada — zero posses com espaço, antes e depois.
+
+Onde a medição precisar de repetir uma conta do jogo, lê a CONSTANTE do jogo
+(aqui, `CarryModel.aberturaCorredor`) em vez de copiar a fórmula. O que
+sobrar de duplicado fica a divergir em silêncio.
