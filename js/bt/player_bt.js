@@ -125,9 +125,16 @@ class PlayerContext {
         }
 
         const tec = p.skillFor ? p.skillFor('TEC') : 50;
+        /*
+        O ALCANCE vem da visao — ate onde ele le o campo. A ABERTURA do
+        corredor nao: e fixa, e quem esta no caminho nao depende da tecnica de
+        quem conduz. Ver `CarryModel.aberturaCorredor`, que tem a medicao do
+        que a abertura por cone de visao fazia (a tecnica 80 cobria o campo
+        inteiro a dez metros).
+        */
         const maxVisionDist = alcanceVisao(tec, 15.0);
-        const halfAngleRad = coneVisao(tec);
-        const aberturaCorredor = Math.tan(halfAngleRad);
+        const aberturaCorredor = (typeof CarryModel.aberturaCorredor === 'number')
+            ? CarryModel.aberturaCorredor : Math.tan(coneVisao(tec));
 
         for (const opp of this.opponents) {
             if (opp.role === 'gk') continue;

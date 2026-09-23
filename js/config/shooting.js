@@ -1654,6 +1654,21 @@ const HeaderModel = {
     */
     raioRemateCabeca: 11.0,
 
+    /*
+    E O RAIO DENTRO DA GRANDE AREA, com o cabeceador SEM MARCACAO.
+
+    O de cima e o raio geral e fica como esta: e o que impede os golos de
+    cabeca de 20+ metros. Este so vale com as tres condicoes juntas — dentro
+    da area, virado a baliza e sem marcador a 2.2 m —, e existe porque o corte
+    aos 11 m mandava passar para tras 72% das cabecadas de quem estava sozinho
+    na area (medido, ver a nota no `executeHeader`, player.js).
+
+    16 m cobrem a grande area em profundidade (16.5 m) e a zona central em
+    largura. A esquina da area esta a 26 m do centro da baliza, e de la
+    continua a ser escora.
+    */
+    raioRemateNaArea: 16.0,
+
     alcanceMax: 16.0,          // alcance máximo de um alívio de cabeça
     alcancePasse: 8.5,         // alcance de escora para colega
 

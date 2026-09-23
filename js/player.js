@@ -3400,8 +3400,69 @@ class FootballPlayer {
             ? HeaderModel.raioRemateCabeca : 11.0;
         const distToGoal = Math.hypot(this.model.position.x,
             this.targetGoalZ - this.model.position.z);
-        const inShootingRange = (distToGoal < raioRemate &&
-            (this.targetGoalZ - this.model.position.z) * this.dirZ > 0);
+        const viradoParaLa = (this.targetGoalZ - this.model.position.z) * this.dirZ > 0;
+
+        /*
+        O MARCADOR SOBE PARA AQUI porque a decisao de rematar passou a
+        depender dele — ver `livreNaArea`, logo abaixo. Estava calculado dentro
+        do ramo do remate, o que so servia para a disputa da cabecada.
+        */
+        const opponentsHead = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        let marcador = null, distMarc = 999;
+        for (const opp of opponentsHead) {
+            if (opp.role === 'gk') continue;
+            const d = opp.model.position.distanceTo(this.model.position);
+            if (d < 2.2 && d < distMarc) { distMarc = d; marcador = opp; }
+        }
+
+        /*
+        =====================================================================
+        DENTRO DA AREA E SEM NINGUEM EM CIMA, CABECEIA-SE A BALIZA
+        =====================================================================
+        Relato: *"O Atacante pula sozinho para cabecear dentro da area e
+        cabeceia para fora da area para dar um passe. Isso nao faz nenhum
+        sentido. pq nao cabeceia para o gol?"*
+
+        E fazia mesmo: o corte era so a distancia (`raioRemateCabeca`, 11 m do
+        centro da baliza) e nao olhava nem a area nem a marcacao. Fora dos
+        11 m a cabecada ia para `findPassTarget('mid')` — um MEDIO, que esta
+        atras —, e por isso a bola saia da area.
+
+        Medido com `tools/lab/cabeceio_na_area.js`, 400 cabeceios de um
+        atacante SOZINHO em pontos sorteados da grande area:
+
+            distancia ao centro da baliza   cabeceios   iam a baliza
+                 0 a 8 m                        45          100%
+                 8 a 11 m                       65          100%
+                11 a 14 m                       90            0%
+                14 a 18 m                      131            0%
+                18 m ou mais                    69            0%
+
+        Sozinho dentro da area, 28% cabeceavam a baliza. O corte aos 11 m e
+        seco: a marca de penalti esta a 11 m, portanto tudo atras dela era
+        passe.
+
+        OS 11 m FICAM DE PE FORA DA AREA, e e de proposito. Vem de um defeito
+        real (ver `raioRemateCabeca` em config/shooting.js): com 24 m em Z e
+        16 m em X apareciam golos de cabeca de mais de 20 metros, que no
+        futebol quase nao existem. Alargar o raio a seco trazia-os de volta.
+
+        As TRES condicoes sao necessarias juntas: dentro da grande area, com a
+        baliza a frente, e sem marcador a `HeaderModel.raioMarcacao` (2.2 m).
+        Com um defesa colado, escorar continua a ser a decisao certa. O tecto
+        de `raioRemateNaArea` existe porque a esquina da grande area esta a
+        26 m do centro da baliza, e de la nao se cabeceia a baliza.
+        =====================================================================
+        */
+        const raioNaArea = (typeof HeaderModel !== 'undefined' &&
+            typeof HeaderModel.raioRemateNaArea === 'number')
+            ? HeaderModel.raioRemateNaArea : raioRemate;
+        const naGrandeArea = (typeof Area !== 'undefined') &&
+            Math.abs(this.model.position.x) < Area.meiaLargura &&
+            Math.abs(this.targetGoalZ - this.model.position.z) < Area.profundidade;
+        const livreNaArea = naGrandeArea && !marcador && distToGoal < raioNaArea;
+
+        const inShootingRange = viradoParaLa && (distToGoal < raioRemate || livreNaArea);
 
         if (inShootingRange) {
             if (typeof MatchStats !== 'undefined') {
@@ -3409,15 +3470,6 @@ class FootballPlayer {
                 if (MatchStats.marcarRemateEmVoo) MatchStats.marcarRemateEmVoo(this.team);
             }
 
-            // Conectar bem a cabeçada é Técnica x Marcação (marcador mais
-            // perto dele) — base 0.55, favorece quem salta pra bola.
-            const opponentsHead = (this.team === 'TeamA') ? Match.opponents : Match.players;
-            let marcador = null, distMarc = 999;
-            for (const opp of opponentsHead) {
-                if (opp.role === 'gk') continue;
-                const d = opp.model.position.distanceTo(this.model.position);
-                if (d < 2.2 && d < distMarc) { distMarc = d; marcador = opp; }
-            }
             // 1. Calcular AerialScore do atacante
             const aerialAtacante = this.skillFor('TEC') * 0.65 + this.skillFor('STRENGTH') * 0.35;
             

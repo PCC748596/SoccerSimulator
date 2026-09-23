@@ -217,6 +217,45 @@ const FootModel = {
 if (typeof window !== 'undefined') window.FootModel = FootModel;
 
 const CarryModel = {
+    /*
+    =========================================================================
+    ABERTURA DO CORREDOR DE CONDUCAO — quem esta NO CAMINHO, e nao quem se ve
+    =========================================================================
+    O corredor que decide "tenho espaco a frente?" abre `corredor + dz *
+    aberturaCorredor` de meia-largura. Esta abertura e FIXA de proposito.
+
+    Era `Math.tan(coneVisao(tec))` — o cone de VISAO do jogador, que cresce com
+    a tecnica. Medido, a meia-largura do corredor a 10 m de distancia:
+
+        tecnica 50    14.0 m
+        tecnica 70    23.6 m
+        tecnica 80    34.8 m
+
+    O campo tem 34 m de meia-largura. A tecnica 80 o corredor a dez metros
+    COBRIA O CAMPO INTEIRO: qualquer adversario a frente, mesmo encostado a
+    linha lateral oposta, contava como estando no caminho. Com o
+    `espacoLivre` a exigir 16 m limpos la dentro, a conducao em espaco aberto
+    praticamente nunca disparava. Medido em 15 minutos de jogo: ZERO posses de
+    atacante com mais de 10 m de espaco a frente — e quando o espaco existia
+    (3 a 10 m), ele conduzia em 83 a 96% dos casos. A decisao estava boa; o que
+    estava errado era a medida.
+
+    O cone de visao serve para VER (escolher um passe, ler a linha). Para
+    "tenho caminho a frente?" o que interessa e quem esta NO CAMINHO — que e
+    exactamente o criterio do `frenteAFrenteComGk` (utils.js), usado a duas
+    linhas de distancia no mesmo ramo da arvore.
+
+    0.12 sao ~7 graus por lado: com `corredor` 4.0, da 5.2 m de meia-largura a
+    10 m e 5.8 m a 15 m. Um caminho, e nao um sector.
+
+    O ALCANCE continua a depender da visao (`alcanceVisao`): ate ONDE ele ve e
+    uma questao de visao, QUEM esta no caminho nao e.
+
+    Medir o efeito: `node tools/lab/adiantar_a_bola.js 900 1`.
+    =========================================================================
+    */
+    aberturaCorredor: 0.12,
+
     leque: [-1.2, -0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9, 1.2],
     lookAhead: 10.0,      // base de distância (sobrescrita por player.tec * 0.5)
     spaceCap: 16.0,       // espaço acima disto já não conta mais
