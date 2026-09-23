@@ -29,6 +29,7 @@ directório de onde se chama não importa.
 | `diag_inf2.js` | segunda passagem sobre a mesma pergunta do `diag_inf.js` | segundos de jogo (300) |
 | `adiantar_a_bola.js` | posses de atacante no meio-campo adversário: quanto espaço tinha à frente, se entrou em condução e quantos metros progrediu | segundos (600), semente (1) |
 | `cabeceio_na_area.js` | cabeceios dentro da grande área: quantos vão à baliza e quantos saem em passe, por distância | segundos (900), semente (1), nº forçados (400), `--marcado` |
+| `impedimento.js` | impedimentos assinalados: recalcula a Lei 11 com tudo congelado no instante do passe e compara com o que se vê quando o apito chega | segundos (1800), semente (1) |
 | `falta_pelas_costas.js` | faltas de contacto: quem foi marcado infractor e de que lado veio o toque | segundos (1800), semente (1) |
 | `dois_toques.js` | reposições em que o próprio batedor voltou a tocar na bola antes de outro jogador — a regra dos dois toques | segundos (600), semente (1), `--forcar`, `--sem-regra` |
 | `lote_tmp.js` | lote de jogos completos, para estatística sobre várias partidas | nº de jogos (4), duração em segundos (1080) |
@@ -77,3 +78,18 @@ não tinha feito nada — zero posses com espaço, antes e depois.
 Onde a medição precisar de repetir uma conta do jogo, lê a CONSTANTE do jogo
 (aqui, `CarryModel.aberturaCorredor`) em vez de copiar a fórmula. O que
 sobrar de duplicado fica a divergir em silêncio.
+
+## Medir no instante certo
+
+O `impedimento.js` começou a medir a Lei 11 recalculando a linha do penúltimo
+defesa **no momento do apito**, e comparando-a com a posição congelada do
+atacante. Isso não é regra nenhuma: compara o instante de um com o instante dos
+outros. Deu 0 erros, mas por acaso.
+
+Congelada também a linha — como a Lei manda — a medição passou a separar duas
+coisas que estavam misturadas: a decisão (certa em 26 de 26) e o que se vê
+quando o apito chega (35% já não parecem impedidos). Foi essa separação que
+mostrou que o problema era de apresentação e não de regra.
+
+Quando uma medição replica uma regra, tem de replicar também **o instante em
+que a regra é avaliada**.

@@ -715,6 +715,15 @@ const Officials = {
         const bolaDir = Match.ball.position.z * dir;
         const tol = M.tolerancia;
 
+        /*
+        A LINHA DO INSTANTE DO PASSE, guardada em z do MUNDO para a poder
+        desenhar mais tarde. Ver `mostrarLinhaDoPasse`: sem ela a decisao e
+        impossivel de conferir a olho, porque quando o apito chega a defesa ja
+        subiu e o atacante ja recuou.
+        */
+        this._linhaNoPasse = linhaDir * dir;
+        this._dirDoPasse = dir;
+
         this._impedidos = [];
         this._passeParaImpedido = null;
         for (const p of colegas) {
@@ -749,6 +758,84 @@ const Officials = {
             */
             if (destinatario && p === destinatario) this._passeParaImpedido = marca;
         }
+    },
+
+    /*
+    =====================================================================
+    A MARCA DO MOMENTO DO PASSE — o "VAR" do impedimento
+    =====================================================================
+    Relato: *"A marcação de impedimento está errada... o jogador do Grêmio não
+    está à frente do último marcador. O último é o lateral esquerdo lá em cima.
+    Está bem longe dele."*
+
+    A marcação NÃO estava errada. Medido com `tools/lab/impedimento.js`, em
+    seis sementes de 30 minutos, 26 impedimentos assinalados:
+
+        errados pela Lei 11, com tudo congelado no instante do passe      0
+        que, quando o apito chega, ja nao estao a frente da linha         9  (35%)
+
+    A posicao congela-se no passe, como manda a regra, mas o apito so vem
+    quando alguem toca na bola ou ela sai — mediana ~1 s, ate 3.4 s depois.
+    Nesse tempo a defesa sobe e o atacante recua, e o que fica no ecra nao e a
+    situacao que foi julgada. Uma decisao certa parece errada.
+
+    E por isto que o VAR desenha as linhas. Aqui desenham-se duas, no relvado,
+    onde estavam NO INSTANTE DO PASSE:
+
+        a AMARELA   a linha do penultimo adversario
+        a VERMELHA  a linha do atacante que ficou em posicao
+
+    Nao muda regra nenhuma — a decisao ja estava tomada. Torna-a conferivel a
+    olho, que e o que faltava.
+
+    As duas malhas nascem a primeira vez e ficam guardadas: um lance de
+    impedimento por poucos minutos nao justifica criar e destruir geometria.
+    =====================================================================
+    */
+    mostrarLinhaDoPasse: function (marca) {
+        if (!marca || typeof Match === 'undefined' || !Match.scene) return;
+        if (typeof this._linhaNoPasse !== 'number') return;
+        const M = (typeof OffsideModel !== 'undefined') ? OffsideModel : null;
+        const segundos = (M && typeof M.segundosLinhaVar === 'number') ? M.segundosLinhaVar : 4.0;
+        if (segundos <= 0) return;
+
+        if (!this._varLinhas) {
+            const faz = (cor) => {
+                const g = new THREE.PlaneGeometry(CAMPO_LARG, 0.30);
+                const m = new THREE.MeshBasicMaterial({
+                    color: cor, transparent: true, opacity: 0.85,
+                    depthWrite: false, side: THREE.DoubleSide
+                });
+                const malha = new THREE.Mesh(g, m);
+                // Deitada no relvado, e um dedo acima dele para nao brigar
+                // com a relva no teste de profundidade.
+                malha.rotation.x = -Math.PI / 2;
+                malha.position.y = 0.02;
+                malha.visible = false;
+                malha.renderOrder = 3;
+                Match.scene.add(malha);
+                return malha;
+            };
+            this._varLinhas = { defesa: faz(0xffdd00), atacante: faz(0xff3322) };
+        }
+
+        this._varLinhas.defesa.position.z = this._linhaNoPasse;
+        this._varLinhas.atacante.position.z = marca.z;
+        this._varLinhas.defesa.visible = true;
+        this._varLinhas.atacante.visible = true;
+        this._varTimer = segundos;
+    },
+
+    /*
+    Apaga as duas linhas passado o prazo. Chamado do `update`, ao lado do
+    `tickEtiqueta` — que faz o mesmo pela etiqueta da ultima marcacao.
+    */
+    tickLinhaDoPasse: function (dt) {
+        if (!this._varLinhas || !(this._varTimer > 0)) return;
+        this._varTimer -= dt;
+        if (this._varTimer > 0) return;
+        this._varLinhas.defesa.visible = false;
+        this._varLinhas.atacante.visible = false;
     },
 
     limparImpedimento: function () {
@@ -803,6 +890,11 @@ const Officials = {
     */
     assinalarImpedimento: function (marca) {
         if (!marca || typeof Match === 'undefined') return false;
+        /*
+        A MARCA DO VAR, ANTES de limpar: o `limparImpedimento` deita fora a
+        linha do passe, e e dela que o desenho vive.
+        */
+        this.mostrarLinhaDoPasse(marca);
         this.limparImpedimento();
 
         if (typeof MatchStats !== 'undefined' && MatchStats.registarImpedimento) {
@@ -1509,6 +1601,8 @@ const Officials = {
         this.detectarContactos(dt);
         // A etiqueta da ultima marcacao apaga-se sozinha (ver tickEtiqueta).
         this.tickEtiqueta(dt);
+        // E as linhas do momento do passe, quando houve impedimento.
+        this.tickLinhaDoPasse(dt);
 
         if (!this.arbitro || !this._ativo) return;
 

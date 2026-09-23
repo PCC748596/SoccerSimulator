@@ -799,6 +799,16 @@ precisão que isso exigiria.
 =============================================================================
 */
 const OffsideModel = {
+
+    /*
+    QUANTO TEMPO FICAM NO RELVADO as duas linhas do momento do passe (a amarela
+    do penultimo defesa, a vermelha do atacante). Ver
+    `Officials.mostrarLinhaDoPasse`, que tem a medicao do porque de existirem.
+
+    4 s cobrem a paragem e a colocacao da bola para o livre indirecto. A zero
+    desliga o desenho sem mexer em mais nada.
+    */
+    segundosLinhaVar: 4.0,
     activo: true,
     tolerancia: 0.35,
 
