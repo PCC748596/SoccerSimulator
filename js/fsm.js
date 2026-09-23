@@ -1224,6 +1224,12 @@ class PlayerFSM {
                         Match.possessionTimer = 0;
                         Match.lastTouchedTeam = p.team;
                         Match.lastTouchedPlayer = p;
+                        /*
+                        Lei 17: o batedor do canto NAO volta a tocar na bola
+                        antes de outro jogador o fazer. Relato: *"No corner o
+                        batedor saiu jogando. Bateu para ele mesmo."*
+                        */
+                        Match.marcarRepositor(p, 'canto');
 
                         /*
                         O LANCE PASSA A ESTAR VIVO. Enquanto estiver, os

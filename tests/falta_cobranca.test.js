@@ -74,17 +74,51 @@ test('a corrida final é uma corrida, não um teletransporte', () => {
         `${velocidade.toFixed(1)} m/s não é uma corrida, é um passeio`);
 });
 
+/*
+O BLOCO DO `onContact`, apanhado a contar chavetas.
+
+Era `/onContact[\s\S]{0,300}executarFalta/` — uma janela de 300 caracteres a
+seguir ao `onContact`. Bastou acrescentar duas linhas de comentário lá dentro
+para o `executarFalta` cair fora dela e o teste acusar um defeito que não
+existia. Há no ficheiro a nota de que isto já tinha acontecido noutra janela
+deste mesmo teste; ficaram as duas, e só uma foi corrigida.
+
+Uma janela em caracteres mede o tamanho dos comentários, não o código.
+*/
+function blocoOnContact(corpo) {
+    /*
+    `onContact:` COM OS DOIS PONTOS, que é a chave do objecto. Procurar só a
+    palavra apanhava a primeira ocorrência dela, que neste método está dentro
+    de um comentário 960 caracteres antes do código.
+    */
+    const i = corpo.indexOf('onContact:');
+    if (i < 0) return '';
+    const abre = corpo.indexOf('{', i);
+    if (abre < 0) return '';
+    let nivel = 0;
+    for (let k = abre; k < corpo.length; k++) {
+        if (corpo[k] === '{') nivel++;
+        else if (corpo[k] === '}') { nivel--; if (nivel === 0) return corpo.slice(i, k + 1); }
+    }
+    return corpo.slice(i);
+}
+
 test('a bola só parte no CONTACTO, e o jogo só abre aí', () => {
     const ini = srcPlayer.indexOf('baterFalta() {');
     assert.ok(ini > 0, 'baterFalta não encontrado');
-    const corpo = srcPlayer.slice(ini, ini + 3000);
+    // Até ao método seguinte, e não por um número de caracteres.
+    const fim = srcPlayer.indexOf('executarFalta(decisao) {', ini);
+    const corpo = srcPlayer.slice(ini, fim > 0 ? fim : ini + 3000);
 
     assert.ok(corpo.includes('new ActionState('),
         'o baterFalta não cria gesto nenhum — voltou a executar no mesmo frame');
     assert.ok(corpo.includes('onPrepare'), 'sem onPrepare não há corrida');
-    assert.ok(/onContact[\s\S]{0,200}(Match\.state = 'PLAY'|Match\.mudarEstado\('PLAY')/.test(corpo),
+
+    const contacto = blocoOnContact(corpo);
+    assert.ok(contacto, 'o baterFalta ficou sem onContact');
+    assert.ok(/Match\.state = 'PLAY'|Match\.mudarEstado\('PLAY'/.test(contacto),
         "o jogo tem de abrir no CONTACTO: `Match.state = 'PLAY'` ou `Match.mudarEstado('PLAY')` dentro do onContact");
-    assert.ok(/onContact[\s\S]{0,300}executarFalta/.test(corpo),
+    assert.ok(/executarFalta/.test(contacto),
         'o contacto não chama o executarFalta');
 
     // E a decisão continua a ser as três: tocar, cruzar ou rematar.

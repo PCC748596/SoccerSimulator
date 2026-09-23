@@ -64,9 +64,23 @@ test('o setup emparelha cada marcador com o seu homem', () => {
         'um canto novo herda os pares do anterior se ninguém os limpar');
 });
 
+/*
+Corta um `case` do switch da FSM até ao `case` seguinte, e não por um número
+de caracteres. Era `slice(ini, ini + 7000)`, e bastou acrescentar um comentário
+ao ramo para o `cantoVivo` cair fora da janela e o teste passar a acusar um
+defeito que não existia. Um limite em caracteres mede o tamanho do comentário,
+não o código.
+*/
+function ramoDoCase(src, nome) {
+    const ini = src.indexOf("case '" + nome + "':");
+    if (ini < 0) throw new Error("case '" + nome + "' não encontrado na fsm.js");
+    const LF = String.fromCharCode(10);
+    const seguinte = src.indexOf(LF + '            case ', ini + 1);
+    return src.slice(ini, seguinte > 0 ? seguinte : src.length);
+}
+
 test('a batida marca o lance como vivo em vez de largar toda a gente', () => {
-    const ini = srcFsm.indexOf("case 'SET_PIECE_TAKER':");
-    const ramo = srcFsm.slice(ini, ini + 7000);
+    const ramo = ramoDoCase(srcFsm, 'SET_PIECE_TAKER');
     assert.ok(/Match\.cantoVivo = \{/.test(ramo),
         'a batida voltou a largar os marcadores: o bloco retoma o comando e a área esvazia-se');
 });

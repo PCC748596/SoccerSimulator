@@ -1156,21 +1156,22 @@ altura para recolher nada.
 const GkLowClip = {
     contactFrame: 2,
     frames: [
-        // GK_Low(1) — impulso baixo: agacha, o tronco já vai à frente e os
-        // braços partem de baixo, à frente do corpo.
-        { chest: 0.30, coxaL: -0.35, joelhoL: 0.95, coxaR: -0.20, joelhoR: 0.75,
-          bracoLx: -0.95, bracoLz: 0.55, bracoRx: -0.95, bracoRz: -0.55,
-          cotoveloL: -0.55, cotoveloR: -0.55, altura: 0.00 },
-        // GK_Low(2) — CONTACTO: corpo esticado rente ao chão, os dois braços
-        // à frente, cotovelos quase direitos. É a fotografia da mão na bola.
-        { chest: 0.18, coxaL: -0.55, joelhoL: 0.55, coxaR: -0.45, joelhoR: 0.40,
-          bracoLx: -1.45, bracoLz: 0.30, bracoRx: -1.45, bracoRz: -0.30,
-          cotoveloL: -0.12, cotoveloR: -0.12, altura: 0.00 },
-        // GK_Low(3) — chegada: o corpo assenta de lado, os braços fecham
-        // sobre a bola e as pernas dobram atrás.
-        { chest: 0.35, coxaL: -0.30, joelhoL: 1.10, coxaR: -0.25, joelhoR: 0.95,
-          bracoLx: -1.25, bracoLz: 0.20, bracoRx: -1.25, bracoRz: -0.20,
-          cotoveloL: -0.45, cotoveloR: -0.45, altura: 0.00 }
+        // GK_Low(1) — comeca a descer: o tronco ja vai a frente e os bracos
+        // partem de baixo. Cabeca a 1.34 m.
+        { chest: 0.45, coxaL: 0.15, joelhoL: 0.55, coxaR: -0.65, joelhoR: 0.70, bracoLx: -1.00, bracoLz: 0.50, bracoRx: -1.00, bracoRz: -0.50, cotoveloL: -0.60, cotoveloR: -0.60, cabecaX: -0.25, altura: -0.06 },
+        // GK_Low(2) — CONTACTO: ja quase ajoelhado (cabeca a 1.10 m), os dois
+        // bracos a frente e os cotovelos a abrir. E a fotografia da mao na bola.
+        { chest: 0.75, coxaL: 0.26, joelhoL: 0.90, coxaR: -1.05, joelhoR: 1.05, bracoLx: -1.35, bracoLz: 0.32, bracoRx: -1.35, bracoRz: -0.32, cotoveloL: -0.30, cotoveloR: -0.30, cabecaX: -0.35, altura: -0.21 },
+        // GK_Low(3) — CHEGADA, a posicao que as fotografias mostram. Medido no
+        // rig, em graus COM O RELVADO (0 = deitado, 90 = a prumo):
+        //
+        //     coxa do lado da bola        69   (canela deitada, a  0)
+        //     coxa da outra perna         14   (canela a prumo,  a 89)
+        //     cabeca a 0.84 m, contra 1.45 m de pe
+        //
+        // O joelho e a canela de um lado no relvado, o pe do outro plantado, e
+        // o corpo curvado por cima da bola.
+        { chest: 0.95, coxaL: 0.35, joelhoL: 1.22, coxaR: -1.33, joelhoR: 1.33, bracoLx: -1.30, bracoLz: 0.25, bracoRx: -1.30, bracoRz: -0.25, cotoveloL: -1.10, cotoveloR: -1.10, cabecaX: -0.40, altura: -0.39 }
     ]
 };
 

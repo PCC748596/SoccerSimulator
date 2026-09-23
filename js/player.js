@@ -1009,6 +1009,8 @@ class FootballPlayer {
         Match.lastTouchedTeam = this.team;
         Match.lastTouchedPlayer = this;
         Match.mudarEstado('PLAY', 'throw_in_taken');
+        // Lei 15: quem repõe não volta a tocar antes de outro. Ver `repositor`.
+        Match.marcarRepositor(this, 'lateral');
         if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'passe');
         if (typeof EventBus !== 'undefined') EventBus.emit('THROW_IN_TAKEN', { team: this.team, p: this });
     }
@@ -1171,6 +1173,8 @@ class FootballPlayer {
             },
             onContact: () => {
                 Match.mudarEstado('PLAY', 'free_kick_taken');
+                // Lei 13: quem bate não volta a tocar antes de outro.
+                Match.marcarRepositor(this, 'falta');
                 this.executarFalta(decisao);
             }
         });
@@ -1572,6 +1576,8 @@ class FootballPlayer {
             onContact: () => {
                 const PM = PenaltyModel;
                 Match.mudarEstado('PLAY', 'penalty_taken');
+                // Lei 14: o batedor não volta a tocar antes de outro.
+                Match.marcarRepositor(this, 'penalti');
 
                 // Oponentes e GK
                 const defendingPlayers = (this.team === 'TeamA') ? Match.opponents : Match.players;
@@ -8012,6 +8018,8 @@ class FootballPlayer {
 
         // A jogada recomeça no instante do toque.
         Match.mudarEstado('PLAY', 'goal_kick_taken');
+        // Lei 16: quem bate não volta a tocar antes de outro.
+        Match.marcarRepositor(this, 'tiro_de_meta');
         this.gkKickTipo = null;
 
         if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'lancamento');

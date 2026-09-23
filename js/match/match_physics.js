@@ -545,7 +545,14 @@ Object.assign(Match, {
             ao lado enquanto este ramo as puxava.
             */
             if (gk.gkEstado === 'mergulho' && gk.dive) continue;
-            
+
+            /*
+            E O GUARDA-REDES TAMBEM CUMPRE OS DOIS TOQUES: bateu o tiro de
+            meta, nao pode ser ele a recolher a propria bola. Ver
+            `Match.repositor` (match_state.js).
+            */
+            if (this.repositor === gk) continue;
+
             // CCD
             let d;
             if (this.prevBallPos) {
@@ -649,6 +656,17 @@ Object.assign(Match, {
         let bestAltura = 0;
         const considerar = (p) => {
             if (p.touchLock > 0) return;
+            /*
+            A REGRA DOS DOIS TOQUES: quem repos a bola nao lhe volta a tocar
+            antes de outro jogador o fazer. Ver `Match.repositor`
+            (match_state.js), que diz de onde vem a marca e porque existe.
+
+            E AQUI que tem de estar a garantia, e nao so no Behaviour Tree: o
+            BT decide para onde ele CORRE, mas a disputa da bola e ganha por
+            quem tem o corpo mais perto, e um batedor parado na bandeirola com
+            a bola a cair-lhe em cima ganhava-a sem sequer a ir buscar.
+            */
+            if (this.repositor === p) return;
             if (p.jumpTimer > 0 && p.hasHeaderedInJump) return;
             if (this.lastHeaderPlayer === p && this.aerialHeaderTimer > 0) return;
             if (this.lastHeaderPlayer && this.aerialHeaderTimer > (HeaderModel.cooldownDisputa - 0.35)) return;
@@ -682,6 +700,13 @@ Object.assign(Match, {
         this.opponents.forEach(considerar);
 
         if (!best || bestDist > BallControl.reach) return false;
+
+        /*
+        TOCOU OUTRO: a marca dos dois toques morre aqui. O `considerar` acima
+        ja garantiu que o `best` nunca e o repositor, portanto chegar a este
+        ponto e a prova de que a bola passou por outro jogador.
+        */
+        if (this.repositor) this.libertarRepositor();
 
         /*
         O ADVERSÁRIO QUE VEM POR TRÁS NÃO LEVA A BOLA — ver

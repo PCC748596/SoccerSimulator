@@ -27,6 +27,7 @@ directório de onde se chama não importa.
 | `infil_lanc.js` | infiltrações que receberam bola: conta cada arranque de `RUN_INTO_SPACE` e vê se aquele jogador chegou a ser destinatário de um passe e a tocar na bola | segundos de jogo |
 | `diag_inf.js` | porque é que o ramo do passe para quem infiltra quase nunca dispara | segundos de jogo (300) |
 | `diag_inf2.js` | segunda passagem sobre a mesma pergunta do `diag_inf.js` | segundos de jogo (300) |
+| `dois_toques.js` | reposições em que o próprio batedor voltou a tocar na bola antes de outro jogador — a regra dos dois toques | segundos (600), semente (1), `--forcar`, `--sem-regra` |
 | `lote_tmp.js` | lote de jogos completos, para estatística sobre várias partidas | nº de jogos (4), duração em segundos (1080) |
 
 ## Cuidado com a leitura
@@ -37,3 +38,27 @@ usado com semente fixa por essa razão — ver o cabeçalho de
 [`tests/gk_varre_o_trajecto.test.js`](../../tests/gk_varre_o_trajecto.test.js),
 que traz três sementes de 300 remates lado a lado. Uma diferença só conta
 quando sobrevive a mudar a semente.
+
+## Quando o defeito não aparece sozinho
+
+O `dois_toques.js` tem um modo `--forcar` que vale a pena conhecer, porque o
+problema que resolve é geral: **um defeito relatado pode ser raro de mais para
+aparecer numa simulação**.
+
+O segundo toque do batedor foi relatado de um jogo a sério, mas em 30 minutos
+de jogo simulado e 75 reposições não apareceu uma única vez — é preciso que a
+bola volte ao pé de quem a repôs, e isso não acontece de encomenda. Medir jogo
+livre dava zero antes e zero depois da correcção, o que não prova nada.
+
+Com `--forcar`, a bola é posta em cima do batedor meio segundo depois de ele a
+repor. A condição passa a existir sempre, e aí a diferença mede-se:
+
+```
+300 s, semente 1        reposicoes   com 2o toque
+  antes da correccao        14             10
+  depois da correccao       10              0
+```
+
+A lição: quando a medição em jogo livre dá o mesmo antes e depois, o problema
+costuma ser a **frequência do cenário**, não a ausência do defeito. Criar a
+condição vale mais do que correr mais horas à espera dela.

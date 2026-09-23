@@ -1,18 +1,18 @@
 /*
-12 SEGUNDOS a 60 fps, e é isso que dura uma repeticao.
+O BUFFER TEM DE SER MAIOR QUE A REPETICAO, e e por isso que sao 20 s para uma
+repeticao de 12.
 
-Eram 20 s de buffer com a repeticao do golo a mostrar 16 (15 antes da bola
-entrar mais 1 depois). Pedido: *"Ajusta o Replay para 12segundos."*
+A repeticao do golo mostra `SEGUNDOS_ANTES` ANTES da bola entrar, mas so
+ARRANCA uns segundos depois disso — o `replayDoGolo` e chamado com a festa do
+golo ja a decorrer. Nesse intervalo o gravador continua a escrever, e escreve
+POR CIMA do mais antigo. Um buffer do tamanho exacto da repeticao perdia
+justamente o principio dela: encolhi-o para 720 (12 s) e a repeticao passou a
+durar 3.5 s, porque quando arrancava ja so existiam os frames de depois.
 
-Encolher AQUI chega para as duas repeticoes, e e por isso que se mexe aqui e
-nao so no REPLAY_GOLO: a repeticao manual (o botao) corre o buffer inteiro, a
-do golo recorta uma janela dentro dele. Com o buffer a 12 s as duas passam a
-durar o mesmo.
-
-Custa 1236 floats por frame (FLOATS_PER_FRAME), portanto o buffer passa de
-5.9 MB para 3.6 MB.
+A folga tem de cobrir o atraso do arranque. 20 s de buffer para 12 s de
+repeticao deixam 8 s, que chegam de sobra.
 */
-const REPLAY_FRAMES = 720; // 12s a 60fps
+const REPLAY_FRAMES = 1200; // 20s a 60fps — o buffer; a repeticao sao 12 s
 const FLOATS_PER_PLAYER = 49;
 
 /*
@@ -53,9 +53,10 @@ automatico terminar, caso esteja ligado"*.
 
 Tres numeros e nada mais:
 
-  `SEGUNDOS_ANTES`  quanto do lance se ve antes da bola entrar. Cabe no
-                    buffer, que guarda 12 s (REPLAY_FRAMES) — e a soma com o
-                    `SEGUNDOS_DEPOIS` tem de caber la dentro.
+  `SEGUNDOS_ANTES`  quanto do lance se ve antes da bola entrar. A soma com o
+                    `SEGUNDOS_DEPOIS` e quanto dura a repeticao — 12 s, pedido:
+                    *"Ajusta o Replay para 12segundos."* Tem de caber no
+                    buffer COM FOLGA para o atraso do arranque (ver acima).
   `SEGUNDOS_DEPOIS` e quanto se ve DEPOIS: sem isto a repeticao acabava no
                     frame exacto em que a bola passa a linha, que e o unico
                     frame que ninguem quer perder.

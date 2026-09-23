@@ -97,6 +97,23 @@ const Match = {
     chaserA: null, chaserB: null,
     possessionTeam: null, possessionTimer: 0,
     lastTouchedTeam: 'TeamA', lastTouchedPlayer: null,
+    /*
+    QUEM REPÔS A BOLA, e não lhe pode voltar a tocar antes de outro jogador o
+    fazer. É a regra dos dois toques, que vale para o canto, o lateral, a
+    falta, o penálti e o tiro de meta.
+
+    Relato: *"No corner o batedor saiu jogando. Bateu para ele mesmo."* E
+    podia: nada no jogo o impedia. Ele batia o canto e, sendo muitas vezes o
+    mais perto da bola quando ela caía curta, ganhava a disputa do
+    `resolveBallContact` como qualquer outro e saía a conduzir.
+
+    Guardado aqui e não num campo do jogador porque quem o lê são a física (a
+    disputa da bola) e o Behaviour Tree (para não o mandar persegui-la), e os
+    dois já falam com o `Match`.
+
+    `repositorLance` é só para diagnóstico e para as mensagens de teste.
+    */
+    repositor: null, repositorLance: null,
     setPieceTaker: null, setPieceTimer: 0,
     // Tiro de meta: espera 3-6s depois de todos posicionados (ver
     // updateGoalKickWait / setupSetPiece).
@@ -137,9 +154,37 @@ const Match = {
     Garante limpeza canónica em transições (limpar timers, flags pendentes de
     bola parada, etc.) e emite evento 'MATCH_STATE_CHANGE' no EventBus.
     */
+    /*
+    A REGRA DOS DOIS TOQUES. `p` acabou de repor a bola em jogo e fica marcado
+    até outro jogador lhe tocar — ver o campo `repositor`.
+    */
+    marcarRepositor: function (p, lance) {
+        this.repositor = p || null;
+        this.repositorLance = p ? (lance || '') : null;
+    },
+
+    /*
+    Alguem que NAO o repositor tocou na bola: o lance seguiu e ele volta a
+    poder joga-la. Chamado pela disputa da bola (`resolveBallContact`) e por
+    qualquer fim de lance.
+    */
+    libertarRepositor: function () {
+        this.repositor = null;
+        this.repositorLance = null;
+    },
+
     mudarEstado: function (novo, motivo = '') {
         const anterior = this.state;
         this.state = novo;
+
+        /*
+        UM LANCE NOVO LIMPA A MARCA DO ANTERIOR. Sem isto, um batedor que
+        repusesse e visse a bola sair logo para outra reposicao ficava marcado
+        para sempre — nunca mais lhe tocava. Entrar num estado de bola parada e
+        o fim de qualquer lance apagam a marca; e o PLAY das reposicoes volta a
+        pô-la logo a seguir, no proprio batedor (ver `marcarRepositor`).
+        */
+        if (novo !== 'PLAY') this.libertarRepositor();
 
         if (novo === 'PLAY') {
             this.setPieceTaker = null;

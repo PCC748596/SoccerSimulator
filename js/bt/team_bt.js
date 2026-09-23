@@ -477,6 +477,7 @@ function pickChaser(bb) {
     }
 
     if (Match.intendedReceiver && Match.intendedReceiver.team === bb.team &&
+        Match.intendedReceiver !== Match.repositor &&
         bb.outfield.indexOf(Match.intendedReceiver) !== -1) {
         if (typeof MatchStats !== 'undefined' && bb.chaser &&
             bb.chaser !== Match.intendedReceiver) {
@@ -528,7 +529,25 @@ function pickChaser(bb) {
 
     const prevChaser = bb.chaser;
 
-    const candidatos = bb.outfield.map(p => {
+    /*
+    QUEM REPOS A BOLA NAO A VAI PERSEGUIR — regra dos dois toques, ver
+    `Match.repositor` (match_state.js).
+
+    A garantia de que ele nao LHE TOCA esta na fisica; esta aqui e para ele
+    nao correr atras dela em vao. Sem isto, o batedor de um canto curto ficava
+    eleito perseguidor (e o mais perto da bola por larga margem, acabou de a
+    por la), corria ate cima dela e ficava colado sem a poder jogar — o que se
+    ve e pior do que o defeito original.
+    */
+    const elegiveis = (typeof Match !== 'undefined' && Match.repositor)
+        ? bb.outfield.filter(p => p !== Match.repositor)
+        : bb.outfield;
+
+    if (prevChaser && typeof Match !== 'undefined' && Match.repositor === prevChaser) {
+        bb.chaser = null;
+    }
+
+    const candidatos = elegiveis.map(p => {
         let score;
         if (bolaSolta && typeof Perception !== 'undefined' && p.blackboard) {
             score = Perception.claimScore(p);
@@ -544,6 +563,8 @@ function pickChaser(bb) {
         return { p, score };
     });
     candidatos.sort((a, b) => b.score - a.score);
+
+    if (!candidatos.length) { bb.chaser = null; return; }
 
     const prevIdx = prevChaser ? candidatos.findIndex(c => c.p === prevChaser) : -1;
     if (prevIdx === 0 || (prevIdx === 1 && (candidatos[0].score - candidatos[prevIdx].score < 4.0))) {
