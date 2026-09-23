@@ -29,6 +29,8 @@ directório de onde se chama não importa.
 | `diag_inf2.js` | segunda passagem sobre a mesma pergunta do `diag_inf.js` | segundos de jogo (300) |
 | `adiantar_a_bola.js` | posses de atacante no meio-campo adversário: quanto espaço tinha à frente, se entrou em condução e quantos metros progrediu | segundos (600), semente (1) |
 | `cabeceio_na_area.js` | cabeceios dentro da grande área: quantos vão à baliza e quantos saem em passe, por distância | segundos (900), semente (1), nº forçados (400), `--marcado` |
+| `roubo_angulo.js` | de que ângulo se rouba a bola, e por que caminho do código a posse muda de dono | segundos (900), semente (1) |
+| `alturas.js` | distribuição das alturas dos jogadores: média realizada, extremos e quantos ficam **colados** aos limites do clamp | min, max, média, sigma, factor (tudo opcional) |
 | `impedimento.js` | impedimentos assinalados: recalcula a Lei 11 com tudo congelado no instante do passe e compara com o que se vê quando o apito chega | segundos (1800), semente (1) |
 | `falta_pelas_costas.js` | faltas de contacto: quem foi marcado infractor e de que lado veio o toque | segundos (1800), semente (1) |
 | `dois_toques.js` | reposições em que o próprio batedor voltou a tocar na bola antes de outro jogador — a regra dos dois toques | segundos (600), semente (1), `--forcar`, `--sem-regra` |
@@ -93,3 +95,18 @@ mostrou que o problema era de apresentação e não de regra.
 
 Quando uma medição replica uma regra, tem de replicar também **o instante em
 que a regra é avaliada**.
+
+## Quando o defeito não está onde a guarda está
+
+O `roubo_angulo.js` mediu 29% de roubos fora do ângulo permitido, apertaram-se
+os limites, e a medição deu **31%** — pior. A guarda estava certa; estava é num
+dos **três** caminhos que tiram a bola a alguém. Os dois desarmes da FSM
+resolvem o roubo à mão e nunca passam pela disputa onde a guarda vivia.
+
+O que o descobriu foi instrumentar a própria variável (`Object.defineProperty`
+sobre `Match.lastTouchedPlayer`, a gravar a linha do `stack` em cada mudança de
+dono) e contar por sítio do código. Em segundos ficou claro que 14 de 22 casos
+vinham de linhas que a guarda nunca via.
+
+Quando uma correcção não mexe no número, vale mais perguntar **por onde passa o
+caso** do que voltar a mexer no limiar.

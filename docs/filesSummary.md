@@ -5,6 +5,231 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Setembro 2026)
 
+### Sessão de 22-23 de Setembro de 2026 — o tiro de meta traçado das fotografias, a regra dos dois toques, e três defeitos que estavam onde a guarda não estava
+
+#### `GoalKickClip` (js/config/animations.js) — o tiro de meta ganha gesto próprio, e um método para o afinar
+
+Pedido: *"Temos que melhorar nossas animações. Primeiro o tiro de meta: 4 frames... Usa as imagens como blueprint para as referências de articulações."*
+
+O `PlayerKickClip` servia os três lances de bola parada. Afinar o tiro de meta mexia na falta e no penálti, e os três não são o mesmo gesto. O `GoalKickClip` é agora clip próprio, com `ActionAnimClips.goalKick`, `aplicarPoseGoalKick` e `amostrarClipGoalKick`; a falta e o penálti ficam onde estavam.
+
+- **AS TRÊS PRIMEIRAS VERSÕES ESTAVAM ERRADAS, E FICA REGISTADO PORQUÊ.** Todas escritas a adivinhar a pose a partir das imagens e a validá-la com números que não mostram o que se vê: uma pôs o jogador a **flutuar 0.646 m no ar**, outra deitou-o **de bruços a 77 graus**, a terceira deixou o frame do contacto com as pernas **a 22 graus** uma da outra — um homem parado. Relato: *"Vc não consegue identificar os frames corretamente."*
+- **O QUE FALTAVA NÃO ERA MEDIR MAIS, ERA OLHAR.** `tools/anim/` guarda as três ferramentas do método: `img.js` (lê e escreve PNG sem dependências, amplia e desenha uma grelha de coordenadas), `esqueleto.js` (traça o esqueleto sobre a fotografia — linhas rectas por segmento e um círculo em cada junção — e imprime os ângulos) e `render.js` (desenha o boneco do jogo em PNG, de lado e de costas, **sem WebGL**). O ciclo fecha-se sem pedir capturas de ecrã: traça-se a imagem, lê-se o ângulo, desenha-se o resultado e compara-se.
+- **Regra 1 — nenhum pé entra no relvado, e o mais baixo assenta nele.** O `altura` de cada frame **não se escolhe: resolve-se** a partir dos ângulos, porque desloca o corpo 1:1 em y e as pernas já mudaram a distância da anca ao pé. A regra era "assenta o pé de APOIO", com uma excepção à mão para o contacto; a excepção tratava do contacto e deixava passar o inverso — no principal 1 o pé de CHUTE ficou **0.135 m dentro do relvado**. O mínimo dos dois não precisa de saber qual é qual.
+- **Regra 2 — o ângulo do tronco é `pitchX` + `chest`, em radianos.** Os dois canais somam-se: 0.55 + 0.80 = 1.35 rad = **77 graus**, que é um jogador deitado. O erro de método foi validar a POSIÇÃO da cabeça (0.99 m de altura, 0.43 m à frente da anca) e dar por bom — a cabeça anda num arco, e essas duas coordenadas são igualmente compatíveis com agachado e com deitado. O que distingue é o ângulo, e não estava a ser medido.
+- **Regra 3 — a dobra vai no `pitchX`, não no `chest`, por causa da COSTURA.** Com o tronco a 30 graus, `pitchX` 0.34 + `chest` 0.18 abre a costura da camisa **0.012 m**; `pitchX` 0.12 + `chest` 0.40, o mesmo ângulo de tronco, abre **0.079 m**. O `pitchX` roda a ANCA, que leva camisa e calção juntos; o `chest` roda só o tronco, e é ali que a costura abre. O preço é que o `pitchX` leva as pernas atrás dele, e paga-se recuando as coxas o mesmo tanto.
+- **Regra 4 — no contacto as pernas abrem 83 graus.** É a medida que diz se o frame do contacto é um chute ou um homem parado. As três regras de cima impedem poses impossíveis; só esta mede o GESTO.
+- **A ORDEM DAS IMAGENS FOI TROCADA POR MIM, E A CONTA QUE A TROCOU NÃO VALE NADA.** Comparei a distância do jogador à bola **em píxeis** — ~50 px numa imagem, ~85 px na outra — e concluí que a mais longe vinha primeiro. As imagens têm **zooms diferentes** (uma tem 153 px de largura e a outra 199): distâncias em píxeis só se comparam DENTRO da mesma imagem.
+- **Duas armadilhas de leitura, as duas já custaram uma versão.** (a) **A vista muda de imagem para imagem** — em três delas o jogador vai para a esquerda, na outra está de costas; um braço estendido para o lado da imagem é `bracoLx` numa vista de lado e `bracoLz` numa de costas, canais diferentes e poses diferentes. (b) **Qual das duas pernas é a de chute não se adivinha pela bola**: há uma perna junto à bola e outra no ar atrás, e tomei a primeira pela que vai BATER. É o contrário — a que se planta AO LADO da bola é a de APOIO. Esse engano pôs a pose do MEIO no fim do gesto.
+- **Treze keyframes, quatro deles principais** (1, 5, 9 e 13, um por imagem). Os nove do meio têm os ÂNGULOS interpolados, mas o `altura` de cada um é **resolvido à parte**: com o passo do principal 1 para o 5 o corpo desce 0.38 m, e a linha recta entre os dois enterrava o pé de apoio **0.104 m** no relvado a meio caminho. Resolvido keyframe a keyframe, o pé fica entre -0.007 e +0.015 m do chão no gesto inteiro.
+- **É um passo, e o pé de apoio fica ao lado da bola** — pedido explícito. O `avanco` traduz isso: 0.00 no principal 1 e **1.00 nos principais 5, 9 e 13**. É também o que obriga a coxa de apoio a nunca mais ficar atrás da anca depois do principal 5: o pé está cravado, e o corpo é que passa por cima dele.
+- Teste: `tests/anim_editor_export.test.js` (o clip entrou na lista; 50 comentários preservados na exportação). Ferramentas e método: `tools/anim/README.md`.
+
+#### O tronco rodava a meio de si próprio (js/pose.js) — a costura que abria em TODAS as animações
+
+Relato: *"No editor o corpo está descolado das pernas."*
+
+`rig.chest` era a própria malha do tronco, com o pivô a meio dela (y 1.025 no espaço da anca) e a bainha da camisa em 0.275 — **0.245 m de braço de alavanca**. Inclinar o tronco levantava e empurrava a própria costura:
+
+| `chest` | buraco nas costas |
+|---|---|
+| 0.00 | fecha (sobrepõe 8 mm) |
+| 0.20 | 0.057 m |
+| 0.40 | **0.110 m** |
+| 0.80 | **0.216 m** |
+
+- **Não era de um clip: era de todos.** O tiro de meta abria 0.135 m, o `PlayerKickClip` 0.121 m, e o mesmo valia para a corrida, o remate, as defesas e o árbitro.
+- **Um nó de cintura novo** em y 0.275, com a malha do tronco pendurada nele 0.75 acima: com rotação zero fica em 0.275 + 0.75 = 1.025, que é onde sempre esteve, portanto **a pose neutra não mexe um milímetro**. Quem adiciona filhos ao tronco continua a adicioná-los à MALHA, e os offsets do pescoço, da casca e dos braços não mudam.
+- **Um efeito a conhecer:** `rig.chest.matrixWorld` passa a ter origem na cintura. O único sítio que o lê é o `gk_dive.js`, para projectar o alvo das mãos para o plano à frente do peito; com o tronco inclinado `a`, esse plano desloca-se `0.245·sin(a)` metros. É um limite de segurança, não uma pose.
+
+#### O amostrador deitava fora as rotações das mãos e dos pés (js/pose.js)
+
+As edições feitas no editor de animação — rodar uma mão ou um pé no gizmo — eram gravadas no keyframe e **desapareciam a caminho do rig**: o `aplicarPesECabeca` já sabia escrever `maoLx/y/z`, `maoRx/y/z`, `peLy`, `peRy` e `cabecaY`, mas o amostrador devolvia uma lista fixa de canais que não os incluía. Via-se no editor e não existia no jogo.
+
+- **`mixOpc` devolve `undefined` quando NENHUM dos dois keyframes vizinhos traz o canal**, e é essa a parte que interessa: o `aplicarPesECabeca` distingue `undefined` de zero e, no primeiro caso, deixa o osso como está. Devolver zero era escrever zero por cima do REPOUSO — e o repouso do `peLy` **não é zero**: os pés nascem virados para fora (`peG.rotation.y = ±π/16 = 0.196`). Um clip que não falasse dos pés passaria a endireitá-los sem o pedir.
+- É também o que deixa o `PlayerKickClip`, que não traz nenhum destes canais, a comportar-se exactamente como antes.
+- **Postos nos TREZE keyframes de propósito**: postos só num, o pé e o pulso voltavam ao repouso a meio do gesto e viam-se a rodar sozinhos.
+
+#### O replay (js/match/match_replay.js, js/goal_net.js) — a bola não rolava e a rede não balançava
+
+Relato: *"No replay a bola não está rolando e a rede não balança."* Dois defeitos diferentes.
+
+- **A BOLA: o replay gravava o quaternião do objecto errado.** Quem a faz rolar é o `MatchPhysics`, que escreve em `Match.ballVisual.quaternion` — a **malha**. O replay gravava e repunha `Match.ball.quaternion`, o **nó de posição**, em cuja rotação ninguém toca em todo o jogo: quatro números sempre iguais a (0,0,0,1). A malha ficava congelada na rotação em que o último frame ao vivo a deixou.
+- **A REDE: o `NetWave.update` e o `NetWave.bater` vivem dentro do `Match.update`**, que não corre durante a repetição — é disso que a repetição vive. A rede ficava imóvel na deformação em que o jogo a deixou, enquanto a bola entrava outra vez à frente dela.
+- O `update` da rede partiu-se em duas partes: **`aplicar()` desenha o estado actual, `update(dt)` avança o relógio e chama o `aplicar()`**. `estado()` e `repor()` são novos, e o buffer do replay ganhou **quatro floats por frame** — `t` e `amplitude` por baliza, porque todas as faces da mesma baliza partilham os dois (é o `bater` que os põe iguais).
+- **Reposto e não re-simulado, de propósito:** o replay repõe o que ACONTECEU, como já faz com a bola e os 25 corpos. Mandar o `update` correr por baixo dava uma onda parecida mas desalinhada do instante em que a bola toca a rede.
+- **Os 4 floats vão no FIM do frame**: acrescentados à cabeça mudavam o offset de tudo o que já lá estava, e este buffer é lido e escrito por índice à mão.
+- **A repetição passou a durar 12 s** (pedido), com `SEGUNDOS_ANTES: 11.0` mais 1 s depois. **Encolher o buffer junto estava errado, e o teste apanhou-o**: a repetição mostra 11 s *antes* do golo mas só arranca uns segundos depois, com a festa a decorrer; nesse intervalo o gravador escreve por cima do mais antigo. Com o buffer do tamanho exacto da repetição, ela perdia o princípio e **durava 3.5 s**. O buffer fica nos 20 s, que deixam 8 s de folga para o atraso do arranque.
+- Teste: `tests/replay_bola_e_rede.test.js`. O buffer é um `Float32Array` lido por índice, com um `pIdx++` por valor — **um valor a mais ou a menos não dá erro nenhum**: desalinha tudo o que vem a seguir. O teste conta as escritas e as leituras e confirma que batem com o `FLOATS_PER_FRAME`, e cobre o caso que mais falha: a onda a acabar ENTRE dois frames, que congelava a rede na última deformação.
+- O `tests/replay_golo.test.js` tinha o `1200` e os `15 s` **copiados à mão**, com o comentário *"tem de bater certo com o módulo"*. Divergiram assim que se mexeu. Passou a **ler as constantes** do `match_replay.js`, e o frame do golo usado nos casos deixou de ser `900` fixo para ser derivado.
+
+#### A regra dos dois toques (js/match/match_state.js e mais quatro) — quem repõe não volta a tocar
+
+Relato: *"BUG: No corner o batedor saiu jogando. Bateu para ele mesmo. Isso Não é permitido."*
+
+E podia: nada no jogo o impedia. A disputa do `resolveBallContact` é ganha por proximidade e mais nada, e o batedor de um canto curto é justamente quem está mais perto quando a bola lhe cai ao pé.
+
+- **`Match.repositor`**, marcado nas **cinco** reposições com batedor (canto, lateral, falta, penálti, tiro de meta). Um lance novo limpa a marca — sem isso, um batedor que repusesse e visse a bola sair logo para outra reposição ficava impedido **para o resto do jogo**.
+- **Três camadas, porque falham por razões diferentes.** (a) O `resolveBallContact` salta o repositor: é a garantia dura, e cobre também o ramo do guarda-redes, que é quem bate o tiro de meta. (b) Quando outro toca, a marca morre ali. (c) O `elegeChaser` não o elege perseguidor — sem isto ele corria atrás da bola e ficava colado a ela sem a poder jogar, **o que se vê pior do que o defeito original**. Tapou-se também o atalho do `intendedReceiver`, que salta a eleição toda.
+- **O defeito é raro de mais para aparecer numa simulação, e isso é informação.** Em 30 minutos de jogo e 75 reposições não aparece uma única vez — nem antes nem depois. Medir jogo livre não provava nada. O `tools/lab/dois_toques.js --forcar` **cria a condição** em vez de esperar por ela (põe a bola em cima do batedor meio segundo depois de ele a repor):
+
+| 300 s, semente 1 | reposições | com 2.º toque |
+|---|---|---|
+| antes | 14 | **10** (2 de 2 cantos, 8 de 11 faltas) |
+| depois | 10 | **0** |
+
+- Teste: `tests/dois_toques_na_reposicao.test.js`.
+
+#### A falta marcada contra quem levava o toque nas costas (js/officials.js)
+
+Relato: *"Um atacante estava com a bola, quase dentro da área, e na hora que ia chutar foi marcado falta contra ele. O marcador estava atrás dele, ninguem à frente."*
+
+- **O infractor era escolhido só pela VELOCIDADE** — *"quem entra é quem vai mais depressa"*. Um atacante a arrancar para rematar vai mais depressa do que o defesa que o persegue, portanto ficava ele o infractor, punido por **levar** o toque.
+- **O ângulo de onde vem o contacto já era calculado nessa mesma função** (*"0 de frente, PI pelas costas"*), mas só **depois** de o infractor estar escolhido, para dosear a gravidade. A informação existia e não decidia nada.
+- Agora a geometria ganha à velocidade quando **um só** deles vem por trás (`anguloPelasCostas: 2.0`, 115 graus; o ombro a ombro está a 90 e não entra). De frente um para o outro, a velocidade continua a decidir.
+
+| semente | faltas de contacto | portador punido com o outro atrás |
+|---|---|---|
+| 1 — antes | 20 | **1** |
+| 1 — depois | 19 | **0** |
+| 3 — antes | 29 | **2** |
+| 3 — depois | 27 | **0** |
+
+- O total não inflacionou: as faltas continuam a ser marcadas, mudou quem as leva. Teste: `tests/falta_pelas_costas.test.js`. Ferramenta: `tools/lab/falta_pelas_costas.js`.
+
+#### O atacante não adiantava a bola — e a decisão estava boa (js/bt/player_bt.js, js/config/player_behavior.js)
+
+Relato: *"Os atacantes não estão adiantando a bola quando tem espaço livre a frente, sem marcação pela frente."*
+
+**Quando o espaço existia, ele conduzia em 83 a 96% das posses.** O que nunca acontecia era o espaço EXISTIR: o corredor que conta quem está à frente abria com o cone de **VISÃO** do jogador.
+
+| técnica | meia-largura do corredor a 10 m |
+|---|---|
+| 50 | 14.0 m |
+| 70 | 23.6 m |
+| 80 | **34.8 m** |
+
+- **O campo tem 34 m de meia-largura: à técnica 80 o corredor a dez metros cobria o campo inteiro** — qualquer adversário à frente, mesmo encostado à linha lateral oposta, bloqueava a condução. Com o `espacoLivre` a exigir 16 m limpos lá dentro, em 15 minutos de jogo havia **ZERO posses de atacante com mais de 10 m de espaço à frente**.
+- O cone de visão serve para VER (escolher um passe, ler a linha). Para *"tenho caminho à frente?"* interessa quem está **no caminho** — que é exactamente o critério do `frenteAFrenteComGk`, usado a duas linhas de distância no mesmo ramo da árvore. `CarryModel.aberturaCorredor: 0.12` (~7 graus por lado) dá 5.2 m de meia-largura a 10 m. **O ALCANCE continua a vir da visão**: até onde ele lê o campo é uma questão de visão, quem está no caminho não é.
+
+| espaço à frente | antes | depois (sem. 1) | depois (sem. 7) |
+|---|---|---|---|
+| 10 a 15 m | **0 posses** | 16, 94% conduz | 18, 100% conduz |
+| livre (>15 m) | **0 posses** | 7, 100% conduz | 11, 100% conduz |
+
+- **Um erro meu que vale a pena contar:** a primeira medição depois da correcção deu *exactamente zero*, como antes. A ferramenta replicava a **fórmula antiga** do corredor — estava copiada em vez de ler a constante do jogo. Onde uma medição repete uma conta do jogo, lê a CONSTANTE do jogo.
+
+#### O cabeceio dentro da área ia para um médio (js/player.js, js/config/shooting.js)
+
+Relato: *"O Atacante pula sozinho para cabecear dentro da área e cabeceia para fora da área para dar um passe. pq não cabeceia para o gol?"*
+
+O corte era só a distância ao centro da baliza (`raioRemateCabeca`, 11 m) e não olhava nem à área nem à marcação; fora dele o código procurava `findPassTarget('mid')` — um **médio**, que está atrás.
+
+| atacante sozinho na área | antes | depois |
+|---|---|---|
+| 0 a 11 m | 100% | 100% |
+| 11 a 14 m | **0%** | 100% |
+| 14 a 18 m | **0%** | 50% |
+| total | **28%** | **63%** |
+
+- `raioRemateNaArea: 16.0`, que só vale com as **três condições juntas**: dentro da grande área, virado à baliza e **sem marcador a 2.2 m**. Com um defesa colado acima dos 11 m volta a escorar, que é a decisão certa — confirmado.
+- **Os 11 m ficam de pé fora da área**, e é de propósito: vêm de um defeito real (com 24 m em Z e 16 m em X apareciam golos de cabeça de mais de 20 metros). Os 16 m não alcançam a esquina da área (26 m), de onde cabecear ao golo não existe.
+- **O marcador subiu no código**, porque a decisão passou a depender dele: estava calculado dentro do ramo do remate, onde só servia para a disputa da cabeçada.
+- Teste: `tests/atacante_progride.test.js` — prende a **forma** das duas regras, não números de um lote. Ferramentas: `tools/lab/adiantar_a_bola.js`, `tools/lab/cabeceio_na_area.js`.
+
+#### O impedimento estava CERTO, e via-se tarde de mais (js/officials.js)
+
+Relato: *"A marcação de impedimento está errada... o jogador do Grêmio não está à frente do último marcador."*
+
+Medido com `tools/lab/impedimento.js`, seis sementes de 30 minutos e **26 impedimentos assinalados**:
+
+| | |
+|---|---|
+| errados pela Lei 11 (tudo congelado no instante do passe) | **0 de 26** |
+| que, quando o apito chega, já não estão à frente da linha | **9 de 26 (35%)** |
+| atraso entre o passe e o apito | mediana ~1 s, **até 3.4 s** |
+
+- A posição congela-se no passe, como manda a regra, mas o apito só vem quando alguém toca na bola ou ela sai. Nesse tempo a defesa sobe e o atacante recua, e **o que fica no ecrã não é a situação que foi julgada**: uma decisão certa parece errada.
+- **É por isto que o VAR desenha as linhas.** O `mostrarLinhaDoPasse` põe duas no relvado com as posições do instante do passe — **amarela** no penúltimo adversário, **vermelha** no atacante — durante `OffsideModel.segundosLinhaVar` (4 s; a 0 desliga). Não muda regra nenhuma.
+- **Desenha ANTES de limpar**: o `limparImpedimento` deita fora justamente a linha do passe.
+- **Um erro meu na medição, e mudou a conclusão:** a primeira versão recalculava a linha do penúltimo defesa *no momento do apito* e comparava-a com a posição congelada do atacante. **Isso não é regra nenhuma** — compara o instante de um com o instante dos outros. Deu 0 erros, mas por acaso. Quando uma medição replica uma regra, tem de replicar também **o instante em que a regra é avaliada**.
+- Teste: `tests/impedimento_linha_do_passe.test.js`, que prende explicitamente que as **três condições da Lei 11 continuam onde estavam** — o risco aqui era "arranjar" o que não estava partido.
+
+#### A altura dos jogadores passa a 1.65-1.90 (js/config/physics.js)
+
+Pedido: *"Ajusta o tamanho dos jogadores de 1.65-1.90 somente."* Era [1.60, 2.00].
+
+- **Mudar só o `min` e o `max` não chega.** As parcelas que enchem a distribuição — bónus de posto, bónus de estilo, penalização da velocidade e ruído — foram dimensionadas para uma faixa de 0.40 m; numa de 0.25 m empurram gente contra os limites e o corte achata-a: **6 de 22 colados (27%)**, com alturas exactamente iguais.
+- **O caso que nenhum ajuste do sigma resolvia:** um guarda-redes tinha `media` 1.795 mais 0.13 de posto = **1.925**, acima do tecto de 1.90 *ainda com ruído zero*.
+- A faixa nova tem 62.5% da largura da antiga; as quatro parcelas levaram o factor **0.55**, o valor que dá média realizada em **1.750** e **nenhum** jogador colado.
+
+| media | factor | realizada | colados | alturas |
+|---|---|---|---|---|
+| 1.775 | 0.625 | 1.747 | 2 | 1.650 a 1.887 |
+| 1.785 | 0.625 | 1.757 | 1 | 1.650 a 1.897 |
+| **1.775** | **0.55** | **1.750** | **0** | **1.652 a 1.874** |
+
+- **Ninguém mede exactamente 1.90, e é de propósito:** tocar no limite É estar colado. Com 22 jogadores não se pode ter as duas coisas — ou se usa a faixa até ao fim e o corte achata alguns, ou a distribuição cabe lá dentro e as pontas sobram. O `min`/`max` fica como corte de segurança, que é o que um clamp deve ser.
+- **Quem voltar a mexer na faixa tem de reescalar as quatro parcelas na mesma proporção**, senão o achatamento volta. Teste: `tests/altura_dos_jogadores.test.js`. Ferramenta: `tools/lab/alturas.js`.
+
+#### De que ângulo se pode tirar a bola (js/utils.js, e três chamadores)
+
+Relato: *"O Atacante está roubando a bola do goleiro por trás do goleiro. Com o corpo do goleiro entre ele e a bola... Só é possivel roubar a bola em uma marcação normal se o jogador adversário estiver num angulo de até 45 de frente com o jogador que tem a bola e de 46-80 graus utilizando o carrinho."*
+
+**Havia uma guarda, e estava em UM dos TRÊS caminhos.** Tirar a bola a alguém acontece em três sítios:
+
+| caminho | permitia | agora |
+|---|---|---|
+| `resolveBallContact` (match_physics.js) — a disputa por proximidade | cos -0.5 = **120 graus** | 45 / 80 |
+| `TACKLE` (fsm.js) — o desarme em pé | `dotAngle >= 0`, 90 graus escritos à mão | idem |
+| `SLIDE_TACKLE` (fsm.js) — o deslize | idem | idem |
+
+- **Os dois desarmes resolvem o roubo À MÃO e nunca passam pela disputa.** Dos roubos fora do ângulo permitido com a bola ainda no pé do dono, **14 em 22 mudavam de dono por um caminho que a guarda não via**.
+- A regra vive agora no `podeTirarABola` (utils.js), com `emCarrinho` a escolher qual dos dois limites vale. **É preciso no BT E no contacto**: o `podeDesarmar` filtra quando o defesa DECIDE atirar-se, os outros quando o carrinho CHEGA — o carrinho demora, e pelo caminho o portador roda ou o defesa passa-lhe para trás.
+
+| três sementes, 15 min | antes | depois |
+|---|---|---|
+| sem carrinho acima de 45 graus | 29% | **20-21%** |
+| com carrinho acima de 80 graus | 3% | **0-2%** |
+| roubos ao guarda-redes fora do ângulo | — | **0 em todas** |
+
+- **Os ~20% que sobram não são infracções:** a maioria tem a bola já sobrada do pé do dono (acima de `rouboPorTras.bolaSolta`), e aí ela é de quem chegar — é a diferença entre tirar a bola do pé a alguém e recolher uma que já lhe fugiu.
+- **Apertar os limiares fez a medição PIORAR (29% → 31%), e foi isso que revelou o defeito.** A guarda estava certa e no caminho errado. O que o descobriu foi instrumentar a própria variável — `Object.defineProperty` sobre `Match.lastTouchedPlayer`, a gravar a linha do `stack` em cada mudança de dono — e contar por sítio do código. **Quando uma correcção não mexe no número, vale mais perguntar por onde passa o caso do que voltar a mexer no limiar.**
+- **E a medição contava bloqueios de remate como roubos** (10 dos 13 primeiros casos): o defesa mete o corpo à frente da bola e o toque passa a ser dele, o que é legítimo de qualquer ângulo.
+- Teste: `tests/angulo_do_roubo.test.js`. Ferramenta: `tools/lab/roubo_angulo.js`.
+
+#### `GkLowClip` (js/config/animations.js) — a defesa baixa deixa de ser feita de pé
+
+Pedido, com fotografias: a perna do lado da bola com a coxa a ~70 graus do relvado, a outra com a coxa paralela ao relvado e a canela perpendicular, corpo curvado e a bola encaixada.
+
+- **O estado anterior media isto:** as duas pernas faziam quase o mesmo (coxa ~70 graus, canela ~50) e a **cabeça ficava a 1.43 m** — o guarda-redes estava *de pé* nesta "defesa baixa".
+- Medido no rig, em graus com o relvado, no frame da chegada: coxa do lado da bola **69** (canela deitada, a 0), coxa da outra perna **14** (canela a prumo, a 89), cabeça a **0.84 m**. Os 14 graus em vez de 0 são geométricos: com a coxa exactamente paralela ao relvado o pé da frente fica 0.12 m no ar.
+- **Funciona no jogo e não só no editor:** o `assentarDeitado` do mergulho mede `lKnee`/`rKnee`/`lFoot`/`rFoot` e baixa o corpo até o mais baixo tocar.
+- **AVISO, e é o que interessa saber:** este clip só é escolhido pelo **mergulho** (`GkDive.clipDaDefesa`). Uma bola que vem *em cima* do guarda-redes nunca dispara mergulho — cai em `Math.abs(lateral) < mergulhoLateralMin` e vai para o estado `maos`, que escreve a pose à mão a partir de `GoalkeeperPose.encaixe` e **nunca lê clip nenhum**. Corrigir o clip não muda esse lance. O `encaixe` tem a sua própria nota de uma tentativa falhada, com a lição registada: olhar para a **compacidade** (distância do pé à anca) e não só para o ângulo de cada segmento.
+- A pose é **assimétrica** (a perna ajoelhada é sempre a esquerda) e o `aplicarPoseLancamentoGR` não espelha: numa defesa baixa para o outro lado, o joelho fica do lado errado.
+
+#### `tools/lab/` (directório novo) — as ferramentas de medição saem da raiz
+
+Sete scripts headless estavam soltos na raiz do projecto (`diag_inf.js`, `diag_inf2.js`, `diag_run.js`, `infil_lanc.js`, `lab_gk.js`, `lab_mira.js`, `lote_tmp.js`), mais um `test_tackle.patch`.
+
+- **Não são rascunho gasto** — é isso que os separa de `tools/scratch/`, cujo README diz que aquilo é código de um só uso e se pode apagar inteiro. São ferramentas de medição parametrizadas: o `lab_gk.js` é a que produziu os números citados neste ficheiro e no cabeçalho do `gk_varre_o_trajecto.test.js`.
+- Movidos com `git mv` (histórico preservado), `require` do harness corrigido, os sete confirmados a arrancar do sítio novo, e as duas referências que os citavam pelo nome actualizadas. O `.patch` foi para `tools/scratch/`.
+- **Juntaram-se-lhes sete ferramentas novas** desta sessão: `dois_toques.js`, `falta_pelas_costas.js`, `adiantar_a_bola.js`, `cabeceio_na_area.js`, `impedimento.js`, `roubo_angulo.js` e `alturas.js`. O `README.md` traz a tabela do que cada uma mede e **quatro lições de método** que esta sessão pagou: criar a condição quando o defeito é raro de mais para aparecer; ler a constante do jogo em vez de copiar a fórmula; medir no instante em que a regra é avaliada; e perguntar por onde passa o caso quando o limiar não resolve.
+
+#### Céu limpo com mais duas nuvens (js/weather.js)
+
+Pedido: *"Coloca mais 2 de nuves no céu claro."* `dia.limpo` de 2 para **4**, `noite.limpo` de 1 para **3** (o mesmo +2; `limpo` é o mesmo céu). **O céu limpo fica agora com mais nuvens que o nublado** (4 contra 3) — os outros presets (3, 4, 5) não foram mexidos.
+
+#### Três testes que falhavam por medirem o TAMANHO DO COMENTÁRIO
+
+Ao longo da sessão, três testes acusaram defeitos que não existiam, todos pelo mesmo mecanismo: **fatiavam o código por contagem de caracteres, ou procuravam uma palavra que também aparece nos comentários**. Ficam corrigidos e com a razão escrita:
+
+- `canto_marcacao.test.js` — `slice(ini, ini + 7000)` a partir do `case 'SET_PIECE_TAKER'`. Um comentário novo empurrou o `cantoVivo` para fora da janela. Passou a cortar **até ao `case` seguinte**.
+- `falta_cobranca.test.js` — uma janela de 300 caracteres a seguir ao `onContact`. O mesmo. Passou a apanhar o **bloco do `onContact` a contar chavetas** — e a procurar `onContact:` **com os dois pontos**, porque a primeira ocorrência da palavra estava num comentário 960 caracteres antes do código. O ficheiro já tinha uma nota de que isto acontecera noutra janela do mesmo teste; ficaram as duas e só uma tinha sido corrigida.
+- `angulo_do_roubo.test.js` — o regex do `anguloCos` apanhava o `anguloCos: -2` que o comentário traz como exemplo de **como desligar a guarda**. Ancorado ao início da linha.
+
+**Uma janela em caracteres mede o tamanho dos comentários, não o código.**
+
 ### Sessão de 17 de Setembro de 2026 (2) — o pessoal do estádio, a jib de televisão atrás do gol, os uniformes dos clubes e a arbitragem do canto
 
 #### `js/staff.js` (ficheiro novo) — o pessoal de colete laranja, à volta do recinto
@@ -184,6 +409,11 @@ com função de pose e amostrador próprios. Não partilha nada com o `ShotClip`
 nem com o clip antigo do guarda-redes, que ficam no ficheiro — o antigo mantém
 entrada no editor, renomeada, para se comparar lado a lado.
 
+> **JÁ NÃO É O GESTO ÚNICO.** A 22 de Setembro o tiro de meta saiu daqui para o
+> `GoalKickClip`, com 13 keyframes próprios — afinar um dos três lances não pode
+> mexer nos outros. O `PlayerKickClip` continua a servir a falta e o penálti, e
+> tudo o que está descrito abaixo vale para esses dois.
+
 **A perna de chute é fixa nos quatro keyframes.** `coxaChute` faz
 `0.45 -> 0.65 -> 0.95 -> -0.70`: recua de forma monótona e vem à frente uma
 vez. Verificado por asserção que há **uma única inversão de direcção** em todo
@@ -306,7 +536,7 @@ original — é a prova da fórmula. O `ESCALA_CORPO` passou a sair dali para a
 `ALTURA_TESTA` e o `ALTURA_CABECA`, que são absolutos em metros. Ficou em 5.5
 cabeças (7 foi experimentado e recusado).
 
-**A altura por jogador**, 1.60 a 2.00 m com média 1.75 — `AlturaJogador`.
+**A altura por jogador**, 1.65 a 1.90 m com média 1.75 — `AlturaJogador`. (Era 1.60 a 2.00 até 23 de Setembro; ao apertar a faixa foi preciso reescalar as quatro parcelas que a enchem, senão o clamp achatava 27% dos jogadores.)
 Bónus por posto (GK +0.13, CB +0.10), por estilo (`target_man` +0.11),
 penalização pela velocidade e ruído determinístico pelo `id`.
 
@@ -908,6 +1138,13 @@ que sobram explicam-se: a guarda mede o ângulo no frame do CONTACTO e o medidor
 no frame em que o dono perdeu a bola; entre os dois o ladrão já vem a passar
 para o lado, chega ao contacto dentro dos 120° e a guarda deixa-o passar, com
 razão. Ver os problemas conhecidos.
+
+> **OS 120° CAÍRAM A 23 DE SETEMBRO**, e a razão de "o resultado ser modesto"
+> ficou finalmente clara: a guarda estava certa e **em um dos três caminhos**
+> que tiram a bola. Os desarmes da FSM (`TACKLE` e `SLIDE_TACKLE`) resolvem o
+> roubo à mão e nunca passam pelo `resolveBallContact` — 14 em 22 casos vinham
+> de lá. Os limites passaram a 45° sem carrinho e 80° com, na função
+> `podeTirarABola` (utils.js), usada pelos três.
 
 #### A bola atrasada com o pé (Lei 12)
 
@@ -8016,6 +8253,50 @@ Coisas medidas e por resolver, para não se voltarem a descobrir por acaso.
 > (os pontapés de baliza a zero), que já não acontecia. Uma lista de problemas
 > envelhece tão depressa como o código.
 
+### Aberto desde 23 de Setembro de 2026
+
+- **A defesa baixa AO CENTRO continua errada, e não é o `GkLowClip`.** Uma bola
+  que vem em cima do guarda-redes nunca dispara mergulho: cai em
+  `Math.abs(lateral) < mergulhoLateralMin` e vai para o estado `maos`, que
+  escreve a pose à mão a partir de `GoalkeeperPose.encaixe` e **não lê clip
+  nenhum**. O `GkLowClip` foi corrigido para a pose de joelhos das fotografias e
+  **isso não muda esse lance** — relato: *"A pose do goleiro na defesa baixa com
+  a bola em cima dele não mudou nada."* O `encaixe` tem no ficheiro a nota de uma
+  tentativa anterior que saiu pior, com a lição: olhar para a **compacidade**
+  (distância do pé à anca) e não só para o ângulo de cada segmento. Corrigi-lo
+  pede o ciclo do `tools/anim/` — traçar as fotografias, desenhar o resultado e
+  comparar —, não um ajuste de números.
+- **O `GkLowClip` é assimétrico e ninguém o espelha.** A perna ajoelhada é sempre
+  a esquerda, e o `aplicarPoseLancamentoGR` escreve esquerda e direita
+  literalmente. Numa defesa baixa para o outro lado o joelho fica do lado errado.
+  É a mesma dívida que a entrada de 16 de Setembro já regista para os braços dos
+  três clips de defesa, agora com um caso a mais.
+- **O apito do impedimento vem até 3.4 s depois do passe.** Medido em seis
+  sementes, 26 impedimentos: **nenhum errado pela Lei 11**, mas 35% já não estão
+  à frente da linha quando a falta aparece no ecrã. A posição congela-se no
+  passe, como manda a regra, e o apito só vem quando alguém toca na bola ou ela
+  sai. As linhas do momento do passe (`mostrarLinhaDoPasse`) tornam a decisão
+  conferível, mas **não encurtam o atraso** — quem quiser atacar a outra metade
+  tem de pôr um tecto ao tempo até assinalar, o que muda o momento da marcação.
+- **A repetição MANUAL continua a correr o buffer inteiro (20 s).** Os 12 s
+  pedidos foram aplicados à repetição do GOLO (`SEGUNDOS_ANTES` 11 + 1); o botão
+  do painel não tem linha de meta e vai do frame mais antigo até ao presente.
+  Encurtá-lo é mudar o ponto de partida do `startReplay`.
+- **O céu limpo tem mais nuvens que o nublado** (4 contra 3), desde que o pedido
+  de *"mais 2 no céu claro"* foi aplicado à letra. Os outros presets (3, 4, 5)
+  não foram reescalados, portanto a progressão limpo → nublado → encoberto →
+  chuva deixou de ser monótona.
+- **Sobram ~20% de roubos acima dos 45 graus, e quase nenhum é infracção.** Com
+  a bola já sobrada do pé do dono (acima de `rouboPorTras.bolaSolta`, 1.6 m) a
+  guarda desliga-se de propósito: ela é de quem chegar. Dos que restam com a
+  guarda activa, quase todos são a diferença de um frame entre o instante do
+  contacto (onde a guarda mede) e o instante em que o dono muda (onde o medidor
+  mede). Fica registado para não ser lido como defeito por quem correr a
+  ferramenta.
+- **`tests/jogador_nao_flutua.test.js` falha, e falhava antes desta sessão.**
+  Assertiva: *"o assentarNoChao deixou de sair quando ele corre"*. Não foi
+  investigado.
+
 ### Aberto desde 16 de Setembro de 2026
 
 - **As defesas novas têm os braços simétricos, e nas fotografias não estão.** Os
@@ -8040,16 +8321,15 @@ Coisas medidas e por resolver, para não se voltarem a descobrir por acaso.
 
 ### Aberto desde 15 de Setembro de 2026
 
-- **Roubar a bola por trás: resolvido a um quarto.** A guarda do
-  `BallControl.rouboPorTras` corta 42 roubos para 30 em 20 min, mas a fracção
-  vinda de trás fica em 30% contra os 33% sem ela. A geometria já está tratada
-  (ninguém tira a bola do PÉ do dono vindo de mais de 120°); o que falta é a
-  outra metade e não é geometria — **o portador não protege a bola com o
-  corpo**. Um jogador com um adversário às costas continua a conduzir em frente
+- **Roubar a bola por trás: a geometria ficou tratada a 23 de Setembro** — os
+  limites passaram a 45°/80° e os TRÊS caminhos que tiram a bola usam-nos (ver a
+  sessão de 22-23). O que fica em aberto é a outra metade, que não é geometria:
+  **o portador não protege a bola com o corpo**. Um jogador com um adversário às costas continua a conduzir em frente
   como se estivesse sozinho, e o contacto acaba por acontecer dentro dos 120°,
   onde a regra (com razão) não se aplica. Ferramenta:
-  `tools/scratch/roubo_angulo.js`, e **medir com n > 100**: a 20 min a amostra
-  é de ~30 roubos e a dispersão engana (uma corrida deu 17%, a seguinte 38%).
+  `tools/lab/roubo_angulo.js` (era `tools/scratch/_roubo_angulo.js`), e **medir
+  com n > 100**: a 20 min a amostra é de ~30 roubos e a dispersão engana (uma
+  corrida deu 17%, a seguinte 38%).
 - **O batedor do LATERAL escolhe o lado errado numa das equipas.** O
   `escolherBatedorDoLateral` (`match_state.js`) tira o lado de
   `bolaPos.x >= 0 ? 'esquerda' : 'direita'`, sem `attDir`. A convenção das
@@ -9279,6 +9559,61 @@ concluir seja o que for de um lote, verificar se o caminho que se está a medir
 corre mesmo sem ecrã.
 
 **Mexer aqui quando:** precisar de medir comportamento em vez de o observar.
+
+## `tools/lab/` — as ferramentas de medição que voltam a correr
+
+Scripts headless que correm o jogo real pelo `tools/headless/harness.js` e
+imprimem uma medição. Estavam **soltos na raiz do projecto** até 23 de Setembro.
+
+O que os separa de `tools/scratch/`: aquilo é código de um só uso e pode ser
+apagado inteiro; isto são ferramentas **parametrizadas**, feitas para voltar a
+correr quando a pergunta reaparecer. O `lab_gk.js` é a que produziu os números
+citados neste ficheiro e no cabeçalho do `gk_varre_o_trajecto.test.js`.
+
+- `lab_gk.js [remates]` — laboratório do guarda-redes: N remates de posições sorteadas dentro e à volta da área, com o pipeline real (`tipoDeRemate` → `miraDeRemate` → sigma → física → GK), e conta os desfechos.
+- `lab_mira.js [remates]` — onde é que se MIRA contra onde a bola acaba por ir.
+- `diag_run.js [segundos]` — porque morre a corrida ao espaço: reavalia por frame as condições de aborto do `case 'RUN_INTO_SPACE'` e regista qual era verdadeira quando o jogador saiu.
+- `infil_lanc.js [segundos]` — infiltrações que receberam bola: cada arranque de `RUN_INTO_SPACE` e se aquele jogador chegou a ser destinatário de um passe e a tocar na bola.
+- `diag_inf.js` / `diag_inf2.js [segundos]` — porque é que o ramo do passe para quem infiltra quase nunca dispara.
+- `lote_tmp.js [jogos] [dur]` — lote de jogos completos, para estatística sobre várias partidas.
+- `dois_toques.js [seg] [semente] [--forcar] [--sem-regra]` — reposições em que o batedor voltou a tocar na bola antes de outro jogador. `--forcar` põe a bola em cima dele meio segundo depois, porque em jogo livre o caso não aparece.
+- `falta_pelas_costas.js [seg] [semente]` — faltas de contacto: quem foi marcado infractor e de que lado veio o toque.
+- `adiantar_a_bola.js [seg] [semente]` — posses de atacante no meio-campo adversário: espaço à frente, se entrou em condução, metros progredidos.
+- `cabeceio_na_area.js [seg] [semente] [N] [--marcado]` — cabeceios dentro da grande área: quantos vão à baliza e quantos saem em passe, por distância. Força N cabeceios porque em jogo livre são cinco em quinze minutos.
+- `impedimento.js [seg] [semente]` — recalcula a Lei 11 com tudo congelado no instante do passe e compara com o que se vê quando o apito chega.
+- `roubo_angulo.js [seg] [semente]` — de que ângulo se rouba a bola, e **por que caminho do código** a posse muda de dono.
+- `alturas.js [min] [max] [media] [sigma] [factor]` — distribuição das alturas: média realizada, extremos e quantos ficam **colados** aos limites do clamp. Com argumentos simula outra calibração sem tocar no ficheiro.
+
+**Quatro lições de método, que esta sessão pagou** (estão no `tools/lab/README.md`):
+
+1. **Quando o defeito é raro de mais, cria a condição.** O segundo toque do batedor não aparece em 30 minutos de jogo e 75 reposições — medir jogo livre dava zero antes e zero depois, o que não prova nada. Com o cenário forçado: 10 em 14 antes, 0 em 10 depois.
+2. **Lê a constante do jogo, não copies a fórmula.** O `adiantar_a_bola.js` replicava a conta do corredor de condução; quando o jogo mudou de fórmula, a medição continuou a medir a antiga e deu a entender que a correcção não fizera nada.
+3. **Mede no instante em que a regra é avaliada.** O `impedimento.js` recalculava a linha do penúltimo defesa no momento do apito e comparava-a com a posição congelada do atacante — isso compara o instante de um com o instante dos outros, e não é regra nenhuma.
+4. **Quando o limiar não resolve, pergunta por onde passa o caso.** Apertar os ângulos do roubo fez a medição piorar (29% → 31%). O que o resolveu foi instrumentar a própria variável (`Object.defineProperty` sobre `Match.lastTouchedPlayer`, a gravar a linha do `stack`) e contar por sítio do código: 14 de 22 casos vinham de linhas que a guarda nunca via.
+
+**Mexer aqui quando:** a pergunta for "quantas vezes" ou "de onde", e a resposta tiver de sobreviver a mudar a semente.
+
+## `tools/anim/` — traçar a fotografia antes de escrever o clip
+
+Existe porque três versões seguidas do `GoalKickClip` foram escritas a
+**adivinhar** a pose a partir das imagens de referência, e as três saíram
+erradas: o jogador flutuou meio metro, depois ficou deitado a 77 graus, depois o
+frame do contacto ficou com as pernas a 22 graus uma da outra.
+
+O que faltava não era medir mais — era **olhar**.
+
+- `img.js` — lê e escreve PNG sem dependências (zlib e nada mais), amplia, e desenha linhas, círculos e uma grelha de coordenadas. `node img.js grelha <entrada> <saida> 4` dá a imagem ampliada com as coordenadas por cima, que é como se marcam as junções.
+- `esqueleto.js` — traça o esqueleto sobre a fotografia a partir de uma ficha `.json` com a coordenada de cada junção, e imprime o ângulo de cada segmento face à vertical. **Se o traçado não assentar no corpo, as coordenadas estão mal e os ângulos não valem nada** — é esse o ponto de a imagem ser escrita.
+- `render.js` — desenha o boneco do jogo em PNG, de lado e de costas, **sem WebGL**: projecta as caixas do rig e pinta as faces por ordem de profundidade. É o passo que fecha o ciclo; sem ele volta-se a escrever números que cumprem todas as verificações e mesmo assim não se parecem com nada.
+- `referencias/` — as quatro imagens do tiro de meta e os quatro traçados, mais as fichas `goalkick_*.json` com as coordenadas das junções, para se corrigir um ponto e voltar a traçar.
+
+**Duas armadilhas, as duas já custaram uma versão:** a vista muda de imagem para
+imagem (um braço estendido para o lado é `bracoLx` numa vista de lado e `bracoLz`
+numa de costas), e a ordem das imagens não é a ordem em que chegam — compará-las
+por distância em píxeis não vale nada, porque têm zooms diferentes.
+
+**Mexer aqui quando:** for preciso pôr o boneco numa pose que existe numa
+fotografia.
 
 ## `simulate.js` — simulação em lote (sem ecrã)
 

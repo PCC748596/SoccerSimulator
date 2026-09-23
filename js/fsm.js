@@ -2173,7 +2173,27 @@ class PlayerFSM {
                             */
                             const forcaDef = (p.skillFor('SPEED') + p.skillFor('STRENGTH')) / 2;
                             const forcaAtk = (carrier.skillFor('SPEED') + carrier.skillFor('STRENGTH')) / 2;
-                            const venceuTackle = dotAngle >= 0 && venceuDuelo(forcaDef, forcaAtk, 0.5);
+                            /*
+                            O ÂNGULO, OUTRA VEZ, NO INSTANTE DO CONTACTO.
+
+                            Era `dotAngle >= 0` — 90 graus, escrito a mao aqui.
+                            Passa a ser o `podeTirarABola` (utils.js), que e a
+                            MESMA conta que a disputa da bola usa, com o limite
+                            do carrinho (80 graus).
+
+                            E preciso aqui E no `podeDesarmar` (player_bt.js):
+                            aquele filtra quando ele DECIDE atirar-se, este
+                            quando o carrinho CHEGA. O carrinho demora, e pelo
+                            caminho o portador roda ou o defesa passa-lhe para
+                            tras. Medido com `tools/lab/roubo_angulo.js`, era
+                            por aqui e pelo deslize que passavam os roubos que
+                            a guarda da disputa nao via — ela vive no
+                            `resolveBallContact`, e estes dois resolvem o roubo
+                            a mao sem passar por la.
+                            */
+                            const anguloOk = (typeof podeTirarABola === 'function')
+                                ? podeTirarABola(carrier, p, true) : (dotAngle >= 0);
+                            const venceuTackle = anguloOk && venceuDuelo(forcaDef, forcaAtk, 0.5);
                             /*
                             Desarme FALHADO: ate aqui nao custava nada a quem
                             errava. Agora o arbitro avalia (js/officials.js) e
@@ -2263,7 +2283,16 @@ class PlayerFSM {
                             const toDef = _v2.subVectors(p.model.position, carrierSlide.model.position);
                             toDef.y = 0;
                             toDef.normalize();
-                            slideAngleOk = (cFwd.x * toDef.x + cFwd.z * toDef.z) >= 0;
+                            /*
+                            Era `>= 0`, ou seja 90 graus escritos a mao. Passa
+                            a ser o `podeTirarABola` (utils.js), a mesma conta
+                            que a disputa da bola e o desarme em pe usam, com o
+                            limite do carrinho (80 graus). Tres sitios tiram a
+                            bola; a regra tem de ser uma so.
+                            */
+                            slideAngleOk = (typeof podeTirarABola === 'function')
+                                ? podeTirarABola(carrierSlide, p, true)
+                                : ((cFwd.x * toDef.x + cFwd.z * toDef.z) >= 0);
                         }
 
                         /*

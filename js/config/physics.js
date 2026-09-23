@@ -286,7 +286,7 @@ if (typeof window !== 'undefined') window.ProporcaoCorpo = ProporcaoCorpo;
 
 /*
 =============================================================================
-A ALTURA DE CADA JOGADOR — 1.60 a 2.00 m, média 1.75
+A ALTURA DE CADA JOGADOR — 1.65 a 1.90 m, média 1.75
 =============================================================================
 Todos mediam o mesmo (1.855 m). Passa a haver variação, com a regra do pedido:
 
@@ -337,13 +337,57 @@ const AlturaJogador = {
         nominal 1.79  ->  realizada 1.747
         nominal 1.80  ->  realizada 1.756
 
-    1.795 fica em 1.75 realizada, que é o pedido. Com outros plantéis a média
-    realizada muda — é uma propriedade da amostra, não do modelo, e quem os
-    trocar deve voltar a medir em vez de confiar neste número.
+    1.795 ficava em 1.75 realizada com a faixa [1.60, 2.00]. Com a faixa nova
+    (ver abaixo) o valor é 1.775, medido da mesma maneira: 1.750 realizada nos
+    22 jogadores dos plantéis. Com outros plantéis a média realizada muda — é
+    uma propriedade da amostra, não do modelo, e quem os trocar deve voltar a
+    medir em vez de confiar neste número.
     */
-    media: 1.795,
-    min: 1.60,
-    max: 2.00,
+    media: 1.775,
+
+    /*
+    =====================================================================
+    A FAIXA ENCOLHEU, E AS PARCELAS ENCOLHERAM COM ELA
+    =====================================================================
+    Pedido: *"Ajusta o tamanho dos jogadores de 1.65-1.90 somente."* Era
+    [1.60, 2.00].
+
+    MUDAR SÓ O `min` E O `max` NÃO CHEGA, e mede-se: as parcelas que enchem a
+    distribuição — bónus de posto, bónus de estilo, penalização da velocidade
+    e ruído — foram dimensionadas para uma faixa de 0.40 m. Numa faixa de
+    0.25 m passam a empurrar gente contra os limites, e o corte achata-a.
+    Medido nos 22 jogadores dos plantéis:
+
+        so a apertar a faixa         6 de 22 colados nos limites  (27%)
+        a encolher tambem o sigma    4 a 5 colados, e a media sobe para 1.77
+
+    Os colados não vinham só do ruído: um guarda-redes tinha `media` 1.795 mais
+    0.13 de posto = 1.925, acima do tecto de 1.90 AINDA COM RUÍDO ZERO. Nenhum
+    ajuste do sigma resolve isso.
+
+    A faixa nova tem 62.5% da largura da antiga, e as parcelas levaram o factor
+    0.55 — o valor que, varrido contra os plantéis, dá média realizada em 1.750
+    e NENHUM jogador colado:
+
+        media   factor   realizada   colados   alturas
+        1.775    0.625     1.747        2      1.650 a 1.887
+        1.785    0.625     1.757        1      1.650 a 1.897
+        1.775    0.55      1.750        0      1.652 a 1.874   <- escolhido
+        1.785    0.55      1.760        0      1.662 a 1.884
+
+    NINGUÉM MEDE EXACTAMENTE 1.90, e é de propósito: tocar no limite É estar
+    colado. Com 22 jogadores não se pode ter as duas coisas — ou se usa a faixa
+    até ao fim e o corte achata alguns, ou a distribuição cabe lá dentro e as
+    pontas sobram. O `min`/`max` fica como corte de segurança, que é o que um
+    clamp deve ser, e as alturas reais vão de 1.65 a 1.87.
+
+    QUEM VOLTAR A MEXER NA FAIXA tem de reescalar estas quatro parcelas na
+    mesma proporção, senão o achatamento volta. Medir com
+    `tools/lab/alturas.js`.
+    =====================================================================
+    */
+    min: 1.65,
+    max: 1.90,
 
     /*
     O bónus do POSTO. Só os três grupos do pedido saem da média; os outros
@@ -351,8 +395,8 @@ const AlturaJogador = {
     ser o que o código faz e não uma aproximação.
     */
     bonusPosto: {
-        GK: 0.13,
-        CB: 0.10,
+        GK: 0.072,
+        CB: 0.055,
         // Ponta-de-lança de referência: o posto sozinho não o diz, o ESTILO
         // sim (ver `bonusEstilo`). CF e SS ficam neutros.
         CF: 0.0, SS: 0.0
@@ -363,10 +407,10 @@ const AlturaJogador = {
     corre para as costas da defesa.
     */
     bonusEstilo: {
-        target_man: 0.11,
+        target_man: 0.061,
         // Estes vivem do arranque e do espaço curto: ficam baixos.
-        goal_poacher: -0.03,
-        dummy_runner: -0.03
+        goal_poacher: -0.017,
+        dummy_runner: -0.017
     },
 
     /*
@@ -383,16 +427,14 @@ const AlturaJogador = {
     */
     velocidadeRef: 82,
     velocidadeSpan: 12,
-    penalVelocidade: 0.075,
+    penalVelocidade: 0.041,
 
     /*
-    A dispersão que faz a faixa chegar aos extremos pedidos (1.60 a 2.00).
-
-    Com sigma 0.045 o mais alto do lote media 1.79 e o intervalo nunca se
-    usava. 0.075 é o que abre a faixa: um central lento com ruído positivo
-    passa dos 1.95, um lateral rápido com ruído negativo bate no piso.
+    A dispersão. Era 0.075, dimensionada para a faixa [1.60, 2.00]; levou o
+    mesmo factor 0.55 das outras parcelas quando a faixa encolheu para
+    [1.65, 1.90] — ver a nota do `min`/`max`.
     */
-    sigma: 0.075
+    sigma: 0.041
 };
 if (typeof window !== 'undefined') window.AlturaJogador = AlturaJogador;
 

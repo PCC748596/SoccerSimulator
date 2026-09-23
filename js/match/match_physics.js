@@ -748,18 +748,12 @@ Object.assign(Match, {
                 `tentarDesarme`, para as duas regras não discordarem sobre o que
                 é "por trás".
                 */
-                let fx, fz;
-                if (dono.velocity && dono.velocity.lengthSq() > 0.1) {
-                    const n = Math.hypot(dono.velocity.x, dono.velocity.z) || 1;
-                    fx = dono.velocity.x / n; fz = dono.velocity.z / n;
-                } else {
-                    fx = Math.sin(dono.model.rotation.y); fz = Math.cos(dono.model.rotation.y);
-                }
-
-                const ax = best.model.position.x - dono.model.position.x;
-                const az = best.model.position.z - dono.model.position.z;
-                const da = Math.hypot(ax, az);
-                if (da > 0.001 && (fx * ax + fz * az) / da < RT.anguloCos) return false;
+                /*
+                A REGRA VIVE NO `podeTirarABola` (utils.js), e nao aqui: os
+                desarmes da FSM tiram a bola por outro caminho e precisam da
+                MESMA conta. Ter duas copias era ter duas regras.
+                */
+                if (!podeTirarABola(dono, best, emCarrinho(best))) return false;
             }
         }
 

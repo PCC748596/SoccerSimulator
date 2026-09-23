@@ -16,7 +16,7 @@
                 <h2 id="app-title" style="font-size: 0.85em; font-weight: bold; margin: 0; padding: 0;">SOCCER SIM |
                     FPS: --
                 </h2>
-                <div id="app-version" style="font-size: 0.70em; font-weight: normal; color: #aaa;">v 0.0639</div>
+                <div id="app-version" style="font-size: 0.70em; font-weight: normal; color: #aaa;">v 0.0640</div>
             </div>
             <button type="button" id="btn-painel" title="Minimizar / maximizar (X) — Shift: todos"
                 onclick="togglePainel(undefined, event)">&minus;</button>
@@ -288,7 +288,8 @@
                     </div>
                     <div style="flex: 1;">
                         <label style="font-size: 11px; margin-bottom: 2px;">Tempo</label>
-                        <select id="sel-weather-condicao" onchange="Weather.setCondicao(this.value)" style="width: 100%;">
+                        <select id="sel-weather-condicao" onchange="Weather.setCondicao(this.value)"
+                            style="width: 100%;">
                             <option value="limpo" selected>Céu Limpo</option>
                             <option value="nublado">Nublado</option>
                             <option value="encoberto">Encoberto</option>
@@ -440,8 +441,7 @@
          ficar COLADO ao lado do placar, e a largura do placar muda com o nome
          das equipas — uma caixa flex resolve isso sozinha, um `left` fixo não. -->
     <div id="placar-linha">
-        <div id="placar"><span id="placar-nome-b">RED</span> <span id="placar-a">0</span> x <span
-                id="placar-b">0</span>
+        <div id="placar"><span id="placar-nome-b">RED</span> <span id="placar-a">0</span> x <span id="placar-b">0</span>
             <span id="placar-nome-a">BLUE</span> | TIME: <span id="placar-tempo">00:00</span>
         </div>
         <div id="aviso-replay" hidden>REPLAY</div>

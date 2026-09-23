@@ -1200,6 +1200,73 @@ function _ruidoAltura(id) {
 /*
 A altura de um jogador, em metros. Determinística e estável.
 */
+/*
+=============================================================================
+DE QUE ÂNGULO SE PODE TIRAR A BOLA A QUEM A TEM
+=============================================================================
+Pedido: *"Só é possivel roubar a bola em uma marcação normal se o jogador
+adversário estiver num angulo de até 45 de frente com o jogador que tem a bola
+e de 46-80 graus utilizando o carrinho. Fora isso tem que ser impossível roubar
+a bola do adversário."*
+
+AQUI, E NUM SÍTIO SÓ, porque a regra estava a ser aplicada em UM dos TRÊS
+caminhos que tiram a bola. Medido com `tools/lab/roubo_angulo.js`: dos roubos
+fora do ângulo permitido e com a bola ainda no pé do dono, **14 em 22 mudavam
+de dono por um caminho que a guarda não via** — os desarmes da FSM resolvem o
+roubo à mão e nunca passam pela disputa do `resolveBallContact`, que era o
+único sítio onde a guarda vivia.
+
+O `podeDesarmar` do Behaviour Tree também filtra o ângulo, mas no instante em
+que DECIDE atirar-se; o carrinho demora a chegar, e pelo caminho o portador
+roda ou o defesa passa-lhe para trás. A decisão e o contacto são momentos
+diferentes e precisam os dois da guarda.
+
+A FRENTE do portador é para onde ele ANDA, e só com ele parado é que vale a
+orientação do modelo — a mesma convenção em toda a parte, para as regras não
+discordarem sobre o que é "por trás".
+
+NÃO É ESTA FUNÇÃO QUE DECIDE SE A BOLA JÁ SOBROU: quando a bola se afasta do
+dono ela deixa de ser dele e é de quem chegar, venha de onde vier. Isso é o
+`rouboPorTras.bolaSolta`, e fica de fora de propósito — quem chama é que sabe
+se está a disputar uma bola que tem dono.
+=============================================================================
+*/
+function podeTirarABola(dono, ladrao, comCarrinho) {
+    const RT = (typeof BallControl !== 'undefined') ? BallControl.rouboPorTras : null;
+    if (!RT || !dono || !ladrao || !dono.model || !ladrao.model) return true;
+
+    let fx, fz;
+    if (dono.velocity && dono.velocity.lengthSq() > 0.1) {
+        const n = Math.hypot(dono.velocity.x, dono.velocity.z) || 1;
+        fx = dono.velocity.x / n; fz = dono.velocity.z / n;
+    } else {
+        fx = Math.sin(dono.model.rotation.y); fz = Math.cos(dono.model.rotation.y);
+    }
+
+    const ax = ladrao.model.position.x - dono.model.position.x;
+    const az = ladrao.model.position.z - dono.model.position.z;
+    const da = Math.hypot(ax, az);
+    if (da <= 0.001) return true;
+
+    const limite = comCarrinho
+        ? ((typeof RT.anguloCosCarrinho === 'number') ? RT.anguloCosCarrinho : RT.anguloCos)
+        : RT.anguloCos;
+    return (fx * ax + fz * az) / da >= limite;
+}
+
+/*
+Está a fazer carrinho? Os dois estados contam — o desarme em pé e o deslize.
+*/
+function emCarrinho(p) {
+    const e = (p && p.fsm && p.fsm.currentState) || '';
+    return e === 'TACKLE' || e === 'SLIDE_TACKLE';
+}
+
+if (typeof window !== 'undefined') {
+    window.podeTirarABola = podeTirarABola;
+    window.emCarrinho = emCarrinho;
+}
+
 function alturaDoJogador(p) {
     const A = (typeof AlturaJogador !== 'undefined') ? AlturaJogador : null;
     const padrao = (typeof ALTURA_PADRAO === 'number') ? ALTURA_PADRAO : 1.855;

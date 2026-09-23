@@ -4149,8 +4149,16 @@ const PlayerBT = sel('PlayerRoot',
                     const dist = ctx.distToBall;
                     if (dist > 3.0) return false; // Longe demais para carrinho
                     
-                    // Bloqueio por ângulo: se o defensor estiver bem atrás do portador (ângulo < -0.3), 
-                    // não vale a pena fazer carrinho/desarme porque vai falhar e a animação não rouba a bola.
+                    /*
+                    BLOQUEIO POR ÂNGULO. Era `< -0.3`, cos(107 graus): deixava
+                    tentar o carrinho de quase toda a parte menos das costas.
+
+                    Pedido: o carrinho vale dos 46 aos 80 graus. O limite passa
+                    a ser o `anguloCosCarrinho` do `BallControl.rouboPorTras`,
+                    que e o MESMO numero que a disputa da bola usa — as duas
+                    regras tem de concordar sobre onde acaba o carrinho, senao
+                    o BT manda-o atirar-se e a fisica recusa-lhe a bola.
+                    */
                     let carrierFwd = _v1;
                     if (carrier.velocity && carrier.velocity.lengthSq() > 0.1) {
                         carrierFwd.copy(carrier.velocity).normalize();
@@ -4161,8 +4169,11 @@ const PlayerBT = sel('PlayerRoot',
                     toDefender.y = 0;
                     if (toDefender.lengthSq() > 0) toDefender.normalize();
                     const dotAngle = carrierFwd.x * toDefender.x + carrierFwd.z * toDefender.z;
-                    
-                    if (dotAngle < -0.3) return false;
+
+                    const RTc = (typeof BallControl !== 'undefined' && BallControl.rouboPorTras) || null;
+                    const limiteCarrinho = (RTc && typeof RTc.anguloCosCarrinho === 'number')
+                        ? RTc.anguloCosCarrinho : -0.3;
+                    if (dotAngle < limiteCarrinho) return false;
                     
                     // Se muito perto e de frente, faz desarme em pé imediatamente.
                     if (dist < 1.4 && dotAngle > 0.5) return true;

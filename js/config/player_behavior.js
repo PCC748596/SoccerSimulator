@@ -844,7 +844,44 @@ const BallControl = {
     sobrar.
     */
     rouboPorTras: {
-        anguloCos: -0.5,   // cos(120°): daqui para trás não se rouba por contacto
+        /*
+        =================================================================
+        DE QUE ÂNGULO SE PODE TIRAR A BOLA A QUEM A TEM
+        =================================================================
+        Pedido: *"Só é possivel roubar a bola em uma marcação normal se o
+        jogador adversário estiver num angulo de até 45 de frente com o
+        jogador que tem a bola e de 46-80 graus utilizando o carrinho. Fora
+        isso tem que ser impossível roubar a bola do adversário."* O relato que
+        o motivou: *"O Atacante está roubando a bola do goleiro por trás do
+        goleiro. Com o corpo do goleiro entre ele e a bola."*
+
+        Era `anguloCos: -0.5` — cos(120°), ou seja tirava-se a bola de tudo
+        menos do terço de trás. Medido em 15 min (`tools/lab/roubo_angulo.js`),
+        76 roubos a menos de 3 m:
+
+            0 a 45 graus (de frente)     46
+            46 a 80 (de lado)             9
+            81 a 120                      9
+            121 a 180 (de tras)          12
+
+            sem carrinho acima de 45 graus    22  (29%)
+
+        Quase um terço dos roubos vinha de onde a regra do pedido não permite.
+
+        SÃO DOIS LIMITES, e não um: sem carrinho até 45 graus, com carrinho até
+        80. O `resolveBallContact` aplica o que for, conforme o ladrão esteja
+        ou não em `TACKLE`/`SLIDE_TACKLE` — porque o carrinho também chega à
+        bola por ali, e um limite só bloqueava o gesto que a regra permite.
+
+        Os 121 a 180 graus da tabela acima existiam APESAR da guarda dos 120,
+        e a razão é o `bolaSolta` logo abaixo: com a bola lançada à frente do
+        portador a guarda desliga-se, e aí ela é de quem chegar. Isso
+        mantém-se — é a diferença entre tirar a bola do pé de alguém e recolher
+        uma bola que já lhe sobrou.
+        =================================================================
+        */
+        anguloCos: 0.7071,          // cos(45°): sem carrinho, só daqui para a frente
+        anguloCosCarrinho: 0.1736,  // cos(80°): com carrinho, abre até aos 80
         bolaSolta: 1.6     // com a bola a mais disto do portador, ela é de quem chegar
     },
 
