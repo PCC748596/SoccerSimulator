@@ -287,6 +287,36 @@ const RefereeModel = {
             choque, nao um rocar.
             */
             velRelMin: 3.2,
+
+            /*
+            QUEM VEM PELAS COSTAS E QUE COMETE A FALTA, seja qual for a
+            velocidade. Angulo em radianos entre a frente de um e a direccao
+            de onde o outro vem: 0 de frente, PI pelas costas.
+
+            O infractor era escolhido SO pela velocidade — "quem entra e quem
+            vai mais depressa". Relato: *"Um atacante estava com a bola, quase
+            dentro da area, e na hora que ia chutar foi marcado falta contra
+            ele. O marcador estava atras dele, ninguem a frente."* E e o que
+            acontecia: um atacante a arrancar para rematar vai mais depressa
+            do que o defesa que o persegue, portanto ficava ele o infractor —
+            a levar o toque nas costas e a ser punido por isso.
+
+            Medido com `tools/lab/falta_pelas_costas.js`, em 30 min de jogo:
+
+                semente 1   20 faltas de contacto, 1 com o portador punido
+                            e o adversario ATRAS dele
+                semente 3   29 faltas de contacto, 2 do mesmo caso
+
+            A velocidade continua a decidir o ombro a ombro e o encontro de
+            frente, onde nenhum dos dois vem de tras. So quando UM deles vem
+            claramente pelas costas do outro e que a geometria manda na
+            velocidade.
+
+            2.0 rad sao 115 graus: nao e "ligeiramente atras", e mesmo por
+            tras do ombro. Dois jogadores lado a lado ficam perto de PI/2
+            (90 graus) e nao entram nesta regra.
+            */
+            anguloPelasCostas: 2.0,
             /*
             0.035 -> 0.075, medido em passos de 207 min de relogio:
 
@@ -1879,8 +1909,30 @@ const Officials = {
                 */
                 const vA = a.velocity ? a.velocity.length() : 0;
                 const vB = b.velocity ? b.velocity.length() : 0;
-                const infractor = (vA >= vB) ? a : b;
-                const vitima = (infractor === a) ? b : a;
+                let infractor = (vA >= vB) ? a : b;
+                let vitima = (infractor === a) ? b : a;
+
+                /*
+                MAS A GEOMETRIA GANHA À VELOCIDADE quando um deles vem pelas
+                COSTAS do outro — ver `anguloPelasCostas`, que tem o relato e a
+                medição. Quem persegue pode ir mais devagar do que quem foge, e
+                punir o que vai à frente por levar um toque nas costas é o
+                contrário da regra.
+
+                O ângulo já era calculado aqui ao lado, para a gravidade — mas
+                SÓ DEPOIS de o infractor estar escolhido, portanto não chegava
+                a influenciar a escolha.
+                */
+                const limiteCostas = (typeof C.anguloPelasCostas === 'number')
+                    ? C.anguloPelasCostas : Infinity;
+                const aVemDeTras = this._anguloDeAtaque(a, b) > limiteCostas;
+                const bVemDeTras = this._anguloDeAtaque(b, a) > limiteCostas;
+                // Só quando é um SÓ deles: de frente um para o outro os dois
+                // dariam verdade, e aí não há nada a corrigir.
+                if (aVemDeTras !== bVemDeTras) {
+                    infractor = aVemDeTras ? a : b;
+                    vitima = (infractor === a) ? b : a;
+                }
 
                 this._arrefecimento.set(chave, C.arrefecimento);
                 this.marcarFalta(infractor, vitima, Object.assign({

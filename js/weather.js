@@ -58,7 +58,15 @@ const Weather = {
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.25,
                 nuvensCor: 0xffffff,
-                nuvensQtd: 2,
+                /*
+                Eram 2. Pedido: *"Coloca mais 2 de nuves no céu claro."*
+
+                FICA ACIMA DO `nublado`, QUE TEM 3. A escala dos outros três
+                presets (3, 4, 5) não foi mexida, portanto o céu limpo passa a
+                ter mais nuvens que o nublado. Foi o pedido à letra; quem quiser
+                a progressão de volta sobe os outros na mesma proporção.
+                */
+                nuvensQtd: 4,
                 chuva: false
             },
             nublado: {
@@ -132,7 +140,10 @@ const Weather = {
                 nuvensVisiveis: true,
                 nuvensOpacidade: 0.20,
                 nuvensCor: 0x1f2b3e,
-                nuvensQtd: 1,
+                // Eram 1. O mesmo "+2" do céu limpo de dia — `limpo` é o
+                // mesmo céu, e deixá-lo em 1 punha a noite limpa com menos
+                // nuvens do que antes tinha o dia limpo.
+                nuvensQtd: 3,
                 chuva: false
             },
             nublado: {

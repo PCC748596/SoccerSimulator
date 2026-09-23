@@ -29,6 +29,7 @@ directório de onde se chama não importa.
 | `diag_inf2.js` | segunda passagem sobre a mesma pergunta do `diag_inf.js` | segundos de jogo (300) |
 | `adiantar_a_bola.js` | posses de atacante no meio-campo adversário: quanto espaço tinha à frente, se entrou em condução e quantos metros progrediu | segundos (600), semente (1) |
 | `cabeceio_na_area.js` | cabeceios dentro da grande área: quantos vão à baliza e quantos saem em passe, por distância | segundos (900), semente (1), nº forçados (400), `--marcado` |
+| `falta_pelas_costas.js` | faltas de contacto: quem foi marcado infractor e de que lado veio o toque | segundos (1800), semente (1) |
 | `dois_toques.js` | reposições em que o próprio batedor voltou a tocar na bola antes de outro jogador — a regra dos dois toques | segundos (600), semente (1), `--forcar`, `--sem-regra` |
 | `lote_tmp.js` | lote de jogos completos, para estatística sobre várias partidas | nº de jogos (4), duração em segundos (1080) |
 
