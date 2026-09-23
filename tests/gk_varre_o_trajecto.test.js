@@ -12,7 +12,8 @@ correcta, medida no rig) a mao passou a estar meio metro a frente do peito, e
 o salto entre frames passou a decidir defesas: medido no lote de 30 jogos, a
 conversao de remate enquadrado subiu de 44.3% para 57.1%.
 
-Medido depois, no lab_gk com semente, tres sementes de 300 remates:
+Medido depois, no tools/lab/lab_gk.js com semente, tres sementes de 300
+remates:
 
     varrimento    semente 0   1       2       media
     COM             20.5%   30.6%   38.3%   29.8%

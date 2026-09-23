@@ -1,5 +1,5 @@
 /* Porque e que o ramo do passe para quem infiltra quase nunca dispara. */
-require('./tools/headless/harness.js');
+require('../headless/harness.js');
 const dt=1/60, segundos=Number(process.argv[2]||300);
 const scene=new THREE.Scene(); Match.init(scene);
 if (typeof Officials!=='undefined'&&Officials.init) Officials.init(scene);

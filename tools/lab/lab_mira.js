@@ -1,5 +1,5 @@
 /* Onde é que se MIRA, e onde é que a bola acaba por ir. */
-require('./tools/headless/harness.js');
+require('../headless/harness.js');
 const N = Number(process.argv[2] || 2000);
 const tipos = {}, mira = {};
 for (let i = 0; i < N; i++) {

@@ -7,7 +7,7 @@ desfecho. Isola a defesa do resto do jogo.
 
 Uso: node lab_gk.js [remates]
 */
-require('./tools/headless/harness.js');
+require('../headless/harness.js');
 const scene = new THREE.Scene();
 Match.init(scene);
 if (typeof Officials !== 'undefined' && Officials.init) Officials.init(scene);

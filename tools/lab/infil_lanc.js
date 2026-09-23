@@ -5,7 +5,7 @@ Conta cada arranque de RUN_INTO_SPACE (o `actInfiltrar`) e verifica, enquanto
 a corrida dura, se aquele jogador chegou a ser destinatário de um passe
 (Match.intendedReceiver) e se chegou mesmo a tocar na bola.
 */
-require('./tools/headless/harness.js');
+require('../headless/harness.js');
 const dt = 1 / 60, segundos = Number(process.argv[2] || 1080);
 const scene = new THREE.Scene();
 Match.init(scene);

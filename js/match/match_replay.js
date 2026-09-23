@@ -1,4 +1,18 @@
-const REPLAY_FRAMES = 1200; // 20s at 60fps
+/*
+12 SEGUNDOS a 60 fps, e é isso que dura uma repeticao.
+
+Eram 20 s de buffer com a repeticao do golo a mostrar 16 (15 antes da bola
+entrar mais 1 depois). Pedido: *"Ajusta o Replay para 12segundos."*
+
+Encolher AQUI chega para as duas repeticoes, e e por isso que se mexe aqui e
+nao so no REPLAY_GOLO: a repeticao manual (o botao) corre o buffer inteiro, a
+do golo recorta uma janela dentro dele. Com o buffer a 12 s as duas passam a
+durar o mesmo.
+
+Custa 1236 floats por frame (FLOATS_PER_FRAME), portanto o buffer passa de
+5.9 MB para 3.6 MB.
+*/
+const REPLAY_FRAMES = 720; // 12s a 60fps
 const FLOATS_PER_PLAYER = 49;
 
 /*
@@ -19,7 +33,15 @@ no mesmo formato e pelo mesmo código. Custo: 3 x 49 floats por frame, ou seja
 =============================================================================
 */
 const CORPOS_POR_FRAME = 25;   // 22 jogadores + árbitro + 2 assistentes
-const FLOATS_PER_FRAME = 7 + CORPOS_POR_FRAME * FLOATS_PER_PLAYER;
+/*
+7 da bola (posicao + quaterniao), 25 corpos, e 4 da REDE no fim — `t` e
+`amplitude` da onda por cada baliza (ver NetWave.estado, js/goal_net.js).
+
+Os 4 da rede vao no FIM de proposito: acrescentados a cabeca mudavam o offset
+de tudo o que ja la estava, e este buffer e lido e escrito por indice a mao.
+*/
+const FLOATS_PER_REDE = 4;
+const FLOATS_PER_FRAME = 7 + CORPOS_POR_FRAME * FLOATS_PER_PLAYER + FLOATS_PER_REDE;
 
 /*
 =============================================================================
@@ -32,7 +54,8 @@ automatico terminar, caso esteja ligado"*.
 Tres numeros e nada mais:
 
   `SEGUNDOS_ANTES`  quanto do lance se ve antes da bola entrar. Cabe no
-                    buffer, que guarda 20 s (REPLAY_FRAMES).
+                    buffer, que guarda 12 s (REPLAY_FRAMES) — e a soma com o
+                    `SEGUNDOS_DEPOIS` tem de caber la dentro.
   `SEGUNDOS_DEPOIS` e quanto se ve DEPOIS: sem isto a repeticao acabava no
                     frame exacto em que a bola passa a linha, que e o unico
                     frame que ninguem quer perder.
@@ -47,7 +70,7 @@ repeticao esta a repor.
 =============================================================================
 */
 const REPLAY_GOLO = {
-    SEGUNDOS_ANTES: 15.0,
+    SEGUNDOS_ANTES: 11.0,
     SEGUNDOS_DEPOIS: 1.0,
     CAMARA: 'lateraltv'
 };
@@ -172,10 +195,23 @@ class ReplaySystem {
         this.buffer[pIdx++] = Match.ball.position.x;
         this.buffer[pIdx++] = Match.ball.position.y;
         this.buffer[pIdx++] = Match.ball.position.z;
-        this.buffer[pIdx++] = Match.ball.quaternion.x;
-        this.buffer[pIdx++] = Match.ball.quaternion.y;
-        this.buffer[pIdx++] = Match.ball.quaternion.z;
-        this.buffer[pIdx++] = Match.ball.quaternion.w;
+        /*
+        O QUATERNIAO E O DO `ballVisual`, E NAO O DO `ball`.
+
+        Era o do `ball`, e por isso a bola nao rolava na repeticao: quem a faz
+        rolar e o `MatchPhysics`, que escreve em `this.ballVisual.quaternion`
+        (a malha, filha do `ball`) a partir da velocidade. O `ball` e so o no
+        de POSICAO — ninguem lhe toca na rotacao em parte nenhuma do jogo.
+        Gravavam-se quatro numeros sempre iguais a (0, 0, 0, 1) e repunha-se a
+        identidade, enquanto a malha ficava congelada na rotacao em que o
+        ultimo frame ao vivo a deixou. Relato: *"no replay a bola nao esta
+        rolando"*.
+        */
+        const qb = Match.ballVisual ? Match.ballVisual.quaternion : Match.ball.quaternion;
+        this.buffer[pIdx++] = qb.x;
+        this.buffer[pIdx++] = qb.y;
+        this.buffer[pIdx++] = qb.z;
+        this.buffer[pIdx++] = qb.w;
 
         const corpos = this.corposDoFrame();
         for(let i = 0; i < CORPOS_POR_FRAME; i++) {
@@ -216,7 +252,19 @@ class ReplaySystem {
                 this.buffer[pIdx++] = 0; this.buffer[pIdx++] = 0; this.buffer[pIdx++] = 0;
             }
         }
-        
+
+        /*
+        A REDE, no fim do frame: `t` e `amplitude` da onda por baliza.
+
+        O `NetWave.update` e o `NetWave.bater` vivem os dois dentro do
+        `Match.update`, que NAO corre durante a repeticao — e disso que a
+        repeticao vive. Sem isto a rede ficava imovel na deformacao em que o
+        jogo a deixou, enquanto a bola entrava outra vez a frente dela.
+        */
+        const rede = (typeof NetWave !== 'undefined') ? NetWave.estado() : [0, 0, 0, 0];
+        this.buffer[pIdx++] = rede[0]; this.buffer[pIdx++] = rede[1];
+        this.buffer[pIdx++] = rede[2]; this.buffer[pIdx++] = rede[3];
+
         this.head = (this.head + 1) % REPLAY_FRAMES;
         if (this.count < REPLAY_FRAMES) this.count++;
     }
@@ -291,7 +339,9 @@ class ReplaySystem {
         let pIdx = base;
         
         Match.ball.position.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
-        Match.ball.quaternion.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
+        // A rotacao vive na MALHA e nao no no de posicao — ver `recordFrame`.
+        const qb = Match.ballVisual ? Match.ballVisual.quaternion : Match.ball.quaternion;
+        qb.set(this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++], this.buffer[pIdx++]);
 
         const corpos = this.corposDoFrame();
         for(let i = 0; i < CORPOS_POR_FRAME; i++) {
@@ -324,6 +374,13 @@ class ReplaySystem {
                 pIdx += 3;
             }
         }
+
+        // A onda da rede, no estado exacto em que estava neste frame.
+        if (typeof NetWave !== 'undefined') {
+            NetWave.repor(this.buffer[pIdx], this.buffer[pIdx + 1],
+                this.buffer[pIdx + 2], this.buffer[pIdx + 3]);
+        }
+        pIdx += FLOATS_PER_REDE;
     }
 
     toggleReplay() {

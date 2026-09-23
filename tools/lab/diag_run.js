@@ -5,7 +5,7 @@ Reavalia, por frame, as mesmas condições de aborto do `case 'RUN_INTO_SPACE'`
 (fsm.js) para cada jogador que está no estado, e regista qual era verdadeira no
 instante em que ele saiu.
 */
-require('./tools/headless/harness.js');
+require('../headless/harness.js');
 const dt = 1 / 60, segundos = Number(process.argv[2] || 600);
 const scene = new THREE.Scene();
 Match.init(scene);

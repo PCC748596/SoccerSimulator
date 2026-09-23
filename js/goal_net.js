@@ -101,12 +101,80 @@ const NetWave = {
         for (const f of this.faces) { if (f.activa) { algumaActiva = true; break; } }
         if (!algumaActiva) return;
 
+        for (const f of this.faces) { if (f.activa) f.t += dt; }
+        this.aplicar();
+    },
+
+    /*
+    =========================================================================
+    O ESTADO DA ONDA SÃO QUATRO NÚMEROS, E É POR ISSO QUE O REPLAY O GUARDA
+    =========================================================================
+    Todas as faces da MESMA baliza partilham `t` e `amplitude` — é o `bater`
+    que os põe iguais, de uma vez. Logo o pano inteiro do estádio cabe em
+    `t` e `amplitude` por cada `zSinal`: quatro floats.
+
+    Isto existe porque durante a repetição do golo o `Match.update` não corre,
+    e com ele não corre nem o `update` daqui nem o `bater` que a física chama.
+    Relato: *"no replay ... a rede não balança"*. E não balançava: a rede
+    ficava exactamente na deformação em que o jogo a deixou, imóvel, enquanto
+    a bola entrava outra vez.
+
+    Reposto em vez de re-simulado de propósito. O replay repõe o que ACONTECEU,
+    frame a frame, como faz com a bola e com os vinte e cinco corpos; mandar o
+    `update` correr por baixo dava uma onda parecida mas não a mesma, e
+    desalinhada do instante em que a bola toca a rede.
+    =========================================================================
+    */
+    estado: function () {
+        const e = [0, 0, 0, 0];
+        for (const f of this.faces) {
+            if (!f.activa) continue;
+            const i = (f.zSinal < 0) ? 0 : 2;
+            e[i] = f.t; e[i + 1] = f.amplitude;
+        }
+        return e;
+    },
+
+    repor: function (tNeg, ampNeg, tPos, ampPos) {
+        if (!this.faces.length) return;
+
+        const dur = GoalNet.duracaoOnda;
+        let mexer = false;
+
+        for (const f of this.faces) {
+            const negativa = (f.zSinal < 0);
+            let t = negativa ? tNeg : tPos;
+            let a = negativa ? ampNeg : ampPos;
+            let activa = (a > 0 && t < dur);
+
+            /*
+            A FACE QUE ACABOU DE PARAR TEM DE LEVAR UMA ÚLTIMA PASSAGEM, senão
+            fica congelada na última deformação que teve. É o mesmo que o
+            `update` faz no fim da onda: manda-a desenhar com `t >= dur`, o que
+            dá deslocamento zero, e só aí a desactiva.
+            */
+            if (!activa && f.activa) { t = dur; a = 0; activa = true; }
+            if (!activa) { f.t = t; f.amplitude = a; f.activa = false; continue; }
+
+            f.t = t; f.amplitude = a; f.activa = true;
+            mexer = true;
+        }
+
+        if (mexer) this.aplicar();
+    },
+
+    /*
+    Desenha as faces activas no estado em que ESTÃO — não avança o tempo. O
+    `update` avança o `t` e chama isto; o `repor` escreve o `t` e chama isto.
+    */
+    aplicar: function () {
+        if (!this.faces.length) return;
+
         const dur = GoalNet.duracaoOnda;
 
         for (const f of this.faces) {
             if (!f.activa) continue;
 
-            f.t += dt;
             const acabou = f.t >= dur;
 
             const base = f.base, arr = f.attr.array;

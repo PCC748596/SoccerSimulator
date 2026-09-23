@@ -1375,7 +1375,7 @@ passa-lhe por cima sem nunca ficar perto em frame nenhum.
 
 Corrigido nos dois sítios (mergulho e defesa de pé) com `distanciaAoSegmento`
 (utils.js), que mede contra o TRAJECTO do frame. Emparelhado por semente no
-`lab_gk`, 300 remates cada:
+`tools/lab/lab_gk.js`, 300 remates cada:
 
     varrimento    semente 0   1       2       media
     COM             20.5%   30.6%   38.3%   29.8%
