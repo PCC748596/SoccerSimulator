@@ -3442,6 +3442,15 @@ function resolverDefesaGK(o) {
         - M.custoVel * (v - M.vRef) / M.vRef
         - M.custoExtensao * ext
         - M.custoAltura * alt;
+    /*
+    A BOLA MOLHADA ESCAPA-SE DAS MAOS. Ver ChuvaNoJogo.agarrarGK
+    (config/physics.js): tira-se uma fraccao da probabilidade de AGARRAR, e o
+    que sobra vai para a espalmada e para o rocar, que e o que se ve num jogo a
+    chover. O tecto e o chao do modelo continuam a mandar.
+    */
+    if (typeof chuvaNoRelvado === 'function') {
+        pAgarra *= (1 - ChuvaNoJogo.agarrarGK * chuvaNoRelvado());
+    }
     pAgarra = Math.max(M.minAgarra, Math.min(M.maxAgarra, pAgarra));
 
     /*

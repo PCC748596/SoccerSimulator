@@ -576,15 +576,94 @@ Valores agora:
     rolamento:  a = μ·g = 0.98 m/s², constante
 =============================================================================
 */
+/*
+=============================================================================
+O QUE A CHUVA FAZ AO JOGO
+=============================================================================
+Pedido: *"o jogo tem que ser afetado pela chuva. Bola um pouco mais rapida.
+Jogadores cansando mais. Etc."*
+
+Ate aqui a chuva era so o que se via — fios, respingos, luz. O relvado
+encharcado nao mudava nada do que acontece nele.
+
+Tudo o que a chuva muda esta NESTE bloco, e em mais lado nenhum. Cada numero e
+a FRACCAO que se tira (ou se poe) com a chuva no maximo; a meio aguaceiro
+conta-se metade, porque a intensidade entra na conta (ver `chuvaNoRelvado`).
+
+  `bolaRola`      relva molhada trava menos: a bola corre mais e chega mais
+                  longe. E o "bola um pouco mais rapida" do pedido.
+  `bolaPatina`    e no quique tambem nao agarra: em vez de morder o relvado,
+                  a bola escorrega para a frente.
+  `bolaRessalta`  e sobe menos — o relvado encharcado absorve.
+  `cansaco`       correr na lama custa mais.
+  `agarrarGK`     a bola molhada escapa das maos: espalma-se mais, agarra-se
+                  menos.
+
+DESLIGAR: `activo: false` devolve o jogo seco, com chuva no ecra e nada mais.
+=============================================================================
+*/
+const ChuvaNoJogo = {
+    activo: true,
+
+    bolaRola: 0.35,        // fraccao retirada ao atrito de rolamento
+    bolaPatina: 0.20,      // fraccao retirada a perda horizontal do quique
+    bolaRessalta: 0.15,    // fraccao retirada ao ressalto vertical
+    cansaco: 0.30,         // fraccao ACRESCENTADA ao gasto de deposito
+    agarrarGK: 0.22        // fraccao retirada a probabilidade de agarrar
+};
+
+/*
+QUANTA CHUVA HA NO RELVADO, de 0 a 1.
+
+0 sem chuva; com chuva, a intensidade do aguaceiro do momento (ver
+`chuvaAguaceiro` em js/weather.js) — portanto o jogo aperta e alivia com ela,
+e nao apenas liga e desliga.
+
+Le o `Weather` de forma preguicosa e tolerante: os ficheiros de configuracao
+carregam antes dele (ver a ordem em index.html) e a simulacao em lote corre
+sem clima nenhum. Sem `Weather`, o campo esta seco — que e o que as medicoes
+e os testes ja assumiam.
+*/
+function chuvaNoRelvado() {
+    if (!ChuvaNoJogo.activo) return 0;
+    const W = (typeof Weather !== 'undefined') ? Weather
+        : ((typeof window !== 'undefined') ? window.Weather : null);
+    if (!W || typeof W.aChover !== 'function' || !W.aChover()) return 0;
+    const i = (typeof W.intensidadeChuva === 'number') ? W.intensidadeChuva : 1;
+    return Math.max(0, Math.min(1, i));
+}
+
 const BallPhysics = {
     massa: 0.430,           // kg
     raio: 0.11,             // m (circunferência 69 cm)
     gravidade: 9.81,        // m/s²
     densidadeAr: 1.225,     // kg/m³ — 1 atm, nível do mar, 15 °C
     cd: 0.25,               // coeficiente de arrasto
-    restituicao: 0.60,      // ressalto vertical em relva
-    atritoRessalto: 0.75,   // perda horizontal em cada ressalto
-    atritoRolamento: 0.38,  // μ de rolamento em relva
+    /*
+    OS TRES VALORES DO RELVADO SAO OS DO RELVADO SECO, e o que se le e o do
+    relvado de agora — ver ChuvaNoJogo, aqui em cima.
+
+    Sao getters e nao numeros para a chuva chegar a TUDO de uma vez: a fisica
+    da bola (match_physics.js), a previsao de onde ela vai parar
+    (`preverBolaEm`, utils.js), a balistica do passe e a leitura do
+    guarda-redes leem todos daqui. Mudar so a fisica poria os jogadores a
+    correr para onde a bola ja nao ia.
+    */
+    restituicaoSeco: 0.60,      // ressalto vertical em relva
+    atritoRessaltoSeco: 0.75,   // perda horizontal em cada ressalto
+    atritoRolamentoSeco: 0.38,  // μ de rolamento em relva
+
+    get restituicao() {
+        return this.restituicaoSeco * (1 - ChuvaNoJogo.bolaRessalta * chuvaNoRelvado());
+    },
+    get atritoRessalto() {
+        // Molhada, a bola MORDE MENOS no quique: perde menos velocidade
+        // horizontal, ou seja patina para a frente. Por isso o atrito DESCE.
+        return 1 - (1 - this.atritoRessaltoSeco) * (1 - ChuvaNoJogo.bolaPatina * chuvaNoRelvado());
+    },
+    get atritoRolamento() {
+        return this.atritoRolamentoSeco * (1 - ChuvaNoJogo.bolaRola * chuvaNoRelvado());
+    },
     vMinRessalto: 0.6,      // abaixo disto não ressalta, assenta
     vMinRolar: 0.25,        // abaixo disto pára de vez
 

@@ -326,7 +326,14 @@ class FootballPlayer {
             // stamina alta gasta menos. 50 e a media e nao mexe.
             const resistencia = 1 - ((this.skillFor('STAMINA') - 50) / 50) * S.sensibilidadeStamina;
             const esforco = Math.pow(Math.max(0, v) / Math.max(0.1, S.vRef), S.expoente);
-            this.energia -= S.custoPorSegundo * esforco * Math.max(0.1, resistencia) * dtJogo;
+            /*
+            E NA CHUVA CUSTA MAIS. Relvado encharcado, bota pesada, pe que
+            escorrega a cada apoio — ver ChuvaNoJogo.cansaco (config/physics.js).
+            Com o aguaceiro a aliviar, o acrescimo alivia com ele.
+            */
+            const molhado = (typeof chuvaNoRelvado === 'function')
+                ? (1 + ChuvaNoJogo.cansaco * chuvaNoRelvado()) : 1;
+            this.energia -= S.custoPorSegundo * esforco * Math.max(0.1, resistencia) * molhado * dtJogo;
         } else {
             const forma = 1 + ((this.skillFor('FITNESS') - 50) / 50) * S.sensibilidadeFitness;
             this.energia += S.recuperaPorSegundo * Math.max(0.1, forma) * dtJogo;
