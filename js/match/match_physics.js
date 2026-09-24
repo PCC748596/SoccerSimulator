@@ -58,6 +58,23 @@ Object.assign(Match, {
         if (this.ball.position.y <= r) {
             this.ball.position.y = r;
 
+            /*
+            RESPINGO DO QUIQUE. So com chuva — o Weather trata disso e de
+            estar em pausa; aqui so se mede a pancada.
+
+            `vImpacto` e a velocidade VERTICAL de chegada, e e ela que manda:
+            uma bola a rolar toca no relvado todos os frames com vy ~ 0 e nao
+            levanta agua nenhuma. O tecto sao 12 m/s, que e uma bola caida de
+            alto a prumo; dai para cima o respingo ja esta no maximo.
+            */
+            if (typeof Weather !== 'undefined' && Weather.aChover()) {
+                const vImpacto = -this.ballVel.y;
+                if (vImpacto > 1.2) {
+                    Weather.respingo(this.ball.position.x, this.ball.position.z,
+                        Math.min(1, vImpacto / 12));
+                }
+            }
+
             // A curva da falta acaba aqui: no chão já não há folha seca.
             this.freeKickDip = null;
 

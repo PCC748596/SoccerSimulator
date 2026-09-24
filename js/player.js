@@ -5070,6 +5070,50 @@ class FootballPlayer {
 
             const t = ((this.animTimer % 1.0) + 1.0) % 1.0;
             this.animPhase = t;
+
+            /*
+            RESPINGO DA PISADA (so com chuva).
+
+            QUANDO — o pe esta a suportar o peso no ponto MAIS BAIXO do
+            ressalto da anca: `ressalto` do getGaitPose e
+            `(1 + sin(2c + pi))/2`, minimo em t = 0.125 e t = 0.625, um por
+            cada apoio. Detecta-se a PASSAGEM por esses dois pontos entre o
+            frame anterior e este, como no `noFrameDoPe` — uma janela dispara
+            na borda e volta a disparar nos frames seguintes.
+
+            NAO E TODA A PISADA, por pedido: um sorteio deixa passar ~35%.
+            Com 22 jogadores a correr, todas as pisadas dava um tapete de agua
+            permanente a toda a volta — e cada respingo sao ate 10 goticulas
+            de uma pool de 600.
+
+            Tambem nao ha respingo a passo de caminhada (`velMinRespingo`): a
+            agua salta de quem crava o pe, nao de quem anda.
+            */
+            if (typeof Weather !== 'undefined' && Weather.aChover() && speed >= 2.0) {
+                const ant = (typeof this._faseRespingoAnterior === 'number')
+                    ? this._faseRespingoAnterior : t;
+                this._faseRespingoAnterior = t;
+
+                const avancoFase = ((t - ant) % 1 + 1) % 1;
+                if (avancoFase > 0 && avancoFase < 0.5) {
+                    for (let k = 0; k < 2; k++) {
+                        const alvo = 0.125 + k * 0.5;
+                        const desde = ((t - alvo) % 1 + 1) % 1;
+                        if (desde >= avancoFase) continue;          // nao cruzou este apoio
+                        if (Math.random() > 0.35) continue;         // ver a nota acima
+
+                        // O pe de apoio esta ao lado do eixo do corpo, nao debaixo
+                        // dele: ~12 cm para o lado, alternando com o apoio.
+                        const lado = (k === 0) ? 1 : -1;
+                        const px = this.model.position.x + (-fwd.z) * 0.12 * lado;
+                        const pz = this.model.position.z + (fwd.x) * 0.12 * lado;
+                        // Forca a subir com a velocidade: a sprintar levanta mais agua.
+                        Weather.respingo(px, pz, 0.15 + Math.min(0.35, speed / 24));
+                    }
+                }
+            } else {
+                this._faseRespingoAnterior = t;
+            }
             const P = getGaitPose(t, speed);
 
             /*

@@ -41,6 +41,33 @@ const Weather = {
     rainGeometry: null,
     rainMaterial: null,
 
+    /*
+    =========================================================================
+    RESPINGOS — a agua que salta do relvado encharcado
+    =========================================================================
+    Um unico sistema de particulas (THREE.Points) partilhado por todos os
+    eventos: o quique da bola (Match.updateBall) e a pisada dos jogadores
+    (Player.aplicarPosePassada). Quem os dispara chama `Weather.respingo(x, z,
+    forca)` e nao sabe nada do resto.
+
+    POOL FIXA, sem alocar nada em jogo. Cada goticula e uma entrada de
+    `splashPool` com velocidade e tempo de vida; as mortas ficam estacionadas
+    fora de campo (y = -1000) em vez de sairem da geometria, que num
+    BufferAttribute e mais caro do que deixa-las la.
+
+    So funciona com `condicao === 'chuva'` — em campo seco nao ha agua para
+    saltar, e o `respingo` sai logo na primeira linha.
+    =========================================================================
+    */
+    splashParticles: null,
+    splashGeometry: null,
+    splashMaterial: null,
+    splashPool: [],
+    splashMax: 600,            // tecto de goticulas vivas ao mesmo tempo
+    splashProx: 0,             // cursor circular da pool
+    splashGravidade: 12.0,     // queda das goticulas (m/s^2), acima da real: caem secas
+    splashVida: 0.45,          // segundos de vida de cada goticula
+
     presets: {
         dia: {
             limpo: {
@@ -217,6 +244,7 @@ const Weather = {
 
         this._criarNuvens();
         this._criarChuva();
+        this._criarRespingos();
         this.apply();
     },
 
@@ -307,6 +335,12 @@ const Weather = {
         // 7. Chuva
         if (this.rainParticles) {
             this.rainParticles.visible = pConfig.chuva;
+        }
+
+        // 8. Respingos — sem chuva nao ha agua no relvado, e a pool esvazia-se
+        if (this.splashParticles) {
+            this.splashParticles.visible = pConfig.chuva;
+            if (!pConfig.chuva) this._limparRespingos();
         }
     },
 
@@ -516,6 +550,139 @@ const Weather = {
         this.scene.add(this.rainParticles);
     },
 
+    _criarRespingos() {
+        if (this.splashParticles) return;
+
+        const max = this.splashMax;
+        const positions = new Float32Array(max * 3);
+
+        this.splashPool = new Array(max);
+        for (let i = 0; i < max; i++) {
+            this.splashPool[i] = { vx: 0, vy: 0, vz: 0, vida: 0 };
+            positions[i * 3 + 1] = -1000;   // estacionada fora de vista
+        }
+
+        this.splashGeometry = new THREE.BufferGeometry();
+        this.splashGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+        /*
+        `depthWrite: false` pela mesma razao da chuva: sao centenas de pontos
+        translucidos e nao vale a pena deixa-los recortar-se uns aos outros.
+        Ficam um pouco mais claros do que os fios da chuva — a goticula que
+        salta apanha luz de cima e le-se melhor contra o relvado escuro.
+        */
+        this.splashMaterial = new THREE.PointsMaterial({
+            color: 0xc8dcf0,
+            size: 0.10,
+            sizeAttenuation: true,
+            transparent: true,
+            opacity: 0.8,
+            depthWrite: false
+        });
+
+        this.splashParticles = new THREE.Points(this.splashGeometry, this.splashMaterial);
+        this.splashParticles.name = "Weather_Splash";
+        this.splashParticles.frustumCulled = false;   // as goticulas mexem-se fora da bounding box inicial
+        this.splashParticles.visible = false;
+        this.scene.add(this.splashParticles);
+    },
+
+    _limparRespingos() {
+        if (!this.splashGeometry) return;
+        const pos = this.splashGeometry.attributes.position.array;
+        for (let i = 0; i < this.splashPool.length; i++) {
+            this.splashPool[i].vida = 0;
+            pos[i * 3 + 1] = -1000;
+        }
+        this.splashGeometry.attributes.position.needsUpdate = true;
+    },
+
+    /*
+    ESTA A CHOVER? — pergunta barata para quem dispara respingos nao ter de
+    saber como o clima esta arrumado por dentro.
+    */
+    aChover() {
+        return this.condicao === 'chuva';
+    },
+
+    /*
+    UM RESPINGO EM (x, z).
+
+    `forca` e 0..1 — o quanto a agua salta. Vem da velocidade vertical do
+    quique da bola, ou de uma constante baixa na pisada do jogador. Decide
+    quantas goticulas saem e com que impulso.
+
+    Silencio em tudo o que nao seja um jogo com chuva a decorrer: sem chuva,
+    em pausa, ou na simulacao em lote (que nao desenha nem corre o
+    `Weather.update`, e portanto encheria a pool sem nunca a esvaziar).
+    */
+    respingo(x, z, forca = 0.5) {
+        if (!this.splashParticles || !this.aChover()) return;
+        if (window.isPaused) return;
+        if (typeof Sim !== 'undefined' && Sim.running) return;
+
+        const f = Math.max(0, Math.min(1, forca));
+        const qtd = 3 + Math.round(f * 14);
+        const pos = this.splashGeometry.attributes.position.array;
+        const max = this.splashPool.length;
+
+        for (let n = 0; n < qtd; n++) {
+            /*
+            Cursor CIRCULAR: quando a pool enche, a goticula mais antiga da
+            lugar a nova. Procurar uma entrada morta custava uma varredura
+            por goticula e o resultado visivel e o mesmo.
+            */
+            const i = this.splashProx;
+            this.splashProx = (this.splashProx + 1) % max;
+
+            const ang = Math.random() * Math.PI * 2;
+            // Impulso lateral em coroa: a agua sai a abrir, nao em coluna.
+            const vr = (0.6 + Math.random() * 1.4) * (0.5 + f);
+            const g = this.splashPool[i];
+            g.vx = Math.cos(ang) * vr;
+            g.vz = Math.sin(ang) * vr;
+            g.vy = (1.1 + Math.random() * 1.9) * (0.5 + f);
+            g.vida = this.splashVida * (0.7 + Math.random() * 0.6);
+
+            pos[i * 3 + 0] = x + Math.cos(ang) * 0.05;
+            pos[i * 3 + 1] = 0.02;
+            pos[i * 3 + 2] = z + Math.sin(ang) * 0.05;
+        }
+
+        this.splashGeometry.attributes.position.needsUpdate = true;
+    },
+
+    _atualizarRespingos(dt) {
+        if (!this.splashParticles || !this.splashParticles.visible) return;
+
+        const attr = this.splashGeometry.attributes.position;
+        const pos = attr.array;
+        const pool = this.splashPool;
+        const grav = this.splashGravidade * dt;
+        let mexeu = false;
+
+        for (let i = 0; i < pool.length; i++) {
+            const g = pool[i];
+            if (g.vida <= 0) continue;
+
+            g.vida -= dt;
+            g.vy -= grav;
+
+            pos[i * 3 + 0] += g.vx * dt;
+            pos[i * 3 + 1] += g.vy * dt;
+            pos[i * 3 + 2] += g.vz * dt;
+
+            // Morre ao voltar ao relvado ou ao fim do tempo — o que vier primeiro.
+            if (g.vida <= 0 || pos[i * 3 + 1] <= 0) {
+                g.vida = 0;
+                pos[i * 3 + 1] = -1000;
+            }
+            mexeu = true;
+        }
+
+        if (mexeu) attr.needsUpdate = true;
+    },
+
     update(dt) {
         let maxSombra = 0;
 
@@ -609,6 +776,8 @@ const Weather = {
 
             attr.needsUpdate = true;
         }
+
+        this._atualizarRespingos(dt);
     },
 
     _atualizarUI() {
