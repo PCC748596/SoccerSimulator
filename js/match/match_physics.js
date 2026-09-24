@@ -264,15 +264,12 @@ Object.assign(Match, {
                 } else {
                 if (this.state === 'PLAY') {
                     /*
-                    A bola saiu, mas se o passe ia para alguem em fora-de-jogo a
-                    infraccao ja estava decidida no lancamento — vale mais do
-                    que o canto ou o pontape de baliza que isto daria. Tem de
-                    ser resolvida ANTES do setupSetPiece, que apaga as marcas.
+                    A BOLA SAIU SEM NINGUEM A TOCAR: nao ha fora-de-jogo
+                    nenhum, ainda que o passe fosse dirigido a alguem em
+                    posicao. Estar em posicao nao e infraccao — so o toque e
+                    (ver Officials, seccao da Lei 11). Sai canto, lateral ou
+                    pontape de baliza, e o `setupSetPiece` apaga as marcas.
                     */
-                    if (typeof Officials !== 'undefined' &&
-                        Officials.resolverPasseParaImpedido &&
-                        Officials.resolverPasseParaImpedido()) return;
-
                     let lastTeam = this.lastTouchedTeam || 'TeamA';
                     /*
                     Bola fora pela linha de fundo:

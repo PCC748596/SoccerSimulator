@@ -5,6 +5,9 @@ O que este teste fixa:
 
 1. A posição congela NO PASSE e a infracção conta-se NO TOQUE: estar em
    posição de impedimento não é falta nenhuma até haver envolvimento.
+1b. Se OUTRO ficar com a bola a meio — um defesa a cortar, o guarda-redes a
+   agarrar — a jogada morre ali e não há impedimento nenhum. O passe seguinte
+   é julgado de novo (casos 8 a 11).
 2. Quem está em linha com a bola, ou com o penúltimo adversário, está ONSIDE —
    é para isso que existe a tolerância.
 3. Na própria metade não há impedimento, aconteça o que acontecer.
@@ -190,6 +193,105 @@ console.log('7 — a bola parada apaga as marcas');
     Officials.marcarPosicoesDeImpedimento(d.passador);
     if (Officials.verificarImpedimento(d.atacante)) erro('não se marca posição fora do jogo corrido');
     else ok('fora do estado PLAY nem se chega a marcar posição');
+}
+
+console.log('');
+console.log('8 — CORTADO A MEIO: quem intercepta mata o lance');
+{
+    /*
+    Relato: *"as vezes um passe e dado na direccao de um jogador em
+    impedimento, mas alguem corta o passe no meio do caminho. A bola nao chega
+    ao jogador final, mas o impedimento e marcado na mesma. Nesse caso nao e
+    para marcar."*
+
+    O passe vai DIRIGIDO ao atacante em posicao — e o caso exacto do relato,
+    por isso o `destinatario` vai preenchido na marcacao. Um defesa corta a
+    meio: nao ha envolvimento nenhum do impedido, portanto nao ha infraccao.
+    E as marcas morrem ali: se ele tocar na bola a seguir, ja e outra jogada.
+    */
+    reset();
+    const c = montar(35, 10);
+    const defesa = Match.opponents[1];              // o central em z=32
+    Officials.marcarPosicoesDeImpedimento(c.passador, c.atacante);
+
+    if (Officials.verificarImpedimento(defesa)) erro('o corte do defesa foi marcado como impedimento');
+    else ok('o defesa corta e nao ha impedimento');
+
+    if (setups.length) erro('montou um livre num lance que nao e falta');
+    else ok('nao monta livre nenhum');
+
+    if (Officials.verificarImpedimento(c.atacante)) {
+        erro('o toque do impedido DEPOIS do corte ainda foi marcado — as marcas do passe cortado sobreviveram');
+    } else ok('depois do corte as marcas ja nao valem');
+}
+
+console.log('');
+console.log('9 — cortado a meio, mas segue-se um passe NOVO para o impedido');
+{
+    /*
+    *"A menos que novamente seja dado outro passe e o jogador recebedor esteja
+    em impedimento."* — o corte apaga o lance anterior, mas o passe seguinte e
+    julgado de novo, com as posicoes congeladas NESSE lancamento.
+    */
+    reset();
+    const c = montar(35, 10);
+    const defesa = Match.opponents[1];
+    Officials.marcarPosicoesDeImpedimento(c.passador, c.atacante);
+    Officials.verificarImpedimento(defesa);         // corta e limpa
+
+    // Passe novo de um colega, com o atacante ainda a frente da linha.
+    Officials.marcarPosicoesDeImpedimento(c.passador, c.atacante);
+    if (!Officials.verificarImpedimento(c.atacante)) {
+        erro('o passe NOVO para quem esta em posicao devia ser impedimento');
+    } else ok('o passe novo e julgado de novo, e e impedimento');
+}
+
+console.log('');
+console.log('10 — o passe dirigido ao impedido nao decide nada por si');
+{
+    /*
+    A GUARDA CONTRA O REGRESSO DA VERSAO ANTIGA: havia aqui um caminho que
+    consumava a infraccao no LANCAMENTO, bastando o passe ir dirigido a alguem
+    em posicao. Era o que marcava os lances cortados a meio.
+    */
+    reset();
+    const c = montar(35, 10);
+    Officials.marcarPosicoesDeImpedimento(c.passador, c.atacante);
+
+    if (setups.length) erro('o lancamento sozinho montou um livre');
+    else ok('marcar posicao nao monta livre nenhum');
+
+    if (typeof Officials.resolverPasseParaImpedido === 'function') {
+        erro('o `resolverPasseParaImpedido` voltou: a infraccao volta a ser decidida no passe');
+    } else ok('nao ha atalho que decida a infraccao no passe');
+
+    const srcOff = ler('js/officials.js');
+    if (/_passeParaImpedido/.test(srcOff)) {
+        erro('o `_passeParaImpedido` voltou ao officials.js');
+    } else ok('o officials.js nao guarda o passe dirigido como infraccao');
+
+    if (/resolverPasseParaImpedido/.test(ler('js/match/match_physics.js'))) {
+        erro('a saida de bola voltou a resolver impedimento sem ninguem ter tocado');
+    } else ok('a bola a sair de campo nao marca impedimento');
+}
+
+console.log('');
+console.log('11 — o guarda-redes a agarrar tambem mata as marcas');
+{
+    /*
+    O `grabBall` (player.js) nao passa pelo `resolveBallContact`, portanto tem
+    de limpar as marcas por sua conta — senao o passe que ele agarrou ficava a
+    espera do primeiro atacante que tocasse na bola a seguir.
+    */
+    const srcJog = ler('js/player.js');
+    const i = srcJog.indexOf('grabBall(manterPose) {');
+    if (i < 0) erro('nao encontrei o grabBall no player.js');
+    else {
+        const corpo = srcJog.slice(i, srcJog.indexOf('Match.possessionTimer = 0;', i));
+        if (!/Officials\.limparImpedimento\(\)/.test(corpo)) {
+            erro('o grabBall nao limpa as marcas de fora-de-jogo');
+        } else ok('o grabBall limpa as marcas do lance');
+    }
 }
 
 console.log('');

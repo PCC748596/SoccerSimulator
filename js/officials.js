@@ -681,12 +681,35 @@ const Officials = {
       limparImpedimento            apaga as marcas (bola de um adversario,
                                    bola parada, golo)
       verificarImpedimento         chamada no primeiro toque: se quem tocou
-                                   estava marcado, e infraccao
+                                   estava marcado, e infraccao; se foi outro
+                                   qualquer, as marcas morrem ali
+
+    ESTAR EM POSICAO NAO E INFRACCAO — so o ENVOLVIMENTO e, e o envolvimento
+    e o TOQUE. Relato: *"as vezes um passe e dado na direccao de um jogador em
+    impedimento, mas alguem corta o passe no meio do caminho. A bola nao chega
+    ao jogador final, mas o impedimento e marcado na mesma. Nesse caso nao e
+    para marcar."*
+
+    E a Lei 11 a letra: quem corta o passe a meio termina a jogada, e o
+    atacante que ficou em posicao nunca chegou a interferir. Se a bola voltar
+    a sair num passe novo, ha uma marcacao nova — as posicoes voltam a
+    congelar nesse lancamento, e e essa a que vale.
+
+    Houve aqui uma versao que decidia tudo no LANCAMENTO: bastava o passe ir
+    dirigido a alguem em posicao para a infraccao ficar consumada, corte ou
+    nao corte. Fazia subir a contagem — medido, so 1 em 16 dos apanhados em
+    posicao chegava a tocar — mas marcava lances que nao sao falta nenhuma.
 
     A linha e a `linhaDeImpedimento` que ja existia para posicionar o
     assistente — o segundo adversario mais recuado, com o guarda-redes a
     contar, que e exactamente a definicao da regra.
     =====================================================================
+    */
+    /*
+    `destinatario` (o alvo do passe) ja NAO decide nada: fica na assinatura
+    porque quem chama tem-no a mao e porque e util a quem depura o lance (ver
+    tools/lab/impedimento.js). Quem julga e o toque — ver a nota da Lei 11 no
+    cabecalho desta seccao.
     */
     marcarPosicoesDeImpedimento: function (passador, destinatario) {
         const M = (typeof OffsideModel !== 'undefined') ? OffsideModel : null;
@@ -725,7 +748,6 @@ const Officials = {
         this._dirDoPasse = dir;
 
         this._impedidos = [];
-        this._passeParaImpedido = null;
         for (const p of colegas) {
             if (p === passador || !p.model) continue;
             const zDir = p.model.position.z * dir;
@@ -741,22 +763,6 @@ const Officials = {
                 team: p.team
             };
             this._impedidos.push(marca);
-
-            /*
-            O PASSE DIRIGIDO A QUEM ESTA EM POSICAO JA E A INFRACCAO.
-
-            A posicao fixa-se no lancamento, e o que acontece a seguir nao a
-            desfaz: se um central corta, se o guarda-redes agarra, se a bola sai
-            pela linha — foi impedimento na mesma, e a cobranca e no sitio onde
-            ele estava quando o passe saiu.
-
-            Sem isto era preciso ele TOCAR na bola, e media-se o resultado:
-            16 jogadores apanhados em posicao ao longo de 3.3 jogos, e apenas
-            **1** chegou a tocar — porque um atacante em fora-de-jogo e, por
-            construcao, um mau alvo de passe e quase sempre alguem lhe chega
-            primeiro. Contando so os toques, a regra existia e nao se via.
-            */
-            if (destinatario && p === destinatario) this._passeParaImpedido = marca;
         }
     },
 
@@ -840,21 +846,6 @@ const Officials = {
 
     limparImpedimento: function () {
         this._impedidos = null;
-        this._passeParaImpedido = null;
-    },
-
-    /*
-    O passe ia para alguem em posicao de impedimento? Entao a infraccao esta
-    determinada, e quem toca a seguir e irrelevante. Chamado no primeiro toque
-    (resolveBallContact) e quando a bola sai de campo.
-
-    Devolve true se marcou.
-    */
-    resolverPasseParaImpedido: function () {
-        const marca = this._passeParaImpedido;
-        if (!marca) return false;
-        this._passeParaImpedido = null;
-        return this.assinalarImpedimento(marca);
     },
 
     /*
@@ -862,13 +853,6 @@ const Officials = {
     abortar o toque nesse caso: a bola passa a ser da outra equipa.
     */
     verificarImpedimento: function (jogador) {
-        /*
-        O passe ia para um impedido: a infraccao esta decidida desde o
-        lancamento, e nao interessa quem chegou primeiro a bola — um central a
-        cortar, o guarda-redes a agarrar, ou a bola a sair.
-        */
-        if (this._passeParaImpedido) return this.resolverPasseParaImpedido();
-
         const marcas = this._impedidos;
         if (!marcas || !marcas.length || !jogador) return false;
 

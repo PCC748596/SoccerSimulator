@@ -8039,6 +8039,22 @@ class FootballPlayer {
             maosProibidasNoRecuo(Match.recuoParaGR, this.team)) return false;
 
         Match.ballVel.set(0, 0, 0);
+
+        /*
+        O GUARDA-REDES AGARROU: a jogada do passe acaba aqui, e com ela as
+        marcas de fora-de-jogo.
+
+        Este caminho NAO passa pelo `resolveBallContact`, que e onde todos os
+        outros toques sao julgados (ver Officials.verificarImpedimento). Sem
+        esta linha, as marcas do passe cortado pelo guarda-redes ficavam vivas
+        e caiam em cima do primeiro atacante que tocasse na bola a seguir —
+        um impedimento marcado numa jogada que ja nada tinha a ver com aquele
+        passe.
+        */
+        if (typeof Officials !== 'undefined' && Officials.limparImpedimento) {
+            Officials.limparImpedimento();
+        }
+
         this.hasBall = true;
         Match.ballCarrier = this;
         Match.possessionTeam = this.team;
