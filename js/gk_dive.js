@@ -771,28 +771,85 @@ const GkDive = {
         });
 
         if (destino === 'canto') {
+            /*
+            =============================================================
+            A BOLA SAI PELA MAO — E NAO POR TELEPORTE
+            =============================================================
+            BUG, com captura: *"mostra o goleiro defendendo a bola sem encostar
+            nela e bem longe dela"*.
+
+            A defesa em si estava CERTA. Medido, a rastrear os contactos: no
+            frame do toque a mao estava a 0.34 m da bola — contacto legitimo,
+            lido da posicao real da mao (ver `defender`). O que acontecia a
+            seguir e que nao estava: este ramo escrevia `bola.x` e `bola.y`
+            directamente, e nesse mesmo frame a bola SALTAVA 2.70 m para fora
+            do poste. No ecra ve-se o guarda-redes a atirar-se e a bola ja
+            longe dele — uma defesa sem contacto nenhum.
+
+            E desfazia, de caminho, o trabalho do `defender`, que repoe a bola
+            no ponto exacto do contacto (ver a nota do `fraccaoNoSegmento` la
+            em cima) precisamente para o ressalto sair de onde deve sair.
+
+            Agora o destino resolve-se em VELOCIDADE. A bola fica onde a mao
+            lhe tocou e leva o que precisa de levar para estar do lado de fora
+            QUANDO CHEGAR A LINHA:
+
+                tLinha    quanto falta ate a linha de fundo, ao z que ela
+                          leva DEPOIS da travagem
+                vx / vy   o que e preciso para, nesse tempo, estar para la do
+                          poste ou por cima do travessao
+
+            Os limites da conta (`espalmarTempoMin`, `espalmarVMax`) estao no
+            GoalkeeperDive, com o porque de cada um.
+            =============================================================
+            */
+
+            /*
+            O z PRIMEIRO, porque e dele que sai o tempo — e ele TRAVA-SE,
+            sempre, incluindo no tiro forte de perto.
+
+            Aqui estava `semAgarrar ? 1.0 : espalmarForaZ`: o remate forte de
+            perto guardava o avanco INTEIRO. Isso fazia sentido enquanto a
+            bola era teletransportada para fora do poste — ja estava la, e o z
+            inteiro so a tirava de campo mais depressa. Sem o teleporte, e o
+            contrario: medido no frame do contacto, a bola e espalmada a 1.2-
+            2.1 m da linha com 16-26 m/s de z, o que deixa 0.08-0.23 s para
+            percorrer os 2.5-3.3 m ate ao lado de fora do poste. Sao 22 a 34
+            m/s de lateral, que nenhuma mao imprime — e as que ficavam pelo
+            tecto entravam: 3 de 7 espalmadas acabavam em GOLO.
+
+            E e o que uma espalmada faz mesmo: mata o grosso da velocidade e
+            redirecciona o resto. O sentido de z mantem-se — atravessa a linha
+            de fundo por fora, e nao volta ao miolo.
+            */
+            Match.ballVel.z *= D.espalmarForaZ;
+
+            const golZ = (typeof p.ownGoalZ === 'number') ? p.ownGoalZ : bola.z;
+            const tMin = (typeof D.espalmarTempoMin === 'number') ? D.espalmarTempoMin : 0.08;
+            const vMax = (typeof D.espalmarVMax === 'number') ? D.espalmarVMax : 16.0;
+            const vzAgora = Math.abs(Match.ballVel.z);
+            const tLinha = Math.max(tMin,
+                (vzAgora > 0.1) ? Math.abs(golZ - bola.z) / vzAgora : 0.25);
+
             if (alta) {
-                bola.y = ALTURA_BALIZA + D.espalmarFolga;
-                Match.ballVel.y = Math.max(Match.ballVel.y, D.espalmarSubida);
+                // Acima do travessao quando la chegar: y + vy*t - g*t*t/2.
+                const alvoY = ALTURA_BALIZA + D.espalmarFolga;
+                const g = BallPhysics.gravidade;
+                const vyPreciso = (alvoY - bola.y) / tLinha + 0.5 * g * tLinha;
+                Match.ballVel.y = Math.min(vMax,
+                    Math.max(Match.ballVel.y, vyPreciso, D.espalmarSubida));
             } else {
-                // Lado do poste onde ela ia: o do próprio remate, e não o do
+                // Lado do poste onde ela ia: o do proprio remate, e nao o do
                 // mergulho — em bola central o `dirX` desempata.
                 const ladoPoste = Math.sign(bola.x) || (d && d.dirX) || 1;
-                bola.x = ladoPoste * ((LARGURA_BALIZA / 2) + D.espalmarFolga);
-                Match.ballVel.x = ladoPoste * D.espalmarLateral;
+                const alvoX = ladoPoste * ((LARGURA_BALIZA / 2) + D.espalmarFolga);
+                const vxPreciso = (alvoX - bola.x) / tLinha;
+                // O minimo continua a ser o `espalmarLateral`: mesmo com a
+                // bola ja quase fora, a espalmada empurra-a para fora.
+                const vx = Math.max(Math.abs(vxPreciso), D.espalmarLateral);
+                Match.ballVel.x = ladoPoste * Math.min(vMax, vx);
                 Match.ballVel.y = Math.max(Match.ballVel.y, 2.0);
             }
-            /*
-            Sentido de z MANTIDO: atravessa a linha de fundo por fora.
-
-            No tiro forte de perto o z NÃO se trava. Medido: com o corte a 45%
-            e os 5 m/s de lateral, 6 de 9 destas bolas saam pela LINHA
-            LATERAL em vez da de fundo -- iam de lado antes de chegar à linha,
-            e o desfecho era um lançamento, não um canto. Como a bola vem a
-            22+ m/s, guardar o z inteiro tira-a por fora do poste quase no
-            mesmo instante, que é o que o pedido quer.
-            */
-            Match.ballVel.z *= semAgarrar ? 1.0 : D.espalmarForaZ;
         } else if (destino === 'lateral') {
             // Para o lado e para cima, de volta ao campo mas longe do miolo.
             Match.ballVel.z *= -0.5;

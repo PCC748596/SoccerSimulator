@@ -1261,6 +1261,39 @@ const OffsideRestartShape = {
     avancadosAFrenteDaBola: 26.0,
 
     /*
+    QUANTOS FICAM ATRAS DA BOLA — pedido: *"na cobranca do impedimento eu quero
+    somente 2 jogadores atras da linha da bola, entre a bola e o gol defendido,
+    se o impedimento for marcado ate a linha da grande area. Se for dentro da
+    linha da grande area para tras, todos os jogadores a frente da linha da
+    bola."*
+
+    Antes ficava atras da bola a LINHA DE DEFESA INTEIRA — os quatro, porque a
+    profundidade saia so do posto (`porRole`). Um livre por impedimento e um
+    recomeco: quer-se apoio atras para sair a jogar, nao meia equipa entre a
+    bola e a propria baliza.
+
+    Sao DOIS pontos da linha de fundo dele para fora, e ZERO da linha da grande
+    area para tras — ai a bola ja esta em cima da propria baliza e nao ha nada
+    de util atras dela; toda a gente sobe.
+
+    NAO CONTAM PARA OS DOIS:
+      . o guarda-redes, que fica na baliza e nao e colocado por esta montagem;
+      . o BATEDOR, que espera 3 m atras da bola alinhado com a cobranca
+        (`FreeKickModel.recuoBatedor`) porque e de la que vem bate-la — se
+        contasse, a regra dava um unico jogador de apoio e a saida a jogar
+        morria ali.
+    */
+    atrasDaBola: 2,
+    atrasDaBolaNaArea: 0,
+
+    /*
+    Quem e empurrado para a frente da bola por causa da regra acima nao fica em
+    cima dela: sobe pelo menos isto. A frente dos medios (`mediosAFrenteDaBola`)
+    ninguem passa por este caminho — e um minimo, nao uma linha.
+    */
+    margemAFrenteDaBola: 4.0,
+
+    /*
     QUEM MARCA. Era "do meio-campo para trás", à letra do primeiro pedido, e a
     resposta a ver o resultado foi *"na cobrança do impedimento o time
     adversário pode avançar um pouco mais. Tá muito recuado."* — depois disso

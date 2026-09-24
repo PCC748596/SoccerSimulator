@@ -120,12 +120,76 @@ test('a equipa que bate forma tres linhas, e nao um monte', () => {
     montagem que mandava a equipa para a outra metade.
     */
     const bolaAtk = Match.ball.position.z * attDir;
-    assert.ok(Math.abs((bolaAtk - zDef) - S.defesaAtrasDaBola) < 2.5,
-        `linha de tras a ${(bolaAtk - zDef).toFixed(1)} m atras da bola (pedido ${S.defesaAtrasDaBola})`);
+
+    /*
+    A LINHA DE TRAS JA NAO E A DEFESA TODA: so os `S.atrasDaBola` mais
+    recuados da formacao ficam atras da bola (ver OffsideRestartShape). A
+    media dos quatro defesas deixou de medir o que quer que seja — mede-se
+    agora quem esta mesmo la atras.
+    */
+    const atrasDaBola = bate
+        .filter(p => p.role !== 'gk' && p !== Match.setPieceTaker)
+        .filter(p => zAtk(p) < bolaAtk);
+    assert.ok(atrasDaBola.length > 0, 'ninguem ficou atras da bola');
+    const zTras = med(atrasDaBola.map(zAtk));
+    assert.ok(Math.abs((bolaAtk - zTras) - S.defesaAtrasDaBola) < 2.5,
+        `linha de tras a ${(bolaAtk - zTras).toFixed(1)} m atras da bola (pedido ${S.defesaAtrasDaBola})`);
     assert.ok(Math.abs((zMid - bolaAtk) - S.mediosAFrenteDaBola) < 2.5,
         `medios a ${(zMid - bolaAtk).toFixed(1)} m da bola (pedido ${S.mediosAFrenteDaBola})`);
     assert.ok(Math.abs((zAtq - bolaAtk) - S.avancadosAFrenteDaBola) < 2.5,
         `avancados a ${(zAtq - bolaAtk).toFixed(1)} m da bola (pedido ${S.avancadosAFrenteDaBola})`);
+});
+
+/*
+=====================================================================
+QUANTOS FICAM ENTRE A BOLA E A PROPRIA BALIZA
+=====================================================================
+Pedido: *"na cobranca do impedimento eu quero somente 2 jogadores atras da
+linha da bola, entre a bola e o gol defendido, se o impedimento for marcado
+ate a linha da grande area. Se for dentro da linha da grande area para tras,
+todos os jogadores a frente da linha da bola."*
+
+Antes ficava atras da bola a linha de defesa INTEIRA — quatro —, porque a
+profundidade saia so do posto.
+
+Dois nao contam para a conta, e o teste exclui-os pela mesma razao por que a
+montagem os exclui: o GUARDA-REDES fica na baliza e nao e colocado por esta
+montagem, e o BATEDOR espera 3 m atras da bola (`FreeKickModel.recuoBatedor`)
+porque e de la que vem bate-la.
+=====================================================================
+*/
+test('so dois atras da bola, e nenhum se a marca for dentro da grande area', () => {
+    const S = OffsideRestartShape;
+    // A linha da grande area dele, no referencial de ataque dele.
+    const linhaArea = -LINHA_FUNDO + Area.profundidade;
+
+    const contar = () => {
+        const bolaAtk = Match.ball.position.z * attDir;
+        return bate
+            .filter(p => p.role !== 'gk' && p !== Match.setPieceTaker)
+            .filter(p => zAtk(p) < bolaAtk - 0.01).length;
+    };
+
+    // Da linha da grande area PARA FORA: dois, e so dois.
+    for (const zA of [-5, -20, -30, linhaArea + 1.0]) {
+        montar(zA * attDir);
+        const n = contar();
+        console.log(`  bola a ${zA.toFixed(1)} (linha da area ${linhaArea.toFixed(1)}): ` +
+            `${n} atras da bola`);
+        assert.strictEqual(n, S.atrasDaBola,
+            `bola a ${zA.toFixed(1)}: ${n} atras da bola, pedido ${S.atrasDaBola}`);
+    }
+
+    // Da linha da grande area PARA TRAS: ninguem.
+    for (const zA of [linhaArea - 0.5, -42, -50]) {
+        montar(zA * attDir);
+        const n = contar();
+        console.log(`  bola a ${zA.toFixed(1)} (dentro da area): ${n} atras da bola`);
+        assert.strictEqual(n, S.atrasDaBolaNaArea,
+            `bola a ${zA.toFixed(1)}: ${n} atras da bola, pedido ${S.atrasDaBolaNaArea}`);
+    }
+
+    montar(-attDir * 30.0);
 });
 
 /*

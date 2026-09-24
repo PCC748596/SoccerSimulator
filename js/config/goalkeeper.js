@@ -1217,7 +1217,25 @@ const GoalkeeperDive = {
     espalmarFolga: 0.35,       // quanto passa por fora do poste/travessão
     espalmarLateral: 5.0,      // m/s que leva para lá do poste
     espalmarSubida: 5.0,       // m/s que leva por cima do travessão
-    espalmarForaZ: 0.45,       // trava o avanço, MANTENDO o sentido (sai)
+    espalmarForaZ: 0.30,       // trava o avanço, MANTENDO o sentido (sai)
+
+    /*
+    A ESPALMADA SAI PELA MAO, E NAO POR TELEPORTE — ver `GkDive.espalmar`.
+
+    O destino ('por fora do poste', 'por cima do travessao') passou a ser
+    resolvido em VELOCIDADE: calcula-se o que a bola precisa de levar para
+    estar do lado de fora quando chegar a linha, e da-se-lhe isso. Estes dois
+    numeros sao os limites dessa conta.
+
+    `espalmarTempoMin` e o tempo minimo ate a linha, em segundos: com a bola
+    ja em cima dela a divisao rebentava e pedia velocidade infinita.
+
+    `espalmarVMax` e o tecto do que uma mao pode imprimir. Se o que era preciso
+    passar disto, a bola leva o tecto e pode nao sair — e uma espalmada que nao
+    chegou, que e um desfecho de futebol e nao um defeito.
+    */
+    espalmarTempoMin: 0.08,
+    espalmarVMax: 16.0,
     ombroY: 1.35,          // altura do ombro acima da origem, de pé
 
     // Pose das pernas em voo: estendidas e ligeiramente abertas.

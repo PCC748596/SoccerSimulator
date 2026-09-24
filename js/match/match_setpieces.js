@@ -1638,7 +1638,8 @@ Object.assign(Match, {
     formaDoLivreDeImpedimento: function (team, taker) {
         const S = (typeof OffsideRestartShape !== 'undefined') ? OffsideRestartShape : {
             defesaAtrasDaBola: 8.0, mediosAFrenteDaBola: 10.0, avancadosAFrenteDaBola: 26.0,
-            blocoAdversario: 26.0, largura: 1.0
+            blocoAdversario: 26.0, largura: 1.0,
+            atrasDaBola: 2, atrasDaBolaNaArea: 0, margemAFrenteDaBola: 4.0
         };
         const bate = (team === 'TeamA') ? this.players : this.opponents;
         const marca = (team === 'TeamA') ? this.opponents : this.players;
@@ -1670,11 +1671,41 @@ Object.assign(Match, {
         const zAvancados = bolaAtk + S.avancadosAFrenteDaBola;
         const porRole = { def: zDefesa, mid: zMedios, atk: zAvancados };
 
-        for (const p of bate) {
-            if (!p.model || p.role === 'gk' || p === taker) continue;
-            const z = (porRole[p.role] !== undefined) ? porRole[p.role] : zMedios;
+        /*
+        QUANTOS PODEM FICAR ATRAS DA BOLA — ver OffsideRestartShape.atrasDaBola
+        para a regra pedida e para quem NAO conta (o guarda-redes e o batedor).
+
+        A fronteira e a linha da GRANDE AREA dele, lida so em profundidade: a
+        marca do impedimento pode cair fora da largura da area e continuar
+        encostada a propria baliza, e "da linha da grande area para tras" e
+        isso que quer dizer. No referencial de ataque dele a propria linha de
+        fundo e -LINHA_FUNDO, portanto a linha da area e essa mais a
+        profundidade da area.
+        */
+        const linhaAreaAtk = -LINHA_FUNDO + Area.profundidade;
+        const naPropriaArea = bolaAtk <= linhaAreaAtk;
+        const nAtras = naPropriaArea
+            ? (S.atrasDaBolaNaArea || 0)
+            : ((typeof S.atrasDaBola === 'number') ? S.atrasDaBola : 2);
+        const margemFrente = (typeof S.margemAFrenteDaBola === 'number')
+            ? S.margemAFrenteDaBola : 4.0;
+
+        /*
+        E QUAIS: os mais recuados da formacao. Ordena-se pela profundidade do
+        POSTO (`baseTarget`) e nao pela posicao actual — a posicao actual e
+        onde a jogada os deixou, e daria dois quaisquer.
+        */
+        const campoBate = bate
+            .filter(p => p.model && p.role !== 'gk' && p !== taker)
+            .sort((a, b) => (a.baseTarget.z * attDir) - (b.baseTarget.z * attDir));
+
+        campoBate.forEach((p, i) => {
+            const zPosto = (porRole[p.role] !== undefined) ? porRole[p.role] : zMedios;
+            // Os `nAtras` primeiros ficam atras da bola; os outros sobem para
+            // a frente dela, esteja o posto deles onde estiver.
+            const z = (i < nAtras) ? zPosto : Math.max(zPosto, bolaAtk + margemFrente);
             colocar(p, p.baseTarget.x * S.largura, z, attDir);
-        }
+        });
 
         /*
         QUEM MARCA: entre a BOLA e a própria baliza. A linha da frente nasce à
