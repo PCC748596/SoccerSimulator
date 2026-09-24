@@ -147,12 +147,17 @@ console.log('3 — E A MEDIDA, com o jogo a correr');
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
-    Math.random = mulberry32(99);
+    /*
+    VARIAS SEMENTES, E NAO UMA.
 
+    Os mergulhos com bola agarrada sao poucos — de 0 a 3 num jogo, conforme a
+    semente — e qualquer retoque no guarda-redes muda quais acontecem. Com uma
+    semente so, este bloco reprovava por "amostra curta" a cada mudanca, sem
+    que nada do que ele mede estivesse errado.
+    */
+    const SEMENTES = [99, 7, 1234, 555, 20260911];
     const dt = 1 / 60;
     const cena = new THREE.Scene();
-    Match.init(cena);
-    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
     if (typeof Sim === 'undefined') global.Sim = {};
     Sim.running = true;
 
@@ -164,7 +169,12 @@ console.log('3 — E A MEDIDA, com o jogo a correr');
     let somMao = 0, maxAssim = 0, maxSalto = 0;
     const ant = new Map();
 
-    for (let f = 0; f < 60 * 60 * 40; f++) {
+    for (const semente of SEMENTES) {
+    Math.random = mulberry32(semente);
+    Match.init(cena);
+    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
+    ant.clear();
+    for (let f = 0; f < 60 * 60 * 20; f++) {
         Match.update(dt);
         for (const p of guardas()) {
             const d = p.dive;
@@ -199,9 +209,11 @@ console.log('3 — E A MEDIDA, com o jogo a correr');
             ant.set(p, agora);
         }
     }
+    }
 
     const mediaPeito = somPeito / Math.max(1, frames);
-    console.log(`  ${agarradas} bolas agarradas, ${frames} frames com ela na mao`);
+    console.log(`  ${agarradas} bolas agarradas em ${SEMENTES.length} sementes, ` +
+        `${frames} frames com ela na mao`);
     console.log(`  bola->peito: media ${mediaPeito.toFixed(2)} m, max ${maxPeito.toFixed(2)} m | ` +
         `altura minima ${minY.toFixed(2)} m (raio ${BallPhysics.raio})`);
     console.log(`  mao mais perto: media ${(somMao / Math.max(1, frames)).toFixed(2)} m | ` +

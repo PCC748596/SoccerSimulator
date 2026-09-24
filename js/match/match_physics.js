@@ -1334,25 +1334,45 @@ Object.assign(Match, {
             atr = 0.98;
         }
 
+       /*
+       A REDE E UM COLCHAO LARGO, E ISSO E DE PROPOSITO — mas tem um preco.
+
+       O `dist` e a distancia a um PLANO INFINITO, quando o pano de tras e um
+       trapezio que acaba a `d = profBase`. E a `bandaContacto` e larga: a rede
+       agarra o que passe a menos dela, tenha-lhe tocado ou nao.
+
+       As duas coisas juntas seguram os golos. Medido com
+       tests/golo_rede.test.js, 1208 golos:
+
+           banda 0.80 (como esta)                     0 bolas presas na linha
+           banda 0.30                                 6
+           banda 0.11 (o raio da bola, o "correcto")  8
+           banda 0.80 mas com o pano cortado em profBase   24
+
+       A 1/30 s uma bola a 40 m/s anda 1.3 m por passo e atravessa duas
+       superficies no mesmo passo; os testes de travessia aqui ao lado nao
+       apanham isso, e e o colchao que a segura.
+
+       O PRECO, medido: uma bola que passa por cima do travessao e cai ATRAS da
+       rede apanha o mesmo colchao e fica a flutuar — 1 caso em 4 sementes de
+       30 minutos, 2.6 s a 0.08 m/s. Tirar o colchao troca esse caso raro por
+       golos que escapam, que e pior. Resolver os dois de vez exige refazer a
+       rede como superficies finitas com teste varrido, e isso e outra obra.
+
+       A parte deste relato que TEM correccao esta no
+       `destravarBolaEmCimaDaBaliza`, aqui em cima: era ele que congelava a
+       bola no ar a 2.55 m, com velocidade zero, durante tres segundos.
+       */
        if (Math.abs(b.x) <= meiaLarg) {
             /*
-            A BANDA E O RAIO DA BOLA, e nao 80 cm.
-
-            Estava `Math.abs(dist) < 0.8`: o pano de tras agarrava tudo o que
-            passasse a menos de OITENTA centimetros dele, e a cada frame em que
-            agarrava matava a velocidade (`atrito` 0.35) e corrigia a posicao.
-            Uma bola que passou por cima do travessao e vem a cair ATRAS da
-            baliza, sem tocar em pano nenhum, ficava presa nesse colchao —
-            medido, suspensa a 1.36 m de altura a 0.08 m/s durante 2.6 s. E a
-            segunda metade do relato *"tem vezes que nem toca no chao, de tao
-            lento que fica"*.
-
-            Uma rede e uma superficie: so ha contacto a menos de um raio dela.
-            A bola rapida continua coberta pelos dois testes de TRAVESSIA aqui
-            ao lado (mudanca de sinal do `dist` entre o frame anterior e este),
-            que e o que impede o atravessamento sem contacto.
+            A BANDA vem da configuracao (`GoalNet.bandaContacto`), e e LARGA de
+            proposito: a 1/30 s uma bola a 40 m/s anda 1.3 m por passo, e os
+            dois testes de travessia aqui ao lado nao apanham tudo quando ela
+            atravessa duas superficies no mesmo passo. Medido a encolhe-la:
+            8 de 1208 golos escapavam pelo lado e paravam em cima da linha.
             */
-            if (Math.abs(dist) < rB || (prevDist <= 0 && dist > 0) || (prevDist > 0 && dist <= 0)) {
+            const banda = (typeof N.bandaContacto === 'number') ? N.bandaContacto : rB;
+            if (Math.abs(dist) < banda || (prevDist <= 0 && dist > 0) || (prevDist > 0 && dist <= 0)) {
                 let tCross = 0;
                 if (dist !== prevDist) tCross = prevDist / (prevDist - dist);
                 const yCross = prevY + tCross * (b.y - prevY);

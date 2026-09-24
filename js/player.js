@@ -331,7 +331,7 @@ class FootballPlayer {
             escorrega a cada apoio — ver ChuvaNoJogo.cansaco (config/physics.js).
             Com o aguaceiro a aliviar, o acrescimo alivia com ele.
             */
-            const molhado = (typeof chuvaNoRelvado === 'function')
+            const molhado = (typeof chuvaNoRelvado === 'function' && typeof ChuvaNoJogo !== 'undefined')
                 ? (1 + ChuvaNoJogo.cansaco * chuvaNoRelvado()) : 1;
             this.energia -= S.custoPorSegundo * esforco * Math.max(0.1, resistencia) * molhado * dtJogo;
         } else {

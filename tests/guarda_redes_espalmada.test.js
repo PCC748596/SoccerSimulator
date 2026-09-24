@@ -88,14 +88,17 @@ console.log('2 — E A MEDIDA, com o jogo a correr');
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
-    Math.random = mulberry32(7);
-
     require('../tools/headless/harness.js');
 
+    /*
+    VARIAS SEMENTES, E NAO UMA. As espalmadas sao poucas — de 1 a 7 num jogo,
+    conforme a semente — e qualquer mudanca no guarda-redes muda quais
+    acontecem. Com uma semente so, este bloco reprovava por amostra curta a
+    cada retoque, sem que nada do que ele mede estivesse errado.
+    */
+    const SEMENTES = [7, 99, 1234, 555];
     const dt = 1 / 60;
     const cena = new THREE.Scene();
-    Match.init(cena);
-    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
     if (typeof Sim === 'undefined') global.Sim = {};
     Sim.running = true;
 
@@ -137,7 +140,12 @@ console.log('2 — E A MEDIDA, com o jogo a correr');
         vivo = { golZ: p.ownGoalZ, dir: p.dirZ, ultimo: Match.lastTouchedPlayer, f: 0 };
     };
 
-    for (let f = 0; f < 60 * 60 * 35; f++) {
+    for (const semente of SEMENTES) {
+    Math.random = mulberry32(semente);
+    Match.init(cena);
+    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
+    vivo = null;
+    for (let f = 0; f < 60 * 60 * 20; f++) {
         Match.update(dt);
         if (!vivo) continue;
         vivo.f++;
@@ -151,9 +159,11 @@ console.log('2 — E A MEDIDA, com o jogo a correr');
             outro++; vivo = null;
         } else if (vivo.f > 240 || Match.state !== 'PLAY') { outro++; vivo = null; }
     }
+    }
 
     const alcance = GoalkeeperDive.raioMao + BallPhysics.raio;
-    console.log(`  ${espalmadas} espalmadas | salto maximo da bola no toque ${maiorSalto.toFixed(3)} m | ` +
+    console.log(`  ${espalmadas} espalmadas em ${SEMENTES.length} sementes | ` +
+        `salto maximo da bola no toque ${maiorSalto.toFixed(3)} m | ` +
         `mao a bola no contacto, maximo ${maiorMao.toFixed(2)} m (alcance ${alcance.toFixed(2)})`);
     console.log(`  desfecho: golo ${golo}, sai ${fora}, outro apanha ${outro}`);
 

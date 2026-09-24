@@ -3448,7 +3448,7 @@ function resolverDefesaGK(o) {
     que sobra vai para a espalmada e para o rocar, que e o que se ve num jogo a
     chover. O tecto e o chao do modelo continuam a mandar.
     */
-    if (typeof chuvaNoRelvado === 'function') {
+    if (typeof chuvaNoRelvado === 'function' && typeof ChuvaNoJogo !== 'undefined') {
         pAgarra *= (1 - ChuvaNoJogo.agarrarGK * chuvaNoRelvado());
     }
     pAgarra = Math.max(M.minAgarra, Math.min(M.maxAgarra, pAgarra));

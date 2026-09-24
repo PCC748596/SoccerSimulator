@@ -49,6 +49,26 @@ const GoalNet = {
     */
     profTopo: 0.8,
     profBase: 2.0,
+
+    /*
+    A BANDA DE CONTACTO do pano de tras: a que distancia dele ha colisao.
+
+    Era 0.8 m, fixo no codigo. A rede agarrava tudo o que passasse a menos de
+    OITENTA centimetros dela, e a cada frame em que agarrava matava a
+    velocidade — uma bola que passou por cima do travessao e vinha a cair ATRAS
+    da baliza, sem tocar em pano nenhum, ficava presa nesse colchao (medido:
+    suspensa a 1.36 m, a 0.08 m/s, durante 2.6 s).
+
+    Mas nao pode ser so o raio da bola: com 0.11 m, 8 de 1208 golos do
+    `tests/golo_rede.test.js` escapavam a rede e paravam em cima da linha, do
+    lado de fora. A um passo de 1/30 s uma bola a 40 m/s anda 1.3 m por frame,
+    e os testes de travessia nao apanham tudo quando ela passa por duas
+    superficies no mesmo passo.
+
+    Este valor e o compromisso medido entre as duas coisas — ver a varredura na
+    nota do commit e os dois testes que o prendem.
+    */
+    bandaContacto: 0.80,
     restituicao: 0.02,
     atrito: 0.35,
 
@@ -653,16 +673,33 @@ const BallPhysics = {
     atritoRessaltoSeco: 0.75,   // perda horizontal em cada ressalto
     atritoRolamentoSeco: 0.38,  // μ de rolamento em relva
 
+    /*
+    QUANTA CHUVA CONTA PARA ESTE CAMPO — a fraccao do `ChuvaNoJogo` vezes a
+    intensidade do aguaceiro, ou zero.
+
+    A tolerancia nao e defensivismo: metade dos testes do repositorio RECORTA
+    este literal do ficheiro (procuram `const BallPhysics = {` e cortam ate ao
+    `};`) para medir a balistica sem carregar o jogo todo. Nesse recorte o
+    `ChuvaNoJogo` nao vem, e sem esta guarda todos eles rebentavam com
+    "ChuvaNoJogo is not defined". Sem a configuracao da chuva, o relvado esta
+    seco — a mesma regra que o `chuvaNoRelvado` ja aplica ao `Weather`.
+    */
+    _chuva(campo) {
+        if (typeof ChuvaNoJogo === 'undefined' || typeof chuvaNoRelvado !== 'function') return 0;
+        return ChuvaNoJogo[campo] * chuvaNoRelvado();
+    },
+
     get restituicao() {
-        return this.restituicaoSeco * (1 - ChuvaNoJogo.bolaRessalta * chuvaNoRelvado());
+        return this.restituicaoSeco * (1 - this._chuva('bolaRessalta'));
     },
     get atritoRessalto() {
         // Molhada, a bola MORDE MENOS no quique: perde menos velocidade
-        // horizontal, ou seja patina para a frente. Por isso o atrito DESCE.
-        return 1 - (1 - this.atritoRessaltoSeco) * (1 - ChuvaNoJogo.bolaPatina * chuvaNoRelvado());
+        // horizontal, ou seja patina para a frente. Por isso o que ela GUARDA
+        // (que e o que este numero e) SOBE.
+        return 1 - (1 - this.atritoRessaltoSeco) * (1 - this._chuva('bolaPatina'));
     },
     get atritoRolamento() {
-        return this.atritoRolamentoSeco * (1 - ChuvaNoJogo.bolaRola * chuvaNoRelvado());
+        return this.atritoRolamentoSeco * (1 - this._chuva('bolaRola'));
     },
     vMinRessalto: 0.6,      // abaixo disto não ressalta, assenta
     vMinRolar: 0.25,        // abaixo disto pára de vez

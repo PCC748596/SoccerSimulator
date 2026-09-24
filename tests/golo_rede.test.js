@@ -26,7 +26,25 @@ const BallPhysics = {
 };
 BallPhysics.kArrasto = 0.5 * BallPhysics.densidadeAr * BallPhysics.cd *
     (Math.PI * BallPhysics.raio ** 2) / BallPhysics.massa;
-const GoalNet = { profTopo: 0.8, profBase: 2.0, restituicao: 0.02, atrito: 0.35 };
+/*
+O `GoalNet` VEM DO FICHEIRO, e nao de uma copia aqui.
+
+Estava escrito a mao — `{ profTopo: 0.8, profBase: 2.0, restituicao: 0.02,
+atrito: 0.35 }` — e por isso este teste media uma rede que podia ja nao ser a
+do jogo. Apanhado quando a `bandaContacto` entrou na configuracao: a copia nao
+a tinha, o codigo caia no valor de reserva, e a varredura do numero novo nao
+mexia no resultado do teste em valor nenhum.
+
+Recorta-se o literal do config, como o `passe_encontro` ja faz ao BallPhysics.
+*/
+const LF = String.fromCharCode(10);
+const GoalNet = (function () {
+    const cfg = fs.readFileSync(path.join(__dirname, '..', 'js', 'config', 'physics.js'), 'utf8');
+    const ini = cfg.indexOf('const GoalNet = {');
+    if (ini < 0) throw new Error('GoalNet nao encontrado em js/config/physics.js');
+    const fim = cfg.indexOf(LF + '};', ini);
+    return new Function(cfg.slice(ini, fim + 3) + '; return GoalNet;')();
+})();
 
 // Extrai colidirComRede do match.js, para o teste correr o código de produção.
 function extrair(nome) {
