@@ -45,6 +45,8 @@ const GkDive = {
     _eixoY: new THREE.Vector3(0, 1, 0),
     // Eixo da queda, montado uma vez por mergulho no `iniciar`.
     _eixoQueda: new THREE.Vector3(),
+    // Rotacao do peito, para ancorar a bola agarrada sem a escala do osso.
+    _qOsso: new THREE.Quaternion(),
 
     /*
     Ossos que podem ser o ponto mais baixo com ele deitado. Nao sao so as
@@ -386,10 +388,27 @@ const GkDive = {
                 corpo.position.y = base + Math.max(0, salto);
 
                 if (!this.poseDoClip(rig, d)) this.poseVoo(rig, d);
-                this.mirarBola(p, rig);
-                // Passado o instante do contacto, o braço de trás sai do IK
-                // e estica ao longo do corpo.
-                this.poseBracosVoo(rig, d, k);
+                /*
+                O IK PARA ASSIM QUE ELE AGARRA — e era aqui que o braco dava a
+                volta.
+
+                Relato: *"de repente o braco da uma volta"*. Agarrada, a bola
+                passava a ser colada a propria mao (ver o fim do `update`), e
+                esta linha continuava a mandar o IK resolver o braco PARA A
+                BOLA. Ou seja: a cadeia ombro-cotovelo-mao a perseguir a sua
+                propria mao, que e uma singularidade — o solver nao tem solucao
+                estavel e o braco roda.
+
+                Agarrada a bola nao ha nada para mirar: o que ha e o abraco.
+                */
+                if (!d.agarrou) {
+                    this.mirarBola(p, rig);
+                    // Passado o instante do contacto, o braco de tras sai do
+                    // IK e estica ao longo do corpo.
+                    this.poseBracosVoo(rig, d, k);
+                } else {
+                    this.poseAbracoBola(rig, d);
+                }
                 this.torcerTronco(rig, d, 'voo');
 
                 // A parábola fechou-se: o corpo chegou ao relvado.
@@ -426,7 +445,14 @@ const GkDive = {
                 */
                 d.bolaPerto = this.bolaAoAlcance(p);
                 if (!d.agarrou && d.bolaPerto) this.mirarBola(p, rig);
-                this.poseBracosChao(rig, d);
+                /*
+                COM A BOLA AGARRADA NAO SE AMPARA A QUEDA COM AS MAOS: elas
+                estao ocupadas. Os bracos ficam fechados sobre ela e e o corpo
+                que escorrega, que e o que um guarda-redes faz a seguir a uma
+                defesa agarrada.
+                */
+                if (d.agarrou) this.poseAbracoBola(rig, d);
+                else this.poseBracosChao(rig, d);
                 this.torcerTronco(rig, d, 'chao');
 
                 // O prazo é o do lance, escrito no `iniciar` — ver `tempoChaoAlto`.
@@ -442,7 +468,16 @@ const GkDive = {
                 // Sobe a partir de onde ficou DEITADO, nao da constante.
                 const yBase = (typeof d.yDeitado === 'number') ? d.yDeitado : D.alturaDeitado;
                 corpo.position.y = yBase + (ALTURA_BASE_Y - yBase) * s;
-                this.poseLevantar(rig, s);
+                /*
+                QUEM SE LEVANTA COM A BOLA nao apoia as maos no chao para
+                empurrar — levanta-se com ela agarrada ao peito. Por isso o
+                `poseLevantar` recebe o aviso e nao escreve os bracos: se
+                escrevesse, o abraco tinha de os trazer de volta por lerp todos
+                os frames, e media-se o preco — um salto de angulo a cada
+                entrada na fase.
+                */
+                this.poseLevantar(rig, s, d.agarrou);
+                if (d.agarrou) this.poseAbracoBola(rig, d);
 
                 if (d.t >= D.tempoLevantar) {
                     corpo.position.y = ALTURA_BASE_Y;
@@ -509,10 +544,42 @@ const GkDive = {
             d.assentar = false;
         }
 
-        // Bola agarrada acompanha a mão durante o resto do mergulho.
-        if (d.agarrou && rig.rHand) {
-            rig[d.maoAgarrou || 'rHand'].getWorldPosition(this._v);
-            Match.ball.position.copy(this._v);
+        /*
+        A BOLA AGARRADA VAI AO PEITO — ver GoalkeeperDive.bolaNoPeito.
+
+        Estava colada a MAO que a apanhou, e a mao esta na ponta do braco
+        esticado: com o corpo deitado a escorregar, a bola acabava por baixo
+        dele. Relato: *"depois de segurar a bola o goleiro fica equilibrado
+        sobre a bola e deslizando sobre a bola"*.
+
+        O ponto e dado no espaco do PEITO, portanto acompanha o tombo, o
+        escorregar e o levantar sem contas nenhumas. Quando o mergulho acaba,
+        quem a segura passa a ser o ramo 'segurando' (player.js), que a poe ao
+        peito dele tambem — a passagem nao tem salto.
+        */
+        if (d.agarrou && rig.chest) {
+            const BP = D.bolaNoPeito || { x: 0, y: 0.06, z: 0.30 };
+            rig.chest.updateWorldMatrix(true, false);
+            /*
+            SEM A ESCALA DO OSSO. Um `applyMatrix4(matrixWorld)` leva a escala
+            do peito junto, e ela nao e 1: medido, os 0.30 m pedidos chegavam
+            ao mundo como 0.10 e a bola ficava DENTRO do peito. O ponto monta-se
+            a partir da posicao e da ROTACAO do peito, que e o que se quer —
+            os centimetros sao do mundo e nao do osso.
+            */
+            rig.chest.getWorldPosition(this._v);
+            rig.chest.getWorldQuaternion(this._qOsso);
+            this._vLocal.set(BP.x, BP.y, BP.z).applyQuaternion(this._qOsso);
+            Match.ball.position.copy(this._v).add(this._vLocal);
+            /*
+            E NAO AFUNDA NO RELVADO. Deitado de lado, a frente do peito pode
+            apontar ao chao, e o ponto do abraco ia com ela — medido, a bola
+            descia aos 0.05 m com o raio dela a ser 0.11. Um guarda-redes
+            encolhe-se A VOLTA da bola; o chao e o chao.
+            */
+            if (Match.ball.position.y < BallPhysics.raio) {
+                Match.ball.position.y = BallPhysics.raio;
+            }
             Match.ballVel.set(0, 0, 0);
         }
 
@@ -1057,7 +1124,53 @@ const GkDive = {
         rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, alvo, 0.25);
     },
 
-    poseLevantar(rig, s) {
+    /*
+    O ENCAIXE: os dois bracos fechados sobre a bola, ao peito.
+
+    Os MESMOS angulos nos dois lados, de proposito — e a simetria que os faz
+    ler como um braco so, que e o pedido. Nao ha lider nem traseiro aqui: quem
+    agarrou a bola ja nao esta a ir busca-la.
+
+    Ver GoalkeeperDive.abracoBola para os angulos e para a convencao do sinal.
+    */
+    poseAbracoBola(rig, d) {
+        const P = GoalkeeperDive.abracoBola;
+        if (!P || !rig) return;
+        /*
+        ESCRITA DIRECTA, todos os frames — nao ha lerp nenhum aqui, e e de
+        proposito.
+
+        Duas razoes, as duas medidas:
+
+        1. O IK escreve angulos de Euler vindos de um quaterniao, e esses dao
+           saltos de sinal (um x que passa de -3.0 para +3.0 e a MESMA pose).
+           A interpolar entre os dois numeros, o braco faz o caminho longo —
+           roda. E o "braco da uma volta" do relato, e media 1.80 rad de salto.
+
+        2. A pose do voo (clip ou `poseVoo`) reescreve os bracos antes disto em
+           TODOS os frames. Com lerp, o abraco passava a vida a puxa-los de
+           volta a 35% e os dois ficavam a disputar o braco — medido, saltos de
+           1.35 e 0.91 rad em frames seguidos.
+
+        A pose e FIXA: escrever-lhe o valor nao tem nada para suavizar. O unico
+        salto que sobra e o frame em que ele agarra, que e um corte e nao uma
+        volta.
+        */
+        const w = 1;
+        const lados = [['lArm', 'lElbow', 1], ['rArm', 'rElbow', -1]];
+        for (const lado of lados) {
+            const ombro = rig[lado[0]];
+            if (ombro) {
+                ombro.rotation.x = lerpTo(ombro.rotation.x, P.ombroX, w);
+                ombro.rotation.y = lerpTo(ombro.rotation.y, 0, w);
+                ombro.rotation.z = lerpTo(ombro.rotation.z, lado[2] * P.ombroZ, w);
+            }
+            const cotovelo = rig[lado[1]];
+            if (cotovelo) cotovelo.rotation.x = lerpTo(cotovelo.rotation.x, P.cotovelo, w);
+        }
+    },
+
+    poseLevantar(rig, s, comBola) {
         // Recolhe as pernas primeiro, estica no fim — é assim que se levanta.
         const dobra = Math.sin(s * Math.PI);
         rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, 1.4 * dobra, 0.2);
@@ -1068,10 +1181,15 @@ const GkDive = {
         // Negativo é à frente (ver a nota do `chao` no GoalkeeperDive): quem se
         // levanta do chão apoia as mãos À FRENTE e empurra. Era +0.4, ou seja
         // os dois braços atrás das costas durante a levantada inteira.
-        rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, -0.4 * dobra, 0.2);
-        rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, -0.4 * dobra, 0.2);
-        rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, Math.PI / 16, 0.2);
-        rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -Math.PI / 16, 0.2);
+        //
+        // COM A BOLA NA MAO NÃO HÁ APOIO NENHUM: os braços estão ocupados a
+        // segurá-la, e quem os escreve é o `poseAbracoBola`.
+        if (!comBola) {
+            rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, -0.4 * dobra, 0.2);
+            rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, -0.4 * dobra, 0.2);
+            rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, Math.PI / 16, 0.2);
+            rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -Math.PI / 16, 0.2);
+        }
         // E desfaz a torção do mergulho: quem se levanta fica de frente.
         rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, 0, 0.2);
     }

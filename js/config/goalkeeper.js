@@ -1406,6 +1406,39 @@ const GoalkeeperDive = {
     */
     torcaoTronco: { impulso: 0.30, voo: 0.18, chao: 0.45 },
 
+    /*
+    =========================================================================
+    AGARROU: A BOLA VAI AO PEITO, E OS BRACOS FECHAM-SE SOBRE ELA
+    =========================================================================
+    Relato, com capturas: *"o goleiro esta defendendo a bola corretamente com
+    as maos. Mas de repente o braco da uma volta. Depois de segurar a bola o
+    goleiro fica equilibrado sobre a bola e deslizando sobre a bola. A bola
+    deveria estar no peito do goleiro e com os bracos encaixando a bola como um
+    braco so."*
+
+    Era o que o codigo fazia: agarrada, a bola ficava colada a MAO que a
+    apanhou, e a mao esta na ponta do braco esticado. Com o corpo deitado a
+    escorregar, a bola ficava por baixo dele — dai o "equilibrado sobre a bola".
+
+    `bolaNoPeito` e a posicao dela no espaco do PEITO (z e a frente), e por isso
+    acompanha o corpo deitado, o tombo e o levantar sem mais contas.
+
+    `abracoBola` e a pose dos dois bracos a fecharem-se sobre ela: os mesmos
+    angulos nos dois lados, que e o que os faz ler como um braco so. O ombro
+    negativo leva a mao a FRENTE (ver a nota do sinal em `sequenciaBracos.chao`)
+    e o cotovelo bem dobrado traz a mao de volta ao peito — e o encaixe.
+    =========================================================================
+    */
+    bolaNoPeito: { x: 0.0, y: 0.06, z: 0.30 },
+    /*
+    Os angulos sairam de uma medicao e nao do olho: com a bola no ponto acima,
+    varreu-se o ombro e o cotovelo a ler onde a MAO cai no espaco do peito.
+    Com estes tres, as maos ficam em (+-0.10, 0.11, 0.33) — ou seja uma de cada
+    lado da bola, a um raio dela (0.11 m), e a mesma altura. E o encaixe: duas
+    maos a fechar sobre a bola, nao dois bracos a apontar para ela.
+    */
+    abracoBola: { ombroX: -0.25, ombroZ: -0.20, cotovelo: -1.05 },
+
     pesoIK: 0.45,          // suavização do IK dos braços por frame
 
     /*
