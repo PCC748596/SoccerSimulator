@@ -17,6 +17,17 @@ partilhada pelos dois disparadores. O que este teste prende:
     pool enche-se e nao ha mais respingos nenhuns;
   . A FORCA CONTA — um quique forte levanta mais agua do que um fraco.
 
+SEGUNDA PASSAGEM, e os dois pedidos que a motivaram: *"coloca um pouco mais de
+respingos durante a chuva"* e *"vamos fazer a chuva aumentar e diminuir durante
+o jogo tambem"*. Dai os blocos 8 a 11:
+
+  . a chuva respinga SOZINHA, a volta da bola, sem ser precisa uma pisada nem
+    um quique;
+  . a taxa disso e por segundo e nao por frame;
+  . a intensidade da chuva passeia dentro de uma faixa, devagar, e e ela que
+    manda nos fios desenhados;
+  . e a agua que salta do chao acompanha-a.
+
 E, do lado de quem dispara, que os dois hooks estao no sitio certo e com as
 guardas certas (leitura do codigo, que precisaria do jogo inteiro a correr
 para ser exercitada).
@@ -41,12 +52,21 @@ existem, por isso chama-se so o que interessa: `_criarRespingos` e uma cena
 de mentira que aceita o `add`.
 */
 const janela = { isPaused: false };
-const amb = { THREE, console, window: janela, document: { getElementById: () => null } };
+const amb = {
+    THREE, console, window: janela,
+    document: { getElementById: () => null },
+    // Os respingos da propria chuva nascem a volta da BOLA (e para onde a
+    // camara olha). Sem Match nenhum eles cairiam no meio do campo, que e o
+    // ramo de seguranca — aqui da-se-lhe uma bola para se medir o sitio.
+    Match: { ball: { position: { x: 0, y: 0, z: 0 } } }
+};
 const Weather = new Function(...Object.keys(amb),
     ler('js/weather.js') + LF + 'return Weather;')(...Object.values(amb));
 
 Weather.scene = { add: () => {} };
+Weather._criarChuva();
 Weather._criarRespingos();
+Weather.rainParticles.visible = true;
 Weather.splashParticles.visible = true;
 
 const posArr = () => Weather.splashGeometry.attributes.position.array;
@@ -197,6 +217,139 @@ console.log(LF + '7 — os dois disparadores estao ligados, e com guarda de chuv
 }
 
 /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+console.log(LF + '8 — a chuva respinga sozinha, a volta da bola');
+{
+    /*
+    Pedido: *"coloca um pouco mais de respingos durante a chuva"*. Os respingos
+    que havia eram todos de EVENTOS (o quique da bola, a pisada). Falta o chao
+    a fervilhar com a propria chuva.
+    */
+    Weather.condicao = 'chuva';
+    Weather.intensidadeChuva = 1.0;
+    Weather._ambienteAcc = 0;
+    Weather._limparRespingos();
+
+    // Um segundo de chuva, sem quique nenhum e sem ninguem a correr.
+    for (let f = 0; f < 60; f++) Weather._respingosDeChuva(1 / 60);
+
+    const nascidas = vivas();
+    const esperadas = Weather.ambienteTaxa * Weather.ambienteGoticulas;
+    console.log(`  1 s de chuva: ${nascidas} goticulas (taxa ${Weather.ambienteTaxa}/s ` +
+        `x ${Weather.ambienteGoticulas} = ${esperadas})`);
+
+    if (nascidas <= 0) erro('a chuva nao respinga sozinha');
+    else ok(`${nascidas} goticulas so da chuva`);
+
+    // Dentro do raio, a volta da bola (que este ambiente poe na origem).
+    const pos = posArr();
+    let fora = 0;
+    Weather.splashPool.forEach((g, i) => {
+        if (g.vida <= 0) return;
+        if (Math.hypot(pos[i * 3 + 0], pos[i * 3 + 2]) > Weather.ambienteRaio + 0.5) fora++;
+    });
+    if (fora) erro(`${fora} goticulas nasceram fora do raio de ${Weather.ambienteRaio} m da bola`);
+    else ok(`todas dentro dos ${Weather.ambienteRaio} m a volta da bola`);
+
+    // E sem chuva nao ha nenhuma — a mesma guarda do resto do sistema.
+    Weather.condicao = 'limpo';
+    Weather._limparRespingos();
+    Weather._ambienteAcc = 0;
+    for (let f = 0; f < 60; f++) Weather._respingosDeChuva(1 / 60);
+    if (vivas() !== 0) erro('respinga sozinha com o campo seco');
+    else ok('com o campo seco nao respinga nada');
+    Weather.condicao = 'chuva';
+}
+
+/* ------------------------------------------------------------------ */
+console.log(LF + '9 — a taxa e por SEGUNDO, e nao por frame');
+{
+    /*
+    Sem o acumulador, a 144 Hz sairiam duas vezes e meia mais respingos do que
+    a 60 Hz e a chuva mudava de aspecto com o hardware. Um segundo de jogo tem
+    de dar o mesmo em qualquer cadencia.
+    */
+    const num = (passo) => {
+        Weather._limparRespingos();
+        Weather._ambienteAcc = 0;
+        const frames = Math.round(1 / passo);
+        for (let f = 0; f < frames; f++) Weather._respingosDeChuva(passo);
+        return vivas();
+    };
+    const a60 = num(1 / 60), a144 = num(1 / 144), a30 = num(1 / 30);
+    console.log(`  1 s a 30 Hz: ${a30} | a 60 Hz: ${a60} | a 144 Hz: ${a144}`);
+    const pior = Math.max(a30, a60, a144), melhor = Math.min(a30, a60, a144);
+    if (pior - melhor > 0.15 * pior) {
+        erro(`a cadencia muda a chuva: de ${melhor} a ${pior} goticulas no mesmo segundo`);
+    } else ok('o mesmo segundo da o mesmo, em qualquer cadencia');
+}
+
+/* ------------------------------------------------------------------ */
+console.log(LF + '10 — a chuva aperta e alivia durante o jogo');
+{
+    /*
+    Pedido: *"vamos fazer a chuva aumentar e diminuir durante o jogo tambem"*.
+
+    Tres minutos de chuva, a ler a intensidade: tem de MEXER-SE, tem de ficar
+    dentro da faixa configurada, e tem de mexer-se DEVAGAR — um aguaceiro que
+    aparece e desaparece num segundo nao e um aguaceiro, e um interruptor.
+    */
+    const A = Weather.chuvaAguaceiro;
+    Weather.condicao = 'chuva';
+    Weather.intensidadeChuva = 1.0;
+    Weather._chuvaTimer = 0;
+
+    let min = 9, max = -9, maiorSalto = 0, ant = Weather.intensidadeChuva;
+    const fios = [];
+    for (let f = 0; f < 60 * 180; f++) {
+        Weather._atualizarIntensidadeDaChuva(1 / 60);
+        const i = Weather.intensidadeChuva;
+        min = Math.min(min, i); max = Math.max(max, i);
+        maiorSalto = Math.max(maiorSalto, Math.abs(i - ant));
+        ant = i;
+        if (f % (60 * 30) === 0) fios.push(Weather.rainGeometry.drawRange.count / 2);
+    }
+    console.log(`  3 min: intensidade de ${min.toFixed(2)} a ${max.toFixed(2)} | ` +
+        `fios desenhados de 30 em 30 s: ${fios.join(', ')}`);
+
+    if (max - min < 0.15) erro(`a chuva mal variou: de ${min.toFixed(2)} a ${max.toFixed(2)}`);
+    else ok(`variou de ${min.toFixed(2)} a ${max.toFixed(2)}`);
+
+    if (min < A.min - 0.01 || max > A.max + 0.01) {
+        erro(`saiu da faixa [${A.min}, ${A.max}]`);
+    } else ok(`dentro da faixa [${A.min}, ${A.max}]`);
+
+    // Por frame nao pode andar mais do que a velocidade configurada.
+    const tecto = A.velocidade / 60 + 1e-6;
+    if (maiorSalto > tecto) {
+        erro(`saltou ${maiorSalto.toFixed(4)} num frame (tecto ${tecto.toFixed(4)}): nao e um aguaceiro, e um interruptor`);
+    } else ok('a mudanca e gradual, nunca aos saltos');
+
+    // E e a intensidade que manda nos fios desenhados.
+    const esperados = Math.max(1, Math.round(Weather.rainCount * Weather.intensidadeChuva));
+    if (Weather.rainGeometry.drawRange.count !== esperados * 2) {
+        erro('os fios desenhados deixaram de acompanhar a intensidade');
+    } else ok('os fios desenhados seguem a intensidade');
+}
+
+/* ------------------------------------------------------------------ */
+console.log(LF + '11 — chuva fraca respinga menos do que chuva forte');
+{
+    Weather.condicao = 'chuva';
+
+    const medir = (intensidade) => {
+        Weather.intensidadeChuva = intensidade;
+        Weather._limparRespingos();
+        Weather.respingo(0, 0, 1.0);
+        return vivas();
+    };
+    const forte = medir(1.0), fraca = medir(Weather.chuvaAguaceiro.min);
+    console.log(`  mesmo quique: ${forte} goticulas com chuva forte, ${fraca} com chuva fraca`);
+    if (fraca >= forte) erro(`chuva fraca deu ${fraca} e forte ${forte}: a intensidade nao conta`);
+    else ok('o mesmo quique levanta menos agua com a chuva a aliviar');
+    Weather.intensidadeChuva = 1.0;
+}
+
 console.log(LF + (falhas === 0
     ? 'TUDO CERTO — os respingos de chuva estao como pedidos.'
     : `${falhas} FALHA(S).`));

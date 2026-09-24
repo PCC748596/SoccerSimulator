@@ -63,10 +63,80 @@ const Weather = {
     splashGeometry: null,
     splashMaterial: null,
     splashPool: [],
-    splashMax: 600,            // tecto de goticulas vivas ao mesmo tempo
+    /*
+    Era 600. Com os respingos da propria chuva (ver `ambienteTaxa`) somados aos
+    do quique e das pisadas, 600 esgotavam-se e o cursor circular comecava a
+    apagar goticulas ainda vivas — via-se o respingo do quique a desaparecer a
+    meio.
+
+    Medido ao longo de tres minutos de chuva, com a intensidade a variar entre
+    0.33 e 1.00: 107 goticulas vivas em media e 164 no pico, quase todas do
+    ambiente (essas vivem pouco — saem fracas e voltam ao relvado em ~0.2 s).
+    Um quique forte sozinho gasta 24. 1400 da folga de sobra para o pico
+    coincidir com dois quiques e meia equipa a correr.
+    */
+    splashMax: 1400,           // tecto de goticulas vivas ao mesmo tempo
     splashProx: 0,             // cursor circular da pool
     splashGravidade: 12.0,     // queda das goticulas (m/s^2), acima da real: caem secas
     splashVida: 0.45,          // segundos de vida de cada goticula
+
+    /*
+    =========================================================================
+    RESPINGOS DA PROPRIA CHUVA — a agua a saltar do relvado, sem ninguem
+    =========================================================================
+    Pedido: *"coloca um pouco mais de respingos durante a chuva"*.
+
+    Os respingos que ja havia sao de EVENTOS: o quique da bola e a pisada dos
+    jogadores. Com chuva a serio o relvado salta sozinho por toda a parte, e
+    era isso que faltava.
+
+    `ambienteTaxa` sao os respingos por segundo com a chuva no maximo (escala
+    com a intensidade, ver `chuvaAguaceiro`). Cada um e pequeno —
+    `ambienteGoticulas` — porque sao muitos: o que se quer e o chao a fervilhar,
+    nao doze fontes.
+
+    NASCEM A VOLTA DA BOLA e nao espalhados pelo campo inteiro: a camara olha
+    sempre para a bola (ver Match.updateCamera), portanto e ali que eles se
+    veem. Espalhados por 105x68 m, a esmagadora maioria caia fora do ecra e
+    gastava a pool a troco de nada.
+    */
+    ambienteTaxa: 220,         // respingos por segundo, com a chuva no maximo
+    ambienteGoticulas: 3,      // goticulas em cada um deles
+    ambienteRaio: 22,          // metros a volta da bola onde nascem
+    _ambienteAcc: 0,
+
+    /*
+    =========================================================================
+    AGUACEIROS — a chuva aperta e alivia durante o jogo
+    =========================================================================
+    Pedido: *"vamos fazer a chuva aumentar e diminuir durante o jogo tambem"*.
+
+    A chuva era uma so: 3500 fios sempre iguais do principio ao fim. Agora ha
+    uma INTENSIDADE (0..1) que caminha devagar para um alvo sorteado, fica la
+    um patamar, e volta a mudar.
+
+    O que a intensidade mexe:
+      . quantos fios se desenham (pelo `setDrawRange` da geometria — os outros
+        continuam a cair, so nao sao desenhados, e por isso voltar a apertar
+        nao faz a chuva aparecer de uma vez num sitio so);
+      . a opacidade deles;
+      . a velocidade de queda e o vento, que num aguaceiro sao maiores;
+      . quantos respingos saltam do chao.
+
+    `velocidade` e por SEGUNDO e nao um lerp: um lerp abranda ao chegar perto
+    e o fim da transicao arrastava-se. A 0.10, ir do minimo ao maximo leva uns
+    sete segundos, que e o tempo que um aguaceiro leva a instalar-se.
+    */
+    chuvaAguaceiro: {
+        min: 0.30,
+        max: 1.00,
+        duracaoMin: 15,        // segundos no patamar, minimo
+        duracaoMax: 45,
+        velocidade: 0.10       // quanto a intensidade anda por segundo
+    },
+    intensidadeChuva: 1.0,
+    _chuvaAlvo: 1.0,
+    _chuvaTimer: 0,
 
     presets: {
         dia: {
@@ -616,13 +686,24 @@ const Weather = {
     em pausa, ou na simulacao em lote (que nao desenha nem corre o
     `Weather.update`, e portanto encheria a pool sem nunca a esvaziar).
     */
-    respingo(x, z, forca = 0.5) {
+    respingo(x, z, forca = 0.5, qtdForcada) {
         if (!this.splashParticles || !this.aChover()) return;
         if (window.isPaused) return;
         if (typeof Sim !== 'undefined' && Sim.running) return;
 
         const f = Math.max(0, Math.min(1, forca));
-        const qtd = 3 + Math.round(f * 14);
+        /*
+        MAIS AGUA POR RESPINGO — era `3 + f * 14`. E escala com a INTENSIDADE
+        da chuva: num aguaceiro o relvado esta encharcado e salta mais; no
+        aliviar salta menos. Ver `chuvaAguaceiro`.
+
+        `qtdForcada` e a porta dos respingos da propria chuva, que sao muitos e
+        pequenos e nao querem esta conta.
+        */
+        const escala = 0.45 + 0.55 * this.intensidadeChuva;
+        const qtd = (typeof qtdForcada === 'number')
+            ? qtdForcada
+            : Math.max(1, Math.round((4 + f * 20) * escala));
         const pos = this.splashGeometry.attributes.position.array;
         const max = this.splashPool.length;
 
@@ -650,6 +731,81 @@ const Weather = {
         }
 
         this.splashGeometry.attributes.position.needsUpdate = true;
+    },
+
+    /*
+    OS RESPINGOS DA PROPRIA CHUVA. Ver `ambienteTaxa` la em cima.
+
+    O acumulador existe para a taxa ser por SEGUNDO e nao por frame: a 144 Hz
+    sairiam duas vezes e meia mais respingos do que a 60 Hz, e a chuva mudava
+    de aspecto com o hardware.
+    */
+    _respingosDeChuva(dt) {
+        if (!this.splashParticles || !this.aChover()) return;
+        if (window.isPaused) return;
+        if (typeof Sim !== 'undefined' && Sim.running) return;
+
+        // A camara olha para a bola; sem bola, o meio do campo serve.
+        const centro = (typeof Match !== 'undefined' && Match.ball)
+            ? Match.ball.position : null;
+        const cx = centro ? centro.x : 0;
+        const cz = centro ? centro.z : 0;
+
+        this._ambienteAcc += this.ambienteTaxa * this.intensidadeChuva * dt;
+        let quantos = Math.floor(this._ambienteAcc);
+        if (quantos <= 0) return;
+        this._ambienteAcc -= quantos;
+        // Tecto por frame: um `dt` grande (separador trocado, jogo a recuperar)
+        // nao pode despejar a pool inteira de uma vez.
+        if (quantos > 40) quantos = 40;
+
+        for (let n = 0; n < quantos; n++) {
+            /*
+            Raiz do sorteio no raio para os pontos ficarem uniformes no disco.
+            Sem ela juntavam-se todos no meio, mesmo a volta da bola.
+            */
+            const ang = Math.random() * Math.PI * 2;
+            const r = this.ambienteRaio * Math.sqrt(Math.random());
+            this.respingo(cx + Math.cos(ang) * r, cz + Math.sin(ang) * r,
+                0.20, this.ambienteGoticulas);
+        }
+    },
+
+    /*
+    A CHUVA APERTA E ALIVIA. Ver `chuvaAguaceiro` para os numeros e o porque.
+    */
+    _atualizarIntensidadeDaChuva(dt) {
+        const A = this.chuvaAguaceiro;
+        if (!A) return;
+
+        if (!this.aChover()) {
+            // Fora da chuva a intensidade nao serve para nada; fica no maximo
+            // para o primeiro aguaceiro do jogo seguinte comecar a chover a
+            // serio e so depois aliviar.
+            this.intensidadeChuva = 1.0;
+            this._chuvaTimer = 0;
+            return;
+        }
+
+        this._chuvaTimer -= dt;
+        if (this._chuvaTimer <= 0) {
+            this._chuvaAlvo = A.min + Math.random() * (A.max - A.min);
+            this._chuvaTimer = A.duracaoMin + Math.random() * (A.duracaoMax - A.duracaoMin);
+        }
+
+        const passo = A.velocidade * dt;
+        const falta = this._chuvaAlvo - this.intensidadeChuva;
+        this.intensidadeChuva += (Math.abs(falta) <= passo) ? falta : Math.sign(falta) * passo;
+
+        // O que se ve: quantos fios sao desenhados e quao densos parecem.
+        if (this.rainGeometry) {
+            const fios = Math.max(1, Math.round(this.rainCount * this.intensidadeChuva));
+            // LineSegments: dois vertices por fio.
+            this.rainGeometry.setDrawRange(0, fios * 2);
+        }
+        if (this.rainMaterial) {
+            this.rainMaterial.opacity = 0.35 + 0.30 * this.intensidadeChuva;
+        }
     },
 
     _atualizarRespingos(dt) {
@@ -741,12 +897,22 @@ const Weather = {
         // para não deixar o lerp preso a meio da transição.
         if (window.isPaused) return;
 
+        this._atualizarIntensidadeDaChuva(dt);
+
         if (this.rainParticles && this.rainParticles.visible) {
             const attr = this.rainGeometry.attributes.position;
             const pos = attr.array;
+            /*
+            CAEM TODOS, desenhados ou nao (o `setDrawRange` e que decide quais
+            se veem). Se so andassem os desenhados, ao apertar o aguaceiro os
+            fios novos entravam parados onde tinham ficado — uma faixa de chuva
+            congelada a aparecer de repente.
+            */
             const count = this.rainCount;
-            const velY = this.rainSpeed * dt;
-            const windX = 3.0 * dt;
+            // Um aguaceiro cai mais depressa e mais inclinado.
+            const i = this.intensidadeChuva;
+            const velY = this.rainSpeed * (0.78 + 0.22 * i) * dt;
+            const windX = 3.0 * (0.6 + 0.4 * i) * dt;
 
             for (let i = 0; i < count; i++) {
                 let idx1 = i * 6 + 1;
@@ -777,6 +943,7 @@ const Weather = {
             attr.needsUpdate = true;
         }
 
+        this._respingosDeChuva(dt);
         this._atualizarRespingos(dt);
     },
 
