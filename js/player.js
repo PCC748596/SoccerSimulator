@@ -6666,6 +6666,40 @@ class FootballPlayer {
             const Pm = GoalkeeperPose.espera;
 
             /*
+            =============================================================
+            E VIRA-SE PARA A BOLA — o que faltava nesta defesa inteira
+            =============================================================
+            Relato: *"O Goleiro tem que se voltar para a bola para poder
+            encaixar quando o chute vier em baixo no centro."*
+
+            E tinha razão: **este ramo não escrevia a orientação do corpo.**
+            Todos os outros o fazem — o 'idle', o reposicionamento, o
+            mergulho, o chutão —, e a defesa de perto era o único sítio onde
+            ele ficava virado para onde a última corrida o deixou. A pose do
+            encaixe põe os dois braços à frente DO MODELO; com o modelo
+            atravessado, as mãos fecham-se ao lado da bola em vez de nela, e
+            o gesto lê-se como um homem a agachar-se de lado.
+
+            SUAVIZADO, e não `lookAtBola`: este ramo apanha-o já perto da
+            bola e muitas vezes a ter de rodar meia volta. O `lookAtBola`
+            escreve a orientação de uma vez e o corpo dava um salto no frame
+            em que a defesa começa. O `virarParaSuave` (utils.js) leva-o lá
+            pelo caminho curto, à fracção por frame do
+            `GoalkeeperPose.viraParaBolaSuave`.
+
+            AQUI E NÃO DENTRO DOS SUB-RAMOS: o encaixe e a barreira precisam
+            os dois, e é a mesma conta.
+            =============================================================
+            */
+            if (Match.ball) {
+                const kVira = (typeof GoalkeeperPose.viraParaBolaSuave === 'number')
+                    ? GoalkeeperPose.viraParaBolaSuave : 0.25;
+                _v1.set(Match.ball.position.x, gkCorpo.position.y, Match.ball.position.z);
+                if (typeof virarParaSuave === 'function') virarParaSuave(gkCorpo, _v1, kVira);
+                else lookAtBola(gkCorpo, _v1);
+            }
+
+            /*
             Um passo curto para o lado da bola — não é deslocação, é ajuste.
 
             E COM LIMITE DE VELOCIDADE, como o ramo de reposicionamento.
@@ -7021,10 +7055,27 @@ class FootballPlayer {
             */
             if (this.gkEncaixe) {
                 const EC = GoalkeeperPose.encaixe;
-                corpoAy = gkCorpo.position.y;
+                /*
+                A COLUNA ANCORA NO RELVADO, E NÃO NA ORIGEM DO CORPO.
+
+                Era `gkCorpo.position.y + alturaEncaixe`, com o `alturaEncaixe`
+                escrito para uma pose que baixava o corpo 0.55 m. Quando a pose
+                foi corrigida e o corpo passou a descer só 0.39 (ele estava
+                sentado para trás, com as pernas 0.094 m DENTRO do relvado), a
+                coluna subiu os mesmos 16 cm com ele — e voltou a medir altura
+                que o guarda-redes não ocupa, que é exactamente o defeito que
+                este bloco existe para corrigir. Medido: 3 de 5 sementes do
+                `gk_agarra_com_a_mao` passaram a apanhar uma bola agarrada a
+                mais de 1 m da mão.
+
+                Ancorada no relvado, o `alturaEncaixe` passa a ser o que o nome
+                diz — até onde o corpo ajoelhado tapa, acima do CHÃO — e deixa
+                de mudar de sítio quando alguém afina a pose.
+                */
+                corpoAy = ALTURA_BASE_Y;
                 corpoBx = gkCorpo.position.x;
                 corpoBz = gkCorpo.position.z;
-                corpoBy = gkCorpo.position.y + (EC.alturaEncaixe || 0.95);
+                corpoBy = ALTURA_BASE_Y + (EC.alturaEncaixe || 0.40);
                 raioCorpoM = (EC.raioEncaixe || RAIO_CORPO);
             } else if (this.gkBarreira) {
                 const B = GoalkeeperPose.barreira;
@@ -7276,7 +7327,14 @@ class FootballPlayer {
             }
             
             const jaEntrouSalto = (Match.state !== 'PLAY');
-            if (!jaEntrouSalto && t < 0.7 && distMaoSalto < 1.4 && Match.ballVel.lengthSq() > 0) {
+            /*
+            O ALCANCE VEM DA CONFIGURAÇÃO, e não de um 1.4 escrito aqui — ver
+            `GkCatchModel.alcanceSalto`, que tem a medição do que o 1.4 deixava
+            passar (uma bola agarrada com a mão a 1.27 m dela).
+            */
+            const alcSalto = (typeof GkCatchModel.alcanceSalto === 'number')
+                ? GkCatchModel.alcanceSalto : 1.4;
+            if (!jaEntrouSalto && t < 0.7 && distMaoSalto < alcSalto && Match.ballVel.lengthSq() > 0) {
                 /*
                 SAIDA AO CRUZAMENTO: agarra ou soca, e quem decide e a
                 MARCACAO -- ver `resolverSaidaAoCruzamento` e
@@ -7287,7 +7345,7 @@ class FootballPlayer {
                     this.gkSaiuAoCruzamento = false;
                 } else {
                     // No ar, a agarrar por cima: ver resolverDefesaComMaos.
-                    this.resolverDefesaComMaos('salto', distMaoSalto / 1.4);
+                    this.resolverDefesaComMaos('salto', distMaoSalto / alcSalto);
                 }
             }
         } else if (this.gkEstado === 'apanhar') {
@@ -7762,6 +7820,39 @@ class FootballPlayer {
         */
         const hMin = (typeof S.alturaMinGesto === 'number') ? S.alturaMinGesto : S.alturaMin;
         if (Match.ball.position.y < hMin) return false;
+
+        /*
+        =============================================================
+        E TEM DE LHE CHEGAR COM A MÃO. Esta função não media distância
+        nenhuma.
+        =============================================================
+        Verificava a ALTURA da bola e se havia adversário por perto, e a
+        seguir agarrava-a — viesse de onde viesse. Traçado o caminho de cada
+        `grabBall` com o `stack`, é POR AQUI que passam as bolas agarradas de
+        longe que o `gk_agarra_com_a_mao` apanha: mão a 1.14, 1.82, 1.08 e
+        1.05 m da bola, em quatro sementes diferentes. O cabeçalho desse teste
+        tem a nota de que não se sabia por onde essa agarrada acontecia, e de
+        que "não é pelo mergulho nem pelo alcance do corpo" — é por aqui.
+
+        O alcance é o do SALTO (`GkCatchModel.alcanceSalto`, 0.85 m) e não o de
+        pé: uma saída ao cruzamento faz-se com os braços estendidos por cima
+        da cabeça, tal como o salto. Ver a nota que lá está.
+
+        NO TOPO, ANTES DO SORTEIO: recusar depois do `Math.random` deixava-o a
+        gastar a probabilidade num lance que não podia alcançar, e a contar
+        uma defesa nas estatísticas por uma bola em que não tocou.
+        =============================================================
+        */
+        const alcSaida = (typeof GkCatchModel !== 'undefined' &&
+            typeof GkCatchModel.alcanceSalto === 'number') ? GkCatchModel.alcanceSalto : 0.85;
+        let distMaoSaida = Infinity;
+        for (const nome of ['lHand', 'rHand']) {
+            const mao = this.rig && this.rig[nome];
+            if (!mao) continue;
+            mao.getWorldPosition(_v3);
+            distMaoSaida = Math.min(distMaoSaida, _v3.distanceTo(Match.ball.position));
+        }
+        if (distMaoSaida > alcSaida) return false;
 
         const adversarios = (this.team === 'TeamA') ? Match.opponents : Match.players;
         let marcado = false;

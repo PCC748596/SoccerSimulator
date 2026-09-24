@@ -161,15 +161,49 @@ const GoalkeeperPose = {
     teste de contacto das mãos que já lá está, em vez de ganhar uma cópia dele
     para divergir.
     */
+    /*
+    QUANTO DO QUE FALTA ELE RODA POR FRAME, a virar-se para a bola na defesa
+    de perto (o estado `maos`, encaixe e barreira). Ver o ramo no player.js,
+    que tem o relato.
+
+    0.25 a 60 fps fecha metade do ângulo em ~2.5 frames e 90% em 8 — ou seja
+    uma meia-volta em pouco mais de um décimo de segundo, que é o tempo que
+    um guarda-redes leva a rodar os ombros. A 1.0 seria o `lookAtBola` de
+    volta, com o salto que ele dá.
+    */
+    viraParaBolaSuave: 0.25,
+
     encaixe: {
         alturaMax: 0.81,       // ALTURA_BALIZA / 3
         anguloMaxGraus: 30.0,
         lateralMax: 1.5,
 
-        altura: -0.55,         // quadril baixo (soma a ALTURA_BASE_Y)
-        chest: 0.45,           // tronco inclinado para a frente
-        cabeca: -0.40,         // cabeça a olhar a bola no chão
-        pelvisX: 0.20,         // bacia a acompanhar o tronco
+        altura: -0.39,         // quadril baixo (soma a ALTURA_BASE_Y)
+        chest: 0.95,           // tronco inclinado para a frente
+        cabeca: -0.45,         // cabeça a olhar a bola no chão
+        /*
+        A BACIA FICA A PRUMO, E ISTO ERA O QUE ESTRAGAVA A POSE TODA.
+
+        Era 0.20. A bacia leva as PERNAS com ela, portanto rodá-la muda os
+        ângulos das duas ao mesmo tempo — e os ângulos desta pose estão
+        escritos para o corpo direito. Medido, com 0.20 contra 0.00:
+
+            pelvisX   coxa da perna ajoelhada   joelho dela   sola da outra
+             0.20            60 graus             0.17 m           0.17 m
+             0.00            70 graus             0.05 m          -0.03 m
+
+        Com 0.20 nenhuma das duas pernas assentava: o joelho ficava 0.20 m
+        acima do relvado e o pé da outra 0.20 m também, e o guarda-redes lia-se
+        SENTADO para trás com as pernas a atravessar o chão (o ponto mais baixo
+        do corpo estava 0.094 m DENTRO dele). Com 0.00 os ângulos saem nos
+        pedidos — 70 graus na coxa do lado da bola com a canela deitada, 89 na
+        canela da outra — e as duas solas assentam.
+
+        A curvatura do tronco passou toda para o `chest`, que roda o tronco e
+        não as pernas. Ver a mesma lição no cabeçalho do GoalKickClip
+        (config/animations.js): a dobra vai no canal que não arrasta o resto.
+        */
+        pelvisX: 0.0,
 
         /*
         OS DOIS JOELHOS DOBRADOS E SEPARADOS. A perna ABERTA é a que vai
@@ -205,8 +239,8 @@ const GoalkeeperPose = {
         olhar para a COMPACIDADE (distância do pé à anca) e não só para o
         ângulo de cada segmento.
         */
-        coxaAberta: -0.10, joelhoAberto: 1.55, aberturaAberta: 0.50,
-        coxaRecolhida: 0.15, joelhoRecolhido: 1.95, aberturaRecolhida: 0.12,
+        coxaAberta: 0.35, joelhoAberto: 1.22, aberturaAberta: 0.18,
+        coxaRecolhida: -1.33, joelhoRecolhido: 1.33, aberturaRecolhida: 0.10,
 
         /*
         AS MÃOS JUNTO AO CHÃO E FECHADAS NA BOLA. `bracoX` negativo é para a
@@ -220,9 +254,9 @@ const GoalkeeperPose = {
         mão. O L quer-se com o ombro aberto para pôr os antebraços à frente
         dos joelhos, e isso é para medir, não para adivinhar.
         */
-        bracoX: -0.75, bracoZ: 0.12, cotovelo: -0.85,
+        bracoX: -1.10, bracoZ: 0.20, cotovelo: -0.55,
         // O pulso vira a palma para cima, a receber a bola.
-        pulsoX: -0.35,
+        pulsoX: -0.50,
 
         suavizacao: 0.45,     // entra depressa, como a barreira
 
@@ -259,12 +293,17 @@ const GoalkeeperPose = {
         da mão E do corpo — ou seja agarrada de onde ele não chegava. Com ele
         desligado, 0 de 11.
 
-        `alturaEncaixe` é o tronco ajoelhado acima da origem JÁ BAIXADA, e
+        `alturaEncaixe` é o tronco ajoelhado medido A PARTIR DO RELVADO — era
+        0.95 a contar da origem do corpo, que é uma âncora que se mexe: quando
+        a pose foi corrigida e o corpo deixou de descer 0.55 m, a coluna subiu
+        com ele e voltou a medir altura que ele não ocupa (ver a nota no
+        `player.js`). Do chão, 0.40 m é até onde os dois braços fechados tapam.
+
         `raioEncaixe` é mais largo do que o normal (0.45) porque nesta pose o
         que tapa a bola são os dois braços fechados em volta dela, não a
         silhueta magra de quem está de pé.
         */
-        alturaEncaixe: 0.95,
+        alturaEncaixe: 0.40,
         raioEncaixe: 0.52
     },
 
@@ -1604,6 +1643,27 @@ const GkCatchModel = {
     contar como defesa, que é exactamente o relato que este bloco cita.
     */
     alcanceContacto: 0.55,
+
+    /*
+    E O ALCANCE NO SALTO, que estava escrito à mão no player.js e valia 1.4 m.
+
+    O ramo do salto alto (`updateGK`) aceitava a bola a 1.4 m da MÃO e
+    agarrava-a. Os outros ramos usam o `alcanceContacto` acima, que é 0.55 — o
+    1.4 era o pré-filtro do CORPO reaproveitado como alcance de captura, quase
+    três vezes o alcance real.
+
+    Foi por aqui que passaram as bolas agarradas de longe que o
+    `gk_agarra_com_a_mao` apanha de vez em quando. Traçado o caminho com o
+    `stack` em cada `grabBall`: uma captura com a mão a 1.27 m da bola e o
+    corpo a 1.90 m, no estado `salto_alto`. O cabeçalho desse teste tem a nota
+    de que não se sabia por onde essa agarrada acontecia — é por aqui.
+
+    MAIOR que o `alcanceContacto` de propósito: no salto o braço vai estendido
+    por cima da cabeça e o corpo está no ar, portanto alcança mais do que quem
+    está de pé. 0.85 m é um braço estendido, e fica abaixo dos 0.90 m a partir
+    dos quais o teste conta a bola como agarrada de longe.
+    */
+    alcanceSalto: 0.85,
 
     // Nunca é certo nem impossível.
     minAgarra: 0.05,

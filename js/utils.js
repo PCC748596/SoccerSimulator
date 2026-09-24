@@ -1267,6 +1267,36 @@ if (typeof window !== 'undefined') {
     window.emCarrinho = emCarrinho;
 }
 
+/*
+=============================================================================
+VIRAR-SE PARA UM PONTO, MAS A CHEGAR LÁ EM VEZ DE SALTAR
+=============================================================================
+O `lookAtBola` escreve a orientação de uma vez. Serve para quem já está
+virado e só acompanha, e não serve para quem TEM de se virar: o corpo dá um
+salto de meia volta num frame.
+
+Aqui interpola-se o ângulo, e pelo CAMINHO CURTO — é a parte que se erra ao
+fazer isto à mão. Com o alvo a +170 graus e o actual a -170, a diferença
+ingénua são 340 graus e o boneco dá a volta ao contrário; normalizada para
+[-PI, PI] são 20 graus no sentido certo.
+
+`k` é a fracção do que falta por frame, como os outros `lerpTo` do jogo.
+Devolve o ângulo que FALTA depois de aplicar, em radianos e sem sinal: quem
+chama pode decidir esperar por ele.
+=============================================================================
+*/
+function virarParaSuave(model, ponto, k) {
+    if (!model || !ponto) return 0;
+    const alvo = Math.atan2(ponto.x - model.position.x, ponto.z - model.position.z);
+    let d = alvo - model.rotation.y;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    model.rotation.y += d * Math.max(0, Math.min(1, k));
+    return Math.abs(d);
+}
+
+if (typeof window !== 'undefined') window.virarParaSuave = virarParaSuave;
+
 function alturaDoJogador(p) {
     const A = (typeof AlturaJogador !== 'undefined') ? AlturaJogador : null;
     const padrao = (typeof ALTURA_PADRAO === 'number') ? ALTURA_PADRAO : 1.855;
