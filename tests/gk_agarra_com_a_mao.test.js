@@ -57,7 +57,6 @@ fica aqui escrito em vez de escondido. O que falta é saber por que caminho essa
 agarrada acontece — não é pelo mergulho (esse mede a mão depois do IK) nem pelo
 alcance do corpo em match_physics.js, que passou a calar-se durante o mergulho.
 */
-Math.random = mulberry32(1234);
 
 require('../tools/headless/harness.js');
 
@@ -103,10 +102,36 @@ proto.grabBall = function () {
         }
         if (mao < Infinity) registos.push({ mao: mao, corpo: corpo, estado: this.gkEstado });
     }
-    return orig.call(this);
+    /*
+    OS ARGUMENTOS PASSAM. Aqui estava `orig.call(this)`, sem eles: o
+    `grabBall(manterPose)` do mergulho (gk_dive.js) chegava ao original como
+    `grabBall(undefined)` e o guarda-redes levantava-se com a bola em vez de a
+    segurar a meio do gesto. A instrumentacao mudava o que estava a medir.
+    */
+    return orig.apply(this, arguments);
 };
 
-for (let i = 0; i < Math.round(1200 / dt); i++) Match.update(dt);
+/*
+CINCO SEMENTES, E NAO UMA.
+
+As agarradas sao poucas — medido, de 4 a 13 em vinte minutos de jogo conforme
+a semente — e o numero e sensivel a qualquer mudanca no guarda-redes, porque
+cada agarrada muda o resto do jogo. Com uma semente so, este teste reprovava
+por amostra curta a cada retoque na pose do mergulho, sem que nada do que ele
+mede estivesse errado: as duas vezes que isso aconteceu, `de longe` continuava
+em zero.
+
+O que o teste existe para apanhar — a bola agarrada A DOIS METROS, sem gesto
+nenhum — nao precisa de uma semente em particular; precisa de amostra. Juntam-
+se cinco, e a assercao passa a ser sobre o conjunto.
+*/
+const SEMENTES = [1234, 7, 99, 555, 20260911];
+for (const semente of SEMENTES) {
+    Math.random = mulberry32(semente);
+    Match.init(scene);
+    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(scene);
+    for (let i = 0; i < Math.round(1200 / dt); i++) Match.update(dt);
+}
 
 test('o alcance do contacto vive na configuracao', () => {
     assert.strictEqual(typeof GkCatchModel.alcanceContacto, 'number',
@@ -135,7 +160,8 @@ test('nenhuma bola e agarrada de longe do corpo e da mao', () => {
     const aoCorpo = registos.filter(r => r.corpo <= limiteCorpo && r.mao > limiteMao).length;
     console.log(`  ${registos.length} agarradas | media ${media.toFixed(2)} m do ponto mais ` +
         `proximo (mao ou corpo), pior ${pior.toFixed(2)} m | ao corpo: ${aoCorpo} | de longe: ${longe.length}`);
-    assert.ok(registos.length >= 5, `amostra curta: ${registos.length} agarradas`);
+    assert.ok(registos.length >= 15,
+        `amostra curta: ${registos.length} agarradas em ${SEMENTES.length} sementes`);
     assert.ok(longe.length === 0,
         `${longe.length} de ${registos.length} agarradas com a bola a mais de ` +
         `${limiteMao.toFixed(2)} m da mao E a mais de ${limiteCorpo.toFixed(2)} m do corpo ` +

@@ -1226,8 +1226,46 @@ Object.assign(Match, {
         if (d < -rB || d > GoalNet.profBase) return;
         if (Math.abs(b.x) > LARGURA_BALIZA / 2 + rB) return;
 
-        b.z = (CAMPO_COMP / 2 + rB * 2) * zSinal;
-        v.set(0, 0, 0);
+        /*
+        PARA LA DA REDE INTEIRA, e nao meio palmo atras da linha.
+
+        Era `CAMPO_COMP / 2 + rB * 2`, ou seja 22 cm atras da linha — dentro do
+        pano de CIMA da rede, que entra `profTopo` (0.8 m). A bola ficava la em
+        cima, e o `colidirComRede` voltava a agarra-la no mesmo frame: o pano de
+        cima prende-a a `ALTURA_BALIZA + raio` e mata a velocidade vertical
+        (`restituicao` 0.02). Medido: com a gravidade a dar-lhe -0.16 m/s por
+        frame e a rede a zera-los a seguir, a bola ficou suspensa a 2.55 m
+        durante 3.1 s — 182 frames.
+
+        Passando alem do `profBase` (2.0 m, onde o pano de tras chega ao chao),
+        nenhum dos panos a apanha: cai atras da baliza, que e onde uma bola por
+        cima do travessao vai parar.
+        */
+        b.z = (CAMPO_COMP / 2 + GoalNet.profBase + rB) * zSinal;
+        /*
+        E CAI — o que aqui estava era `v.set(0, 0, 0)`, e era ele que deixava a
+        bola PARADA NO AR.
+
+        BUG, com relato: *"depois que a bola sai pela linha de fundo parece que
+        ela reduz bastante a velocidade e tem vezes que nem toca no chao, de
+        tao lento que fica"*. Nao era lentidao: era paragem. Medido em 30 min
+        de jogo, a bola congelada a 2.55 m de altura, com velocidade 0.00,
+        durante 3.1 s seguidos — 182 frames a passar por aqui.
+
+        A razao e este bloco correr TODOS os frames enquanto a condicao se
+        mantiver. Ele punha a bola atras da armacao e zerava a velocidade; no
+        frame seguinte a gravidade dava-lhe uns -0.16 m/s, a condicao continuava
+        a bater certo (a bola nao tinha descido nada) e o zero voltava a apaga-
+        los. A bola ficava suspensa ate outra coisa qualquer mexer no lance.
+
+        O trabalho desta funcao e tirar a bola de cima da armacao e nao a deixar
+        voltar ao campo — isso sao o x e o z. FAZE-LA CAIR nao e trabalho dela,
+        e da gravidade: deixando o `y` em paz, ela ganha velocidade de queda e
+        em poucos frames passa do `lengthSq() > 1.0` la em cima, que e a porta
+        de saida deste bloco.
+        */
+        v.x = 0;
+        v.z = 0;
     },
 
     colidirComRede: function (zSinal) {
@@ -1297,7 +1335,24 @@ Object.assign(Match, {
         }
 
        if (Math.abs(b.x) <= meiaLarg) {
-            if (Math.abs(dist) < 0.8 || (prevDist <= 0 && dist > 0) || (prevDist > 0 && dist <= 0)) {
+            /*
+            A BANDA E O RAIO DA BOLA, e nao 80 cm.
+
+            Estava `Math.abs(dist) < 0.8`: o pano de tras agarrava tudo o que
+            passasse a menos de OITENTA centimetros dele, e a cada frame em que
+            agarrava matava a velocidade (`atrito` 0.35) e corrigia a posicao.
+            Uma bola que passou por cima do travessao e vem a cair ATRAS da
+            baliza, sem tocar em pano nenhum, ficava presa nesse colchao —
+            medido, suspensa a 1.36 m de altura a 0.08 m/s durante 2.6 s. E a
+            segunda metade do relato *"tem vezes que nem toca no chao, de tao
+            lento que fica"*.
+
+            Uma rede e uma superficie: so ha contacto a menos de um raio dela.
+            A bola rapida continua coberta pelos dois testes de TRAVESSIA aqui
+            ao lado (mudanca de sinal do `dist` entre o frame anterior e este),
+            que e o que impede o atravessamento sem contacto.
+            */
+            if (Math.abs(dist) < rB || (prevDist <= 0 && dist > 0) || (prevDist > 0 && dist <= 0)) {
                 let tCross = 0;
                 if (dist !== prevDist) tCross = prevDist / (prevDist - dist);
                 const yCross = prevY + tCross * (b.y - prevY);
