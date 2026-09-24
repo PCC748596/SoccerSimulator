@@ -1230,14 +1230,28 @@ Object.assign(Match, {
                     z: bolaZ - gk.dirZ * recuo
                 };
                 /*
-                Posiciona-o no ponto de partida — mas não a meio de um
-                mergulho: o tiro de meta vem quase sempre a seguir a uma
-                defesa dele, que é precisamente quando o corpo ainda está no
-                ar. Ver `reporGuardaRedes`; o `golKickAtrasoInicio` dá-lhe o
-                tempo de se levantar e ir a pé.
+                ELE VAI A PE, NAO E TELETRANSPORTADO.
+
+                BUG, com relato: *"depois do chute, quando a bola sai pela
+                linha de fundo, o goleiro e teletransportado de um lado para
+                o outro"*. Aqui estava um `reporGuardaRedes`, que escreve
+                `model.position` de uma vez — e o ponto de arranque e na quina
+                da pequena area DO LADO POR ONDE A BOLA SAIU. Com ele a
+                defender no poste contrario, isso e um salto de ate ~13 m
+                atravessado a baliza, num frame.
+
+                Nao ha nada a repor: quem o leva ao ponto de arranque e a
+                caminhada do proprio 'tiro_meta_espera' (player.js), que tem
+                os segundos do lance para o fazer — os 3 s de espera da bola
+                mais o `golKickAtrasoInicio`. So se escreve o alvo.
+
+                O `dynamicTarget` vai junto porque e o que os outros sistemas
+                leem para saber para onde ele se dirige; o corpo, esse, anda.
                 */
-                this.reporGuardaRedes(gk, gk.gkTiroAlvo.x, gk.gkTiroAlvo.z,
-                    { x: bolaX, y: ALTURA_BASE_Y, z: bolaZ });
+                if (gk.dynamicTarget) {
+                    gk.dynamicTarget.set(gk.gkTiroAlvo.x, ALTURA_BASE_Y, gk.gkTiroAlvo.z);
+                }
+                if (gk.velocity) gk.velocity.set(0, 0, 0);
             }
 
             /*

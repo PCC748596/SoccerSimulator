@@ -674,6 +674,24 @@ Object.assign(Match, {
                 const equipaNoLugar = this.golKickProntos ||
                     this.golKickEsperaPeloBloco > tectoEspera;
 
+                /*
+                NAO HA PORTA A ESPERA DO GUARDA-REDES, e foi medido.
+
+                Ele deixou de ser teletransportado para o ponto de arranque
+                (ver a nota do `reporGuardaRedes` no setupSetPiece) e passou a
+                ir a pe, o que levanta a duvida obvia: chega a tempo? Medido
+                com a mesma semente do `saida_de_bola_ritmo`, seis tiros de
+                meta, travessias de 4.9 a 9.8 m:
+
+                    chegada ao ponto de arranque    1.8 a 2.8 s
+                    duracao do lance                7.6 a 10.6 s
+
+                Chega sempre com folga — a caminhada comeca no frame da
+                montagem e o countdown so arranca depois de a bola assentar na
+                quina. Uma porta aqui nao mudava nada e atrasava o lance nos
+                casos em que mordesse, o que se via na cadencia da saida de
+                bola (tests/saida_de_bola_ritmo.test.js).
+                */
                 if (!(gkEspera && gkEspera.gkTiroMetaPendente) && equipaNoLugar) {
                     this.golKickAtrasoInicio -= dt;
                 }

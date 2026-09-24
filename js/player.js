@@ -6421,7 +6421,12 @@ class FootballPlayer {
             `gkVelSaida` no ShootingModel): sair é velocidade, não posição.
             */
             this.velocity.set(velX, 0, velZ);
-            let lookPos = Match.ball.position.clone(); lookPos.y = gkCorpo.position.y; lookAtBola(gkCorpo, lookPos);
+            // Acompanha a bola, mas nunca de costas para o campo — a regra e
+            // o porque estao em `zDeOlharDoGuardaRedes` (utils.js).
+            const lookZ = zDeOlharDoGuardaRedes(
+                Match.ball.position.z, this.ownGoalZ, this.dirZ);
+            _v1.set(Match.ball.position.x, gkCorpo.position.y, lookZ);
+            lookAtBola(gkCorpo, _v1);
 
             gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, 0.25);
             gkRig.pelvis.rotation.y = lerpTo(gkRig.pelvis.rotation.y, 0, 0.25);
@@ -6593,7 +6598,20 @@ class FootballPlayer {
             contrario — apagava a passada a cada frame.
             */
             {
-                const bolaE = Match.ball.position;
+                /*
+                ONDE A BOLA VAI ESTAR, e nao onde ela esta.
+
+                Durante os primeiros segundos do lance a bola ainda esta a
+                sair — rola para fora do campo e so passados 3 s e puxada para
+                a quina da pequena area (`golKickBolaAlvo`, ver o countdown em
+                match_loop.js). Ler a posicao viva punha-o a caminhar atras de
+                uma bola fora de campo, e a olhar para tras enquanto andava
+                para a frente.
+                */
+                const alvoBolaE = Match.golKickBolaAlvo;
+                const bolaE = alvoBolaE
+                    ? { x: alvoBolaE.x, z: alvoBolaE.z }
+                    : Match.ball.position;
                 const G = GoalkeeperPose;
                 const plantXe = bolaE.x + this.dirZ * 0.32;
                 const plantZe = bolaE.z - this.dirZ * 0.10;
@@ -6606,7 +6624,21 @@ class FootballPlayer {
                 const dxE = alvoEx - gkCorpo.position.x;
                 const dzE = alvoEz - gkCorpo.position.z;
                 const distE = Math.hypot(dxE, dzE);
-                const passoE = (G.tiroMetaAndar || 2.2) * dt;
+                /*
+                DE LONGE VAI A TROTE, de perto acaba a andar.
+
+                A quina da pequena area e do lado por onde a bola saiu, e ele
+                pode estar no poste contrario: ate ~13 m de travessia. A 2.2
+                m/s isso sao seis segundos, mais do que o lance costuma dar —
+                chegava atrasado e o clip do chute tapava o resto a arrastar o
+                corpo. A velocidade sobe com o que falta andar e volta ao passo
+                de caminhada nos ultimos metros, que e onde ele se compoe para
+                bater.
+                */
+                const vAndar = G.tiroMetaAndar || 2.2;
+                const vCorrer = G.tiroMetaCorrer || 5.5;
+                const fracE = Math.max(0, Math.min(1, (distE - 2.5) / 5.5));
+                const passoE = (vAndar + (vCorrer - vAndar) * fracE) * dt;
 
                 if (distE > 0.12) {
                     const sxE = distE > passoE ? (dxE / distE) * passoE : dxE;
@@ -6628,9 +6660,16 @@ class FootballPlayer {
                 } else {
                     this.resetBonesToDefault();
                 }
+
+                /*
+                Olha para onde a bola VAI ficar — a caminhar, e o sitio para
+                onde anda; parado no ponto de arranque, e a bola a bater. Com
+                a posicao viva da bola ele passava a espera virado de costas
+                para o campo, a olhar para a bola que ainda estava fora.
+                */
+                _v1.set(bolaE.x, gkCorpo.position.y, bolaE.z);
+                lookAtBola(gkCorpo, _v1);
             }
-            _v1.set(Match.ball.position.x, gkCorpo.position.y, Match.ball.position.z);
-            lookAtBola(gkCorpo, _v1);
         } else if (this.gkEstado === 'tiro_meta') {
             /*
             O TIRO DE META E UMA ANIMACAO SO.

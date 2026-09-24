@@ -2503,6 +2503,36 @@ function guinadaPara(origem, alvoX, alvoZ) {
 
 let _vLookAt = null;
 
+/*
+=============================================================================
+O GUARDA-REDES NAO FICA DE COSTAS PARA O CAMPO
+=============================================================================
+BUG, com relato: *"depois do chute o goleiro esta ficando de lado"*.
+
+Ele olha para a bola todos os frames, e isso esta certo. O que nao esta e o
+que acontece quando ela sai pela LINHA DE FUNDO: fica la atras, fora de campo,
+durante os segundos da reposicao, e a olhar para ela o guarda-redes roda de
+perfil ou de costas, a ver o publico.
+
+Esta funcao prende o ponto de olhar a partir da propria linha PARA DENTRO. Ele
+continua a acompanhar a bola em X — vira para o lado por onde ela saiu — mas
+nunca passa de perfil. Com a bola em campo nao muda nada: o clamp so morde do
+lado de la da linha.
+
+  `zBola`    onde a bola esta
+  `golZ`     a linha da baliza DELE
+  `dirZ`     o sentido de ataque dele, ou seja para onde fica o campo
+  `margem`   quanto para dentro, no minimo (metros)
+
+Devolve o z a usar no olhar.
+=============================================================================
+*/
+function zDeOlharDoGuardaRedes(zBola, golZ, dirZ, margem = 1.0) {
+    const d = dirZ || 1;
+    if ((zBola - golZ) * d < margem) return golZ + d * margem;
+    return zBola;
+}
+
 function lookAtBola(model, point) {
     if (!model || !point) return;
     const targetY = (model.position && typeof model.position.y === 'number') ? model.position.y : 0;
