@@ -2519,6 +2519,40 @@ class FootballPlayer {
                 }
             }
 
+            /*
+            O HOMEM LIVRE A FRENTE DA BOLA — ver PasseParaOLivre
+            (config/passing.js) para o pedido, para a medicao e para a lista do
+            que este bonus NAO pisa.
+
+            A escada aqui em cima paga por estar livre e nao olha a onde; a
+            progressao, mais abaixo, paga por estar a frente e vale 25 pontos no
+            tecto. Quem esta as duas coisas — livre E a partir a linha — nao
+            tinha nada que o distinguisse, e media-se: com um homem nessas
+            condicoes disponivel, a bola ia para ele em 17% das vezes.
+            */
+            const LV = (typeof PasseParaOLivre !== 'undefined') ? PasseParaOLivre : null;
+            if (LV && LV.activo) {
+                const aFrente = (optPos.z - Match.ball.position.z) * dirZ;
+                /*
+                A distancia ao adversario e a REAL (`distMarcador`), e nao a
+                efectiva: o pedido fala de um raio de tres metros, e um raio e
+                um raio — quem esta pelas costas ja e descontado na escada.
+                */
+                if (aFrente > LV.aFrenteDaBola && distMarcador > LV.raio) {
+                    /*
+                    E NAO SE PREMEIA QUEM ESTA EM POSICAO IRREGULAR. Esta busca
+                    nao filtra impedimento (quem o faz e a arvore, ver
+                    `offsideLimitDir` em player_bt.js), portanto um bonus por
+                    estar a frente sem esta guarda mandava a bola para la da
+                    linha. `offsideLimitDir` ja vem no referencial de ataque.
+                    */
+                    const linha = teamBB ? teamBB.offsideLimitDir : null;
+                    const irregular = (typeof linha === 'number') &&
+                        (optPos.z * dirZ > linha);
+                    if (!irregular) score += LV.bonus * fiab;
+                }
+            }
+
             // Bónus de prioridade de passes (Triangulações)
             let priorityBonus = 0;
             /*

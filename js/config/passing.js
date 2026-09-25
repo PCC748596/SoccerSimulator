@@ -32,6 +32,64 @@ const PassLineModel = {
     ultimoTercoZ: 17.0       // mesma fronteira do bolaNoUltimoTerco do TeamBT
 };
 
+/*
+=============================================================================
+O HOMEM LIVRE A FRENTE — a conjuncao, que nao estava a valer nada
+=============================================================================
+Pedido: *"temos que ajustar para que um jogador sem marcacao (sem nenhum
+adversario num raio de 3 metros, a frente da linha da bola mais de 6 metros)
+ganhe mais pontos de passe. Tem alguns jogadores sozinhos que nao estao
+recebendo o passe livre."*
+
+O QUE ESTAVA A ACONTECER, medido em 3 jogos (17087 decisoes de passe):
+
+    havia um livre-e-a-frente               13532 vezes
+    o passe foi para ele                     2334 (17%)
+    quando foi para outro, o adversario
+      mais perto DESSE outro                 12.5 m de mediana
+
+Ou seja, o problema NAO era passar a marcados: era passar a outro homem
+igualmente livre, mas de lado ou atras. A escada de desmarcacao que ja existia
+(`distMarcEf`, no findPassTarget) paga por estar LIVRE e nao olha a onde; a
+progressao paga por estar a FRENTE e vale pouco (25 pontos no tecto). A
+conjuncao das duas — o passe que parte a linha — nao tinha peso nenhum.
+
+E o que este bloco acrescenta, e so isso.
+
+O QUE ELE NAO FAZ, que foi verificado um a um:
+
+  . NAO substitui a escada de desmarcacao. Quem esta livre e nao esta a frente
+    continua a valer exactamente o que valia.
+  . ESCALA COM A FIABILIDADE (`fiab`), como a escada. Sem isso, um homem livre
+    a 40 m levava o bonus inteiro e desfazia a calibracao do
+    FiabilidadePasse — 84% de acerto aos 8 m contra 44% acima dos 25.
+  . NAO PASSA POR CIMA DA LINHA. O `penalLinha` e somado na mesma: um homem
+    livre com tres corpos no corredor continua a ser um mau passe, e o bonus
+    foi dimensionado para nao o tapar.
+  . NAO PREMEIA IMPEDIMENTO. O `findPassTarget` nao tem filtro de fora-de-jogo
+    nenhum — esse vive na arvore (player_bt.js) —, portanto um bonus por estar
+    A FRENTE, sem guarda, mandava a bola a quem estava em posicao irregular. O
+    bonus le a linha publicada pelo nivel 1 (`offsideLimitDir`) e cala-se para
+    la dela.
+=============================================================================
+*/
+const PasseParaOLivre = {
+    activo: true,
+
+    raio: 3.0,             // nenhum adversario a menos disto do recetor
+    aFrenteDaBola: 6.0,    // metros a frente da linha da BOLA, no sentido do ataque
+
+    /*
+    O TAMANHO SAIU DE UMA VARREDURA e nao do palpite — ver a tabela na nota do
+    commit. Abaixo de 150 mal se nota; acima de 400 o passe para a frente come
+    a circulacao e a percentagem de acerto cai, porque se passa a insistir em
+    bolas longas que o `fiab` ja dizia serem piores.
+    */
+    bonus: 260
+};
+
+if (typeof window !== 'undefined') window.PasseParaOLivre = PasseParaOLivre;
+
 const PassModel = {
 
     /*

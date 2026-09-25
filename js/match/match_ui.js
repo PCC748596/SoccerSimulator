@@ -30,6 +30,32 @@ Object.assign(Match, {
             if (e.key === '7') this.setCameraMode('lateraltv');
             // A câmara da grua de televisão atrás da baliza (ver GruaDeCamera).
             if (e.key === '8') this.setCameraMode('grua');
+            /*
+            ESC SAI DA REPETICAO.
+
+            BUG, com relato: *"nao esta saindo do replay quando aperto ESC"*.
+            E nao estava mesmo: o ESC nao estava ligado a NADA — nao havia um
+            unico `Escape` em todo o codigo. A unica forma de sair era voltar a
+            carregar no botao "Replay (20s)" do painel, e numa repeticao
+            automatica de golo nem isso, porque ela comeca sozinha e o
+            utilizador so a quer ver ate onde lhe apetece.
+
+            So morde COM UMA REPETICAO A CORRER: fora dela o ESC fica livre
+            para o que o navegador quiser fazer com ele (sair do ecra inteiro,
+            por exemplo), e engolir essa tecla sem nada para fechar era tirar
+            ao utilizador uma saida que ele conta ter.
+
+            O `stopReplay` trata do resto — repoe o frame mais recente e, se a
+            repeticao era a automatica do golo, devolve a camara que pediu
+            emprestada.
+            */
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                const R = window.MatchReplay;
+                if (R && R.isReplaying) {
+                    R.stopReplay();
+                    e.preventDefault();
+                }
+            }
             if (e.key === ' ' || e.code === 'Space') {
                 this.togglePause();
                 e.preventDefault();
