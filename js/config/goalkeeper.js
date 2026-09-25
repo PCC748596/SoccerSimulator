@@ -747,6 +747,72 @@ const GkSaidaCruzamento = {
 };
 if (typeof window !== 'undefined') window.GkSaidaCruzamento = GkSaidaCruzamento;
 
+/*
+=============================================================================
+O SALTO ALTO — ate onde ele salta, e porque nao e sempre o maximo
+=============================================================================
+Relato, com fotografias: *"o goleiro esta pulando no meio e defendendo uma
+bola em cima"*.
+
+A altura do salto era `(0.8 + (GK-50)/50 * 0.6) * 0.75` e mais nada: depende
+so da skill e NUNCA OLHA PARA A BOLA. Ou seja, ele salta o mesmo para uma bola
+a 1.3 m e para uma a 3 m.
+
+Medido, com os bracos no alto:
+
+    mao PARADO chega a          2.04 m   (base do corpo + 2.07)
+    travessao                   2.44 m
+    salto de um GK 50           0.60 m   -> mao a 2.64 m
+    salto de um GK 100          1.05 m   -> mao a 3.09 m
+
+Com a bola a 2.13 m (caso medido no jogo), ele saltava 0.60 e punha a mao meio
+metro ACIMA dela. O contacto ainda acontecia — a mao passava a 0.54 m, no
+limite do alcance — mas o gesto lia-se ao contrario do que era: um homem a
+saltar por cima da bola.
+
+Agora o salto e o que a bola PEDE, com o tecto de sempre:
+
+    preciso = altura da bola no apice - alcance da mao parado
+    salto   = preciso, cortado entre `saltoMin` e o tecto da skill
+
+O TECTO NAO MUDA. Ele ja tinha sido baixado 25% a pedido, e continua igual —
+o que muda e ele deixar de o usar sempre. Uma bola a 2.2 m passa a levar um
+pulinho; uma ao angulo continua a levar o salto inteiro.
+=============================================================================
+*/
+const GkSaltoAlto = {
+    /*
+    Quanto a mao chega ACIMA da base do corpo, com os bracos no alto. Medido
+    na pose do proprio ramo 'salto_alto' (bracos a 2.8 em z, -0.5 em x).
+    */
+    alcanceMaoParado: 2.07,
+
+    /*
+    O salto minimo. A zero, uma bola a altura do peito dava um "salto" de zero
+    e o gesto nao se lia como salto nenhum — ele ficava de pe a levantar os
+    bracos. Dez centimetros chegam para se ver que ele se impulsionou.
+    */
+    saltoMin: 0.10,
+
+    /*
+    Quanto tempo o corpo leva a subir, e que e o tempo a que se preve a bola:
+    ele tem de estar la em cima quando ela chega, nao quando ela ainda vem a
+    caminho. E o mesmo 0.3 s da fase de subida do ramo 'salto_alto'.
+    */
+    tempoDeSubida: 0.30,
+
+    /*
+    TECTO DA PREVISAO. A altura da bola le-se ao tempo que ela leva a CHEGAR a
+    ele (distancia a dividir pela velocidade), nao a um tempo fixo — ver a nota
+    em player.js, onde a primeira tentativa (0.3 s fixos) piorou o contacto.
+    Este tecto existe para uma bola quase parada nao pedir uma previsao de
+    segundos, que a essa distancia ja nao vale nada.
+    */
+    tempoMaxPrevisao: 0.45
+};
+
+if (typeof window !== 'undefined') window.GkSaltoAlto = GkSaltoAlto;
+
 const GoalkeeperDive = {
     /*
     TEMPO DE REACÇÃO A UM REMATE, em segundos, antes de o gesto sequer começar.

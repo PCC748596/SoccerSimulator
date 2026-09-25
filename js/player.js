@@ -6122,6 +6122,39 @@ class FootballPlayer {
                     if (podeSaltar && Match.ball.position.y > 1.2 && Match.ball.position.y < 3.2) {
                         this.gkEstado = 'salto_alto';
                         this.gkTempoMergulho = 0;
+                        /*
+                        A QUE ALTURA VAI ESTAR A BOLA quando ele la chegar —
+                        ver GkSaltoAlto. Guarda-se AQUI e nao se recalcula por
+                        frame: a meio da subida a bola ja se mexeu, e um alvo
+                        que muda todos os frames da um salto que treme.
+                        */
+                        const SA = (typeof GkSaltoAlto !== 'undefined') ? GkSaltoAlto : null;
+                        /*
+                        O TEMPO E O QUE A BOLA LEVA A CHEGAR A ELE, e nao o
+                        tempo de subida do salto.
+
+                        Primeira tentativa: prever a bola a `tempoDeSubida`
+                        (0.3 s). Medido, deu pior do que estava — a bola que
+                        ele defende a 2.01 m era prevista a 3.17 m, porque num
+                        cruzamento a subir 0.3 s sao muita bola. O salto voltava
+                        ao tecto pelo motivo errado e a mao afastou-se: mediana
+                        de 0.54 para 0.75 m.
+
+                        Ele nao tem de estar onde a bola vai estar daqui a
+                        0.3 s: tem de estar onde ela vai estar QUANDO CHEGAR
+                        A ELE. Esse tempo sai da distancia e da velocidade
+                        dela, com um tecto para uma bola lenta nao dar uma
+                        previsao de segundos.
+                        */
+                        let tPrev = 0;
+                        if (SA) {
+                            const vBola = Match.ballVel.length();
+                            const dBola = gkCorpo.position.distanceTo(Match.ball.position);
+                            tPrev = (vBola > 0.5) ? Math.min(SA.tempoMaxPrevisao, dBola / vBola) : 0;
+                        }
+                        const prev = (SA && tPrev > 0 && typeof preverBolaEm === 'function')
+                            ? preverBolaEm(tPrev) : null;
+                        this.gkSaltoAlvoY = prev ? prev.y : Match.ball.position.y;
                     }
                 } 
                 else if (!isAttacking) {
@@ -7306,7 +7339,22 @@ class FootballPlayer {
                 número JÁ É a altura, portanto multiplica-se por 0.75 e não
                 pela raiz: era 0.80 m com GK 50 e 1.40 m com GK 100.
                 */
-                let jumpH = (0.8 + ((gkSkill - 50) / 50) * 0.6) * 0.75;
+                /*
+                O TECTO e o de sempre (ja baixado 25% a pedido); o que mudou e
+                ele deixar de o usar SEMPRE. Ver GkSaltoAlto para a medicao —
+                com a bola a 2.13 m ele saltava 0.60 e punha a mao a 2.64,
+                meio metro acima dela.
+                */
+                const tectoSalto = (0.8 + ((gkSkill - 50) / 50) * 0.6) * 0.75;
+                const SA = (typeof GkSaltoAlto !== 'undefined') ? GkSaltoAlto : null;
+                let jumpH = tectoSalto;
+                if (SA) {
+                    const alvoY = (typeof this.gkSaltoAlvoY === 'number')
+                        ? this.gkSaltoAlvoY : Match.ball.position.y;
+                    // O que falta subir para a MAO chegar a bola.
+                    const preciso = alvoY - (ALTURA_BASE_Y + SA.alcanceMaoParado);
+                    jumpH = THREE.MathUtils.clamp(preciso, SA.saltoMin, tectoSalto);
+                }
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + jumpH, 0.25);
 
                 /*
