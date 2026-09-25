@@ -96,7 +96,7 @@ console.log('2 — E A MEDIDA, com o jogo a correr');
     acontecem. Com uma semente so, este bloco reprovava por amostra curta a
     cada retoque, sem que nada do que ele mede estivesse errado.
     */
-    const SEMENTES = [7, 99, 1234, 555];
+    const SEMENTES = [7, 99, 1234, 555, 20260911, 42];
     const dt = 1 / 60;
     const cena = new THREE.Scene();
     if (typeof Sim === 'undefined') global.Sim = {};
@@ -123,10 +123,23 @@ console.log('2 — E A MEDIDA, com o jogo a correr');
     const origDefender = GkDive.defender.bind(GkDive);
     GkDive.defender = function (p, rig) {
         const jaTocou = p.dive && p.dive.tocou;
-        const antes = distMao(p);
         origDefender(p, rig);
-        if (!jaTocou && p.dive && p.dive.tocou && isFinite(antes)) {
-            maiorMao = Math.max(maiorMao, antes);
+        /*
+        A DISTANCIA MEDE-SE DEPOIS, e nao antes.
+
+        Antes daqui media-se a mao contra a posicao da bola no FIM do frame, e
+        isso nao e o contacto: o `defender` decide pelo TRAJECTO do frame (a
+        1/60 s e 25 m/s a bola anda 42 cm) e depois repoe a bola no ponto em
+        que a mao esteve mais perto. Medida antes, a bola aparecia ate 0.75 m
+        da mao num contacto perfeitamente legitimo, e o teste dava-o como
+        defesa a distancia.
+
+        Medida DEPOIS, a bola esta no ponto do contacto — que e o que este
+        bloco quer prender: se defendeu, a mao estava mesmo la.
+        */
+        if (!jaTocou && p.dive && p.dive.tocou) {
+            const d = distMao(p);
+            if (isFinite(d)) maiorMao = Math.max(maiorMao, d);
         }
     };
 
@@ -145,7 +158,7 @@ console.log('2 — E A MEDIDA, com o jogo a correr');
     Match.init(cena);
     if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
     vivo = null;
-    for (let f = 0; f < 60 * 60 * 20; f++) {
+    for (let f = 0; f < 60 * 60 * 30; f++) {
         Match.update(dt);
         if (!vivo) continue;
         vivo.f++;
@@ -167,7 +180,17 @@ console.log('2 — E A MEDIDA, com o jogo a correr');
         `mao a bola no contacto, maximo ${maiorMao.toFixed(2)} m (alcance ${alcance.toFixed(2)})`);
     console.log(`  desfecho: golo ${golo}, sai ${fora}, outro apanha ${outro}`);
 
-    if (espalmadas < 2) erro(`amostra curta: so ${espalmadas} espalmadas`);
+    /*
+    QUANTAS ESPERAR. Medido, espalmadas em 45 minutos por semente:
+
+        7: 2 | 99: 2 | 1234: 6 | 555: 2 | 20260911: 5 | 42: 4    (21 ao todo)
+
+    Sao poucas e mudam de lance com qualquer retoque no guarda-redes — dai as
+    seis sementes e os 30 minutos cada. O piso em 5 fica bem abaixo do que a
+    medicao da e bem acima de zero, que e o que este guarda existe para
+    apanhar: uma medicao que nao mediu nada e passa por boa.
+    */
+    if (espalmadas < 5) erro(`amostra curta: so ${espalmadas} espalmadas`);
     else ok(`${espalmadas} espalmadas medidas`);
 
     /*

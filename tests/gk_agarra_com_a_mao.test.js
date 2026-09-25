@@ -73,12 +73,35 @@ const proto = Object.getPrototypeOf(Match.players[0]);
 const orig = proto.grabBall;
 proto.grabBall = function () {
     if (this.role === 'gk' && Match.ball) {
+        /*
+        A DISTANCIA E AO TRAJECTO DO FRAME, e nao ao ponto onde a bola acabou.
+
+        E a MESMA quantidade que o codigo usa para decidir (ver
+        `distanciaAoSegmento` e as notas do contacto em gk_dive.js e player.js):
+        a 1/60 s e 25 m/s a bola anda 42 cm, portanto uma bola que passou pela
+        mao aparece, no fim do frame, quase meio metro dela. Medida ao ponto
+        final, este teste acusava agarradas "de longe" a 1.05 m que eram
+        contactos legitimos — e so as viu quando a amostra passou a cinco
+        sementes.
+
+        O que ele existe para apanhar continua inteiro: a bola agarrada a dois
+        metros, sem gesto nenhum, nao passa perto do trajecto nenhum.
+        */
+        const b = Match.ball.position;
+        const dtB = (typeof Match.delta === 'number' && Match.delta > 0) ? Match.delta : 1 / 60;
+        const ax = b.x - Match.ballVel.x * dtB;
+        const ay = b.y - Match.ballVel.y * dtB;
+        const az = b.z - Match.ballVel.z * dtB;
+
         let mao = Infinity;
         for (const nome of ['lHand', 'rHand']) {
             const m = this.rig && this.rig[nome];
             if (!m) continue;
             m.getWorldPosition(_w);
-            mao = Math.min(mao, _w.distanceTo(Match.ball.position));
+            const d = (typeof distanciaAoSegmento === 'function')
+                ? distanciaAoSegmento(_w.x, _w.y, _w.z, ax, ay, az, b.x, b.y, b.z)
+                : _w.distanceTo(b);
+            mao = Math.min(mao, d);
         }
         /*
         E A DISTÂNCIA AO CORPO, que passou a valer: desde que existe a defesa

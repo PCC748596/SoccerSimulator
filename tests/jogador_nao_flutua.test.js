@@ -85,16 +85,32 @@ test('o ramo de quem está parado chama o assento', () => {
         'o ramo de quem está parado voltou a sair sem assentar o pé no chão');
 });
 
-test('a quem corre não se mexeu: a passada tem fase de voo', () => {
+test('a quem corre o assento nao PUXA PARA BAIXO: a passada tem fase de voo', () => {
     /*
-    Acima de `AssentoNoChao.velMax` o assento continua desligado de propósito —
-    uma passada a sério tem os dois pés no ar em parte do ciclo, e corrigir isso
-    frame a frame punha o corpo a subir e a descer com ela. Fica escrito aqui
-    porque é a tentação óbvia a olhar para os 18% de leituras "no ar": quase
-    todas são jogadores a correr, e são a passada.
+    Acima de `AssentoNoChao.velMax` o assento nao pode colar a sola ao relvado:
+    uma passada a serio tem os dois pes no ar em parte do ciclo, e corrigir isso
+    frame a frame punha o corpo a subir e a descer com ela. E a tentacao obvia a
+    olhar para os 18% de leituras "no ar": quase todas sao jogadores a correr, e
+    sao a passada.
+
+    ESTA ASSERCAO ESTAVA DESACTUALIZADA e reprovava a suite. Procurava
+    `velocity.length() > A.velMax) return;` — o `return` SECO que aqui existia
+    e que foi substituido de proposito, com relato e medicao ao lado no
+    player.js: *"tem jogador enfiando quase toda chuteira na grama durante a
+    corrida"*. O `return` seco desligava os DOIS sentidos, e o de baixo nao tem
+    fase de voo nenhuma — bota enterrada e sempre defeito.
+
+    O contrato de hoje e um clamp num SENTIDO SO (`soASubir`): a correr, o
+    assento levanta a bota enterrada e nunca desce o corpo. E isso que se
+    prende aqui, que e o que este teste sempre quis dizer.
     */
     const src = require('fs').readFileSync(
         require('path').join(__dirname, '..', 'js/player.js'), 'utf8');
-    assert.ok(/velocity\.length\(\) > A\.velMax\) return;/.test(src),
-        'o assentarNoChao deixou de sair quando ele corre');
+
+    assert.ok(/const soASubir = \(this\.velocity\.length\(\) > A\.velMax\);/.test(src),
+        'o assentarNoChao deixou de distinguir os dois sentidos acima da velMax');
+
+    // E a guarda que o usa: a correr, com a sola FORA do relvado, nao se mexe.
+    assert.ok(/if \(soASubir && chao >= 0\) return;/.test(src),
+        'a correr, o assento voltou a poder puxar o corpo para baixo — adeus fase de voo');
 });

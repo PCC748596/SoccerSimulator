@@ -52,7 +52,23 @@ const GkDive = {
     Ossos que podem ser o ponto mais baixo com ele deitado. Nao sao so as
     botas: caido de lado, quem toca primeiro e a mao, o ombro ou a anca.
     */
-    _ossosDeitado: ['pelvis', 'chest', 'neck', 'lArm', 'rArm', 'lHand', 'rHand',
+    /*
+    Ossos que podem ser o ponto mais baixo com ele deitado — e as MAOS NAO
+    ESTAO CA.
+
+    Relato, com fotografia: *"o goleiro esta ficando apoiado na mao, e fica uns
+    3 ou 4 segundos apoiados na mao"*. Era exactamente o que esta lista fazia:
+    o `assentarDeitado` sobe o corpo ate o osso MAIS BAIXO ficar a `folgaDeitado`
+    do relvado, e com as maos ca dentro o osso mais baixo era quase sempre uma
+    delas — medido, em 97% dos frames da fase de chao (lHand 74%, rHand 23%).
+    O corpo inteiro ficava pendurado na ponta de um braco.
+
+    Quem assenta no relvado e o TRONCO, os OMBROS e as PERNAS — tudo o que um
+    homem deitado apoia no chao. Saem so as MAOS: elas vao onde a pose as
+    puser, e quem as impede de entrar na relva e o `maosForaDoRelvado`, nao o
+    corpo a subir para as acompanhar.
+    */
+    _ossosDeitado: ['pelvis', 'chest', 'neck', 'lArm', 'rArm',
         'lLeg', 'rLeg', 'lKnee', 'rKnee', 'lFoot', 'rFoot'],
 
     /*
@@ -454,6 +470,9 @@ const GkDive = {
                 if (d.agarrou) this.poseAbracoBola(rig, d);
                 else this.poseBracosChao(rig, d);
                 this.torcerTronco(rig, d, 'chao');
+                // Depois de toda a gente escrever os bracos — ver a nota da
+                // funcao: e uma correccao por cima do que ficou, nao uma pose.
+                this.maosForaDoRelvado(rig);
 
                 // O prazo é o do lance, escrito no `iniciar` — ver `tempoChaoAlto`.
                 const prazoChao = (typeof d.tempoChao === 'number') ? d.tempoChao : D.tempoChao;
@@ -478,6 +497,7 @@ const GkDive = {
                 */
                 this.poseLevantar(rig, s, d.agarrou);
                 if (d.agarrou) this.poseAbracoBola(rig, d);
+                this.maosForaDoRelvado(rig);
 
                 if (d.t >= D.tempoLevantar) {
                     corpo.position.y = ALTURA_BASE_Y;
@@ -1113,6 +1133,45 @@ const GkDive = {
     },
 
     /*
+    AS MAOS NAO ENTRAM NA RELVA.
+
+    Relato, com fotografia: *"os bracos estao entrando na grama quase de
+    lado"*. Medido na fase de chao, altura media das maos no mundo: a esquerda
+    a 0.04 m e a direita a -0.17 m — ou seja, a direita passava a vida um palmo
+    DENTRO do relvado, e chegava aos -0.45 m.
+
+    Nao ha aqui IK para resolver: o que ha e um angulo de ombro escrito por
+    uma pose. Entao corrige-se esse angulo, pouco e por frame, na medida do que
+    a mao esta enterrada — `ombro.rotation.x` menos negativo levanta a mao (a
+    convencao esta na nota de `sequenciaBracos.chao`, no config).
+
+    E uma correccao e nao um clamp duro de proposito: o ganho medido e de
+    ~0.2 m de mao por radiano de ombro, portanto meio radiano por frame ja
+    sobe 10 cm, e em dois ou tres frames a mao esta a superficie sem que se
+    veja o braco a saltar. O `tecto` impede que um frame mau (a mao a um metro
+    de profundidade, durante um mergulho) rode o ombro de uma vez.
+
+    So sobe: uma mao que esteja ACIMA da relva nao e tocada — quem manda nela
+    e a pose, ou o IK quando ele ainda vai a bola.
+    */
+    maosForaDoRelvado(rig) {
+        const D = GoalkeeperDive;
+        if (!rig) return;
+        const chao = (typeof D.folgaDeitado === 'number') ? D.folgaDeitado : 0.10;
+        const ganho = (typeof D.subidaPorMetro === 'number') ? D.subidaPorMetro : 5.0;
+        const tecto = (typeof D.subidaMaxPorFrame === 'number') ? D.subidaMaxPorFrame : 0.35;
+
+        for (const par of [['lHand', 'lArm'], ['rHand', 'rArm']]) {
+            const mao = rig[par[0]], ombro = rig[par[1]];
+            if (!mao || !ombro) continue;
+            mao.getWorldPosition(this._v);
+            const enterrada = chao - this._v.y;
+            if (enterrada <= 0) continue;
+            ombro.rotation.x += Math.min(tecto, enterrada * ganho);
+        }
+    },
+
+    /*
     A TORÇÃO DO TRONCO, para o lado do mergulho. É ela que faz o gesto ler
     como um mergulho e não como um tombo de lado. Ver GoalkeeperDive.
     */
@@ -1171,13 +1230,63 @@ const GkDive = {
     },
 
     poseLevantar(rig, s, comBola) {
-        // Recolhe as pernas primeiro, estica no fim — é assim que se levanta.
-        const dobra = Math.sin(s * Math.PI);
-        rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, 1.4 * dobra, 0.2);
-        rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, 1.4 * dobra, 0.2);
-        rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, -0.5 * dobra, 0.2);
-        rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, -0.5 * dobra, 0.2);
-        rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, 0.5 * dobra, 0.2);
+        const D = GoalkeeperDive;
+        const G = D.poseGatas;
+        const fracGatas = (typeof D.fracGatas === 'number') ? D.fracGatas : 0.55;
+
+        /*
+        DUAS METADES: primeiro de gatas, depois de pe. Ver `poseGatas` no
+        GoalkeeperDive para o relato e para o desenho do gesto.
+
+        `k` e 0 no chao, 1 na pose de gatas, e volta a 0 de pe — porque de pe
+        as pernas estao esticadas e os bracos ao lado do corpo, que e o mesmo
+        sitio de onde partiram. E a pose do MEIO que e o acrescento.
+        */
+        /*
+        TRES POSES E NAO UMA: a do CHAO (onde ele esta), a de GATAS (o meio) e
+        a de PE (o fim). Interpola-se de uma para a outra.
+
+        Aqui estava um `suave` de 0 a 1 e de volta a 0 a MULTIPLICAR a pose de
+        gatas, o que quer dizer que o gesto comecava em zero — pernas
+        esticadas. Ora ele vem do chao com o joelho a 1.70 rad: o primeiro
+        terco da levantada era o joelho a ESTICAR para depois voltar a dobrar,
+        e medido nunca passava de 1.33 dos 1.85 pedidos. Ia de gatas sem
+        chegar la.
+        */
+        const PC = (D.sequenciaPernas && D.sequenciaPernas.chao) || {};
+        const chao = {
+            coxa: (PC.coxaBaixo !== undefined) ? PC.coxaBaixo : 0,
+            joelho: (PC.joelhoBaixo !== undefined) ? PC.joelhoBaixo : 0,
+            chest: (PC.chest !== undefined) ? PC.chest : 0
+        };
+        const dePe = { coxa: 0, joelho: 0, chest: 0 };
+        const suavizar = (u) => u * u * (3 - 2 * u);
+
+        let de, para, u;
+        if (s <= fracGatas) { de = chao; para = G; u = s / Math.max(1e-6, fracGatas); }
+        else { de = G; para = dePe; u = (s - fracGatas) / Math.max(1e-6, 1 - fracGatas); }
+        const t = suavizar(u);
+        const entre = (campo) => de[campo] + (para[campo] - de[campo]) * t;
+
+        const alvoCoxa = entre('coxa');
+        const alvoJoelho = entre('joelho');
+        const alvoChest = entre('chest');
+        // Os bracos so tem pose de gatas: nascem colados ao corpo e voltam la.
+        const suave = (s <= fracGatas) ? t : (1 - t);
+
+        /*
+        O PESO E 0.45 E NAO 0.25 porque a fase dura meio segundo — 30 frames —
+        e o `suave` sobe e volta a descer dentro deles. A 0.25 por frame o
+        joelho so chegava a 1.33 rad dos 1.85 da pose de gatas: ele passava
+        perto da posicao sem a atingir, e o que se via era outra vez uma
+        levantada mole. O `tempoLevantar` fica nos 500 ms que foram pedidos.
+        */
+        const w = 0.45;
+        rig.lKnee.rotation.x = lerpTo(rig.lKnee.rotation.x, alvoJoelho, w);
+        rig.rKnee.rotation.x = lerpTo(rig.rKnee.rotation.x, alvoJoelho, w);
+        rig.lLeg.rotation.x = lerpTo(rig.lLeg.rotation.x, alvoCoxa, w);
+        rig.rLeg.rotation.x = lerpTo(rig.rLeg.rotation.x, alvoCoxa, w);
+        rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, alvoChest, w);
         // Negativo é à frente (ver a nota do `chao` no GoalkeeperDive): quem se
         // levanta do chão apoia as mãos À FRENTE e empurra. Era +0.4, ou seja
         // os dois braços atrás das costas durante a levantada inteira.
@@ -1185,10 +1294,14 @@ const GkDive = {
         // COM A BOLA NA MAO NÃO HÁ APOIO NENHUM: os braços estão ocupados a
         // segurá-la, e quem os escreve é o `poseAbracoBola`.
         if (!comBola) {
-            rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, -0.4 * dobra, 0.2);
-            rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, -0.4 * dobra, 0.2);
-            rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, Math.PI / 16, 0.2);
-            rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -Math.PI / 16, 0.2);
+            // Os bracos SUPORTAM: plantados a frente enquanto ele esta de
+            // gatas, e a largar o chao quando as pernas tomam conta.
+            rig.lArm.rotation.x = lerpTo(rig.lArm.rotation.x, G.ombro * suave, w);
+            rig.rArm.rotation.x = lerpTo(rig.rArm.rotation.x, G.ombro * suave, w);
+            rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, Math.PI / 16, w);
+            rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -Math.PI / 16, w);
+            if (rig.lElbow) rig.lElbow.rotation.x = lerpTo(rig.lElbow.rotation.x, G.cotovelo * suave, w);
+            if (rig.rElbow) rig.rElbow.rotation.x = lerpTo(rig.rElbow.rotation.x, G.cotovelo * suave, w);
         }
         // E desfaz a torção do mergulho: quem se levanta fica de frente.
         rig.chest.rotation.y = lerpTo(rig.chest.rotation.y, 0, 0.2);

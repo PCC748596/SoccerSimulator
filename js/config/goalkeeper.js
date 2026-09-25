@@ -869,6 +869,40 @@ const GoalkeeperDive = {
     tempoLevantar: 0.50,   // pôr-se de pé (pedido: 500 ms)
 
     /*
+    =========================================================================
+    LEVANTAR-SE DE GATAS, E NAO A RODAR NO CHAO
+    =========================================================================
+    Relato, com fotografia: *"o goleiro levanta todo duro, somente girando com
+    pivo na grama. O ideal era o goleiro ficar de 4 para levantar"*.
+
+    E o que se via, porque o `poseLevantar` so fazia duas coisas ao mesmo
+    tempo: dobrar e esticar as pernas (um seno ao longo da fase inteira) e
+    desfazer o tombo. O corpo rodava de deitado para de pe sem nunca passar por
+    uma posicao de apoio — dai o "pivo na grama".
+
+    Agora a fase parte-se em duas, com `fracGatas` a dizer onde:
+
+      ate `fracGatas`   DE GATAS: os joelhos vem para baixo do corpo, as maos
+                        ficam plantadas a frente e o peito sobe. O tombo do
+                        mergulho desfaz-se quase todo aqui — e de gatas que se
+                        fica direito.
+      dai em diante     DE PE: as pernas estendem, os bracos largam o chao e o
+                        corpo sobe o resto.
+
+    Os angulos sao os do meio do gesto (a pose de gatas); o resto e
+    interpolado para ela e a partir dela.
+    =========================================================================
+    */
+    fracGatas: 0.55,
+    poseGatas: {
+        coxa: -0.95,       // a coxa vem para baixo do corpo
+        joelho: 1.85,      // e o joelho fecha, para o apoio ficar nele
+        ombro: -0.35,      // bracos a frente, quase por baixo dos ombros
+        cotovelo: -0.15,   // e esticados: sao eles que suportam
+        chest: 0.35        // peito levantado do relvado
+    },
+
+    /*
     E DEPOIS DE SE PÔR DE PÉ AINDA NÃO ARRANCA.
 
     Relato: *"o goleiro quando cai levanta praticamente instantaneamente e sai
@@ -1110,7 +1144,28 @@ const GoalkeeperDive = {
     =========================================================================
     */
     fracFrente: 0.70,
-    anguloFrente: 0.62,
+
+    /*
+    ATE ONDE A BARRIGA VIRA — e agora vira ATE AO CHAO.
+
+    Relato, com fotografias: *"o goleiro ainda esta caindo de lado. O goleiro
+    tem que cair de peito para baixo"*.
+
+    Estava em 0.62 rad, e o que isso da e o que se media: 35 graus no chao,
+    com 0 a ser de lado e 90 de brucos. Ou seja, a viragem existia mas ficava a
+    meio caminho — o corpo aterrava de lado, apoiado no ombro e na anca, e dai
+    nao ha maneira de por as maos no chao para empurrar.
+
+    1.40 rad sao 80 graus: aterra de peito, com os dois bracos a frente a
+    amparar. Nao sao os 90 exactos de proposito — um guarda-redes que se atira
+    para o lado nunca acaba perfeitamente a direito, e os ultimos dez graus sao
+    o que separa uma queda de um exercicio de ginastica.
+
+    O INICIO DO VOO NAO MUDA: a viragem so entra a partir de `fracFrente`
+    (70% do voo), portanto ele continua a sair de lado, de perfil para a
+    baliza, que foi o pedido anterior e continua a valer.
+    */
+    anguloFrente: 1.40,
 
     /*
     A viragem é à volta do eixo LONGO do corpo (o +Y local, da cabeça aos
@@ -1161,6 +1216,18 @@ const GoalkeeperDive = {
     acima da relva.
     */
     folgaDeitado: 0.10,
+
+    /*
+    A CORRECCAO QUE TIRA AS MAOS DE DENTRO DA RELVA — ver
+    `GkDive.maosForaDoRelvado` para o relato e para a medicao.
+
+    `subidaPorMetro` e quantos radianos de ombro se aplicam por metro de mao
+    enterrada; medido, o ganho e de ~0.2 m de mao por radiano, logo 5.0 sobe
+    praticamente o que falta num frame. `subidaMaxPorFrame` e o tecto, para um
+    frame mau nao rodar o ombro de uma vez.
+    */
+    subidaPorMetro: 5.0,
+    subidaMaxPorFrame: 0.35,
 
     alturaDeitado: 0.42,   // y da origem do modelo com ele deitado de lado
     atritoChao: 3.5,       // desaceleração do deslize no relvado (m/s²)
@@ -1286,10 +1353,19 @@ const GoalkeeperDive = {
         para cima e o tronco roda um pouco para a frente — é isso que dá a
         rolagem. Antes ficava esticado como uma tábua.
         */
+        /*
+        CHAO — de brucos, com as pernas recolhidas por baixo do corpo.
+
+        Os joelhos vem mais dobrados do que estavam (1.45/1.15) porque agora o
+        corpo aterra de peito (ver `anguloFrente`): as pernas ficam ATRAS dele
+        e nao de lado, e sao elas que o poem de gatas para se levantar. O
+        `chest` tira o peito do relvado, que e o que um homem de brucos faz com
+        os bracos.
+        */
         chao: {
-            coxaBaixo: -0.25, joelhoBaixo: 1.45,
-            coxaCima: -0.15, joelhoCima: 1.15,
-            chest: 0.22
+            coxaBaixo: -0.15, joelhoBaixo: 1.70,
+            coxaCima: -0.05, joelhoCima: 1.40,
+            chest: 0.30
         }
     },
 
@@ -1393,9 +1469,9 @@ const GoalkeeperDive = {
 
             As magnitudes ficam como estavam; muda o sinal.
             */
-            liderX: -0.95, liderZ: 0.85,
-            traseiroX: -0.75, traseiroZ: 0.55,
-            cotovelo: -0.35
+            liderX: -0.55, liderZ: 0.85,
+            traseiroX: -0.45, traseiroZ: 0.55,
+            cotovelo: -0.70
         }
     },
 
