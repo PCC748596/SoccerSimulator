@@ -367,6 +367,80 @@ const ShotModel = {
     potenciaMin: 16.0,      // nem o pior rematador bate mais fraco do que isto
 
     /*
+    =========================================================================
+    O TECTO — o remate que nenhum guarda-redes defende
+    =========================================================================
+    Pedido: baixar a media de golos de 4.34 para 2.6.
+
+    MEDIDO, 101 remates em 3 jogos:
+
+        velocidade de saida, mediana    26.0 m/s (94 km/h)   <- real ~25, certo
+        p90                             39.0 m/s (141 km/h)
+        acima de 35 m/s                 22% dos remates
+
+    A MEDIANA ESTA CERTA. O que esta errado e a frequencia do topo: no futebol
+    real 35 m/s e um remate de destaque, raro; aqui e um em cada cinco.
+
+    E e esse quinto que faz os golos. Tracado frame a frame um golo sofrido:
+
+        f25  o remate sai a 39.4 m/s, a 19 m da baliza -> chega em 0.46 s
+        f38  o guarda-redes reage (0.22 s de reaccao)
+             precisa de cobrir 3.12 m; o alcance que o tempo lhe da e 2.08 m
+        f38-59  a porta aberta, ele parado, o alcance a cair para 0.92 m
+
+    Ele esta bem colocado (a mao passa a 0.77 m de mediana nos golos sofridos)
+    e reage a tempo. Nao ha gesto humano que cubra tres metros em sete
+    centesimos. Medido: ZERO dos golos sofridos tiveram toque dele.
+
+    PORQUE E UM TECTO E NAO UMA POTENCIA MAIS BAIXA. A `potenciaBase` e o
+    `potenciaPorSkill` foram subidos de proposito (ver a nota deles: "continuava
+    a ler como fraco", e o topo de 41 m/s a TEC 100 e explicitamente o remate
+    de elite que se quer). Baixa-los mexia na mediana, que esta boa, e desfazia
+    essa decisao. O tecto corta so a cauda: um TEC 100 continua a bater mais
+    forte do que um TEC 50, ate ao limite do que um guarda-redes ainda tem
+    hipotese de ler.
+
+    A zero ou negativo, desliga.
+    =========================================================================
+    */
+    potenciaMax: 36.0,
+
+    /*
+    =========================================================================
+    MENOS 15% DE FORCA EM TODOS OS REMATES
+    =========================================================================
+    Pedido: *"reduz em 15% a forca dos chutes"*.
+
+    E um FACTOR e nao numeros novos na `potenciaBase`/`potenciaPorSkill` por
+    duas razoes:
+
+      . esses dois trazem historia escrita (foram subidos de 28/8 para 32/9
+        porque "continuava a ler como fraco", e o topo de 41 m/s a TEC 100 e
+        declaradamente o remate de elite). Mexer-lhes apagava essa nota;
+      . assim o corte e exactamente -15% sobre o comportamento de HOJE, que ja
+        inclui o tecto — e reverte-se pondo 1.0.
+
+    APLICA-SE DEPOIS DO TECTO. A ordem importa: cortar primeiro e escalar
+    depois da -15% a toda a gente, incluindo quem batia no tecto. Escalar
+    primeiro deixaria os remates fortes a bater no mesmo tecto e o corte so
+    apanharia os fracos.
+
+    O QUE ISTO COBRE: os remates de jogo corrido (os dois sitios que compoem a
+    potencia em fsm.js). NAO cobre o livre directo (tem o seu proprio
+    `potenciaBase` de 28.5 no FreeKickModel), o penalti, o cabeceio nem os
+    chutos do guarda-redes — se algum desses tambem tiver de baixar, e outra
+    alteracao.
+
+    EFEITO NOS GOLOS: nao previsto de proposito. O banco de ensaio deste
+    repositorio nao reproduz a finalizacao do lote de 50 jogos — mediu 53
+    remates por jogo contra os 30 reais, e na varredura do tecto deu ate o
+    SINAL trocado (baixar o tecto subia os golos no banco e baixou-os no lote).
+    Quem julga este numero e o lote.
+    =========================================================================
+    */
+    factorForca: 0.85,
+
+    /*
     Elevação de recurso, para quando nem no ângulo óptimo a bola chega ao alvo
     (remate de muito longe). Era `Math.PI / 5` (36°) escrito à mão — um balão.
     A 20° a bola vai mais longe e mais tensa, e ainda tem hipótese de incomodar.
@@ -581,8 +655,26 @@ const ShotModel = {
 
         A manípula que aperta a pontaria SEM mandar bolas para as bancadas
         continua a ser a `fraccaoCanto` (a ambição da colocação), lá em cima.
+
+        E 1.56 -> 2.03, mais 30%, a pedido (*"aumenta em 30% os erros nos
+        chutes"*). QUINTA vez no mesmo sentido, e o custo já não é um aviso: é
+        medida. O lote imediatamente anterior a esta linha — com o tecto de
+        velocidade e o corte de 15% na força já aplicados — deu:
+
+            % no alvo        27.5%   contra os ~33% reais
+            golos             3.27   contra o alvo de 2.52
+            conversão dos enquadrados  42.0%  (era 50.1% antes de hoje)
+
+        Os 27.5% JÁ ESTÃO ABAIXO do real, e 30% de erro a mais afasta-os mais.
+        Os golos descem, sim, mas pela via de mandar bola para fora da moldura:
+        o que sai não dá defesa nem canto, dá pontapé de baliza. Se o objectivo
+        for menos golos COM o guarda-redes a trabalhar, o instrumento não é
+        este — é a preparação do mergulho dele (os 0.17 s de ler e impulsionar,
+        que no traço frame a frame comem mais tempo do que a própria reacção).
+
+        Fica a decisão, e fica o custo escrito pela quinta vez.
         */
-        escalaGlobal: 1.56
+        escalaGlobal: 2.03
     }
 };
 

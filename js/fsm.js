@@ -1,3 +1,28 @@
+/*
+A FORCA FINAL DE UM REMATE: o tecto e o factor, por esta ordem.
+
+  `potenciaMax`  o tecto da velocidade de saida — ver o config, que traz a
+                 medicao (22% dos remates acima de 35 m/s) e o traco do golo
+                 que a motivou.
+  `factorForca`  o corte de 15% pedido, aplicado DEPOIS do tecto para valer
+                 tambem para quem batia nele.
+
+Fica aqui, e nao em cada sitio, porque sao dois os sitios que compoem a
+potencia de um remate e ter a conta em duplicado era garantir que um deles
+ficava para tras.
+*/
+function forcaDoRemate(v) {
+    const M = (typeof ShotModel !== 'undefined') ? ShotModel : null;
+    let r = v;
+    if (M && typeof M.potenciaMax === 'number' && M.potenciaMax > 0) {
+        r = Math.min(r, M.potenciaMax);
+    }
+    if (M && typeof M.factorForca === 'number' && M.factorForca > 0) {
+        r *= M.factorForca;
+    }
+    return r;
+}
+
 function ownGoalZCenter(team) {
     return (team === 'TeamA') ? -48 : 48;
 }
@@ -665,9 +690,11 @@ function executeShotGameplay(p) {
             // contadores diferentes (ver MatchStats.registarRemateBloqueado).
             MatchStats.registarRemateBloqueado(bloqueador.team, p.team);
         }
-        const potenciaDoRemate = Math.max(ShotModel.potenciaMin,
+        // O tecto vive no config — ver ShotModel.potenciaMax e a medicao que o
+        // motivou. Aplica-se nos DOIS sitios que compoem a potencia.
+        const potenciaDoRemate = forcaDoRemate(Math.max(ShotModel.potenciaMin,
             ShotModel.potenciaBase
-            + ((p.skillFor('TEC') - 50) / 50) * ShotModel.potenciaPorSkill);
+            + ((p.skillFor('TEC') - 50) / 50) * ShotModel.potenciaPorSkill));
         desvioBloqueio = desvioDeBloqueio({
             dirX: -Match.ball.position.x,
             dirZ: p.targetGoalZ - Match.ball.position.z,
@@ -722,9 +749,15 @@ function executeShotGameplay(p) {
         alvoX = mira.x + sigma.lateral * amostraGaussiana(Math.random);
         alvoY = Math.max(0.08, mira.y + sigma.vertical * amostraGaussiana(Math.random));
 
-        pow = Math.max(ShotModel.potenciaMin,
+        /*
+        O TECTO E O FACTOR SAO DEPOIS do multiplicador do tipo, e nao antes:
+        o que o guarda-redes tem de ler e a velocidade com que a bola SAI, e
+        essa ja traz o tipo dentro. Cortar antes deixava um `forca` de um TEC
+        alto passar na mesma.
+        */
+        pow = forcaDoRemate(Math.max(ShotModel.potenciaMin,
             ShotModel.potenciaBase + ((p.skillFor('TEC') - 50) / 50) * ShotModel.potenciaPorSkill)
-            * ShotModel.tipos[tipoRemate].potencia;
+            * ShotModel.tipos[tipoRemate].potencia);
 
         /*
         NO ALVO: agora é uma medida da bola e não uma etiqueta do sorteio —
