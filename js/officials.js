@@ -436,6 +436,35 @@ const RefereeModel = {
         limiarVermelho: 0.95,
 
         /*
+        O LIMIAR DO SEGUNDO AMARELO — mais baixo que o do primeiro, e nao o
+        mesmo.
+
+        Primeira tentativa: exigir ao advertido a mesma gravidade do amarelo
+        (0.85). Medido em 50 jogos, deu **ZERO** expulsoes, contra o alvo de
+        0.08. A conta que faltou: quem esta advertido ja nao faz carrinhos
+        (ver `podeFazerCarrinho`), e sem carrinho uma falta quase nunca chega
+        a 0.85. Dois travoes em cima um do outro nunca deixam sair ninguem.
+
+        Por isso o advertido tem limiar PROPRIO, mais baixo: uma falta a meio
+        caminho ja o poe fora, uma falta tactica leve nao.
+
+        A ESCADA MEDIDA, 50 jogos por ponto:
+
+            limiar 0.85 (o mesmo do amarelo)    0.00 vermelhos
+            limiar 0.45                         0.02
+            limiar 0.32                          ?     <- aqui
+            sem exigencia (so `temAmarelo`)     0.26
+            alvo                                0.08
+
+        AVISO A QUEM AFINAR ISTO: 0.08 por jogo sao QUATRO expulsoes em 50
+        jogos, e 0.02 e UMA. A esta escala o ruido de Poisson e da ordem do
+        proprio numero — 4 mais ou menos 2 — portanto nao vale a pena perseguir
+        a decima. O que se quer e a ordem de grandeza certa: uma expulsao a
+        cada dez a quinze jogos, e nao uma a cada quatro nem nenhuma.
+        */
+        limiarSegundoAmarelo: 0.32,
+
+        /*
         Ate onde atras e que um ataque ainda conta como promissor, em metros a
         contar do meio-campo para a propria baliza (referencial de quem ataca).
         Uma falta a 40 m da baliza adversaria trava um ataque; a mesma falta a
@@ -1766,14 +1795,17 @@ const Officials = {
             O `podeFazerCarrinho` ja tira o carrinho a quem esta advertido,
             mas nao cobre a falta tactica, que da amarelo sozinha.
 
-            Agora quem ja tem amarelo so sai se a falta valer amarelo POR SI —
-            pela gravidade, nao so por ter travado o ataque. E o arbitro a
-            pensar duas vezes antes de deixar uma equipa com dez, que e o que
-            se ve num jogo a serio.
+            Agora quem ja tem amarelo so sai se a falta tiver gravidade por
+            si — ver `limiarSegundoAmarelo`, que e mais baixo que o do
+            primeiro amarelo de proposito. E o arbitro a pensar duas vezes
+            antes de deixar uma equipa com dez, sem deixar de expulsar quem
+            merece.
             */
             const advertido = !!(jogador && jogador.temAmarelo);
             if (advertido) {
-                return (gravidade >= F.limiarAmarelo) ? 'vermelho' : 'amarelo';
+                const lim = (typeof F.limiarSegundoAmarelo === 'number')
+                    ? F.limiarSegundoAmarelo : F.limiarAmarelo;
+                return (gravidade >= lim) ? 'vermelho' : 'amarelo';
             }
             return 'amarelo';
         }
