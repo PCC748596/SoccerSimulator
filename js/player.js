@@ -6185,11 +6185,55 @@ class FootballPlayer {
                     */
                     let podeSaltar = (distToBall < 2.5);
                     if (quedaNaPequena) {
-                        const dq = Math.hypot(gkCorpo.position.x - quedaNaPequena.x,
-                            gkCorpo.position.z - quedaNaPequena.z);
-                        const S_ALC = (typeof GkSaidaCruzamento !== 'undefined')
-                            ? GkSaidaCruzamento.alcanceSaida : 1.6;
-                        podeSaltar = (dq < 1.2) && (distToBall < S_ALC + 0.5);
+                        /*
+                        O SALTO SAI QUANDO ELE ENCONTRA A BOLA, e nao quando
+                        tres condicoes calham no mesmo frame.
+
+                        O que aqui estava exigia, tudo ao mesmo tempo: estar a
+                        menos de 1.2 m do ponto de queda, a bola a menos de
+                        2.1 m, e a bola entre 1.2 e 3.2 m de altura. Cada uma
+                        defensavel; as tres juntas quase nunca acontecem no
+                        mesmo frame.
+
+                        MEDIDO, 44 cantos:
+
+                            altura da bola no frame em que ele esta mais perto
+                                mediana 0.19 m   (73% abaixo de 1.20)
+                            janela do salto alguma vez aberta      18%
+                            'salto_alto', em frames                12
+
+                        E NAO E FALTA DE PERNAS. Medido nos cantos em que ele
+                        sai: precisa de 3.13 m/s para chegar antes de a bola
+                        pousar e faz 4.38. Ele CHEGA — chega, fica de pe, e a
+                        bola desce ao lado dele.
+
+                        Agora pergunta-se a leitura da trajectoria (ver
+                        `interceptarBola`, utils.js, e AlcanceDaBola) em que
+                        instante e que ele a apanha com as maos. Salta-se
+                        quando esse instante esta a menos do que o tempo de
+                        subida do salto: e o que o poe LA EM CIMA quando ela
+                        chega, em vez de a ver passar.
+
+                        A margem existe porque o salto nao e instantaneo nem a
+                        leitura e exacta; sem ela, o frame certo passa entre
+                        dois frames e o gesto nao sai.
+                        */
+                        const SA_T = (typeof GkSaltoAlto !== 'undefined')
+                            ? GkSaltoAlto.tempoDeSubida : 0.30;
+                        const encontro = (typeof interceptarBola === 'function')
+                            ? interceptarBola(this, { gestos: ['gk_salto', 'gk_maos'] })
+                            : null;
+                        if (encontro) {
+                            podeSaltar = (encontro.t <= SA_T + 0.10);
+                        } else {
+                            // Sem leitura (bola ja tocada, ja no chao) fica o
+                            // criterio antigo, que pelo menos nao inventa.
+                            const dq = Math.hypot(gkCorpo.position.x - quedaNaPequena.x,
+                                gkCorpo.position.z - quedaNaPequena.z);
+                            const S_ALC = (typeof GkSaidaCruzamento !== 'undefined')
+                                ? GkSaidaCruzamento.alcanceSaida : 1.6;
+                            podeSaltar = (dq < 1.2) && (distToBall < S_ALC + 0.5);
+                        }
                     }
                     if (podeSaltar && Match.ball.position.y > 1.2 && Match.ball.position.y < 3.2) {
                         this.gkEstado = 'salto_alto';
