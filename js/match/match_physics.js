@@ -1063,6 +1063,28 @@ Object.assign(Match, {
                 if (best.dynamicTarget) {
                     best.dynamicTarget.set(destino.x, ALTURA_BASE_Y, destino.z);
                 }
+                /*
+                O CRONOMETRO DA CORRIDA, e nao e enfeite: o RUN_INTO_SPACE
+                comeca por fazer `runTimer -= dt` e aborta para MOVE_TO_POS
+                assim que ele chega a zero. Quem entra no estado sem o pôr
+                aborta NO PRIMEIRO FRAME — e o defeito que o comentario do
+                proprio estado ja descreve para o actOverlap e o
+                actEsperarDevolucao, e em que eu tornei a cair.
+
+                MEDIDO, antes disto: 29 gestos em 6 jogos e o autor do drible a
+                voltar a tocar na bola em ZERO deles. Ele deixava passar e
+                ficava parado a ver — que e exactamente o contrario do gesto.
+
+                `duracao` e o tempo que ele tem para ir buscar a bola. O
+                destino esta a ~18 m e ele parte parado; 3 s sao o suficiente
+                para la chegar e nao tanto que o deixe a correr atras de uma
+                bola que ja e de outro (a perda de posse aborta a corrida na
+                mesma, por `perdemosABola`).
+                */
+                best.runTimer = (typeof DribleDeixarPassar !== 'undefined' &&
+                    typeof DribleDeixarPassar.duracaoCorrida === 'number')
+                    ? DribleDeixarPassar.duracaoCorrida : 3.0;
+                best.runCooldown = 0;
                 best.fsm.changeState('RUN_INTO_SPACE');
                 if (best.showActionBanner) best.showActionBanner('DUMMY');
                 /*

@@ -1312,7 +1312,19 @@ const DribleDeixarPassar = {
     Onde ela vai parar: projecta-se a bola `tempoProjeccao` segundos a frente.
     Nao e a trajectoria fina — e a triagem de "para que lado e que isto vai".
     */
-    tempoProjeccao: 1.2,
+    /*
+    MEDIDO, e foi o que baixou este numero de 1.2 para 0.5:
+
+    a 1.2 s e com a bola a ~15 m/s, o destino ficava a ~18 m dele. Ele parte
+    PARADO e a corrida sao 8.0 m/s; a mediana ate alguem tocar na bola e
+    1.3 s. Nem lancado ele la chegava. Resultado em 29 gestos medidos: o autor
+    do drible recuperou a bola em ZERO, e o adversario ficou com ela em 48%.
+    O gesto estava a mandar a bola para um sitio que era de ninguem.
+
+    Meio segundo sao ~7 m — a distancia que ele cobre de facto antes de a bola
+    ser disputada.
+    */
+    tempoProjeccao: 0.5,
 
     /*
     Nenhum adversario a menos disto do ponto de chegada. Seis metros sao o
@@ -1359,7 +1371,20 @@ const DribleDeixarPassar = {
     que era o problema a resolver, e fica livre para ir buscar a bola antes de
     a disputa acabar — que e o ponto do drible.
     */
-    carencia: 0.45
+    carencia: 0.45,
+
+    /*
+    QUANTO TEMPO ELE CORRE ATRAS DA BOLA que deixou passar.
+
+    O RUN_INTO_SPACE desconta isto a cada frame e desiste quando chega a zero.
+    Estava por pôr — e sem ele a corrida abortava no primeiro frame, com o
+    autor do drible a recuperar a bola em 0 de 29 gestos medidos.
+
+    Tres segundos: o destino fica a ~18 m e ele parte parado, a acelerar ate
+    aos 8.0 m/s da corrida. Perder a posse continua a abortar a corrida antes
+    disto, portanto nao e um jogador amarrado a perseguir uma bola perdida.
+    */
+    duracaoCorrida: 3.0
 };
 
 if (typeof window !== 'undefined') window.DribleDeixarPassar = DribleDeixarPassar;

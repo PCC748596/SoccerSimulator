@@ -5984,10 +5984,53 @@ class FootballPlayer {
                     Match.ball.position.y > S_CRUZ_PREV.alturaMin &&
                     typeof preverQuedaDaBola === 'function' && typeof Area !== 'undefined') {
                     const q = preverQuedaDaBola();
-                    if (q && Math.abs(q.x) <= Area.pequenaMeiaLargura &&
-                        Math.abs(this.ownGoalZ - q.z) <= Area.pequenaProfundidade &&
-                        Math.sign(q.z) === Math.sign(this.ownGoalZ)) {
-                        quedaNaPequena = q;
+                    if (q && Math.sign(q.z) === Math.sign(this.ownGoalZ)) {
+                        const dx = Math.abs(q.x);
+                        const dz = Math.abs(this.ownGoalZ - q.z);
+
+                        // O QUINTAL: dentro da pequena area a bola e dele, sem
+                        // discussao. Era esta a unica zona que existia.
+                        if (dx <= Area.pequenaMeiaLargura && dz <= Area.pequenaProfundidade) {
+                            quedaNaPequena = q;
+                        } else {
+                            /*
+                            A ZONA DISPUTADA — ver GkSaidaCruzamento, que tem o
+                            relato do canto e a medicao (29 frames de
+                            'salto_alto' em 39 cantos) que a motivou.
+
+                            Aqui ele so sai se CHEGAR PRIMEIRO com margem. A
+                            conta e de distancias e nao de tempos de propósito:
+                            um atacante que vem a correr e um guarda-redes que
+                            arranca da linha tem velocidades parecidas, e a
+                            distancia e a parte da conta que nao depende de
+                            adivinhar a aceleracao de ninguem.
+                            */
+                            const pz = (typeof S_CRUZ_PREV.saidaProfundidade === 'number')
+                                ? S_CRUZ_PREV.saidaProfundidade : 11.0;
+                            const px = (typeof S_CRUZ_PREV.saidaMeiaLargura === 'number')
+                                ? S_CRUZ_PREV.saidaMeiaLargura : 11.0;
+                            if (dx <= px && dz <= pz) {
+                                const margem = (typeof S_CRUZ_PREV.margemVantagem === 'number')
+                                    ? S_CRUZ_PREV.margemVantagem : 2.0;
+                                const dEle = Math.hypot(gkCorpo.position.x - q.x,
+                                    gkCorpo.position.z - q.z);
+                                /*
+                                O ADVERSARIO MAIS PERTO DO PONTO DE QUEDA, e nao
+                                o mais perto dele: o que interessa e quem ganha a
+                                bola, nao quem o marca.
+                                */
+                                const advs = (this.team === 'TeamA') ? Match.opponents : Match.players;
+                                let dAdv = Infinity;
+                                for (let i = 0; i < advs.length; i++) {
+                                    const adv = advs[i];
+                                    if (!adv || adv.expulso || !adv.model) continue;
+                                    const d = Math.hypot(adv.model.position.x - q.x,
+                                        adv.model.position.z - q.z);
+                                    if (d < dAdv) dAdv = d;
+                                }
+                                if (dEle + margem < dAdv) quedaNaPequena = q;
+                            }
+                        }
                     }
                 }
 

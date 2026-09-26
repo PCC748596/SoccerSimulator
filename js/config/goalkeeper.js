@@ -743,7 +743,72 @@ const GkSaidaCruzamento = {
     perde um pouco de velocidade, para o toque contar e para o lance continuar
     disputável — é exactamente o que o pedido descreve.
     */
-    travagemEscape: 0.85
+    travagemEscape: 0.85,
+
+    /*
+    =========================================================================
+    ATE ONDE E QUE A BOLA E DELE — a saida ao canto
+    =========================================================================
+    Relato: *"nao consegui ver nenhum lance do goleiro pegando a bola apos um
+    escanteio"*.
+
+    MEDIDO, 39 cantos em 5 jogos, os 5 s a seguir a cada cobranca:
+
+        guarda-redes tocou na bola      9 (23%)
+        distancia minima dele a bola    mediana 2.3 m
+        gkEstado, em frames:
+            idle          6376
+            maos          1056
+            segurando      609
+            salto_alto      29     <- meio segundo no total
+
+    Ou seja: ele ate agarra alguns cruzamentos, mas SEMPRE DE PE e sempre
+    porque a bola lhe caiu em cima. O gesto de sair da linha e ir busca-la no
+    ar praticamente nao existe.
+
+    A CAUSA era a zona: a saida so disparava com a bola a cair dentro da
+    PEQUENA area (5.5 m de profundidade). Um canto cai quase sempre entre a
+    marca de penalti e a entrada da area — fora dela por um ou dois metros — e
+    ai ele nao saia de todo.
+
+    Agora ha duas zonas, e a diferenca entre elas e quem tem de ganhar a
+    corrida:
+
+      . dentro da PEQUENA area a bola e dele e ponto final. E o quintal, sai
+        sempre, como ja era;
+      . entre a pequena area e `saidaProfundidade` ele so sai se CHEGAR
+        PRIMEIRO com margem — ver `margemVantagem`.
+
+    Porque e que a segunda zona tem de ser condicional e a primeira nao: um
+    guarda-redes que sai a 11 m e nao chega deixa a baliza vazia, e esse e o
+    golo mais feio que ha. Na pequena area nao ha esse risco, porque nao ha
+    onde ficar mal colocado.
+    =========================================================================
+    */
+
+    /*
+    A zona onde ele DISPUTA o cruzamento, medida da linha de fundo para
+    dentro e do eixo para cada lado.
+
+    11 m sao a marca de penalti — o sitio onde o canto cai. Mais do que isto
+    e ele a sair a entrada da area, que nao e uma saida, e um passeio.
+    */
+    saidaProfundidade: 11.0,
+    saidaMeiaLargura: 11.0,
+
+    /*
+    QUANTO MAIS PERTO DO PONTO DE QUEDA ele tem de estar do que o atacante
+    mais perto, em metros, para sair da segunda zona.
+
+    Nao e zero: empatar nao chega. Ele parte da linha, com a baliza atras, e
+    quem falha uma bola destas concede golo em baliza aberta. Dois metros sao
+    a margem que paga esse risco.
+
+    Ele tambem tem uma vantagem legitima que esta conta nao ve: usa as MAOS,
+    e chega meio metro mais alto do que a cabeca de qualquer atacante. E por
+    isso que a margem sao 2 e nao 5.
+    */
+    margemVantagem: 2.0
 };
 if (typeof window !== 'undefined') window.GkSaidaCruzamento = GkSaidaCruzamento;
 
