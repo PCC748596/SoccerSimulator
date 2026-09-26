@@ -216,7 +216,24 @@ const RefereeModel = {
         numero de faltas e o preco directo dessa mudanca, e este multiplicador
         e onde se paga.
         */
-        escala: 4.3,
+        /*
+        MAIS 15% DE FALTAS, a pedido (*"aumenta as faltas em 15%"*):
+        4.3 -> 4.95.
+
+        MEDIDO DEPOIS: 4.3 -> 4.95 deu 34.37 faltas, ou seja **+19%** e nao os
+        15% pedidos — a escala nao e linear no numero de faltas, porque uma
+        falta a mais muda o jogo que gera a falta seguinte. Corrigido para
+        4.62, que e o que a medicao diz dar os 15%.
+
+        O QUE ISTO ARRASTA, com os numeros do lote:
+
+            amarelos    3.42 -> 4.51   (66% -> 86% do alvo)   na direccao certa
+            vermelhos   0.15 -> 0.26   (188% -> 325%)         fora de controlo
+
+        Os vermelhos sao efeito colateral e nao foram pedidos: tratam-se no
+        `limiarVermelho`, logo abaixo, e nao aqui.
+        */
+        escala: 4.62,
 
         /*
         FONTE A — o duelo perdido. O desfecho já existe (venceuDuelo, em
@@ -402,6 +419,20 @@ const RefereeModel = {
         quase todos os vermelhos reais saem do segundo amarelo.
         */
         limiarAmarelo: 0.85,
+        /*
+        SUBIR ESTE LIMIAR PARA CORTAR VERMELHOS FOI TENTADO E NAO SERVIU.
+
+        Com as faltas a subir 15% a pedido, os vermelhos foram a 0.26 por jogo
+        contra o alvo de 0.08 — 325%. Subiu-se este limiar de 0.95 para 1.06 e
+        o lote seguinte deu **os mesmos 0.26**.
+
+        PORQUE E QUE NAO MEXEU: este limiar so apanha o vermelho DIRECTO, e
+        esse quase nao acontece. A expulsao que domina e o SEGUNDO AMARELO
+        (ver `cartaoPara`, mais abaixo) — e a nota dessa funcao ja o dizia:
+        "quase todos os vermelhos reais saem do segundo amarelo".
+
+        Volta a 0.95. O corte faz-se onde a expulsao nasce.
+        */
         limiarVermelho: 0.95,
 
         /*
@@ -1723,7 +1754,28 @@ const Officials = {
         segundo amarelo.
         */
         if (gravidade >= F.limiarAmarelo || travouAtaque) {
-            return (jogador && jogador.temAmarelo) ? 'vermelho' : 'amarelo';
+            /*
+            O SEGUNDO AMARELO NAO SAI DE UMA FALTA TACTICA LEVE.
+
+            Era `temAmarelo -> vermelho` para QUALQUER coisa que chegasse
+            aqui, incluindo um `travouAtaque` de gravidade nula. Medido, com
+            as faltas a subir 15% a pedido: 0.26 vermelhos por jogo contra o
+            alvo de 0.08 — 325%, e a subir com as faltas porque mais faltas
+            poem mais gente advertida em campo.
+
+            O `podeFazerCarrinho` ja tira o carrinho a quem esta advertido,
+            mas nao cobre a falta tactica, que da amarelo sozinha.
+
+            Agora quem ja tem amarelo so sai se a falta valer amarelo POR SI —
+            pela gravidade, nao so por ter travado o ataque. E o arbitro a
+            pensar duas vezes antes de deixar uma equipa com dez, que e o que
+            se ve num jogo a serio.
+            */
+            const advertido = !!(jogador && jogador.temAmarelo);
+            if (advertido) {
+                return (gravidade >= F.limiarAmarelo) ? 'vermelho' : 'amarelo';
+            }
+            return 'amarelo';
         }
         return null;
     },

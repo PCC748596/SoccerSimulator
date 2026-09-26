@@ -721,6 +721,31 @@ const GkThrowModel = {
 if (typeof window !== 'undefined') window.GkThrowModel = GkThrowModel;
 
 const PassErrorModel = {
+    /*
+    O CORTE DE 15% NO ERRO DE PASSE FOI TENTADO E REVERTIDO.
+
+    Pedido: *"diminui os erros de passe em 15%"*. Aplicou-se (0.0878 -> 0.0746
+    e 0.0061 -> 0.0052) e correu-se um lote de 50 jogos. Nao fez o que promete
+    e custou caro:
+
+        passes certos     72.2% -> 70.8%   DESCEU, ao contrario do esperado
+        finalizacoes      28.58 -> 34.14   +19%
+        golos              2.85 ->  3.43   saiu do alvo (113% -> 136%)
+        xG                 3.81 ->  4.30   (134% -> 151%)
+
+    PORQUE E QUE PIOROU O QUE DEVIA MELHORAR: nao ha explicacao medida. A
+    hipotese e que passes mais certos facam o bloco subir mais e mudem o TIPO
+    de passe tentado, mas e hipotese.
+
+    O QUE SE SABE AO CERTO e que o efeito dominante nao foi a precisao: foi o
+    volume de ataque. Passes melhores levam a bola a frente mais vezes, e cada
+    ataque a mais e um remate a mais — 19% mais finalizacoes, com a conversao
+    quase na mesma.
+
+    Por isso volta aos valores de antes. Se um dia se quiser mesmo passes mais
+    certos, tem de vir acompanhado de um corte na finalizacao, senao os golos
+    saem do alvo outra vez.
+    */
     sigmaMax: 0.0878,      // ~5.0 graus (reduzido 10% e depois 25%)
     sigmaMin: 0.0061,      // ~0.35 graus (reduzido 10% e depois 25%)
     pesoTecnica: 0.35,

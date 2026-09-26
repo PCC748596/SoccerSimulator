@@ -894,6 +894,30 @@ const OffsideModel = {
     linha. Este numero decide ha quanto tempo ele la esta, nao com que
     frequencia la vai.
     */
+    /*
+    PROLONGAR ESTE TEMPO FOI TENTADO E REVERTIDO.
+
+    Pedido: *"aumenta o tempo que o jogador demora para sair dos
+    impedimentos"*. Subiu-se de 6.5/0.4 para 9.5/1.5 — para um plantel de
+    tacticknow 85, de 2.23 s para 3.90 s de posicao irregular, mais 75%.
+
+    MEDIDO EM 50 JOGOS, deu o CONTRARIO do que se procurava:
+
+        impedimentos    1.20 -> 0.84   (37% -> 26% do alvo de 3.2)
+        finalizacoes   28.58 -> 36.19  (+27%)
+        xG              3.81 ->  4.80  (134% -> 169%)
+
+    Menos impedimentos com mais tempo irregular, e um salto grande nos
+    remates. A leitura provavel — e e leitura, nao medicao — e que atacantes
+    adiantados mais tempo puxam a equipa com eles: mais bolas em profundidade,
+    mais remates, e a linha defensiva a ajustar-se em vez de os apanhar.
+
+    O QUE FICA PARA QUEM VOLTAR AQUI: o tempo de reaccao NAO e o botao dos
+    impedimentos. Antes de mexer outra vez, medir onde e que eles se perdem —
+    quantas vezes um atacante fica irregular, quantas dessas recebe passe, e
+    quantas o arbitro marca. Sem essa reparticao qualquer alteracao aqui e
+    adivinha.
+    */
     reaccaoLenta: 6.5,     // tacticknow 50 (ou abaixo)
     reaccaoRapida: 0.4,    // tacticknow 100
 
