@@ -1389,6 +1389,117 @@ const DribleDeixarPassar = {
 
 if (typeof window !== 'undefined') window.DribleDeixarPassar = DribleDeixarPassar;
 
+/*
+=============================================================================
+LER O PERCURSO DA BOLA — as faixas de alcance de cada gesto
+=============================================================================
+Pedido: *"os jogadores tem que saber reconhecer o percurso da bola. Seja ele
+rasteiro ou no ar (parabola) para que eles tenham condicoes de programar a
+cabecada (para os jogadores) ou o pulo com os bracos pra cima para os
+goleiros. Os goleiros assim vao poder optar por segurar a bola ou dar um soco
+na bola para longe. Sem isso fica impossivel para o goleiro e para a animacao
+procedural esticar os bracos tentando alcancar o deslocamento da bola. Ou para
+a perna do jogador tentar bloquear um passe ate uns 50 cms na altura. Ou para
+um jogador tentar fazer um gol de peixinho"*.
+
+O QUE JA HAVIA E O QUE FALTAVA. A fisica da previsao ja existe e e fiel —
+`preverBolaEm`, `preverQuedaDaBola` e `preverBolaEmAltura` (utils.js) simulam
+arrasto, quique e rolamento com as mesmas constantes do `updateBall`. O que
+nao existia era a LEITURA: dado um jogador, em que instante do voo e que ele
+consegue la estar, e a que altura estara a bola nesse instante — que e o que
+decide se o gesto e perna, pe, peito, cabeca, peixinho, maos ou soco.
+
+Cada gesto tem uma faixa de alturas. Algumas sao numeros do corpo humano e
+estao aqui; outras SAO O PROPRIO CORPO do jogador e por isso nao podem ser
+constantes — a testa de um central de 1.95 nao esta a mesma altura que a de um
+lateral de 1.62. Essas derivam-se de `alturaTestaDe(p)` e da altura dele, e o
+que aqui fica e so a folga a volta.
+
+POR ORDEM DE ALTURA:
+
+    perna/bloqueio    ate 0.50      a perna estendida a cortar um passe
+    pe/rasteiro       0 a 0.35      bola no chao, dominio normal
+    peixinho          0.80 a 1.20   cabeca em mergulho, o golo de peixinho
+    peito             1.20 a 1.50   a matada no peito
+    cabeca de pe      a testa       +/- `folgaTesta`
+    cabeca com salto  ate a testa + `SaltoCabeceio.alturaMax`
+    GK maos de pe     1.20 a 1.90   as maos a frente do corpo, sem saltar
+    GK maos no alto   ate 2.07 acima da base + o salto dele
+    GK soco           o mesmo alcance, menos `descidaDoSoco`
+
+O SOCO E O AGARRAR PARTILHAM A ALTURA de propósito. O punho fechado nao chega
+mais alto do que a mao aberta — chega com os bracos um pouco mais dobrados,
+que e o que `descidaDoSoco` desconta. O que separa os dois gestos nao e a
+altura, e a PRESSAO: agarra-se quando ha espaco, soca-se quando ha gente em
+cima (ver GkSaidaCruzamento.raioSemMarcacao, que ja decide isso).
+=============================================================================
+*/
+const AlcanceDaBola = {
+    /*
+    As faixas fixas, em metros acima do relvado. Sao do corpo humano medio e
+    nao escalam com o jogador — a diferenca entre o peito de um homem de 1.62
+    e o de um de 1.95 e menor do que a folga que estas faixas ja tem.
+    */
+    pernaMax: 0.50,          // bloqueio com a perna estendida
+    peMax: 0.35,             // bola rasteira, dominio com o pe
+    peitoMin: 1.20,
+    peitoMax: 1.50,
+    peixinhoMin: 0.80,
+    peixinhoMax: 1.20,
+    gkMaosMin: 1.20,
+    gkMaosMax: 1.90,
+
+    /*
+    A FOLGA A VOLTA DA TESTA para o cabeceio de pe. A testa e um ponto, e um
+    ponto nunca apanha uma bola: 20 cm para cada lado sao a bola a passar pela
+    cabeca, e nao pelo pescoco (1.45) nem por cima do cranio (1.79).
+    */
+    folgaTesta: 0.20,
+
+    /*
+    Quanto o punho fica ABAIXO da mao aberta no mesmo salto. O soco da-se com
+    os bracos um pouco dobrados — ver a nota acima sobre porque e que o soco e
+    o agarrar nao se distinguem pela altura.
+    */
+    descidaDoSoco: 0.15,
+
+    /*
+    O ALCANCE HORIZONTAL de cada familia de gestos: a que distancia do ponto
+    de encontro ele ainda toca na bola. Nao e o mesmo para todos — um peixinho
+    cobre muito mais chao do que um pe parado, e e para isso que serve.
+    */
+    alcancePe: 0.80,
+    alcanceCabeca: 0.80,     // = SaltoCabeceio.alcanceXZ
+    alcancePeixinho: 1.80,   // o corpo estendido no ar
+    alcanceGkMaos: 1.60,     // = GkSaidaCruzamento.alcanceSaida
+
+    /*
+    QUANTO TEMPO ELE PERDE ANTES DE ARRANCAR. Sem isto a leitura seria a de um
+    jogador que ja sabia para onde ia a bola antes de ela sair — e todos
+    chegariam a tudo.
+
+    0.25 s e a reaccao simples de um atleta. Nao se confunde com o
+    `gkDelayReacao`, que e o tempo de decisao do guarda-redes num remate e ja
+    tem a skill dele dentro.
+    */
+    atrasoReaccao: 0.25,
+
+    /*
+    ATE QUE TEMPO SE OLHA PARA A FRENTE. Quatro segundos sao o voo mais longo
+    que ha (um pontape de baliza); mais do que isso e a previsao ja nao vale
+    nada, porque alguem toca na bola pelo caminho.
+    */
+    horizonte: 4.0,
+
+    /*
+    O PASSO da leitura. 1/60 e um frame: mais fino do que isto nao muda o
+    gesto escolhido e custa o dobro das contas.
+    */
+    passo: 1 / 60
+};
+
+if (typeof window !== 'undefined') window.AlcanceDaBola = AlcanceDaBola;
+
 const OffsideRestartShape = {
     /*
     QUEM COBRA — três linhas, no referencial de ataque dele e medidas da bola.

@@ -1941,6 +1941,208 @@ e ficar atrás dela.
 Simula o voo com a física real (a mesma do updateBall) até tocar no relvado.
 Se a bola já estiver rasteira, devolve simplesmente onde ela está.
 */
+/*
+=============================================================================
+A TRAJECTORIA DA BOLA, CALCULADA UMA VEZ POR FRAME
+=============================================================================
+Ver AlcanceDaBola (config/player_behavior.js) para o pedido e para as faixas
+de cada gesto.
+
+PORQUE E QUE E PARTILHADA. As previsoes que ja havia (`preverBolaEm`,
+`preverQuedaDaBola`, `preverBolaEmAltura`) re-simulam o voo inteiro a cada
+chamada. Com 22 jogadores a perguntar "onde e que eu a apanho?" todos os
+frames, isso sao 22 simulacoes de 240 passos por frame — e todas a dar
+exactamente o mesmo resultado, porque a bola e uma so.
+
+Aqui simula-se UMA VEZ e guarda-se a tabela. Quem quiser saber onde a bola
+esta no instante `t` le a tabela; quem quiser saber onde a pode interceptar
+chama o `interceptarBola`, que a percorre.
+
+A FISICA E A MESMA do `preverBolaEm` — arrasto, gravidade, quique com
+restituicao e atrito, rolamento. Se mudar la, muda aqui: e por isso que este
+bloco e uma copia e nao uma variante. Uma trajectoria que diverge da real e
+pior do que nao ter trajectoria nenhuma, porque o jogador corre com confianca
+para o sitio errado.
+
+A CACHE INVALIDA-SE PELO ESTADO DA BOLA e nao pelo relogio: a posicao e a
+velocidade dela sao o que define o voo, e enquanto nao mudarem a tabela
+continua boa. Guardar so o tempo falhava nos frames em que alguem toca na
+bola sem o relogio avancar.
+*/
+let _trajCache = null;
+let _trajChave = '';
+
+function trajectoriaDaBola() {
+    if (typeof Match === 'undefined' || !Match.ball || !Match.ballVel) return null;
+    const A = (typeof AlcanceDaBola !== 'undefined') ? AlcanceDaBola : null;
+    if (!A) return null;
+
+    const pos = Match.ball.position, vel = Match.ballVel;
+    const chave = pos.x.toFixed(3) + ',' + pos.y.toFixed(3) + ',' + pos.z.toFixed(3) + '|' +
+        vel.x.toFixed(3) + ',' + vel.y.toFixed(3) + ',' + vel.z.toFixed(3);
+    if (_trajCache && _trajChave === chave) return _trajCache;
+
+    const B = BallPhysics;
+    const dt = A.passo;
+    const n = Math.round(A.horizonte / dt);
+    const t = new Float32Array(n), X = new Float32Array(n),
+        Y = new Float32Array(n), Z = new Float32Array(n);
+
+    let x = pos.x, y = pos.y, z = pos.z;
+    let vx = vel.x, vy = vel.y, vz = vel.z;
+
+    for (let i = 0; i < n; i++) {
+        const sp = Math.hypot(vx, vy, vz);
+        if (sp > 0.001) {
+            const dv = B.kArrasto * sp * sp * dt;
+            vx -= vx / sp * dv; vy -= vy / sp * dv; vz -= vz / sp * dv;
+        }
+        vy -= B.gravidade * dt;
+        x += vx * dt; y += vy * dt; z += vz * dt;
+
+        // O SOLO, com a mesma conta do updateBall — ver a nota do preverBolaEm.
+        if (y <= B.raio) {
+            y = B.raio;
+            if (vy < 0) {
+                if (-vy > B.vMinRessalto) {
+                    vy *= -B.restituicao;
+                    vx *= B.atritoRessalto;
+                    vz *= B.atritoRessalto;
+                } else {
+                    vy = 0;
+                }
+            }
+            const vh = Math.hypot(vx, vz);
+            if (vh > 0.0001) {
+                const dvh = Math.min(vh, B.atritoRolamento * B.gravidade * dt);
+                vx -= (vx / vh) * dvh;
+                vz -= (vz / vh) * dvh;
+            }
+        }
+        t[i] = (i + 1) * dt; X[i] = x; Y[i] = y; Z[i] = z;
+    }
+
+    _trajCache = { n: n, dt: dt, t: t, x: X, y: Y, z: Z };
+    _trajChave = chave;
+    return _trajCache;
+}
+
+/*
+=============================================================================
+ONDE E COMO E QUE ESTE JOGADOR APANHA A BOLA
+=============================================================================
+Percorre a trajectoria e devolve o PRIMEIRO instante que satisfaz as duas
+condicoes ao mesmo tempo:
+
+  . ele consegue la estar — a distancia a percorrer cabe no tempo que falta,
+    a velocidade de corrida dele e ja descontado o `atrasoReaccao`;
+  . a bola esta numa das faixas de altura dele — e e a faixa que diz qual e o
+    gesto.
+
+O PRIMEIRO E NAO O MELHOR, de propósito. Um jogador que pode escolher entre
+cabecear agora e dominar no peito daqui a um segundo cabeceia: quem espera da
+tempo ao adversario de chegar. Se um dia for preciso escolher o melhor gesto e
+nao o mais cedo, isso e uma decisao de quem chama, com esta leitura na mao —
+por isso devolve-se tambem o `gesto` e a `folga`.
+
+DEVOLVE `null` quando ele nao chega a nada. Isso e uma resposta e nao uma
+falha: e o que diz a um jogador para nao sair do sitio.
+
+O `gesto` NAO E UMA ORDEM, e uma leitura. Quem a recebe decide o que faz com
+ela: o guarda-redes escolhe entre agarrar e socar pela pressao a volta (ver
+GkSaidaCruzamento.raioSemMarcacao), o jogador de campo entre cabecear e peitar
+pelo que tem a frente.
+*/
+function interceptarBola(p, opts) {
+    const A = (typeof AlcanceDaBola !== 'undefined') ? AlcanceDaBola : null;
+    const traj = trajectoriaDaBola();
+    if (!A || !traj || !p || !p.model) return null;
+
+    const o = opts || {};
+    const ehGk = (p.role === 'gk');
+
+    /*
+    A VELOCIDADE DELE. `GaitModel.correr.vel` e a corrida; o `speedMult` e o
+    que o jogo ja usa para o diferenciar. Nao se usa a velocidade ACTUAL: ele
+    pode estar parado, e e precisamente isso que se quer saber — se arrancando
+    agora chega la.
+    */
+    const vBase = (typeof GaitModel !== 'undefined' && GaitModel.correr)
+        ? GaitModel.correr.vel : 8.0;
+    const vEle = Math.max(1.0, vBase * (p.speedMult || 1.0));
+
+    const atraso = (typeof o.atraso === 'number') ? o.atraso : A.atrasoReaccao;
+    const base = (typeof ALTURA_BASE_Y === 'number') ? ALTURA_BASE_Y : 0;
+
+    // As faixas que dependem DO CORPO DELE — ver a nota do config.
+    const testa = base + ((typeof alturaTestaDe === 'function') ? alturaTestaDe(p) : 1.74);
+    const saltoCabeca = (typeof SaltoCabeceio !== 'undefined') ? SaltoCabeceio.alturaMax : 0.80;
+    let gkMaoAlto = 0;
+    if (ehGk) {
+        const SA = (typeof GkSaltoAlto !== 'undefined') ? GkSaltoAlto : null;
+        const alcance = SA ? SA.alcanceMaoParado : 2.07;
+        const skill = (typeof p.skillFor === 'function') ? p.skillFor('GK') : 50;
+        const salto = (0.8 + ((skill - 50) / 50) * 0.6) * 0.75;
+        gkMaoAlto = base + alcance + salto;
+    }
+
+    const px = p.model.position.x, pz = p.model.position.z;
+
+    for (let i = 0; i < traj.n; i++) {
+        const t = traj.t[i];
+        const tUtil = t - atraso;
+        if (tUtil <= 0) continue;
+
+        const bx = traj.x[i], by = traj.y[i], bz = traj.z[i];
+        const d = Math.hypot(bx - px, bz - pz);
+
+        /*
+        QUE GESTO E QUE ESTA ALTURA PEDE. Testa-se de baixo para cima e fica o
+        primeiro que serve — as faixas tocam-se (o peixinho e o peito
+        partilham o 1.20) e a de baixo e sempre a menos arriscada.
+        */
+        let gesto = null, alcanceXZ = 0;
+        if (by <= A.peMax) { gesto = 'pe'; alcanceXZ = A.alcancePe; }
+        else if (by <= A.pernaMax) { gesto = 'perna'; alcanceXZ = A.alcancePe; }
+        else if (ehGk && by >= A.gkMaosMin && by <= A.gkMaosMax) {
+            gesto = 'gk_maos'; alcanceXZ = A.alcanceGkMaos;
+        } else if (ehGk && by <= gkMaoAlto) {
+            gesto = 'gk_salto'; alcanceXZ = A.alcanceGkMaos;
+        } else if (!ehGk && by >= A.peixinhoMin && by <= A.peixinhoMax) {
+            gesto = 'peixinho'; alcanceXZ = A.alcancePeixinho;
+        } else if (!ehGk && by >= A.peitoMin && by <= A.peitoMax) {
+            gesto = 'peito'; alcanceXZ = A.alcancePe;
+        } else if (!ehGk && by >= testa - A.folgaTesta && by <= testa + A.folgaTesta) {
+            gesto = 'cabeca'; alcanceXZ = A.alcanceCabeca;
+        } else if (!ehGk && by > testa && by <= testa + saltoCabeca) {
+            gesto = 'cabeca_salto'; alcanceXZ = A.alcanceCabeca;
+        }
+        if (!gesto) continue;
+        if (o.gestos && o.gestos.indexOf(gesto) < 0) continue;
+
+        // E chega la a tempo? O alcance do gesto conta como caminho andado.
+        if (d - alcanceXZ > vEle * tUtil) continue;
+
+        return {
+            t: t, x: bx, y: by, z: bz,
+            gesto: gesto,
+            distancia: d,
+            /*
+            A FOLGA em segundos: quanto tempo lhe sobra depois de la chegar.
+            Zero e chegar em cima da hora; quanto maior, mais seguro o gesto.
+            E o numero com que quem chama decide se DISPUTA ou se espera.
+            */
+            folga: tUtil - Math.max(0, d - alcanceXZ) / vEle
+        };
+    }
+    return null;
+}
+
+if (typeof window !== 'undefined') {
+    window.trajectoriaDaBola = trajectoriaDaBola;
+    window.interceptarBola = interceptarBola;
+}
+
 function preverQuedaDaBola() {
     const B = BallPhysics;
     const pos = Match.ball.position;
