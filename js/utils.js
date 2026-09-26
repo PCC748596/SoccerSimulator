@@ -3705,6 +3705,58 @@ SIGMA DA MIRA, em metros no plano da baliza. Devolve `{ lateral, vertical }`.
 Cresce com a distância, com a pressão e com o ângulo fechado; cai com a
 técnica e com o tipo de remate escolhido (colocar é mais preciso do que bater).
 */
+/*
+DEIXA PASSAR A BOLA? — ver DribleDeixarPassar (config/player_behavior.js) para
+o gesto, as quatro condicoes e o porque de cada uma.
+
+Devolve o ponto onde a bola vai ficar (para quem quiser desenhar a corrida) ou
+`null`. Nao toca em nada: quem decide o que fazer com a resposta e o
+`resolveBallContact`.
+*/
+function deixaPassarABola(p, bola, bolaVel, adversarios) {
+    const D = (typeof DribleDeixarPassar !== 'undefined') ? DribleDeixarPassar : null;
+    if (!D || !D.activo || !p || !p.model || !bola || !bolaVel) return null;
+    if (p.role === 'gk') return null;
+
+    // 4. depressa — a primeira a testar porque e a que corta mais casos.
+    const vBola = Math.hypot(bolaVel.x, bolaVel.z);
+    if (vBola < D.velMin) return null;
+
+    // 1. de tras, no sentido do ataque dele.
+    if (bolaVel.z * p.dirZ < D.vFrenteMin) return null;
+
+    // 2. onde ela vai parar, e se esta livre.
+    const alvoX = bola.position.x + bolaVel.x * D.tempoProjeccao;
+    const alvoZ = bola.position.z + bolaVel.z * D.tempoProjeccao;
+
+    // 3. e ha marcador?
+    let temMarcador = false;
+    for (let i = 0; i < adversarios.length; i++) {
+        const a = adversarios[i];
+        if (!a || a.expulso || !a.model) continue;
+        const dAlvo = Math.hypot(a.model.position.x - alvoX, a.model.position.z - alvoZ);
+        if (dAlvo < D.raioDestinoLivre) return null;          // destino ocupado
+        const dEle = Math.hypot(a.model.position.x - p.model.position.x,
+            a.model.position.z - p.model.position.z);
+        if (dEle < D.raioMarcador) temMarcador = true;
+    }
+    if (!temMarcador) return null;
+
+    return { x: alvoX, z: alvoZ };
+}
+
+/*
+E ELE LEMBRA-SE DE O FAZER? Ver `fraccaoBase` em DribleDeixarPassar: isto e a
+frequencia com que a jogada lhe ocorre, nao a de ela correr bem.
+*/
+function tentaODribleDeDeixarPassar(p) {
+    const D = (typeof DribleDeixarPassar !== 'undefined') ? DribleDeixarPassar : null;
+    if (!D) return false;
+    const tec = (p && p.skillFor) ? p.skillFor('TEC') : 50;
+    const f = D.fraccaoBase + ((Math.max(0, Math.min(100, tec)) - 50) / 50) * D.fraccaoPorTecnica;
+    return Math.random() < Math.max(0, Math.min(1, f));
+}
+
 function sigmaDeRemate(o) {
     const E = ShotModel.erro;
     const dist = Math.max(0, o.dist || 0);

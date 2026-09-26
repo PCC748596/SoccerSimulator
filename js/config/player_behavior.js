@@ -1248,6 +1248,122 @@ também: a sua linha da frente nasce aos 9.15 m regulamentares da bola, do lado
 da própria baliza, e o bloco estende-se para trás a partir daí.
 =============================================================================
 */
+/*
+=============================================================================
+O DRIBLE DE DEIXAR PASSAR
+=============================================================================
+Pedido, com a descricao do gesto: *"esse deixar passar e um tipo de drible em
+que o jogador que esta pra receber a bola abre as pernas e deixa a bola passar
+enquanto ja gira para correr atras dela. Ou seja, o marcador espera que o
+adversario domine, mas ele gira quando a bola esta praticamente no seu pe de
+dominio e engana o marcador"*.
+
+O QUE ELE RESOLVE: *"quando um jogador recebe um passe, mesmo tendo muito
+espaco a frente, ele mata a bola e meio que atrasa a jogada"*. O dominio custa
+o tempo do gesto mais a re-aceleracao a partir de zero; deixar correr guarda o
+embalo que a bola ja trazia.
+
+AS QUATRO CONDICOES, e nenhuma delas e enfeite:
+
+  1. A BOLA VEM DE TRAS e segue no sentido do ataque dele. Uma bola que vem
+     de frente, deixada passar, e uma bola entregue.
+
+  2. O DESTINO ESTA LIVRE. Pedido explicito: *"nao faz sentido deixar passar
+     uma bola que vai para uma posicao onde tem adversario"*. Olha-se para
+     onde ela VAI parar, nao para onde ela esta.
+
+  3. HA UM MARCADOR PERTO. Sem ninguem a quem enganar isto nao e um drible, e
+     so nao tocar na bola — e ai o dominio normal e melhor, porque deixa a
+     bola controlada.
+
+  4. A BOLA VEM DEPRESSA. Tambem pedido: *"a velocidade da bola tem que ser
+     mais alta que a normal. Senao o jogador vai girar e a bola nao vai
+     conseguir passar para ele pegar ela mais na frente"*. E a condicao mais
+     dura das quatro, e e fisica: ele parte PARADO, gasta o tempo do giro e
+     ainda tem de acelerar ate aos 8.0 m/s da corrida (GaitModel.correr.vel).
+     Uma bola a 8 m/s nunca lhe fica a frente — afasta-se ao mesmo ritmo a que
+     ele corre, com o atraso do giro a mais.
+
+O RISCO NAO E INVENTADO. Nao ha sorteio de "falhou o drible": o que acontece e
+que a bola fica SOLTA, e quem chegar primeiro a ela fica com ela — a disputa
+normal do `resolveBallContact`. Se o marcador for mais rapido ou estiver melhor
+colocado, a bola e dele, e isso e o castigo de ter tentado o gesto na altura
+errada. E por isso que a condicao 3 existe: o gesto so se tenta quando ha
+alguem por perto, ou seja, exactamente quando ha algo a perder.
+=============================================================================
+*/
+const DribleDeixarPassar = {
+    activo: true,
+
+    /*
+    Velocidade minima da bola. A corrida sao 8.0 m/s; abaixo de ~11 ele nao
+    chega a ver a bola a frente dele. Ver a condicao 4 na nota acima.
+    */
+    velMin: 11.0,
+
+    /*
+    Quanto a bola tem de vir no SENTIDO do ataque dele, em m/s. Nao chega ir
+    para a frente: tem de ir com intencao, senao um passe quase lateral
+    qualificava-se.
+    */
+    vFrenteMin: 4.0,
+
+    /*
+    Onde ela vai parar: projecta-se a bola `tempoProjeccao` segundos a frente.
+    Nao e a trajectoria fina — e a triagem de "para que lado e que isto vai".
+    */
+    tempoProjeccao: 1.2,
+
+    /*
+    Nenhum adversario a menos disto do ponto de chegada. Seis metros sao o
+    espaco que ele precisa para chegar la primeiro tendo partido parado.
+    */
+    raioDestinoLivre: 6.0,
+
+    /*
+    E tem de haver um marcador a menos disto dele. Sem isto nao ha drible.
+    */
+    raioMarcador: 4.0,
+
+    /*
+    A FRACCAO DE VEZES QUE ELE TENTA, com a tecnica dele a mandar.
+
+    Nao e a probabilidade de "acertar" o gesto — acertar ou falhar decide-se
+    sozinho, na corrida atras da bola. E a frequencia com que ele SE LEMBRA de
+    o fazer: um jogador de tecnica 100 ve a jogada quase sempre, um de 50 ve-a
+    de vez em quando. Sem isto, toda a gente faria o gesto sempre que as
+    quatro condicoes batessem, e um drible que sai sempre deixa de ser drible.
+    */
+    fraccaoBase: 0.35,      // a tecnica 50
+    fraccaoPorTecnica: 0.45, // +- isto entre tecnica 0 e 100
+
+    /*
+    QUANTO TEMPO ELE FICA PROIBIDO DE TOCAR NA BOLA — e a trava que impede o
+    gesto de morrer no frame seguinte, com o dominio normal a apanha-lo outra
+    vez como o mais perto da bola.
+
+    ESTEVE EM 1.2 s E ERA O QUE MATAVA O GESTO. Medido em 6 jogos com esse
+    valor:
+
+        tentativas                        29
+        proximo toque e DELE               0   (zero)
+        proximo toque e de um colega      48%
+        proximo toque e do ADVERSARIO     45%
+        tempo ate alguem tocar           1.3 s
+
+    Ou seja: a carencia calava-o durante exactamente o tempo em que a bola era
+    disputada, e quando expirava ela ja era de outro. O gesto existia na
+    animacao e nunca na jogada.
+
+    Agora e so o tempo do GIRO. Ele deixa de poder dominar no mesmo instante,
+    que era o problema a resolver, e fica livre para ir buscar a bola antes de
+    a disputa acabar — que e o ponto do drible.
+    */
+    carencia: 0.45
+};
+
+if (typeof window !== 'undefined') window.DribleDeixarPassar = DribleDeixarPassar;
+
 const OffsideRestartShape = {
     /*
     QUEM COBRA — três linhas, no referencial de ataque dele e medidas da bola.

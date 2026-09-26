@@ -382,12 +382,38 @@ Object.assign(Match, {
 
             let defGK = defendingPlayers.find(p => p.role === 'gk');
             if (defGK) {
-                // Ver `reporGuardaRedes`: a meio de um mergulho isto só escreve
-                // o alvo, e ele vai a pé depois de se levantar.
+                /*
+                O ALVO E O ESTADO ESCREVEM-SE SEMPRE; SO O CORPO E QUE ESPERA.
+
+                BUG, com relato: *"depois que o goleiro pula em uma bola que
+                vai pra fora, depois de levantar, ele fica na mesma posição.
+                Ele não volta para o centro do gol"*.
+
+                E o caso mais comum de todos: ele mergulha, a bola sai, e o
+                canto e montado com ele ainda no chao. O `reporGuardaRedes`
+                devolve FALSE a meio de um mergulho (de proposito — nao se
+                teletransporta um corpo a meio da queda), e as duas linhas de
+                dentro do `if` nunca corriam. Sem `SET_PIECE_WAIT` ele levanta
+                em `idle`, onde o alvo em x e a propria posicao (ver
+                player.js), e fica onde caiu ate a bola voltar a andar.
+
+                Agora o alvo e o estado sao escritos SEMPRE. O que o
+                `reporGuardaRedes` continua a decidir e so se o CORPO salta
+                para la de uma vez (com ele de pe) ou se vai a pe (a meio de
+                um mergulho) — que era a intencao original.
+                */
                 if (this.reporGuardaRedes(defGK, 0, linhaZ - attDir * 1.5, this.ball.position)) {
                     defGK.dynamicTarget.set(0, ALTURA_BASE_Y, linhaZ - attDir * 2.0);
                     defGK.fsm.changeState('SET_PIECE_WAIT');
                 }
+                /*
+                E SE ELE ESTAVA A MERGULHAR, quem o leva ao meio e o proprio
+                `updateGK` — ver a lista de estados do `alvoGkX` em player.js,
+                que agora inclui o CORNER_KICK. Aqui nao se force o
+                SET_PIECE_WAIT: esse estado ZERA a velocidade de quem nao tem
+                ancora de disputa, e o guarda-redes nao tem. Punha-lo la a
+                meio do levantar era congela-lo onde caiu, que e o bug.
+                */
             }
 
             let attGK = attackingPlayers.find(p => p.role === 'gk');

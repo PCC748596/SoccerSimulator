@@ -5749,7 +5749,32 @@ class FootballPlayer {
             */
             const naLinhaDaFalta = (typeof Match !== 'undefined' &&
                 Match.state === 'FREE_KICK' && this.team !== Match.setPieceTeam);
-            let alvoGkX = (typeof Match !== 'undefined' && (Match.state === 'GOAL' || Match.state === 'OUT' || Match.state === 'PENALTY')) ? 0 : gkCorpo.position.x;
+            /*
+            O MEIO DA BALIZA NUMA BOLA PARADA — e o CORNER_KICK faltava.
+
+            BUG, com relato: *"depois que o goleiro pula em uma bola que vai
+            pra fora, depois de levantar, ele fica na mesma posição. Ele não
+            volta para o centro do gol"*.
+
+            Em repouso o alvo em x e a PROPRIA POSICAO — de proposito, para ele
+            nao andar de um lado para o outro em jogo corrido, onde sao os
+            ramos defensivos la em baixo que decidem o x. So tres estados o
+            mandavam ao meio: GOAL, OUT e PENALTY.
+
+            Uma bola que sai pela linha de fundo da CORNER_KICK ou GOAL_KICK, e
+            nenhum dos dois estava na lista. O lance mais comum e precisamente
+            esse: ele mergulha, a bola sai para canto, levanta-se num canto da
+            baliza e fica la os segundos todos da marcacao.
+
+            O canto entra. O GOAL_KICK nao: ai ele e quem BATE, e o ponto de
+            arranque dele e outro (ver `tiro_meta_espera` e a nota do
+            teletransporte em match_setpieces.js) — manda-lo ao meio era
+            desfazer essa caminhada.
+            */
+            const noMeioDaBaliza = (typeof Match !== 'undefined') &&
+                (Match.state === 'GOAL' || Match.state === 'OUT' ||
+                 Match.state === 'PENALTY' || Match.state === 'CORNER_KICK');
+            let alvoGkX = noMeioDaBaliza ? 0 : gkCorpo.position.x;
 
             /*
             Posição de repouso: sai toda de gkAnchor() (config.js), a mesma
@@ -5772,7 +5797,11 @@ class FootballPlayer {
                 ? (-48 * this.dirZ)
                 : ancora.z;
 
-            let speedLerp = (typeof Match !== 'undefined' && (Match.state === 'GOAL' || Match.state === 'PENALTY' || naLinhaDaFalta)) ? 4.0 : 2.0;
+            // O canto anda ao mesmo ritmo dos outros lances parados: ele tem
+            // os segundos da marcacao para chegar ao meio, sem correr.
+            let speedLerp = (typeof Match !== 'undefined' && (Match.state === 'GOAL' ||
+                Match.state === 'PENALTY' || Match.state === 'CORNER_KICK' ||
+                naLinhaDaFalta)) ? 4.0 : 2.0;
 
             let gkSkill = this.skillFor('GK');
 

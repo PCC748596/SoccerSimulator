@@ -1035,6 +1035,62 @@ Object.assign(Match, {
         const testaBest = alturaTestaDe(best);
         if (alturaRealDaBola > testaBest + HeaderModel.janelaAcima) return false;
 
+        /*
+        O DRIBLE DE DEIXAR PASSAR — ver DribleDeixarPassar
+        (config/player_behavior.js) para o gesto e as quatro condicoes.
+
+        Fica AQUI, antes de tudo o que toca na bola, porque o gesto e
+        precisamente NAO tocar: a bola segue com a velocidade que trazia e ele
+        gira para a ir buscar a frente.
+
+        A bola fica solta, e a disputa do frame seguinte decide de quem ela e.
+        Nao ha sorteio de falha: se o marcador chegar primeiro, a bola e dele,
+        e esse e o preco de ter tentado.
+        */
+        if (best.role !== 'gk' && !best.jogarDePrimeira && best.jumpTimer <= 0 &&
+            best.fsm.currentState !== 'SET_PIECE_TAKER' &&
+            typeof deixaPassarABola === 'function' &&
+            typeof tentaODribleDeDeixarPassar === 'function') {
+            const advs = (best.team === 'TeamA') ? this.opponents : this.players;
+            const destino = deixaPassarABola(best, this.ball, this.ballVel, advs);
+            if (destino && tentaODribleDeDeixarPassar(best)) {
+                /*
+                O GIRO E A CORRIDA. O `dynamicTarget` leva-o ao ponto onde a
+                bola vai ficar; a orientacao vai atras do movimento como em
+                qualquer corrida, portanto nao se escreve aqui — o que se
+                escreve e o SITIO, que e o que o faz rodar.
+                */
+                if (best.dynamicTarget) {
+                    best.dynamicTarget.set(destino.x, ALTURA_BASE_Y, destino.z);
+                }
+                best.fsm.changeState('RUN_INTO_SPACE');
+                if (best.showActionBanner) best.showActionBanner('DUMMY');
+                /*
+                E NAO SE LHE TOCA MAIS NESTE LANCE. Sem esta marca, o frame
+                seguinte volta a encontra-lo como o mais perto da bola e
+                aplica-lhe o dominio que acabamos de recusar — o gesto durava
+                um frame e a bola morria na mesma.
+
+                Morre sozinha quando ele (ou outro) voltar a tocar na bola, ou
+                ao fim de `deixarPassarCarencia` segundos.
+                */
+                // Ver DribleDeixarPassar.carencia: esteve em 1.2 s e era o que
+                // impedia o proprio autor do gesto de ir buscar a bola.
+                const carencia = (typeof DribleDeixarPassar !== 'undefined' &&
+                    typeof DribleDeixarPassar.carencia === 'number')
+                    ? DribleDeixarPassar.carencia : 0.45;
+                best.deixouPassarAte = (this.tempoDeJogo || 0) + carencia;
+                return false;
+            }
+        }
+        /*
+        E QUEM ACABOU DE DEIXAR PASSAR NAO DOMINA A PROPRIA BOLA no frame
+        seguinte: sem isto o gesto nao tinha efeito nenhum.
+        */
+        if (best.deixouPassarAte && (this.tempoDeJogo || 0) < best.deixouPassarAte) {
+            return false;
+        }
+
         // A faixa é assimétrica: a cabeça alcança muito mais abaixo da testa
         // (queixo) do que acima dela (crânio). Ver HeaderModel.janelaAbaixo.
         const naAlturaDaTesta = alturaRealDaBola >= testaBest - HeaderModel.janelaAbaixo &&
