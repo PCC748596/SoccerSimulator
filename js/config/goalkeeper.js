@@ -793,8 +793,23 @@ const GkSaidaCruzamento = {
     11 m sao a marca de penalti — o sitio onde o canto cai. Mais do que isto
     e ele a sair a entrada da area, que nao e uma saida, e um passeio.
     */
-    saidaProfundidade: 8.0,
-    saidaMeiaLargura: 8.0,
+    saidaProfundidade: 11.0,
+    saidaMeiaLargura: 11.0,
+
+    /*
+    VARRIDO, depois de o salto passar a ser disparado pela leitura da
+    trajectoria (ver `interceptarBola`, utils.js, e a nota do gatilho em
+    player.js):
+
+        zona 11 x 11    28.6 frames de 'salto_alto' por canto
+        zona  8 x  8    15.5
+
+    Apertar a zona corta o gesto a metade, portanto os 11 m estao a fazer
+    trabalho e nao sao folga. O que ficou por decidir e se custam posse: com
+    a zona larga o 'segurando' andou nos 533 frames contra 609 antes de haver
+    saida nenhuma. Se um lote mostrar mais golos de canto, e aqui que se
+    olha primeiro.
+    */
 
     /*
     QUANTO MAIS PERTO DO PONTO DE QUEDA ele tem de estar do que o atacante
