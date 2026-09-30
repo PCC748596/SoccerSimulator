@@ -3028,14 +3028,58 @@ class FootballPlayer {
                 typeof PassModel.giroGraus === 'number')
                 ? PassModel.giroGraus : 30) * Math.PI / 180;
 
+            /*
+            A REFERENCIA E O CORPO SEMPRE QUE O CORPO ESTA TORTO.
+
+            Relato: *"ainda tem jogador dando passe a 90 graus da direcao de
+            alinhamento dele sem se virar pelo menos uns 30 graus"*.
+
+            A referencia era a LINHA DE VELOCIDADE com ele em andamento (foi o
+            que o pedido antigo dizia: "os passes ate 70 graus para cada lado
+            da linha de deslocamento"). So que um jogador pode correr numa
+            direccao e estar orientado noutra, e ai um passe cabia nos 70 graus
+            da velocidade e saia a 90 do corpo — que e o que se ve.
+
+            MEDIDO, 493 passes em 3 jogos, no instante em que a bola sai do pe:
+
+                angulo CORPO-alvo      mediana 49   p90 71   max 175
+                acima de 70 graus      62 passes (13%)
+                    desses, SEM giro pedido    36 (58%)
+                    desses, COM giro pedido    26 (42%)
+
+            As duas metades tem a mesma causa. Os 58% nunca pedem giro porque
+            a velocidade estava dentro da janela. Os 42% pedem giro e saem
+            tortos na mesma porque o `direccaoDoCorpoNoPasse` roda a partir da
+            VELOCIDADE: garante o alvo a menos de 70 graus dessa direccao, nao
+            da do corpo.
+
+            (E nao e o `slerp` do case 'PASS' a ficar a meio, que foi a minha
+            primeira suspeita e estava errada: a 25*dt ele cobre 99.8% do giro
+            nos 0.2 s ate ao contacto do PassClip.)
+
+            AGORA MEDEM-SE OS DOIS. A linha de deslocamento continua a valer —
+            e a que decide se ele precisa de rodar de todo, como o pedido
+            antigo manda — mas se o CORPO estiver fora da janela, e do corpo
+            que se parte. Assim a invariante passa a ser a que interessa a
+            quem ve: quando a bola sai, o boneco esta virado para um lado de
+            onde aquele passe se pode dar.
+            */
             const speed = this.velocity.length();
-            const frente = (speed > 0.1)
+            const alvoUnit = { x: dx / normDir, z: dz / normDir };
+            const frenteCorpo = { x: _vFrenteCorpo.x, z: _vFrenteCorpo.z };
+            const nfc = Math.hypot(frenteCorpo.x, frenteCorpo.z) || 1;
+            frenteCorpo.x /= nfc; frenteCorpo.z /= nfc;
+
+            const cosCorpo = frenteCorpo.x * alvoUnit.x + frenteCorpo.z * alvoUnit.z;
+            const corpoForaDaJanela =
+                Math.acos(Math.max(-1, Math.min(1, cosCorpo))) > limiteRad;
+
+            const frente = (speed > 0.1 && !corpoForaDaJanela)
                 ? { x: this.velocity.x / speed, z: this.velocity.z / speed }
-                : { x: _vFrenteCorpo.x, z: _vFrenteCorpo.z };
+                : frenteCorpo;
 
             const novaFrente = (typeof direccaoDoCorpoNoPasse === 'function')
-                ? direccaoDoCorpoNoPasse(frente, { x: dx / normDir, z: dz / normDir },
-                    limiteRad, giroRad)
+                ? direccaoDoCorpoNoPasse(frente, alvoUnit, limiteRad, giroRad)
                 : null;
 
             this.turnForPass = !!novaFrente;

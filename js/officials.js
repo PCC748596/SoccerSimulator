@@ -462,7 +462,32 @@ const RefereeModel = {
         a decima. O que se quer e a ordem de grandeza certa: uma expulsao a
         cada dez a quinze jogos, e nao uma a cada quatro nem nenhuma.
         */
-        limiarSegundoAmarelo: 0.32,
+        /*
+        QUANTO SE CONTEM QUEM JA TEM AMARELO — o factor sobre a probabilidade
+        de ele cometer a falta.
+
+        SUBSTITUI O `limiarSegundoAmarelo`, que era uma excepcao a Lei 12
+        (exigia gravidade ao advertido para o expulsar) e que o
+        tests/faltas_cartoes.test.js apanhou: um advertido que trava um ataque
+        TEM de sair, por leve que seja o lance.
+
+        A conta que aquilo tentava arranjar continua de pe, e resolve-se aqui:
+
+            amarelos     62% do alvo
+            vermelhos   325% do alvo   (com a lei aplicada tal e qual)
+
+        Menos amarelos e mais vermelhos do que o real quer dizer que o
+        advertido reincide de mais. O `podeFazerCarrinho` ja lhe tirava o
+        carrinho; isto tira-lhe tambem o desarme de pe e o choque, que sao os
+        que produzem a falta tactica.
+
+        A SER VARRIDO: por medir. 0.45 e o ponto de partida — pouco menos de
+        metade das faltas — e o alvo sao 0.08 vermelhos por jogo. Quem afinar
+        isto que leia o aviso do Poisson: 0.08 por jogo sao QUATRO expulsoes em
+        50 jogos, portanto o que se persegue e a ordem de grandeza (uma a cada
+        dez a quinze jogos), nunca a decima.
+        */
+        cautelaDoAdvertido: 0.45,
 
         /*
         Ate onde atras e que um ataque ainda conta como promissor, em metros a
@@ -1844,12 +1869,34 @@ const Officials = {
             antes de deixar uma equipa com dez, sem deixar de expulsar quem
             merece.
             */
-            const advertido = !!(jogador && jogador.temAmarelo);
-            if (advertido) {
-                const lim = (typeof F.limiarSegundoAmarelo === 'number')
-                    ? F.limiarSegundoAmarelo : F.limiarAmarelo;
-                return (gravidade >= lim) ? 'vermelho' : 'amarelo';
-            }
+            /*
+            SEGUNDO AMARELO E EXPULSAO, SEMPRE — Lei 12, sem excepcao de
+            gravidade.
+
+            Eu tinha posto aqui um limiar (`limiarSegundoAmarelo`) que exigia
+            gravidade ao advertido para o expulsar. Estava errado, e o
+            tests/faltas_cartoes.test.js apanhou-o:
+
+                X segundo amarelo por travar ataque devia dar vermelho
+
+            O amarelo por travar um ataque NAO vem da gravidade — vem de ter
+            travado o ataque. Um advertido que o faz tem de sair, por leve que
+            tenha sido o lance. Dobrar a regra para acertar numa estatistica e
+            o tipo de correccao que arranja o numero e estraga o jogo.
+
+            O NUMERO ARRANJA-SE NOUTRO SITIO, e o sitio certo esta a vista nos
+            dados que eu tinha:
+
+                amarelos     62% do alvo
+                vermelhos   325% do alvo
+
+            Menos amarelos do que o real e tres vezes mais vermelhos so pode
+            significar uma coisa: o advertido REINCIDE aqui muito mais do que
+            na vida real. O `podeFazerCarrinho` ja lhe tirava o carrinho, mas
+            nao lhe tirava a falta tactica — que e precisamente a que o
+            expulsa. Ver `cautelaDoAdvertido`.
+            */
+            if (jogador && jogador.temAmarelo) return 'vermelho';
             return 'amarelo';
         }
         return null;
@@ -1867,6 +1914,26 @@ const Officials = {
     */
     podeFazerCarrinho: function (p) {
         return !(p && p.temAmarelo);
+    },
+
+    /*
+    QUANTO E QUE UM ADVERTIDO SE CONTEM, como factor sobre a probabilidade de
+    ele cometer a falta. 1.0 e nao se conter nada.
+
+    Ver a nota do `decidirCartao`: com a Lei 12 de volta (segundo amarelo e
+    sempre expulsao), e AQUI que os vermelhos se calibram — no numero de
+    faltas que um advertido comete, e nao na regra que as pune. E tambem o que
+    se ve num jogo a serio: quem tem amarelo tira o pe, deixa passar o
+    adversario e prefere o golo ao banho.
+
+    Cobre o que o `podeFazerCarrinho` nao cobria: o desarme de pe e o choque.
+    Esses sao os que produzem a falta tactica, e a falta tactica e o que
+    expulsa.
+    */
+    _cautelaDe: function (p) {
+        if (!p || !p.temAmarelo) return 1.0;
+        const F = RefereeModel.faltas;
+        return (typeof F.cautelaDoAdvertido === 'number') ? F.cautelaDoAdvertido : 1.0;
     },
 
     /*
@@ -2031,7 +2098,9 @@ const Officials = {
             if (dx * dx + dz * dz > raio * raio) return;
         }
 
-        const prob = (tipo === 'carrinho' ? F.probCarrinhoFalhado : F.probDesarmeFalhado) * F.escala;
+        let prob = (tipo === 'carrinho' ? F.probCarrinhoFalhado : F.probDesarmeFalhado) * F.escala;
+        // O MEDO DO ADVERTIDO, tambem fora do carrinho — ver cautelaDoAdvertido.
+        prob *= this._cautelaDe(defensor);
         if (Math.random() >= prob) return;
 
         this.marcarFalta(defensor, portador, Object.assign({
@@ -2138,6 +2207,13 @@ const Officials = {
                     infractor = aVemDeTras ? a : b;
                     vitima = (infractor === a) ? b : a;
                 }
+
+                /*
+                E O ADVERTIDO TAMBEM SE CONTEM NOS CHOQUES. Um homem com
+                amarelo nao entra num choque que nao precisa de entrar — ver
+                `cautelaDoAdvertido`.
+                */
+                if (Math.random() >= this._cautelaDe(infractor)) continue;
 
                 this._arrefecimento.set(chave, C.arrefecimento);
                 this.marcarFalta(infractor, vitima, Object.assign({

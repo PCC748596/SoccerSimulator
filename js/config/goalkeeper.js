@@ -793,8 +793,8 @@ const GkSaidaCruzamento = {
     11 m sao a marca de penalti — o sitio onde o canto cai. Mais do que isto
     e ele a sair a entrada da area, que nao e uma saida, e um passeio.
     */
-    saidaProfundidade: 11.0,
-    saidaMeiaLargura: 11.0,
+    saidaProfundidade: 8.0,
+    saidaMeiaLargura: 8.0,
 
     /*
     QUANTO MAIS PERTO DO PONTO DE QUEDA ele tem de estar do que o atacante

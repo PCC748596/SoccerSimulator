@@ -3944,6 +3944,33 @@ function deixaPassarABola(p, bola, bolaVel, adversarios) {
     }
     if (!temMarcador) return null;
 
+    /*
+    5. E ELE VOLTA A APANHA-LA? A condicao que faltava, e a que fazia do gesto
+    outra coisa do que o pedido.
+
+    O pedido descreve um DRIBLE: *"o jogador que esta pra receber a bola abre
+    as pernas e deixa a bola passar enquanto ja gira para correr atras dela"*.
+    A parte de ir busca-la e metade do gesto.
+
+    MEDIDO, tres calibracoes seguidas e 73 gestos no total: o autor do drible
+    voltou a tocar na bola em ZERO deles. Quem apanhava era um colega (60%) ou
+    o adversario (33%). Eu culpei a carencia, depois o `runTimer`, depois a
+    distancia da projeccao — nenhuma das tres era a causa.
+
+    A causa e fisica e agora ha com que a medir: a leitura da trajectoria
+    (`interceptarBola`) diz se, partindo PARADO e com a bola a fugir a mais de
+    11 m/s, ele ainda a encontra em algum instante do percurso. Se nao
+    encontrar, o gesto e impossivel para ele — e deixa-la passar e dar a bola
+    a quem estiver a frente, nao driblar.
+
+    Exige-se `folga >= 0`: chegar em cima da hora ja conta, porque a bola solta
+    e disputada e nao entregue.
+    */
+    if (typeof interceptarBola === 'function') {
+        const encontro = interceptarBola(p);
+        if (!encontro || encontro.folga < 0) return null;
+    }
+
     return { x: alvoX, z: alvoZ };
 }
 
