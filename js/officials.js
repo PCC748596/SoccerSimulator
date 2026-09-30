@@ -481,13 +481,21 @@ const RefereeModel = {
         carrinho; isto tira-lhe tambem o desarme de pe e o choque, que sao os
         que produzem a falta tactica.
 
-        A SER VARRIDO: por medir. 0.45 e o ponto de partida — pouco menos de
-        metade das faltas — e o alvo sao 0.08 vermelhos por jogo. Quem afinar
-        isto que leia o aviso do Poisson: 0.08 por jogo sao QUATRO expulsoes em
-        50 jogos, portanto o que se persegue e a ordem de grandeza (uma a cada
-        dez a quinze jogos), nunca a decima.
+        VARRIDO no lote de 20 jogos de 20 min (tools/headless/lote_jogos.js,
+        que e o instrumento valido para faltas e cartoes — o banco de ensaio
+        ad-hoc deste repositorio da 213 faltas por 90 contra as 31 do lote):
+
+            cautela 0.45    amarelos 4.26 (82%)   vermelhos 0.00 (0 em 20)
+            cautela 0.70    amarelos 4.56 (87%)   vermelhos 0.10 (2 em 20)
+            alvo                     5.22                    0.08
+
+        Fica em 0.70. O AVISO DO POISSON vale mais do que a decima: 0.08 por
+        jogo sao 1.6 expulsoes em 20 jogos, portanto zero e tres sao ambos
+        compativeis com o alvo por puro acaso. O que estes numeros distinguem
+        e "nenhum" de "cinco", e foi so isso que se usou para escolher — nao
+        se persegue aqui nada mais fino.
         */
-        cautelaDoAdvertido: 0.45,
+        cautelaDoAdvertido: 0.70,
 
         /*
         Ate onde atras e que um ataque ainda conta como promissor, em metros a
