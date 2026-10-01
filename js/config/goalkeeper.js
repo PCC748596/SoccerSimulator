@@ -484,9 +484,44 @@ const GoalkeeperPose = {
         joelho: 0.12,
         coxa: 0.05,
         abertura: 0.07,
-        bracoZ: 0.05,
-        bracoX: -0.76,
-        cotovelo: -1.82,
+
+        /*
+        =====================================================================
+        O V DOS BRACOS — braco e antebraco a fazer um V, a bola no meio dele
+        =====================================================================
+        Relato, com captura: *"quando se levanta, os bracos tem que estar um
+        pouco mais abertos. O antebraco mais para cima (braco e antebraco numa
+        posicao em V). E a bola no meio do V encostada no peito"*.
+
+        O QUE JA ESTAVA CERTO, e por isso nao se mexe: a GEOMETRIA do encaixe.
+        Medido no rig, em jogo, com as coordenadas convertidas do espaco do
+        modelo (escalado ~3.33x) para metros:
+
+            maos             1.37 m de altura, 0.35 m a frente do corpo
+            entre as maos    0.22 m   <- o diametro exacto da bola
+            bola             1.36 m de altura, 0.31 m a frente
+            bola a mao       0.12 m   <- o raio da bola
+
+        Ou seja a bola JA esta encostada ao peito, entre as duas maos. O que
+        nao lia como V era a forma do braco: o ombro a -0.76 levanta o braco
+        todo para a frente, e com o cotovelo a -1.82 o conjunto fica quase
+        fechado sobre si — dois antebracos horizontais, nao um V.
+
+        AGORA:
+
+            bracoX   -0.76 -> -0.45   o braco desce, mais junto ao tronco
+            cotovelo -1.82 -> -2.15   o antebraco sobe, que e o que abre o V
+            bracoZ    0.05 ->  0.18   os bracos afastam-se um pouco
+
+        O `bracoZ` e so um PONTO DE PARTIDA: o `fecharPunhos` corre a seguir e
+        fecha-o por bisseccao ate os punhos ficarem a um diametro da bola (ver
+        `fecharMaosNaBola`, player.js). Abrir aqui nao desencaixa a bola —
+        muda o angulo de onde a bisseccao parte.
+        =====================================================================
+        */
+        bracoZ: 0.18,
+        bracoX: -0.45,
+        cotovelo: -2.15,
 
         /*
         A BOLA NAS MÃOS, E NÃO ao lado delas.

@@ -1775,8 +1775,16 @@ class PlayerFSM {
                         // 5 a 10 metros — toque curto
                         leadDist = CarryModel.touchShort;
                     } else if (nearestOppDist > gatilhoDribleDe(p)) {
-                        // 0 a 5 metros — toque muito curto, bola junto ao pé
-                        leadDist = CarryModel.touchShort * 0.5;
+                        /*
+                        0 a 5 metros — toque curto, mas A FRENTE DO PE.
+
+                        Era `* 0.5` (0.48 m com o touchShort antigo) e este e o
+                        escalao que MAIS corre: medido, 41% dos frames de
+                        conducao. Ver a nota dos toques em CarryModel — a bola
+                        junto ao corpo pertence ao DRIBLE, que e o estado logo
+                        abaixo deste, nao a conducao.
+                        */
+                        leadDist = CarryModel.touchShort * 0.7;
                     } else {
                         // Adversário muito perto — transição para DRIBBLE 1v1
                         if (nearestOpp && nearestOppDist > 1.2) {

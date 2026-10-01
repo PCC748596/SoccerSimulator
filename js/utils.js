@@ -2469,7 +2469,42 @@ function maiorToqueSeguro(px, pz, dirX, dirZ, velPortador, leadInicial, adversar
     for (const lead of candidatos) {
         const ax = px + dirX * lead;
         const az = pz + dirZ * lead;
-        const tMeu = Math.sqrt(2 * lead / a);
+
+        /*
+        QUANTO TEMPO ELE LEVA A CHEGAR A BOLA — e nao quanto tempo a BOLA leva
+        a parar, que era o que aqui estava (`sqrt(2 * lead / a)`).
+
+        Relato: *"o Carry esta carregando demais a bola junto ao corpo. Ele
+        sempre tem que dar pequenos toques a frente."*
+
+        PORQUE E QUE O ANTIGO SE VOLTAVA CONTRA SI PROPRIO: quanto MAIOR o
+        toque, mais tempo a bola rola, maior o `tMeu` e mais facil a disputa
+        ser dada como perdida. E quando nenhum candidato passa, isto devolve
+        ZERO e nao ha toque nenhum — a bola fica onde esta, colada ao pe.
+
+        MEDIDO. Subi os tres escaloes de toque (2.8/1.6/0.96 para 3.4/2.4/1.6)
+        e a bola ficou MAIS colada, nao menos:
+
+            distancia da bola ao portador   mediana 0.89 -> 0.64 m
+            frames com a bola a menos de 1 m   53% -> 55%
+
+        O portador nao espera que a bola pare: vai a correr atras dela e
+        alcanca-a a meio do rolamento. O tempo dele e a distancia a dividir
+        pela velocidade a que ja vai — com um minimo, para um portador quase
+        parado nao dar tempo zero.
+
+        A NOTA ANTIGA tinha razao num ponto e e por isso que a `margem` fica:
+        `lead/velocidade` sozinho faz a validacao passar quase sempre. O que a
+        impede de ser um cheque em branco e a margem (`margemDisputa`) e o
+        facto de quem vem atras do ombro ja sair da conta (`disputaProjMin`).
+
+        O QUE ISTO PODE CUSTAR: toques longos por cima da defesa, que e o que
+        a versao pessimista evitava. O guarda-redes conta nesta disputa (ver a
+        nota acima), portanto a bola picada para dentro da area continua a ser
+        recusada. Se as perdas de posse subirem no lote, e aqui que se olha.
+        */
+        const vMeu = Math.max(2.0, velPortador || 0);
+        const tMeu = lead / vMeu;
 
         let seguro = true;
         for (let i = 0; i < adversarios.length; i++) {

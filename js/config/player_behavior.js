@@ -431,10 +431,48 @@ const CarryModel = {
         distCorte: 4.0
     },
 
-    // Toques de condução — distância do toque depende do espaço à frente
-    touchLong: 2.8,       // toque longo (campo aberto, adversário > 15m)
-    touchMedium: 1.6,     // toque médio (adversário entre 8-15m)
-    touchShort: 0.96,     // toque curto (adversário perto < 8m)
+    /*
+    =====================================================================
+    TOQUES DE CONDUCAO — a bola vai A FRENTE, nao colada ao pe
+    =====================================================================
+    Relato: *"o Carry esta carregando demais a bola junto ao corpo. Ele sempre
+    tem que dar pequenos toques a frente. Junto ao corpo somente em um drible
+    curto. Em um drible onde o jogador tem pouco espaco para passar."*
+
+    MEDIDO, 37 630 frames de CARRY em 3 jogos:
+
+        distancia da bola ao portador   mediana 0.89 m
+        a menos de 1 m do corpo         53% dos frames
+
+        escalao usado, por distancia do adversario mais perto:
+            > 15 m   40%   ->  toque de 2.80 m
+            10-15 m   7%   ->  1.60
+            5-10 m   12%   ->  0.96
+            < 5 m    41%   ->  0.48   (touchShort * 0.5, em fsm.js)
+
+    O escalao de baixo e o que domina — 41% da conducao com a bola a meio
+    metro — e e esse que faz o relato. A 5 m de distancia um adversario ainda
+    nao esta em cima de ninguem: um jogador a serio continua a empurrar a bola
+    dois metros a frente e so a encolhe ao pe quando tem de passar POR ELE.
+
+    E e isso que o pedido separa: a bola junto ao corpo pertence ao DRIBLE
+    (estado proprio, com o adversario a menos de `gatilhoDribleDe`), nao a
+    conducao. A conducao empurra sempre.
+
+        touchLong    2.8  ->  3.4    campo aberto, passada inteira
+        touchMedium  1.6  ->  2.4
+        touchShort   0.96 ->  1.6
+        (e o escalao < 5 m passa de * 0.5 para * 0.7 em fsm.js, ou seja de
+         0.48 para 1.12 m — ainda curto, mas ja a frente do pe)
+
+    O QUE ISTO CUSTA, e e preciso vigiar: a bola mais longe do pe e mais facil
+    de interceptar. Se as perdas de posse ou os desarmes sofridos subirem no
+    lote, e aqui que se olha primeiro.
+    =====================================================================
+    */
+    touchLong: 3.4,       // toque longo (campo aberto, adversário > 15m)
+    touchMedium: 2.4,     // toque médio (adversário entre 10-15m)
+    touchShort: 1.6,      // toque curto (adversário entre 5-10m)
     touchPower: 8.0,      // força base do toque (m/s)
     touchCooldown: 0.4,   // tempo mínimo entre toques (seg)
 
