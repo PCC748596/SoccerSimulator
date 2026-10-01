@@ -2067,6 +2067,26 @@ function interceptarBola(p, opts) {
     pode estar parado, e e precisamente isso que se quer saber — se arrancando
     agora chega la.
     */
+    /*
+    A VELOCIDADE DELE. `GaitModel.correr.vel` e a corrida; o `speedMult` e o
+    que o jogo ja usa para o diferenciar. Nao se usa a velocidade ACTUAL: ele
+    pode estar parado, e e precisamente isso que se quer saber — se arrancando
+    agora chega la.
+
+    LIMITE CONHECIDO, E IMPORTA: isto aplica a velocidade de corrida
+    INSTANTANEAMENTE, sem aceleracao. Em janelas longas (um cruzamento, uma
+    bola em profundidade) a diferenca nao conta; em janelas CURTAS conta tudo.
+
+    Medido, nos golos sofridos: a leitura dizia que o guarda-redes "chegava" a
+    uma bola que lhe cruzava a 2.93 m do corpo com 0.34 s de voo — porque
+    2.93/8.0 = 0.37 s. Um guarda-redes parado que mergulha nao faz 8 m/s em
+    tres decimos, e de facto a mao ficou a 1.42 m de mediana. A leitura estava
+    optimista por um factor grande.
+
+    Quem usar isto para decisoes de fraccoes de segundo — um mergulho, um
+    bloqueio — que conte com isso, ou lhe passe um `atraso` maior para pagar a
+    aceleracao que aqui nao existe.
+    */
     const vBase = (typeof GaitModel !== 'undefined' && GaitModel.correr)
         ? GaitModel.correr.vel : 8.0;
     const vEle = Math.max(1.0, vBase * (p.speedMult || 1.0));

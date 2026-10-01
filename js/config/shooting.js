@@ -574,10 +574,45 @@ const ShotModel = {
         o `GoalkeeperDive.espalmarForaMargem` subiu na mesma alteração — ver
         a nota lá.
         */
+        /*
+        MENOS 15%, E PELA MESMA RAZAO DE ANTES — que nao chegou.
+
+        O corte anterior deixou a percentagem no alvo em 21.7 (real ~33). O
+        lote de 40 jogos do painel, depois de tudo o resto, da:
+
+            % no alvo                   23.2    (real ~33)
+            golos                       3.67    145% do alvo
+            xG por remate               0.130   120%
+            conversao do ENQUADRADO      44%    (real ~30%)
+
+        Esta combinacao so tem uma leitura: rematam MAL e marcam MUITO quando
+        acertam. Isso e a assinatura de uma pontaria que procura cantos
+        extremos — o que se desvia sai pela linha (daí os 23.2%) e o que fica
+        dentro vai junto ao poste, onde nao ha defesa.
+
+        E NAO HA MESMO. Medido nos golos sofridos: o guarda-redes reage no
+        PRIMEIRO frame em 5 de 5, e o que lhe pedem e cobrir 2.93 m de
+        mediana em 0.34 s de voo — 8.6 m/s de deslocamento lateral a partir
+        de parado. A bola cruza a 2.93 m do centro, numa baliza com 3.66 de
+        meia-largura. Nenhum guarda-redes defende isto, e por isso nao e no
+        guarda-redes que se mexe.
+
+        Baixar a ambicao corrige as DUAS pontas ao mesmo tempo, que e o que
+        faz deste o instrumento certo: mais remates ficam dentro da moldura
+        (a % no alvo sobe na direccao dos 33) e os que ficam sao defensaveis
+        (a conversao desce na direccao dos 30%).
+
+        O `chapeu` NAO desce: esse passa por CIMA do guarda-redes, nao pelo
+        lado, e a ambicao dele ja e a mais baixa das quatro.
+
+            forca     0.27-0.81  ->  0.23-0.69
+            colocado  0.59-0.90  ->  0.50-0.77
+            rasteiro  0.50-0.90  ->  0.43-0.77
+        */
         fraccaoCanto: {
-            forca: { min: 0.27, max: 0.81 },
-            colocado: { min: 0.59, max: 0.90 },
-            rasteiro: { min: 0.50, max: 0.90 },
+            forca: { min: 0.23, max: 0.69 },
+            colocado: { min: 0.50, max: 0.77 },
+            rasteiro: { min: 0.43, max: 0.77 },
             chapeu: { min: 0.09, max: 0.41 }
         },
         alturaRasteira: 0.30,
