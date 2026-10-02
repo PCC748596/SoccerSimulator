@@ -3900,7 +3900,16 @@ class FootballPlayer {
         passo a partir da velocidade que a aproximação lhe deu — por isso já não
         há deslize.
         */
-        if (Match.state === 'FREE_KICK' && this === Match.setPieceTaker) {
+        /*
+        O BATEDOR DA FALTA CORRE A FSM E SAI — excepto o guarda-redes.
+
+        Esta saida foi escrita quando o batedor nunca podia ser ele. Desde
+        `FreeKickModel.guardaRedesBateNaArea` pode, e o gesto dele (o do tiro
+        de meta) vive no `updateGK`, que fica mais abaixo: com esta saida a
+        apanha-lo primeiro, o `updateGK` era chamado ZERO vezes durante a
+        falta e ele ficava parado em 'tiro_meta' ate o prazo acabar.
+        */
+        if (Match.state === 'FREE_KICK' && this === Match.setPieceTaker && this.role !== 'gk') {
             this.fsm.update(dt);
             this.model.position.addScaledVector(this.velocity, dt);
             if (!headless) this.animateBones(dt);
@@ -6189,14 +6198,8 @@ class FootballPlayer {
                             if (bolaForaDaArea) {
                                 // ALÍVIO COM O PÉ. Mesmo gesto do tiro de meta,
                                 // com a bola a partir no contactTime do clip.
-                                this.gkEstado = 'chutando';
-                                this.gkKickTipo = 'chao';
-                                this.gkTempoMergulho = 0;
-                                this.gkKickNorm = 0;
-                                this.gkKickClipNome = 'playerKick';
-                                this.gkKickAction = new ActionState('playerKick', {
-                                    onContact: () => this.aliviarForaDaArea()
-                                });
+                                this.chutarComGestoDeTiroDeMeta(
+                                    () => this.aliviarForaDaArea());
                             } else if (!maosProibidas) {
                                 this.gkEstado = 'apanhar';
                                 this.gkTempoMergulho = 0;
@@ -6993,8 +6996,11 @@ class FootballPlayer {
             this.gkKickClipNome = 'goalKick';
             this.gkKickAction = new ActionState('goalKick', {
                 onContact: () => {
+                    // So o tiro de meta e tiro de meta: a mesma cadeia serve a
+                    // falta na propria area, e essa nao o anuncia.
+                    const eraTiroDeMeta = (Match.state === 'GOAL_KICK');
                     this.kickFromGround();
-                    if (typeof EventBus !== 'undefined') {
+                    if (eraTiroDeMeta && typeof EventBus !== 'undefined') {
                         EventBus.emit('GOAL_KICK_TAKEN', { team: this.team, gk: this });
                     }
                 }
@@ -8493,19 +8499,61 @@ class FootballPlayer {
     gatilho — aqui nao ha bola parada nem tempo, ha um adversario a chegar e as
     maos proibidas pela Lei 12.
     */
+    /*
+    O PONTAPE DO GUARDA-REDES EM JOGO CORRIDO TEM O GESTO DO TIRO DE META.
+
+    Revisao dos gestos do guarda-redes: o alivio fora da area e o recuo de
+    urgencia usavam o `PlayerKickClip`, o chuto generico dos jogadores, e so o
+    tiro de meta usava o `GoalKickClip` — que e o clip mais cuidado do
+    projecto (13 keyframes tracados de fotografias, pernas a 83 graus no
+    contacto, pe de apoio ao lado da bola). O mesmo homem chutava de duas
+    maneiras conforme a bola estivesse parada ou nao.
+
+    NAO E SO TROCAR O NOME DO CLIP. O avanco do corpo no gesto vem do
+    `gkKickBlend`, que so existe se alguem chamar `iniciarBlendChuteChao`; o
+    tiro de meta chama-o, estes dois nao chamavam. Trocar so o nome punha o
+    passo do clip a acontecer no mesmo sitio, com o corpo parado. Por isso o
+    pe de apoio e calculado como no tiro de meta (`plantX`/`plantZ`, ao lado
+    da bola) e o corpo desliza ate la ao ritmo do `avanco` do clip.
+
+    Os dois chamam isto; quem chama so diz o que acontece no contacto.
+    */
+    chutarComGestoDeTiroDeMeta(noContacto) {
+        const gkCorpo = this.model, gkRig = this.rig;
+        /*
+        ONDE A BOLA VAI ESTAR NO CONTACTO, e nao onde esta.
+
+        O tiro de meta pode usar a posicao actual porque a bola esta PARADA.
+        Aqui ela rola sempre — e um alivio ou um recuo, nunca uma bola parada
+        — e o gesto dura `ActionAnimClips.goalKick.duration` (0.55 s) ate ao
+        contacto. Medido num recuo montado, bola a rolar para a baliza a
+        2.5 m/s: com o pe de apoio apontado a posicao ACTUAL, o pe chegava ao
+        contacto a 1.06 m da bola nos quatro casos (com o clip antigo, sem
+        deslize, eram 0.22 a 0.65 m) — a bola andava 1.4 m enquanto ele
+        deslizava para onde ela ja nao estava.
+        */
+        const tContacto = (typeof ActionAnimClips !== 'undefined' && ActionAnimClips.goalKick)
+            ? ActionAnimClips.goalKick.duration * ActionAnimClips.goalKick.contactTime : 0.55;
+        const prev = (typeof preverBolaEm === 'function') ? preverBolaEm(tContacto) : null;
+        const bola = prev || Match.ball.position;
+        const plantX = bola.x + this.dirZ * 0.32;
+        const plantZ = bola.z - this.dirZ * 0.10;
+        if (gkCorpo && gkRig) this.iniciarBlendChuteChao(gkCorpo, gkRig, plantX, plantZ);
+        this.gkEstado = 'chutando';
+        this.gkKickTipo = 'chao';
+        this.gkTempoMergulho = 0;
+        this.gkKickNorm = 0;
+        this.gkKickClipNome = 'goalKick';
+        this.gkKickAction = new ActionState('goalKick', { onContact: noContacto });
+    }
+
     chutarRecuoDeUrgencia() {
         if (this.gkKickAction || this.gkEstado === 'chutando') return;
         const R = (typeof GkRecuoModel !== 'undefined') ? GkRecuoModel : null;
         if (!R || !Match.ball) return;
         if (this.model.position.distanceTo(Match.ball.position) > R.distToque) return;
 
-        this.gkEstado = 'chutando';
-        this.gkKickTipo = 'chao';
-        this.gkTempoMergulho = 0;
-        this.gkKickNorm = 0;
-        this.gkKickClipNome = 'playerKick';
-        this.gkKickAction = new ActionState('playerKick', {
-            onContact: () => {
+        this.chutarComGestoDeTiroDeMeta(() => {
                 this.kickFromGround();
                 /*
                 O recuo acaba aqui: a bola saiu do pe dele PARA A FRENTE. Quem
@@ -8517,8 +8565,7 @@ class FootballPlayer {
                 if (typeof EventBus !== 'undefined') {
                     EventBus.emit('GK_BACKPASS_CLEARED', { team: this.team, gk: this });
                 }
-            }
-        });
+            });
     }
 
     kickFromGround() {
@@ -8545,9 +8592,17 @@ class FootballPlayer {
         window.bolaChutada = false;
 
         // A jogada recomeça no instante do toque.
-        Match.mudarEstado('PLAY', 'goal_kick_taken');
-        // Lei 16: quem bate não volta a tocar antes de outro.
-        Match.marcarRepositor(this, 'tiro_de_meta');
+        /*
+        O MESMO PONTAPE SERVE A FALTA NA PROPRIA AREA (ver
+        FreeKickModel.guardaRedesBateNaArea). O que muda e so o registo: a
+        razao da passagem a PLAY e a regra do repositor — Lei 13 para a falta,
+        Lei 16 para o tiro de meta; em ambas quem bate nao volta a tocar antes
+        de outro.
+        */
+        const eraFalta = (Match.state === 'FREE_KICK');
+        Match.mudarEstado('PLAY', eraFalta ? 'free_kick_taken' : 'goal_kick_taken');
+        Match.marcarRepositor(this, eraFalta ? 'falta' : 'tiro_de_meta');
+        if (eraFalta) Match.faltaDirecta = false;
         this.gkKickTipo = null;
 
         if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'lancamento');

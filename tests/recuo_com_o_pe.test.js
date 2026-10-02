@@ -110,7 +110,10 @@ console.log('2 — recuo com o pé e adversário perto: chuta como no tiro de me
 
     const mAperta = src.match(/adversarioAperta\(\) \{[\s\S]*?\n    \}/);
     const mChuta = src.match(/chutarRecuoDeUrgencia\(\) \{[\s\S]*?\n    \}/);
-    if (!mAperta || !mChuta) {
+    // O recuo delega o gesto no `chutarComGestoDeTiroDeMeta` (partilhado com o
+    // alivio fora da area), portanto o objecto isolado precisa dele tambem.
+    const mGesto = src.match(/chutarComGestoDeTiroDeMeta\(noContacto\) \{[\s\S]*?\n    \}/);
+    if (!mAperta || !mChuta || !mGesto) {
         erro('faltam adversarioAperta / chutarRecuoDeUrgencia em player.js');
     } else {
         // Ambiente mínimo para correr os dois métodos isolados.
@@ -148,7 +151,7 @@ console.log('2 — recuo com o pé e adversário perto: chuta como no tiro de me
             '; return { registarToqueComPe, avaliarRecuoParaGR };'))(Match, GkRecuoModel);
 
         const proto = (new Function('GkRecuoModel', 'Match', 'ActionState', 'registarToqueComPe',
-            'return {' + mAperta[0] + ',' + mChuta[0] + '};'
+            'return {' + mAperta[0] + ',' + mChuta[0] + ',' + mGesto[0] + '};'
         ))(GkRecuoModel, Match, ActionState, regras.registarToqueComPe);
 
         const gk = {
@@ -177,8 +180,11 @@ console.log('2 — recuo com o pé e adversário perto: chuta como no tiro de me
         // E o chute: mesmo gesto do tiro de meta, e o recuo acaba no contacto.
         Match.opponents = [jogador('TeamB', 0, 47)];
         gk.chutarRecuoDeUrgencia();
-        if (chamadas[0] !== 'playerKick') {
-            erro('devia usar o clip do tiro de meta (playerKick), usou ' + chamadas[0]);
+        // O clip do tiro de meta passou a ser o `goalKick` (GoalKickClip); era
+        // o `playerKick` quando este teste foi escrito. A intencao — o recuo
+        // usa o gesto do tiro de meta — e a mesma.
+        if (chamadas[0] !== 'goalKick') {
+            erro('devia usar o clip do tiro de meta (goalKick), usou ' + chamadas[0]);
         } else ok('usa o gesto do tiro de meta');
         if (gk.gkEstado !== 'chutando') erro('devia ficar no estado chutando');
         else ok('estado chutando');

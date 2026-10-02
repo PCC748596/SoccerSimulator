@@ -1047,6 +1047,38 @@ const GoalkeeperDive = {
     alvo (`espY > 1.2`).
     */
     tempoChaoAlto: 2.0,
+
+    /*
+    =========================================================================
+    A SEGUNDA DEFESA — com a bola viva na area, levanta-se ja
+    =========================================================================
+    Revisao dos gestos do guarda-redes: depois de espalmar ele ficava deitado
+    o `tempoChao` inteiro, e no mergulho alto isso sao 2.0 s, a pedido (*"deve
+    ficar uns 3 s no chao antes de levantar"*). O pedido e sobre o fim da
+    defesa — a bola foi-se. Nao e sobre uma bola que continua solta a frente
+    dele.
+
+    MEDIDO, 4 jogos de 10 min:
+
+        mergulhos sem agarrar                                 18
+          com a bola solta na area e ele ainda no chao        10
+          golos sofridos nessa janela                          0
+
+    Em mais de metade das defesas que nao agarra, a bola fica viva na area e
+    ele continua deitado. Nesta amostra nao custou golos (um defesa alivia ou a
+    bola sai), e por isso isto e REALISMO e nao calibracao: nenhum
+    guarda-redes fica dois segundos deitado com a bola solta na area dele.
+
+    A REGRA: na fase de chao, sem a bola agarrada, se ela estiver dentro da
+    grande area DELE e ninguem da equipa dele a tiver, passa a levantar — mas
+    nunca antes do `tempoChao` de 0.35 s, que e o deslize da propria queda e
+    nao se corta. Com a bola longe, ou segura por um colega, fica o tempo do
+    pedido.
+
+    A falso, volta a ficar sempre o `tempoChao` inteiro.
+    =========================================================================
+    */
+    recargaLevantaJa: true,
     tempoLevantar: 0.50,   // pôr-se de pé (pedido: 500 ms)
 
     /*

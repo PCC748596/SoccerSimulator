@@ -552,12 +552,37 @@ Object.assign(Match, {
             const ladoBolaFK = (typeof ladoDaBola === 'function')
                 ? ladoDaBola(bolaFK.x, attDir) : null;
 
-            const takerFK = (typeof batedorDaFalta === 'function')
+            let takerFK = (typeof batedorDaFalta === 'function')
                 ? batedorDaFalta(attackingPlayers, criterioFK, p => p.skillFor('TEC'), ladoBolaFK)
                 : null;
+
+            /*
+            NA PROPRIA AREA BATE O GUARDA-REDES — ver
+            FreeKickModel.guardaRedesBateNaArea.
+
+            O gesto e o do tiro de meta: poe-se em `tiro_meta_espera` (que o
+            leva a pe ao ponto de arranque atras da bola, a mesma caminhada do
+            tiro de meta) e e o ciclo da falta que o passa a `tiro_meta` quando
+            o tempo acaba. Nao passa pela FSM dos batedores: o guarda-redes
+            corre o `updateGK` e nao a FSM, e e por isso que o gesto dele vive
+            la.
+            */
+            const gkDaFalta = attackingPlayers.find(p => p.role === 'gk' && !p.expulso);
+            const naPropriaArea = !!(gkDaFalta && typeof Area !== 'undefined' &&
+                typeof Area.contem === 'function' &&
+                Area.contem(bolaFK.x, bolaFK.z, gkDaFalta.ownGoalZ));
+            const bateOGuardaRedes = !!(F.guardaRedesBateNaArea && naPropriaArea);
+            if (bateOGuardaRedes) takerFK = gkDaFalta;
+
             this.setPieceTaker = takerFK || null;
 
-            if (takerFK) {
+            if (takerFK && bateOGuardaRedes) {
+                takerFK.velocity.set(0, 0, 0);
+                takerFK.alvoFalta = null;
+                takerFK.gkEstado = 'tiro_meta_espera';
+                takerFK.gkTempoMergulho = 0;
+                takerFK.dive = null;
+            } else if (takerFK) {
                 takerFK.model.position.set(
                     bolaFK.x - dirFK.x * F.recuoBatedor, ALTURA_BASE_Y,
                     bolaFK.z - dirFK.z * F.recuoBatedor);
@@ -1782,7 +1807,18 @@ Object.assign(Match, {
             ? FreeKickModel.afastaAdversarios : 9.15;
         const bola = this.ball.position;
 
-        const campoM = marca.filter(p => p && p.role !== 'gk' && p.model);
+        /*
+        A BARREIRA NAO E DA FORMA — quem esta nela fica onde a montagem do
+        livre o pos.
+
+        No impedimento nunca houve barreira (`if (indirecta) nBarreira = 0`),
+        e por isso esta montagem podia mexer em toda a gente que marca. Desde
+        que ela corre tambem na falta recuada (ver a chamada no ramo do
+        FREE_KICK), passou a apanhar a barreira e a leva-la para o bloco:
+        tests/livre_forma_da_defesa.test.js apanhou um jogador da barreira a
+        14.5 m da bola com a barreira a 9.15 m.
+        */
+        const campoM = marca.filter(p => p && p.role !== 'gk' && p.model && !p.naBarreiraFalta);
         if (!campoM.length) return;
         const zs = campoM.map(p => p.baseTarget.z * p.dirZ);
         const zMin = Math.min(...zs), zMax = Math.max(...zs);

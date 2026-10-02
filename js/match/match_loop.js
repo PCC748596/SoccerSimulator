@@ -156,7 +156,9 @@ Object.assign(Match, {
                 */
                 const takerFalta = this.setPieceTaker;
                 const FK = FreeKickModel;
-                if (takerFalta && takerFalta.model) {
+                // O guarda-redes faz a caminhada no proprio `updateGK`
+                // ('tiro_meta_espera'); esta aproximacao e so dos outros.
+                if (takerFalta && takerFalta.model && takerFalta.role !== 'gk') {
                     if (this.faltaAtraso < ESPERA_APOS_REPOSICAO / 3) {
                         const bx = this.ball.position.x, bz = this.ball.position.z;
                         let alvoX = bx;
@@ -193,7 +195,17 @@ Object.assign(Match, {
                     espera, a caminhada, o prazo — e o mesmo, e por isso vive
                     aqui e nao num estado novo.
                     */
-                    if (t && this.faltaDirecta) t.baterFaltaDirecta();
+                    /*
+                    O GUARDA-REDES NAO TEM `baterFalta`: o gesto dele e o do
+                    tiro de meta, e arranca passando-o a 'tiro_meta' — o mesmo
+                    passo que o ciclo do GOAL_KICK da, mais acima. Ver
+                    FreeKickModel.guardaRedesBateNaArea.
+                    */
+                    if (t && t.role === 'gk') {
+                        t.gkEstado = 'tiro_meta';
+                        t.gkTempoMergulho = 0;
+                    }
+                    else if (t && this.faltaDirecta) t.baterFaltaDirecta();
                     else if (t) t.baterFalta();
                     else this.mudarEstado('PLAY', 'falta_sem_batedor');
                 }

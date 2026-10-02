@@ -106,6 +106,26 @@ esta medição se enganou à primeira.
 */
 const ateLargar = (marcados) => {
     let t = 0;
+    /*
+    SEM FALTAS DURANTE A CONTAGEM.
+
+    Isto mede a regra dos 8 segundos — quando e que ele larga a bola por
+    decisao propria. Os adversarios recolados a 1.2 m de cada companheiro em
+    todos os frames geram choques, e um deles caiu SOBRE o guarda-redes com a
+    bola nas maos (TeamB:CM, aos 7.48 s): falta a favor dele, dentro da propria
+    area.
+
+    Desde que o guarda-redes bate as faltas na propria area
+    (FreeKickModel.guardaRedesBateNaArea) ele pousa a bola e vai bate-la — que
+    e o certo — e o teste lia isso como "largou cedo". Antes passava porque
+    quem batia era o central, e o guarda-redes ficava em 'segurando' com a bola
+    teletransportada para o chao a frente do central.
+
+    Uma falta e outro lance; nao e o que este teste prende.
+    */
+    const detectar = Officials.detectarContactos;
+    Officials.detectarContactos = function () {};
+    try {
     while (t < 14 && gk.gkEstado === 'segurando') {
         if (marcados) {
             rivais.forEach((o, i) => {
@@ -115,6 +135,9 @@ const ateLargar = (marcados) => {
         }
         Match.update(dt);
         t += dt;
+    }
+    } finally {
+        Officials.detectarContactos = detectar;
     }
     return t;
 };

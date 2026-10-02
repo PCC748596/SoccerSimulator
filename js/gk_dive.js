@@ -475,7 +475,18 @@ const GkDive = {
                 this.maosForaDoRelvado(rig);
 
                 // O prazo é o do lance, escrito no `iniciar` — ver `tempoChaoAlto`.
-                const prazoChao = (typeof d.tempoChao === 'number') ? d.tempoChao : D.tempoChao;
+                let prazoChao = (typeof d.tempoChao === 'number') ? d.tempoChao : D.tempoChao;
+                /*
+                A SEGUNDA DEFESA — ver GoalkeeperDive.recargaLevantaJa. Com a
+                bola viva na area dele e sem ser de um colega, o prazo do lance
+                (ate 2.0 s no mergulho alto) cai para o deslize da queda.
+                */
+                if (D.recargaLevantaJa && !d.agarrou && typeof Match !== 'undefined' &&
+                    Match.state === 'PLAY' && Match.ball && typeof Area !== 'undefined' &&
+                    Area.contem(Match.ball.position.x, Match.ball.position.z, p.ownGoalZ) &&
+                    !(Match.ballCarrier && Match.ballCarrier.team === p.team)) {
+                    prazoChao = Math.min(prazoChao, D.tempoChao);
+                }
                 if (d.t >= prazoChao) { d.fase = 'levantar'; d.t = 0; }
                 break;
             }

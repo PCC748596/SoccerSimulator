@@ -1061,6 +1061,34 @@ const FreeKickModel = {
     Este mapa é o da falta PELO MEIO. A falta pela ala tem o seu, o
     `batedorPorSetorLateral` aqui a seguir.
     */
+    /*
+    =========================================================================
+    A FALTA NA PROPRIA AREA BATE-A O GUARDA-REDES
+    =========================================================================
+    Revisao dos gestos do guarda-redes: *"Revisa tb as animacao de faltas e
+    tiro de meta cobrados pelo goleiro."*
+
+    O que se encontrou: o guarda-redes NUNCA batia faltas. O `batedorDaFalta`
+    (utils.js) exclui-o de proposito (`semGk`) e na defesa quem batia era
+    sempre o central (`batedorPorSetor.defesa`). No futebol real, uma falta
+    dentro da propria area e batida pelo guarda-redes quase sempre — e
+    exactamente o mesmo lance que um tiro de meta, so com outra origem.
+
+    POR ISSO O GESTO E O DO TIRO DE META, e nao um novo: a cadeia
+    `tiro_meta_espera` -> `tiro_meta` -> `chutando` (player.js) com o
+    `GoalKickClip`, que e o clip mais cuidado do projecto (13 keyframes
+    tracados de fotografias). A montagem (`setupSetPiece`) poe-no na espera,
+    e o ciclo da falta (`match_loop.js`) liberta-o no instante em que
+    libertaria qualquer outro batedor.
+
+    SO DENTRO DA GRANDE AREA de quem bate. Fora dela a falta e jogada — com
+    passe, com o central a sair a jogar — e isso ja tem batedor e gesto.
+
+    A falso, volta tudo a como era: bate o central.
+    =========================================================================
+    */
+    guardaRedesBateNaArea: true,
+
     batedorPorSetor: {
         defesa: 'central',
         meio_recuado: 'central',
