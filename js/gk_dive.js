@@ -621,6 +621,36 @@ const GkDive = {
         }
 
         /*
+        E AS MAOS TAMBEM NAO ENTRAM NA RELVA DURANTE O VOO.
+
+        Com o corpo resolvido (acima), o que ainda entrava no relvado eram as
+        maos: medido, 66 em 1332 frames de mergulho, ate -0.48 m, no arranque
+        do voo e na aterragem. O `maosForaDoRelvado` ja existia, mas so era
+        chamado nas fases de chao e de levantar.
+
+        NO VOO CHAMA-SE VARIAS VEZES NO MESMO FRAME, e nao uma: aqui os bracos
+        sao reescritos DE RAIZ a cada frame (pelo clip e pelo IK), portanto a
+        correccao de um frame nao sobrevive ao seguinte para se ir somando — e
+        o tecto por chamada (`subidaMaxPorFrame`, 0.35 rad) nao chega para uma
+        mao meio metro dentro da relva. Cada chamada rele a posicao da mao, e
+        para quando ela sai. O tecto continua a fazer o que a nota dele diz:
+        nenhum passo isolado roda o ombro de uma vez.
+
+        Depois da rotacao do corpo, e nao dentro do `case 'voo'`: a mao so tem
+        a posicao certa no mundo com o tombo deste frame ja escrito.
+        */
+        /*
+        E NA ATERRAGEM TAMBEM. Com so a fase de voo, as maos baixaram de 66
+        para 46 frames enterrados — e 34 dos 46 eram ja na fase de CHAO, no
+        instante em que o corpo bate na relva e as maos ficam meio metro la
+        dentro de uma vez. A chamada que a fase de chao ja fazia (uma, com o
+        tecto) levava varios frames a tira-las, e via-se.
+        */
+        if (d.fase === 'voo' || d.fase === 'chao') {
+            for (let i = 0; i < 4; i++) this.maosForaDoRelvado(rig);
+        }
+
+        /*
         A BOLA AGARRADA VAI AO PEITO — ver GoalkeeperDive.bolaNoPeito.
 
         Estava colada a MAO que a apanhou, e a mao esta na ponta do braco

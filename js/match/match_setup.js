@@ -152,8 +152,36 @@ Object.assign(Match, {
 
         this.showOffsideLines = false;
 
+        /*
+        UM SEGUNDO `init` NO MESMO PROCESSO NAO PODE SOMAR UM SEGUNDO ONZE.
+
+        O `createTeams` faz `push` de onze jogadores em cada lista e nao as
+        esvazia: quem as esvazia e o `trocarEquipas`, que e o que o jogo (e o
+        tools/headless/lote_jogos.js) usa entre jogos. Mas os testes e as
+        sondas de medicao chamam o `init` uma vez por semente — e a partir da
+        segunda cada equipa jogava com 22: os onze novos e onze FANTASMAS, que
+        nunca passaram pelo `assignFormations` e ficavam com os valores do
+        construtor (`role: 'def'`, `pos: 'GK'`). Disputavam duelos, faziam
+        faltas e levavam cartoes: apanhado com um "guarda-redes" expulso que
+        afinal era um destes, com `role: 'def'`.
+
+        O jogo no browser chama o `init` uma vez so, e por isso nunca o via.
+        O que fica contaminado sao as MEDICOES com varias sementes.
+
+        A limpeza e a do `trocarEquipas`, menos tirar os bonecos da cena: o
+        `init` recebe uma cena NOVA, e os antigos ja nao estao nela.
+        */
+        const doInitAnterior = [...(this.players || []), ...(this.opponents || []),
+            ...(this.expulsos || [])];
+        if (this.expulsos) this.expulsos.length = 0;
+        this.players = [];
+        this.opponents = [];
+
         this.equipasPorOmissao();
         this.createTeams();
+        if (doInitAnterior.length && typeof this.esquecerJogadoresAntigos === 'function') {
+            this.esquecerJogadoresAntigos(doInitAnterior);
+        }
         this.resetPlay();
         this.setupKeyboardListeners();
     },

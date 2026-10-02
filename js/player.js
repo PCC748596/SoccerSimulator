@@ -4126,7 +4126,24 @@ class FootballPlayer {
         porque o CRUZAMENTO não tem clip próprio e continua a precisar da
         passada desenhada por baixo.
         */
-        if ((this.role === 'gk' && Match.state !== 'CORNER_KICK') ||
+        /*
+        O GUARDA-REDES A MERGULHAR FICA FORA DO `animateBones` TAMBEM NO CANTO.
+
+        Relato, com captura: *"o goleiro esta se enfiando no chao no final da
+        queda"*. A excepcao `|| gkAMergulhar` ja existia na escolha de quem
+        corre o `updateGK` (mais acima, ver a nota dela) e faltava AQUI: quando
+        ele espalma para canto — o desfecho mais comum de um mergulho alto — o
+        estado passa a CORNER_KICK com ele ainda deitado, e este ramo deixava
+        de o proteger. Cada frame corria o `animateBones` de jogador de campo
+        por cima do mergulho, e esse acaba no `assentarNoChao`, que desce o
+        corpo ate a sola tocar no relvado: com ele DEITADO, enterra-o. Sem
+        ecra o mesmo ramo punha-o a `ALTURA_BASE_Y` a forca.
+
+        MEDIDO, envolvendo o `GkDive.update`: em 156 de 156 frames com o corpo
+        abaixo da relva, o corpo estava BEM no fim do mergulho e quem o baixava
+        era esta linha, no mesmo frame.
+        */
+        if ((this.role === 'gk' && (Match.state !== 'CORNER_KICK' || gkAMergulhar)) ||
             this.fsm.currentState === 'LATERAL' ||
             (this.fsm.currentState === 'SHOOT' && this.actionState) ||
             (this.fsm.currentState === 'SET_PIECE_KICK' && this.actionState) ||

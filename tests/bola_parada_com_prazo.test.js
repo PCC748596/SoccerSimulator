@@ -141,7 +141,11 @@ console.log(LF + '3 — durante o canto o updateGK não corre (é o que congela)
     fixado porque é a razão de o canto preso ser MUITO pior do que os outros
     estados presos: nos outros o boneco continua a ser animado, aqui não.
     */
-    if (!/role === 'gk' && Match\.state !== 'CORNER_KICK'/.test(srcPlayer)) {
+    // O parentese e opcional: as duas guardas do `update` passaram a ter a
+    // forma `(Match.state !== 'CORNER_KICK' || gkAMergulhar)` — a excepcao de
+    // quem ja estava a mergulhar quando o canto foi marcado (espalmou para
+    // canto). Fora disso o canto continua a nao correr o updateGK.
+    if (!/role === 'gk' && \(?Match\.state !== 'CORNER_KICK'/.test(srcPlayer)) {
         erro('a guarda do updateGK mudou de forma — este teste precisa de ser ' +
             'reescrito, e o comentário do prazo do canto revisto');
     } else {
