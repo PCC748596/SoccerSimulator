@@ -1687,6 +1687,19 @@ const GoalkeeperDive = {
     =========================================================================
     */
     bolaNoPeito: { x: 0.0, y: 0.06, z: 0.30 },
+
+    /*
+    E A BOLA NUNCA FICA ATRAS DO CORPO, em metros a frente dele.
+
+    Ver a guarda em `gk_dive.js`, que tem a medicao: o encaixe esta certo em
+    96% dos frames (bola a 1.34 m de altura, 0.27 m a frente, 0.12 m da mao) e
+    nos outros 4% a bola cai para tras da perna, porque o ponto e dado no
+    espaco do PEITO e o peito roda com o tombo.
+
+    12 cm sao pouco mais do que o raio da bola: chega para ela ficar do lado
+    de fora do corpo sem a afastar do peito.
+    */
+    bolaZMinNoCorpo: 0.12,
     /*
     Os angulos sairam de uma medicao e nao do olho: com a bola no ponto acima,
     varreu-se o ombro e o cotovelo a ler onde a MAO cai no espaco do peito.

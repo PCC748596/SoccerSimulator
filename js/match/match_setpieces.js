@@ -946,7 +946,42 @@ Object.assign(Match, {
             marca e errada para quem bate: a chamada estava lá em cima, ao lado
             da `formaDaDefesaNoLivre`, e os `lugares` passavam-lhe por cima.
             */
-            if (indirecta) this.formaDoLivreDeImpedimento(team, takerFK);
+            /*
+            E TAMBEM NA FALTA RECUADA, nao so no impedimento.
+
+            Relato, com o minimapa: *"na marcacao de falta ou impedimento
+            dentro da area os jogadores ainda estao se posicionando uns de um
+            lado do campo e outros do outro lado. Nao faz o menor sentido
+            metade dos jogadores ficarem de um lado do campo e a outra metade
+            do outro lado."*
+
+            MEDIDO, 351 amostras de bola parada com os 20 jogadores de campo
+            (o maior vao em z entre jogadores consecutivos):
+
+                FREE_KICK     mediana  9 m   max 62 m   acima de 30 m: 14
+                CORNER_KICK   mediana 11 m   max 12 m   acima de 30 m:  0
+                GOAL_KICK     mediana 14 m   max 15 m   acima de 30 m:  0
+                PENALTY       mediana  9 m   max  9 m   acima de 30 m:  0
+
+            So a FALTA tem o defeito. O caso tipico: bola em z=48, 8 jogadores
+            junto a ela e 12 a 62 m dali — e entre os 12 estao OS TRES MEDIOS
+            de quem cobra. Os avancados ficarem la a frente e correcto e nao se
+            mexe; os medios e que nao podem estar colados a eles, porque numa
+            falta recuada sao eles que se oferecem para a saida a jogar.
+
+            E e exactamente isto que a `formaDoLivreDeImpedimento` ja resolve —
+            o comentario dela traz a mesma medicao, feita a proposito dos
+            impedimentos: *"em tres de doze impedimentos reais as duas equipas
+            ficavam a 52-56 m da bola, uma em cada metade do campo"*. Faltava
+            so correr tambem aqui.
+
+            SO NA METADE DEFENSIVA de quem cobra. Uma falta no ataque nao tem
+            este problema (a bola ja esta onde a equipa esta) e re-montar a
+            forma ali desfazia o trabalho do `lugaresDaFalta`, que coloca a
+            gente dentro da area para atacar o cruzamento.
+            */
+            const bolaNaMetadeDele = (bolaFK.z * attDir) < 0;
+            if (indirecta || bolaNaMetadeDele) this.formaDoLivreDeImpedimento(team, takerFK);
 
             this.faltaPendente = true;
             this.faltaAtraso = ESPERA_APOS_REPOSICAO;

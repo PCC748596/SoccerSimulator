@@ -565,6 +565,51 @@ const GkDive = {
         }
 
         /*
+        E CONTINUA A NAO SE ENTERRAR, todos os frames — nao so naquele.
+
+        Relato, com captura: *"o goleiro esta se enfiando no chao no final da
+        queda."*
+
+        O `assentarDeitado` acima e um TIRO UNICO (`d.assentar = false` logo a
+        seguir): assenta-o no frame da transicao e a pose continua a evoluir
+        depois disso. Quando os membros descem mais, ninguem volta a levanta-lo
+        — e por isso o defeito aparece no FIM da queda e nao no inicio.
+
+        MEDIDO, altura do osso mais baixo ao longo do mergulho (0 = relvado):
+
+            t=0.0 a 0.3 s    nenhum osso abaixo do relvado
+            t=0.4 s          20% das amostras, minimo -0.33 m
+            t=0.8 s          51%, minimo -0.98 m
+            t=1.0 s em diante 29%, minimo -0.48 m
+
+            osso mais enterrado: lArm 93, lHand 52, rHand 52, rArm 31, rFoot 25
+
+        O `maosForaDoRelvado` ja existia mas so olha para as MAOS, e corrige-as
+        rodando o ombro; os BRACOS (o proprio no do ombro) sao os que mais se
+        enterram e ninguem olhava para eles.
+
+        SO SOBE, NUNCA DESCE, e e isso que o distingue do assento inicial: o
+        assento pode baixar o corpo para o encostar ao relvado, e e para isso
+        que serve. Repeti-lo inteiro todos os frames fa-lo-ia AFUNDAR sempre
+        que um membro se levantasse — bastava uma perna no ar para o tronco
+        descer atras dela. Aqui so se corrige o que esta enterrado.
+        */
+        const folgaCh = (typeof D.folgaDeitado === 'number') ? D.folgaDeitado : 0.10;
+        let minYCh = Infinity;
+        for (let i = 0; i < this._ossosDeitado.length; i++) {
+            const o = rig[this._ossosDeitado[i]];
+            if (!o) continue;
+            o.getWorldPosition(this._v);
+            if (this._v.y < minYCh) minYCh = this._v.y;
+        }
+        if (isFinite(minYCh) && minYCh < folgaCh) {
+            corpo.position.y += (folgaCh - minYCh);
+            // O levantar parte daqui, senao sobe a partir de uma altura que ja
+            // nao e a dele — mesma razao da nota do `assentarDeitado`.
+            d.yDeitado = corpo.position.y;
+        }
+
+        /*
         A BOLA AGARRADA VAI AO PEITO — ver GoalkeeperDive.bolaNoPeito.
 
         Estava colada a MAO que a apanhou, e a mao esta na ponta do braco
@@ -600,6 +645,7 @@ const GkDive = {
             if (Match.ball.position.y < BallPhysics.raio) {
                 Match.ball.position.y = BallPhysics.raio;
             }
+
             Match.ballVel.set(0, 0, 0);
         }
 

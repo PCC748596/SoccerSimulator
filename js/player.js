@@ -663,6 +663,43 @@ class FootballPlayer {
             : ((typeof LateralPose !== 'undefined' && LateralPose.bolaAcimaDasMaos)
                 ? LateralPose.bolaAcimaDasMaos : 0);
 
+        /*
+        A BOLA ATRAS DO CORPO — MEDIDO, DUAS CORRECCOES FALHADAS, NAO MEXER
+        SEM LER ISTO.
+
+        Relato, com captura: *"o goleiro tem que encaixar a bola junto ao
+        peito. Nao pode encaixar atras da perna."*
+
+        MEDIDO, 126 encaixes frame a frame, no espaco do corpo:
+
+            altura da bola          1.34 m
+            a frente do corpo       0.27 m
+            distancia a mao         0.12 m   (o raio da bola e 0.11)
+            ATRAS do corpo (z<0)    4% dos frames
+
+        Ou seja o encaixe esta certo em 96% dos frames; o defeito e uma
+        minoria em que os punhos ficam atras do tronco (pose de mergulho de
+        lado por desfazer) e a bola vai com eles.
+
+        DUAS TENTATIVAS, AS DUAS PIORARAM:
+
+          1. travar no `gk_dive.js`, junto a guarda do relvado: subiu para 8%.
+             Estava no caminho errado — aqueles frames sao do estado
+             'segurando', que passa por aqui e nao por la — e de caminho
+             escrevia por cima de temporarios partilhados (`_vLocal`,
+             `_qOsso`).
+
+          2. travar AQUI, empurrando a bola ao longo da frente do jogador:
+             subiu para 11% E afastou a bola das maos (0.12 -> 0.21 m). A
+             conta da "frente" usava `model.rotation.y`, mas o modelo e
+             orientado por QUATERNIAO (`lookAtBola`) e o Euler em y nao
+             representa a direccao dele — a trava disparava onde nao devia.
+
+        QUEM TENTAR OUTRA VEZ: a frente do jogador tira-se de
+        `getWorldQuaternion` aplicado a (0,0,1), nunca do `rotation.y`. E o
+        sitio certo e provavelmente a POSE (os punhos nao deviam ficar atras
+        do tronco de todo), nao a posicao da bola depois de colada.
+        */
         Match.ball.position.copy(_v1);
         Match.ballVel.set(0, 0, 0);
     }

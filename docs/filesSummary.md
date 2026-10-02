@@ -3,7 +3,119 @@
 Mapa do código do Soccer Simulator depois da divisão do `index.html` monolítico.
 Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
-## Últimas Actualizações (Setembro 2026)
+## Últimas Actualizações (Outubro 2026)
+
+### Sessão de 30 de Setembro – 1 de Outubro de 2026 — a leitura da trajectória, a condução que empurra a bola, e três correcções minhas que pioraram o que iam arranjar
+
+#### `trajectoriaDaBola` e `interceptarBola` (js/utils.js) + `AlcanceDaBola` (js/config/player_behavior.js) — a camada que faltava
+
+Pedido: *"os jogadores tem que saber reconhecer o percurso da bola. Seja ele rasteiro ou no ar (parábola) para que eles tenham condições de programar a cabeçada ou o pulo com os braços pra cima para os goleiros. Sem isso fica impossível para a animação procedural esticar os braços tentando alcançar o deslocamento da bola."*
+
+A física da previsão já existia e é fiel (`preverBolaEm`, `preverQuedaDaBola`, `preverBolaEmAltura`). O que não existia era a **leitura**: dado um jogador, em que instante do voo é que ele pode encontrar a bola, e a que altura — que é o que decide se o gesto é perna, pé, peito, cabeça, peixinho, mãos ou soco.
+
+- **`trajectoriaDaBola()`** simula o voo **uma vez por frame** e guarda a tabela. As funções antigas re-simulam 240 passos a cada chamada; com 22 jogadores a perguntar o mesmo todos os frames eram 22 simulações idênticas. A cache invalida-se pelo **estado da bola** (posição + velocidade) e não pelo relógio, senão um toque no mesmo frame passava despercebido.
+- **`interceptarBola(p, opts)`** percorre a tabela e devolve o primeiro instante que satisfaz as duas condições: ele consegue lá estar, e a bola está numa faixa de alcance dele. Devolve `{t, x, y, z, gesto, distancia, folga}`. Devolve `null` quando não chega — e isso é uma resposta, não uma falha.
+- **As faixas vieram do pedido, e as que são o corpo DERIVAM do jogador**: perna 0.50, pé 0.35, peixinho 0.80–1.20, peito 1.20–1.50, GK mãos 1.20–1.90 são fixas; a testa sai de `alturaTestaDe(p)`, a testa+salto soma `SaltoCabeceio.alturaMax`, e as mãos no alto do guarda-redes somam o salto da skill GK dele. O **soco partilha a altura do agarrar** menos 15 cm: o que separa os dois gestos é a pressão, não a altura.
+- Validado num jogo de 5 min: erro de previsão a 0.5 s com **mediana de 0.24 m**; 99% dos jogadores com leitura. O p90 (3.9 m) e o máximo (53 m) são lances em que alguém tocou na bola entretanto — nenhuma previsão os pode acertar, e é por isso que a `folga` vem no resultado.
+- **LIMITE CONHECIDO, ESCRITO NO PRÓPRIO FICHEIRO:** aplica a velocidade de corrida **instantaneamente, sem aceleração**. Em janelas longas não conta; em janelas curtas conta tudo. Medido: a leitura dizia que o guarda-redes "chegava" a uma bola a 2.93 m com 0.34 s de voo (2.93/8.0 = 0.37 s), e a mão ficou a 1.42 m dela. Quem a usar para um mergulho ou um bloqueio que conte com isso.
+
+#### A condução (js/config/player_behavior.js, js/fsm.js, js/utils.js) — a bola à frente, e a trava que se voltava contra si própria
+
+Relato: *"o Carry está carregando demais a bola junto ao corpo. Ele sempre tem que dar pequenos toques a frente. Junto ao corpo somente em um drible curto."*
+
+Medido, 37 630 frames de `CARRY`: a bola a **0.89 m** de mediana do portador, e **53% dos frames com ela a menos de um metro**. O escalão `< 5 m` — `touchShort * 0.5`, 0.48 m — é o que mais corre, 41% dos frames.
+
+- **SUBIR OS TOQUES SOZINHO FEZ O CONTRÁRIO.** De 2.8/1.6/0.96 para 3.4/2.4/1.6, a bola ficou **mais** colada: mediana 0.89 → 0.64 m, e os frames a menos de um metro subiram de 53% para 55%.
+- **A causa é o `maiorToqueSeguro` (utils.js).** O `tMeu` era `sqrt(2 * lead / a)` — o tempo que a **bola** leva a PARAR. Quanto maior o toque, mais tempo ela rola, maior o `tMeu`, e mais fácil a disputa ser dada como perdida; e quando nenhum candidato passa, a função devolve **zero** e não há toque nenhum. Aumentar os toques aumentava as recusas.
+- **O portador não espera que a bola pare**: vai a correr atrás dela e alcança-a a meio do rolamento. `tMeu` passa a ser `lead / max(2.0, velPortador)`. A nota antiga tinha razão num ponto — `lead/velocidade` sozinho faz a validação passar quase sempre — e é por isso que a `margemDisputa` e o `disputaProjMin` (quem vem atrás do ombro sai da conta) ficam como estavam.
+- Resultado: bola a **2.77 m** do portador (era 0.89), frames a menos de um metro **40%** (era 53%), e o escalão mais curto desceu de 41% para 31% da condução.
+- **No lote de 20 jogos melhorou quase tudo, e a posse não caiu:** finalizações 35.30 → 33.27, % no alvo 22.1 → 25.1, xG total 4.44 → 3.92, xG por remate 0.123 → **0.117 (107% do alvo, no verde pela primeira vez)**, ataques totais 129 → 139, passes certos 71.6 → 71.3. Cantos desceram de 8.75 para 7.46, que é a direcção errada e fica apontado.
+
+#### `ShotModel.fraccaoCanto` (js/config/shooting.js) — menos 15% de ambição, e porquê não é no guarda-redes que se mexe
+
+O painel de 40 jogos dava golos a 145%, **% no alvo 23.2** (real ~33) e **conversão do enquadrado 44%** (real ~30). Rematam mal e marcam muito quando acertam — a assinatura de uma pontaria que procura cantos extremos.
+
+- **E não há defesa possível.** Medido nos golos sofridos: o guarda-redes reage no **primeiro frame em 5 de 5**, e o que lhe pedem é cobrir **2.93 m de mediana em 0.34 s** de voo — 8.6 m/s de deslocamento lateral a partir de parado. A bola cruza a 2.93 m do centro, numa baliza com 3.66 de meia-largura. A mão fica a 1.42 m dela.
+- Baixar a ambição corrige as **duas pontas** ao mesmo tempo: mais remates ficam dentro da moldura e os que ficam são defensáveis. `forca` 0.27–0.81 → 0.23–0.69, `colocado` 0.59–0.90 → 0.50–0.77, `rasteiro` 0.50–0.90 → 0.43–0.77. O `chapeu` não desce: passa por CIMA do guarda-redes, não pelo lado.
+- Resultado: golos 151% → **125%**, xG por remate 118% → 113%, xG total 162% → 156%. **Metade da previsão falhou**: a % no alvo não subiu (24.1 → 22.1, dentro do ruído de lotes de 20 jogos).
+- **TENSÃO A CONHECER:** a % no alvo levanta-se com o `ShotModel.erro.escalaGlobal`, mas esse foi subido 30% de propósito para reduzir golos. Os dois números puxam em sentidos opostos por esse botão; o único instrumento que os move ambos na direcção certa é a ambição de colocação, já cortada duas vezes.
+
+#### A Lei 12 volta (js/officials.js) — o segundo amarelo é expulsão, sempre
+
+O `tests/faltas_cartoes.test.js` apanhou-me: *"X segundo amarelo por travar ataque devia dar vermelho"*. Eu tinha posto um `limiarSegundoAmarelo` que exigia gravidade ao advertido para o expulsar — uma excepção à lei, escrita para acertar numa estatística (os vermelhos estavam a 325% do alvo).
+
+- **O amarelo por travar um ataque não vem da gravidade**, vem de ter travado o ataque. Um advertido que o faz tem de sair, por leve que seja o lance.
+- **O número arranja-se noutro sítio**, e os dados diziam qual: amarelos a 62% do alvo e vermelhos a 325% só pode significar que o advertido **reincide** de mais. O `podeFazerCarrinho` já lhe tirava o carrinho; falta tirar-lhe o desarme de pé e o choque, que são os que produzem a falta táctica — e a falta táctica é o que expulsa.
+- **`cautelaDoAdvertido: 0.70`**, factor sobre a probabilidade de o advertido cometer a falta, aplicado no `_tentarFalta` e no `detectarContactos` via `_cautelaDe`. Varrido no lote: 0.45 deu **0 vermelhos em 20 jogos**; 0.70 deu 0.10/jogo (125% do alvo) com amarelos a 87%.
+- **O aviso do Poisson vale mais do que a décima:** 0.08 por jogo são 1.6 expulsões em 20 jogos, portanto zero e três são ambos compatíveis com o alvo por acaso. Estes números distinguem "nenhum" de "cinco", e foi só isso que se usou.
+
+#### O passe mede-se contra o CORPO (js/player.js) — não só contra a linha de deslocamento
+
+Relato: *"ainda tem jogador dando passe a 90 graus da direção de alinhamento dele sem se virar pelo menos uns 30 graus."*
+
+A referência era a linha de **velocidade** (foi o que o pedido antigo pedia: "os passes até 70 graus para cada lado da linha de deslocamento"). Mas um jogador pode correr numa direcção e estar orientado noutra, e aí o passe cabe nos 70 graus da velocidade e sai a 90 do corpo.
+
+- Medido, 493 passes no instante em que a bola sai do pé: ângulo corpo-alvo com mediana 49 graus, **13% acima de 70** e máximo de 175. Desses 13%: **58% nunca pediam giro** (a velocidade estava dentro da janela) e **42% pediam giro e saíam tortos na mesma**, porque o `direccaoDoCorpoNoPasse` roda a partir da velocidade e só garante o alvo a ≤70 graus **dessa** direcção.
+- **Não era o `slerp` a ficar a meio**, que foi a primeira suspeita: a 25·dt ele cobre 99.8% do giro nos 0.2 s até ao contacto do `PassClip`.
+- Agora medem-se os dois: a linha de deslocamento continua a decidir **se** ele precisa de rodar, mas se o corpo estiver fora da janela é **do corpo** que se parte. Resultado: 13% → **8%**, máximo 175 → 144 graus.
+- **O que sobra está identificado e é outra coisa:** dos 33 passes tortos que restam, 16 são `SET_PIECE_KICK` (nunca passaram por esta lógica — outro gesto, outra geometria) e 17 são casos em que o corpo chegou exactamente onde lhe foi mandado (faltavam 0 graus) e o **alvo moveu-se** entre a decisão e o contacto.
+
+#### O árbitro vira-se para a bola antes de apontar (js/officials.js)
+
+Relato: *"depois da falta o juiz tem que primeiro virar para a jogada (para a bola) para depois escolher o braço. O juiz está apontando para o lado correto, mas várias vezes está de costa para a bola."*
+
+O gesto da falta põe o corpo **de perfil** para o alvo (é o que deixa o braço a 90 graus a apontar a baliza), e das duas orientações possíveis escolhia-se "a mais perto da actual". Isso não decide nada: no primeiro frame do gesto o `mover` acabou de o pôr virado para a bola, portanto as duas hipóteses estão exactamente a ±90 graus dela. Empate, desfeito pelo arredondamento — e uma vez escolhido, o lado fica travado no `corpoY`.
+
+- Medido, 91 sinais em 3 jogos, 13 226 frames de falta: ângulo corpo-bola com mediana 61, p90 137, **30% dos frames acima de 90 graus** (bola nas costas) e 12% acima de 135.
+- Agora a hipótese escolhe-se pela **bola** — fica a que tem o maior produto interno com a direcção dela — e **reavalia-se todos os frames**, porque a bola mexe-se durante os 2.5 s do gesto e uma escolha congelada volta a deixá-lo de costas a meio.
+- Resultado: mediana 61 → **43**, bola nas costas 30% → **1%**, acima de 135 graus 12% → **0%**. O braço e o lado apontado não mudaram.
+
+#### A falta recuada monta a forma relativa à bola (js/match/match_setpieces.js)
+
+Relato, com o minimapa: *"na marcação de falta ou impedimento dentro da área os jogadores ainda estão se posicionando uns de um lado do campo e outros do outro lado."*
+
+- Medido, 351 amostras de bola parada com os 20 jogadores de campo (maior vão em z entre jogadores consecutivos): `FREE_KICK` com mediana 9 m e **máximo 62 m, 14 casos acima de 30 m**; `CORNER_KICK`, `GOAL_KICK`, `PENALTY` e `THROW_IN` com **zero** casos. É só na falta.
+- O caso típico: bola em z=48, 8 jogadores junto a ela e 12 a 62 m dali — e entre os 12 estão **os três médios de quem cobra**. Os avançados ficarem à frente é futebol a sério; os médios colados a eles não, porque numa falta recuada são eles que se oferecem para a saída a jogar.
+- O arranjo **já existia**: a `formaDoLivreDeImpedimento` monta as duas equipas em três profundidades medidas da bola, e o comentário dela traz a mesma medição feita a propósito dos impedimentos (*"em três de doze impedimentos reais as duas equipas ficavam a 52-56 m da bola"*). Faltava correr também nas faltas comuns.
+- Passa a correr quando a bola está na **metade defensiva de quem cobra**. Numa falta de ataque não corre: a bola já está onde a equipa está, e re-montar a forma ali desfazia o `lugaresDaFalta`, que é quem mete gente na área a atacar o cruzamento.
+- Resultado: vão máximo nas faltas **62 m → 15 m**, zero casos acima de 30 m.
+
+#### O guarda-redes sai ao cruzamento e o salto decide-se pela leitura (js/player.js, js/config/goalkeeper.js)
+
+Relato: *"não consegui ver nenhum lance do goleiro pegando a bola após um escanteio."*
+
+Medido, 39 cantos: ele tocava na bola em 23% deles, mas o `salto_alto` eram **29 frames em 39 cantos** — meio segundo no total. Agarrava de pé, à altura do peito, e nunca saía da linha.
+
+- **A zona era a causa**: a saída só disparava com a bola a cair na **pequena área**. Um canto cai entre a marca de penálti e a entrada da área. Agora há duas zonas: dentro da pequena área a bola é dele e sai sempre; entre essa e `saidaProfundidade`/`saidaMeiaLargura` (11 m) só sai se chegar **2 m antes** do atacante mais perto do ponto de queda (`margemVantagem`).
+- **Alargar a zona sozinho PIOROU o gesto** — `salto_alto` 29 → 12 frames. O gatilho exigia, no mesmo frame, estar a menos de 1.2 m do ponto de queda **e** a bola a menos de 2.1 m **e** entre 1.2 e 3.2 m de altura. Medido: a altura da bola no frame em que ele está mais perto tem **mediana de 0.19 m** e 73% dos cantos abaixo de 1.20 — ele chega e a bola já rola.
+- **E não é falta de pernas:** precisa de 3.13 m/s para chegar antes de a bola pousar e faz 4.38. Chega, fica de pé, e a bola desce ao lado dele.
+- Agora pergunta-se à leitura (`interceptarBola` com os gestos `gk_salto`/`gk_maos`) **em que instante é que ele a encontra**, e salta quando esse instante está dentro do tempo de subida do salto. Resultado: **0.7 → 28.6 frames de `salto_alto` por canto**. A fracção de bolas que ele ganha não mudou (23% → 24%), e isso fica dito.
+- A zona foi varrida depois: 11×11 dá 28.6 frames por canto, 8×8 dá 15.5. Os 11 m fazem trabalho e ficam.
+
+#### O V dos braços do guarda-redes (js/config/goalkeeper.js) e um defeito que NÃO ficou resolvido
+
+Relato: *"quando se levanta, os braços tem que estar um pouco mais abertos. O antebraço mais para cima (braço e antebraço numa posição em V). E a bola no meio do V encostada no peito."*
+
+- **A geometria do encaixe já estava certa e não se mexeu.** Medido no rig, convertido do espaço do modelo (escalado ~3.33×) para metros: mãos a 1.37 m de altura e 0.35 m à frente, **0.22 m uma da outra** (o diâmetro exacto da bola), bola a 1.36 m e a 0.12 m da mão (o raio é 0.11).
+- O que não lia como V era a forma do braço: `bracoX` −0.76 → **−0.45** (o braço desce), `cotovelo` −1.82 → **−2.15** (o antebraço sobe), `bracoZ` 0.05 → **0.18** (os braços abrem). O `bracoZ` é só um ponto de partida: o `fecharPunhos` fecha-o por bissecção até os punhos ficarem a um diâmetro. Verificado depois: mãos a 0.24 m, bola a 0.12 m da mão.
+- **A BOLA ATRÁS DO CORPO NÃO FICOU RESOLVIDA, e está documentado no `colarBolaAsMaos` (player.js).** Relato: *"não pode encaixar atrás da perna."* Medido, 126 encaixes frame a frame: o encaixe está certo em **96%** dos frames e nos outros 4% os punhos ficam atrás do tronco e a bola vai com eles. **Duas correcções, as duas pioraram:** (1) travar no `gk_dive.js` junto à guarda do relvado subiu para 8% — caminho errado, aqueles frames são do estado `segurando`, e de caminho escrevia por cima de temporários partilhados; (2) travar no `colarBolaAsMaos` subiu para 11% **e** afastou a bola das mãos (0.12 → 0.21 m), porque a conta da "frente" usava `model.rotation.y` e o modelo é orientado por **quaternião**. Quem tentar outra vez: a frente tira-se de `getWorldQuaternion` aplicado a (0,0,1), e o sítio certo é provavelmente a POSE — os punhos não deviam ficar atrás do tronco de todo.
+
+#### O drible de deixar passar (js/utils.js, js/config/player_behavior.js) — a condição que faltava
+
+O gesto foi escrito numa sessão anterior e nunca funcionou como descrito: *"o jogador que está pra receber a bola abre as pernas e deixa a bola passar enquanto já gira para correr atrás dela."* Medido em três calibrações seguidas e 73 gestos no total, o autor do drible voltou a tocar na bola em **zero** deles; quem apanhava era um colega (60%) ou o adversário (33%).
+
+- Culpei a carência, depois o `runTimer`, depois a distância da projecção. **Nenhuma das três era a causa** — e as três estão registadas no config.
+- A causa é física, e agora há com que a medir: a quinta condição passa a ser `interceptarBola(p)` com `folga >= 0`. Se a leitura não encontrar instante nenhum em que ele reencontre a bola, o gesto é impossível para ele e deixá-la passar é dar a bola a quem estiver à frente, não driblar.
+- Resultado: as tentativas caíram de 4.8 para **1.3 por jogo** (a leitura cortou 73% delas, que eram impossíveis), a equipa fica com a bola em **75%** (era 60%) e o adversário em 25% (era 33%). O "ELE 0" mantém-se, mas agora em 4 casos — amostra que não sustenta conclusão.
+
+#### Armadilhas de medição desta sessão, para não se repetirem
+
+- **`MatchStats` não se repõe entre `Match.init`.** Quem o ler ao longo de vários jogos tem de ler **deltas**, não totais. E o campo é `faltas.cometidas`, não `faltas`.
+- **O banco de ensaio ad-hoc não é o lote.** Mediu 213 faltas por 90 contra as 31 do `lote_jogos.js`, e 102 remates contra 35.82. Para golos, remates, faltas e cartões **o único instrumento válido é o lote** (ou o painel).
+- **Medir no instante errado continua a ser a armadilha mais cara.** Nesta sessão: a bola contada como "pousada" no frame da cobrança do canto (está no chão, a subir); a leitura do guarda-redes refrescada até ao golo (no fim a bola está em cima dele, e qualquer bola é alcançável — a `folga` de 0.00 denunciou-o); e a ameaça definida como `vz > 3`, que dispara a 40 m em qualquer passe para a frente.
+- **`bolaAmeacaABaliza` não existe.** Foi redigida numa sessão anterior e deliberadamente não aplicada; uma sonda que a chamava mediu zero em silêncio durante uma corrida inteira.
+- **O guarda-redes da outra ponta falseia qualquer medida de dispersão.** O maior vão em z entre jogadores num canto é sempre ele, sozinho na linha: 53 m que não são defeito nenhum. Excluir os guarda-redes mudou a mediana de 53 m para 9 m.
+
 
 ### Sessão de 22-23 de Setembro de 2026 — o tiro de meta traçado das fotografias, a regra dos dois toques, e três defeitos que estavam onde a guarda não estava
 
