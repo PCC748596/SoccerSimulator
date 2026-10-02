@@ -392,7 +392,8 @@ class FootballPlayer {
 
     A aproximacao passou a ser parte do proprio clip (PlayerKickClip,
     keyframes 0 e 1), portanto nao ha nada de onde misturar o esqueleto. O que
-    resta aqui e so o corpo: a posicao planar, que desliza ate plantX/plantZ, e
+    resta aqui e so o corpo: a posicao planar, que desliza ate o PE DE APOIO
+    ficar em plantX/plantZ (ver "QUEM VAI AO PONTO DE APOIO E O PE"), e
     o quaterniao, porque a corrida olha para a BOLA e o gesto olha campo
     adentro.
     */
@@ -8133,11 +8134,64 @@ class FootballPlayer {
                 gkCorpo.quaternion.copy(BQ.quatOrigem).slerp(BQ.quatAlvo, BQ.w);
             }
 
+            /*
+            =================================================================
+            QUEM VAI AO PONTO DE APOIO E O PE, NAO O CORPO
+            =================================================================
+            Relato, com captura: *"o pe de apoio no tiro de meta tem que ficar
+            ao lado da bola: imagem GoalKick2. Esta ficando a frente da bola."*
+
+            O `plantX`/`plantZ` (0.10 m atras da bola, 0.32 m ao lado) era
+            aplicado a ORIGEM do corpo. So que no balanco a coxa de apoio esta
+            55 graus a frente, e o pe fica longe da anca. Medido no rig, com o
+            corpo virado para a frente:
+
+                keyframe 5 (o pe planta)    pe de apoio 0.71 m a frente do corpo
+                keyframe 9 (contacto)                   0.23 m
+                keyframe 13                             0.30 m
+
+            Com o corpo no ponto de apoio, o pe plantava ~0.6 m A FRENTE da
+            bola — a captura. E havia um segundo defeito por baixo deste: com
+            o corpo parado do 5 ao 9, o pe recuava 0.48 m em relacao a ele, ou
+            seja ESCORREGAVA PARA TRAS na relva durante o chuto.
+
+            Os dois resolvem-se da mesma maneira. Em cada frame, com a pose E a
+            rotacao deste frame ja escritas, le-se onde esta o pe de apoio face
+            ao corpo, e poe-se o corpo de maneira que o PE caia no ponto de
+            apoio. Ao ritmo do `avanco`: antes de plantar, o corpo aproxima-se
+            desse alvo; com o `avanco` a 1 o pe fica cravado e e o corpo que
+            passa por cima dele. E uma formula so, por isso nao ha salto na
+            passagem.
+
+            O ponto de apoio passa assim a querer dizer o que o comentario do
+            tiro de meta sempre disse que era: onde fica o PE. A bola fica 0.10
+            m a frente dele e 0.32 m ao lado, e e ai que o pe de chute a vai
+            encontrar no contacto.
+            =================================================================
+            */
+            if (isGroundKick && this.gkKickBlend && gkRig) {
+                const BP = this.gkKickBlend;
+                const clipPe = (this.gkKickClipNome === 'goalKick') ? GoalKickClip : PlayerKickClip;
+                const peApoio = (clipPe.pernaChute === 'r')
+                    ? (gkRig.lBota || gkRig.lFoot) : (gkRig.rBota || gkRig.rFoot);
+                if (peApoio) {
+                    gkCorpo.updateMatrixWorld(true);
+                    peApoio.getWorldPosition(_v1);
+                    const offX = _v1.x - gkCorpo.position.x;
+                    const offZ = _v1.z - gkCorpo.position.z;
+                    const alvoX = BP.plantX - offX;
+                    const alvoZ = BP.plantZ - offZ;
+                    gkCorpo.position.x = BP.origemX + (alvoX - BP.origemX) * BP.w;
+                    gkCorpo.position.z = BP.origemZ + (alvoZ - BP.origemZ) * BP.w;
+                }
+            }
+
             if (!this.gkKickAction || this.gkKickAction.isDone()) {
                 this.gkKickAction = null;
                 // O alvo morre com o gesto: ver a nota da rotação acima.
                 this.gkAlvoLancamento = null;
                 this.gkKickBlend = null;
+                this.gkKickTipo = null;
                 this.gkEstado = 'idle';
                 this.resetBonesToDefault();
             }
@@ -8620,7 +8674,15 @@ class FootballPlayer {
         Match.mudarEstado('PLAY', eraFalta ? 'free_kick_taken' : 'goal_kick_taken');
         Match.marcarRepositor(this, eraFalta ? 'falta' : 'tiro_de_meta');
         if (eraFalta) Match.faltaDirecta = false;
-        this.gkKickTipo = null;
+        /*
+        O `gkKickTipo` NAO SE APAGA AQUI. Apagava-se, e era inofensivo enquanto o
+        contacto era o ultimo frame do gesto. Desde que o GoalKickClip tem o
+        contacto no keyframe 9 de 13, o gesto continua DEPOIS da bola sair — e
+        com o tipo a null o ramo do desenho achava que ja nao era um chuto do
+        chao e desenhava o resto com o clip do PONTAPE DA MAO: medido, o pe de
+        apoio saltava 27 cm num frame e o corpo congelava. Apaga-se no fim do
+        gesto, com o resto (ver o `isDone` no ramo 'chutando').
+        */
 
         if (typeof MatchStats !== 'undefined') MatchStats.registarPasseIniciado(this.team, 'lancamento');
     }

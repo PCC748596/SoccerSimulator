@@ -1,7 +1,7 @@
 {
- "nome": "GoalKick3 — armacao, vista de costas (frame 2)",
+ "nome": "GoalKick4 - seguimento, perna de chute A FRENTE (principal 13)",
  "imagem": "referencias/goalkick_25.png",
- "frente": "direita",
+ "frente": "esquerda",
  "juntas": {
   "cabeca": [
    116,
@@ -63,5 +63,6 @@
    92,
    136
   ]
- }
+ },
+ "leitura": "Corrigida a 2 de Outubro de 2026: ordem 24 -> 26 -> 23 -> 25, confirmada pelo autor. A frente estava 'direita', e com ela a perna esticada lia-se atras; e a frente."
 }

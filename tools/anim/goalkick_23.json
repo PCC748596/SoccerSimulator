@@ -1,5 +1,5 @@
 {
- "nome": "GoalKick2 — planta o pe de apoio (frame 1)",
+ "nome": "GoalKick3 - contacto, vista de tras a tres quartos (principal 9)",
  "imagem": "referencias/goalkick_23.png",
  "bola": [
   46,
@@ -44,28 +44,30 @@
    52
   ],
   "joelhoChute": [
-   92,
-   86
-  ],
-  "tornozeloChute": [
-   84,
-   108
-  ],
-  "bicoChute": [
-   80,
-   112
-  ],
-  "joelhoApoio": [
    76,
    82
   ],
-  "tornozeloApoio": [
+  "tornozeloChute": [
    69,
    104
   ],
-  "bicoApoio": [
+  "bicoChute": [
    65,
    109
+  ],
+  "joelhoApoio": [
+   92,
+   86
+  ],
+  "tornozeloApoio": [
+   84,
+   108
+  ],
+  "bicoApoio": [
+   80,
+   112
   ]
- }
+ },
+ "frente": "esquerda",
+ "leitura": "Corrigida a 2 de Outubro de 2026: ordem 24 -> 26 -> 23 -> 25, confirmada pelo autor. Os nomes Chute/Apoio estavam trocados no tracado de Setembro. "
 }

@@ -1,5 +1,5 @@
 {
- "nome": "GoalKick1 — corrida de aproximacao (frame 0)",
+ "nome": "GoalKick1 - aproximacao, a correr para a bola (principal 1)",
  "imagem": "referencias/goalkick_24.png",
  "frente": "esquerda",
  "bola": [
@@ -45,28 +45,29 @@
    85
   ],
   "joelhoChute": [
-   145,
-   82
-  ],
-  "tornozeloChute": [
-   157,
-   107
-  ],
-  "bicoChute": [
-   164,
-   114
-  ],
-  "joelhoApoio": [
    122,
    85
   ],
-  "tornozeloApoio": [
+  "tornozeloChute": [
    134,
    107
   ],
-  "bicoApoio": [
+  "bicoChute": [
    133,
    117
+  ],
+  "joelhoApoio": [
+   145,
+   82
+  ],
+  "tornozeloApoio": [
+   157,
+   107
+  ],
+  "bicoApoio": [
+   164,
+   114
   ]
- }
+ },
+ "leitura": "Corrigida a 2 de Outubro de 2026: ordem 24 -> 26 -> 23 -> 25, confirmada pelo autor. Os nomes Chute/Apoio estavam trocados no tracado de Setembro. "
 }

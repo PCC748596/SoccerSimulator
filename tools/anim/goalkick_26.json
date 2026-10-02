@@ -1,5 +1,5 @@
 {
- "nome": "GoalKick4 — contacto, vista de lado (frame 3)",
+ "nome": "GoalKick2 - balanco atras, pe de apoio ao lado da bola (principal 5)",
  "imagem": "referencias/goalkick_26.png",
  "bola": [
   33,
@@ -44,28 +44,30 @@
    40
   ],
   "joelhoChute": [
-   82,
-   82
-  ],
-  "tornozeloChute": [
-   66,
-   106
-  ],
-  "bicoChute": [
-   56,
-   112
-  ],
-  "joelhoApoio": [
    130,
    67
   ],
-  "tornozeloApoio": [
+  "tornozeloChute": [
    150,
    63
   ],
-  "bicoApoio": [
+  "bicoChute": [
    158,
    62
+  ],
+  "joelhoApoio": [
+   82,
+   82
+  ],
+  "tornozeloApoio": [
+   66,
+   106
+  ],
+  "bicoApoio": [
+   56,
+   112
   ]
- }
+ },
+ "frente": "esquerda",
+ "leitura": "Corrigida a 2 de Outubro de 2026: ordem 24 -> 26 -> 23 -> 25, confirmada pelo autor. Os nomes Chute/Apoio estavam trocados no tracado de Setembro. "
 }
