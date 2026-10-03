@@ -60,14 +60,14 @@ Um mergulho, do agachar ao levantar. Devolve as fases, cada uma com:
   h        altura media de cada osso que interessa
   joelho   flexao maxima do joelho (para a pose de gatas)
 */
-function mergulhar(tipo, dirX, alvoY) {
+function mergulhar(tipo, dirX, alvoY, lateral) {
     const gk = Match.players[0];
     gk.gkEstado = 'mergulho';
     gk.dive = null;
     gk.model.position.set(0, ALTURA_BASE_Y, gk.ownGoalZ + gk.dirZ * 0.5);
     gk.model.quaternion.identity();
     gk.resetBonesToDefault();
-    gk.gkAlvoX = dirX * 2.5;
+    gk.gkAlvoX = dirX * (lateral || 2.5);
     gk.gkAlvoY = alvoY;
     GkDive.iniciar(gk, gk.gkAlvoX, alvoY, tipo, dirX);
 
@@ -127,8 +127,16 @@ DOIS MERGULHOS e nao um: o rasteiro e o alto nao passam pelos mesmos ramos (o
 alto fica segundos no chao, `tempoChaoAlto`) e o lado do mergulho troca qual e
 o braco lider. Um defeito de sinal so aparece num dos dois.
 */
-const baixo = mergulhar('baixo', 1, 0.5);
+/*
+O RASTEIRO E A 4.5 m, e nao a 2.5 como era. Pedido posterior: *"o goleiro nao
+esta escorregando deitado de lado para pegar as bolas do lado proximas"* — uma
+bola baixa a menos de `GoalkeeperDive.deslizeLado.lateralMax` (4 m) ja nao e
+um mergulho de peito, e um deslize DE LADO (ver o ponto 7, mais abaixo). O
+mergulho que tem de aterrar de peito e o de 4 a 6 m, o do pulo.
+*/
+const baixo = mergulhar('baixo', 1, 0.5, 4.5);
 const alto = mergulhar('alto', -1, 1.9);
+const deslize = mergulhar('baixo', 1, 0.3, 2.5);
 const casos = [['mergulho rasteiro, para a direita', baixo], ['mergulho alto, para a esquerda', alto]];
 
 /* ------------------------------------------------------------------ */
@@ -261,5 +269,24 @@ console.log('6 — as guardas do codigo');
 }
 
 console.log('');
+/* ------------------------------------------------------------------ */
+console.log('');
+console.log('7 — a bola baixa e PERTO: escorrega DEITADO DE LADO');
+{
+    /*
+    Ver GoalkeeperDive.deslizeLado. Bola rasteira a 2.5 m: no chao ele fica de
+    lado (barriga perto de 0) e nao de peito, e nao se enterra.
+    */
+    const c = deslize.chao;
+    if (!c) erro('deslize: nao chegou ao chao');
+    else {
+        console.log(`  deslize a 2.5 m: barriga ${picada(c).toFixed(0)} graus no chao, ${c.sob} frames com osso sob a relva`);
+        if (picada(c) > 30) erro(`deslize: virou de peito (${picada(c).toFixed(0)} graus, tinha de ficar de lado)`);
+        else ok(`deslize: fica de lado (${picada(c).toFixed(0)} graus)`);
+        if (c.sob > 0) erro(`deslize: ${c.sob} frames com algum osso sob a relva`);
+        else ok('deslize: nao se enterra');
+    }
+}
+
 console.log(falhas ? 'FALHOU: ' + falhas : 'OK: cai de peito, nao se enterra, levanta-se de gatas.');
 process.exit(falhas ? 1 : 0);

@@ -1829,6 +1829,32 @@ const ThrowInModel = {
     apoioMax: 10.0,
 
     /*
+    CADA APOIO NA SUA DIRECÇÃO — ver aproximarNoLateral (player_bt.js).
+
+    Pedido: *"na hora do lateral os jogadores têm que ficar melhor ajustados no
+    campo para receber o lateral. Estão muito juntos em posições quase
+    iguais."* Medido em 51 laterais: em 16 os dois apoios estavam a menos de
+    4 m um do outro (mediana 5.7 m), e em 28 havia dois companheiros a menos
+    de 4 m.
+
+    Os dois apoios eram puxados em linha recta para o anel `apoioMin`..
+    `apoioMax`, cada um pelo rumo em que já estava — dois que chegassem pela
+    mesma banda acabavam no mesmo ponto. Agora as direcções são fixas, em
+    graus a partir da linha lateral e sempre para DENTRO do campo:
+
+      . o mais adiantado dos dois (pelo slot) vai À FRENTE, `apoioAnguloFrente`
+        graus da linha — a opção pela linha;
+      . o outro vai ATRÁS, `apoioAnguloTras` — a opção de segurança.
+
+    Com 40 e 50 graus os dois rumos fazem 90 graus entre si: a 5 m do batedor
+    ficam a 7 m um do outro, a 10 m a 14 m.
+    */
+    apoioAnguloFrente: 40,
+    apoioAnguloTras: 50,
+    // Fora do apoio, nenhum companheiro fica a menos disto de outro durante o lateral.
+    espacoEntreColegas: 6.0,
+
+    /*
     ERRO DE EXECUÇÃO, por TEC de quem repõe. Não havia nenhum: a direcção saía
     exacta para o alvo e a única variação era o sorteio uniforme da elevação,
     que muda a trajectória mas não a pontaria. Um jogador de TEC 20 repunha tão

@@ -1038,13 +1038,23 @@ class PlayerFSM {
         rig.chest.rotation.x = P.peito * k;
         rig.chest.rotation.z = -s * P.peitoRolar * k;
 
+        /*
+        Os eixos y (torção da coxa) e z (abrir para o lado) também se
+        escrevem, e com o sinal de `s`: os valores do SlideTackleModel são os
+        do carrinho com a perna DIREITA, e o espelho troca o sinal destes dois.
+        Antes ficavam com o que a animação anterior lá tivesse deixado (y) ou a
+        zero (z) — e sem eles não há maneira de pôr a perna de trás DEITADA na
+        relva: ver a nota do SlideTackleModel.pose.
+        */
         coxaEst.rotation.x = P.coxaEstendida * k;
-        coxaEst.rotation.z = 0;
+        coxaEst.rotation.y = s * (P.coxaEstendidaY || 0) * k;
+        coxaEst.rotation.z = s * (P.coxaEstendidaZ || 0) * k;
         joelhoEst.rotation.x = P.joelhoEstendido * k;
         if (peEst) peEst.rotation.x = P.peEstendido * k;
 
         coxaDob.rotation.x = P.coxaDobrada * k;
-        coxaDob.rotation.z = 0;
+        coxaDob.rotation.y = s * (P.coxaDobradaY || 0) * k;
+        coxaDob.rotation.z = s * (P.coxaDobradaZ || 0) * k;
         joelhoDob.rotation.x = P.joelhoDobrado * k;
         // O pe de tras deitado no relvado, alinhado com a canela, e nao pendurado dela.
         if (peDob && typeof P.peDobrado === 'number') peDob.rotation.x = P.peDobrado * k;

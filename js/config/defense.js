@@ -283,17 +283,39 @@ const SlideTackleModel = {
         peito: 0.0,
         peitoRolar: 0.10,
 
-        coxaEstendida: -0.02,
-        joelhoEstendido: 0.05,
+        /*
+        SENTADO NA RELVA, as duas pernas assentes — segundo pedido, com a
+        imagem 9BC0 (tools/anim/referencias/carrinho_9BC0.png) e uma captura
+        do jogo a mostrar o defeito: *"perna direita à frente levemente dobrada
+        para o lado, perna esquerda dobrada para trás. Mas as duas pernas estão
+        apoiadas na grama. O jogador tem que estar praticamente sentado."*
+
+        A versão anterior punha o joelho de trás no chão com a coxa A PRUMO:
+        ele ficava ajoelhado, com a anca meio metro acima da relva. Agora a
+        coxa de trás ABRE PARA O LADO até ficar deitada (`coxaDobradaZ`) e a
+        canela dobra para trás rente ao chão; a da frente vai à frente, quase
+        deitada, com o joelho a cair para fora (`coxaEstendidaY`, a torção). O
+        braço de apoio dobra o cotovelo: esticado, escorava o corpo e era ele o
+        ponto mais baixo, não a anca.
+
+        Os `...Y` e `...Z` são os do carrinho com a perna DIREITA à frente; o
+        applySlidePose troca-lhes o sinal no outro lado.
+        */
+        coxaEstendida: -0.50,
+        joelhoEstendido: 0.35,
+        coxaEstendidaY: 0.60,
+        coxaEstendidaZ: 0.0,
         peEstendido: -0.30,
 
-        coxaDobrada: 0.45,  // a de trás: o joelho no chão...
-        joelhoDobrado: 1.90,// ...e a canela deitada para trás
-        peDobrado: 1.20,    // o pé alinhado com a canela, no relvado
+        coxaDobrada: 0.75,
+        coxaDobradaY: -0.40,
+        coxaDobradaZ: 1.40,
+        joelhoDobrado: 1.90,
+        peDobrado: 0.0,
 
         bracoApoioZ: 0.30,  // braço de trás, em baixo e atrás, a apoiar
-        bracoApoioX: 1.40,
-        cotoveloApoio: -0.20,
+        bracoApoioX: 0.90,
+        cotoveloApoio: -0.90,
 
         bracoLivreZ: 0.25,  // o outro levantado, para cima e para a frente
         bracoLivreX: -1.70,

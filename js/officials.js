@@ -59,9 +59,16 @@ const RefereeModel = {
     ele dava eram a apertar ou a largar centímetros.
 
     O RUMO continua a ser a diagonal; a coroa manda só na DISTÂNCIA.
+
+    SEGUNDO PEDIDO, 10 a 15 m: *"ajusta o juiz para ficar entre 10-15 metros
+    da bola durante as jogadas normais e na cobrança das faltas (sem ficar na
+    frente da bola na direção do gol). No penálti e corners mantém onde está
+    hoje."* A coroa só vale na diagonal (jogo corrido e faltas); o penálti e o
+    canto têm posição fixa e não passam por ela. O "não à frente da bola" é o
+    fim do `pontoDoArbitro`.
     */
-    raioMin: 20.0,           // mais perto do que isto, afasta-se
-    raioMax: 25.0,           // mais longe do que isto, aproxima-se
+    raioMin: 10.0,           // mais perto do que isto, afasta-se
+    raioMax: 15.0,           // mais longe do que isto, aproxima-se
     /*
     Folga até à linha, para o alvo da coroa nunca cair fora do campo: com a bola
     encostada à linha de fundo, 20 m para o lado de lá sairia do relvado.
@@ -154,9 +161,30 @@ const RefereeModel = {
     assistentes correm na linha e não recebem `olharPara`.
     */
     anguloMaxDaBola: 110 * Math.PI / 180,
-    paragemMax: 0.06,
-    arranqueMin: 0.10,
+    /*
+    ANDAR NO SÍTIO, e a zona morta era a causa. Relato: *"o juiz está com
+    animação de andar sem sair da posição"*. O alvo dele quase nunca está
+    parado — a coroa desliza com a bola — e com 6-10 cm de folga ele estava
+    sempre a "acertar": avançava a 0.3-0.4 m/s com o ciclo de passada inteiro,
+    pernas a andar e corpo quase parado. Medido em 5 min: 4.5% das janelas de
+    1 s assim.
+
+    Agora fica PARADO até o alvo se afastar `arranqueMin`, e dá-se por chegado
+    a `paragemMax`. Um árbitro a acompanhar dá meia dúzia de passos e pára; não
+    arrasta os pés atrás de cada centímetro que a bola anda.
+    */
+    paragemMax: 0.25,
+    arranqueMin: 1.50,
     suavizacaoVel: 0.20,
+    /*
+    O ALVO DO ÁRBITRO É AMORTECIDO (constante de tempo, segundos). As duas
+    regras do fim do `pontoDoArbitro` — não passar a bola, ficar entre as
+    linhas — dependem de QUEM TEM A POSSE, e numa bola dividida a posse troca
+    várias vezes por segundo: o alvo saltava metros para um lado e para o
+    outro (561 saltos de mais de 1 m num frame em 5 min). Amortecido, ele vai
+    para onde a jogada assenta, e não para onde ela estava no último frame.
+    */
+    alvoSuavizacao: 0.35,
 
     /*
     Equipamento, preto por agora. Em texto e não em hexadecimal numérico: o
@@ -700,6 +728,8 @@ const Officials = {
     */
     colocarInicial: function () {
         if (!this.arbitro) return;
+        // Posto a mao no sitio: o alvo amortecido recomeca daqui.
+        this.arbitro.alvoSuave = null;
         if (typeof Match === 'undefined' || !Match.ball ||
             !Match.players || !Match.players.length) return;
 
@@ -1140,6 +1170,42 @@ const Officials = {
             }
             alvoX = usa1 ? p1x : p2x;
             alvoZ = usa1 ? p1z : p2z;
+        }
+
+        /*
+        =================================================================
+        ENTRE AS DUAS LINHAS DOS ASSISTENTES, E NUNCA À FRENTE DA BOLA
+        =================================================================
+        Pedido: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos
+        bandeirinhas. Não tem necessidade de passar pra frente da linha da
+        bola do ataque."*
+
+        A diagonal e a coroa não sabiam nada disto: com a bola a meio-campo e
+        a coroa a 20-25 m, o ponto escolhido podia ficar para lá da linha de
+        fora-de-jogo, no meio da área de quem defende, à frente do próprio
+        lance.
+
+          . À FRENTE DA BOLA NÃO: no sentido em que ataca quem tem a posse, o z
+            dele não passa o da bola. Ele acompanha o ataque por trás ou ao
+            lado, nunca à frente dele.
+          . ENTRE AS LINHAS: o z fica entre as duas linhas que os assistentes
+            seguem (`_faixaArbitro`, escrita no `update` com os mesmos alvos que
+            os move). Fora daí o lance é deles.
+
+        As linhas mandam sobre a bola: com o guarda-redes a sair a jogar, a
+        bola está atrás da linha da própria defesa, e o árbitro fica na linha
+        e não dentro da área.
+        =================================================================
+        */
+        if (typeof Match !== 'undefined' && Match.possessionTeam) {
+            const lista = (Match.possessionTeam === 'TeamA') ? Match.players : Match.opponents;
+            const dirAtaque = (lista && lista[0] && lista[0].dirZ) ? lista[0].dirZ : 0;
+            if (dirAtaque > 0 && alvoZ > bola.z) alvoZ = bola.z;
+            else if (dirAtaque < 0 && alvoZ < bola.z) alvoZ = bola.z;
+        }
+        const faixa = this ? this._faixaArbitro : null;
+        if (faixa && faixa.min <= faixa.max) {
+            alvoZ = THREE.MathUtils.clamp(alvoZ, faixa.min, faixa.max);
         }
 
         const limX = CAMPO_LARG / 2 - R.margemDoCampo;
@@ -1738,18 +1804,30 @@ const Officials = {
         const zA = this.linhaDeImpedimento(Match.players, 1);
         const zB = this.linhaDeImpedimento(Match.opponents, -1);
 
+        const linhaA = THREE.MathUtils.clamp(zA, -(CAMPO_COMP / 2), 0);
+        const linhaB = THREE.MathUtils.clamp(zB, 0, CAMPO_COMP / 2);
         this.mover(this.assistentes[0],
-            meiaLarg + R.margemLinha,
-            THREE.MathUtils.clamp(zA, -(CAMPO_COMP / 2), 0),
+            meiaLarg + R.margemLinha, linhaA,
             R.velocidadeAssistente, dt);
 
         this.mover(this.assistentes[1],
-            -(meiaLarg + R.margemLinha),
-            THREE.MathUtils.clamp(zB, 0, CAMPO_COMP / 2),
+            -(meiaLarg + R.margemLinha), linhaB,
             R.velocidadeAssistente, dt);
 
+        // O árbitro anda entre estas duas linhas: ver o fim do pontoDoArbitro.
+        this._faixaArbitro = { min: linhaA, max: linhaB };
+
         const alvoArb = this.pontoDoArbitro(Match.ball.position);
-        this.mover(this.arbitro, alvoArb.x, alvoArb.z, R.velocidade, dt,
+        // Amortecido: ver RefereeModel.alvoSuavizacao.
+        const S = this.arbitro;
+        if (!S.alvoSuave || !(R.alvoSuavizacao > 0)) {
+            S.alvoSuave = { x: alvoArb.x, z: alvoArb.z };
+        } else {
+            const k = 1 - Math.exp(-dt / R.alvoSuavizacao);
+            S.alvoSuave.x += (alvoArb.x - S.alvoSuave.x) * k;
+            S.alvoSuave.z += (alvoArb.z - S.alvoSuave.z) * k;
+        }
+        this.mover(this.arbitro, S.alvoSuave.x, S.alvoSuave.z, R.velocidade, dt,
             Match.ball.position);
 
         // Depois do mover: e ele que escreve a pose dos bracos, e o gesto

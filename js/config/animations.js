@@ -708,31 +708,41 @@ isso, chegava a afundar 0.23 m.
 =============================================================================
 */
 const QuedaClip = {
-    duracao: 7.05,
+    /*
+    O LEVANTAR É RÁPIDO: 1.0 s do chão até de pé (5.25 -> 6.25). Era 1.8 s, e
+    o pedido foi *"depois da falta e dos segundos caído, o jogador tem que se
+    levantar um pouco mais rápido"*. As poses são as mesmas, só os tempos.
+    */
+    duracao: 6.25,
     // Quando chega ao keyframe Foul1 (deitado). E daqui que os outros comecam a
     // ir para os lugares do lance parado — ver Match.montarBolaParadaAndada.
     deitadoEm: 1.25,
     frames: [
         // Foul4 — O TOQUE: ainda de pé, a meio da passada, braços a abrir.
-        { t: 0.00, leanZ: 0.00, pitchX: 0.15, chest: 0.05, coxaChute: -0.55, joelhoChute: 0.35, coxaChuteZ: 0.00, coxaApoio: 0.40, joelhoApoio: 0.70, bracoLx: 0.45, bracoLz: 0.35, bracoRx: -0.55, bracoRz: -0.35, cotoveloL: -0.60, cotoveloR: -0.70, cabecaX: 0.00, avanco: 0.00, rolarY: 0.00, altura: -0.03 },
+        { t: 0.00, leanZ: 0.00, pitchX: 0.15, chest: 0.05, coxaChute: -0.55, joelhoChute: 0.35, coxaChuteZ: 0.00, coxaApoio: 0.40, joelhoApoio: 0.70, bracoLx: 0.45, bracoLz: 0.35, bracoRx: -0.55, bracoRz: -0.35, cotoveloL: -0.60, cotoveloR: -0.70, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 0.00, rolarY: 0.00, altura: -0.03 },
         // A tropeçar: o tronco vai à frente, as pernas ficam para trás, os braços estendem-se.
-        { t: 0.22, leanZ: 0.00, pitchX: 0.85, chest: 0.10, coxaChute: 0.10, joelhoChute: 0.50, coxaChuteZ: 0.00, coxaApoio: 0.70, joelhoApoio: 0.90, bracoLx: -1.30, bracoLz: 0.40, bracoRx: -1.50, bracoRz: -0.40, cotoveloL: -0.50, cotoveloR: -0.40, cabecaX: -0.30, avanco: 0.55, rolarY: 0.00, altura: -0.31 },
+        { t: 0.22, leanZ: 0.00, pitchX: 0.85, chest: 0.10, coxaChute: 0.10, joelhoChute: 0.50, coxaChuteZ: 0.00, coxaApoio: 0.70, joelhoApoio: 0.90, bracoLx: -1.30, bracoLz: 0.40, bracoRx: -1.50, bracoRz: -0.40, cotoveloL: -0.50, cotoveloR: -0.40, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 0.55, rolarY: 0.00, altura: -0.32 },
         // Bate com o ombro no relvado e começa a rolar (rolarY a subir).
-        { t: 0.42, leanZ: 0.00, pitchX: 1.45, chest: 0.15, coxaChute: 0.05, joelhoChute: 0.50, coxaChuteZ: 0.00, coxaApoio: 0.25, joelhoApoio: 0.70, bracoLx: -1.20, bracoLz: 0.60, bracoRx: -1.60, bracoRz: -0.30, cotoveloL: -0.60, cotoveloR: -0.50, cabecaX: 0.20, avanco: 1.05, rolarY: 1.10, altura: -0.21 },
+        { t: 0.42, leanZ: 0.00, pitchX: 1.45, chest: 0.15, coxaChute: 0.05, joelhoChute: 0.50, coxaChuteZ: 0.00, coxaApoio: 0.25, joelhoApoio: 0.70, bracoLx: -1.20, bracoLz: 0.60, bracoRx: -1.60, bracoRz: -0.30, cotoveloL: -0.60, cotoveloR: -0.50, cabecaX: 0.20, peLy: 0.00, peRy: 0.00, avanco: 1.05, rolarY: 1.10, altura: -0.21 },
         // Foul3 — DE COSTAS, PERNAS NO AR: meia volta (rolarY = pi).
-        { t: 0.68, leanZ: 0.00, pitchX: 1.40, chest: 0.35, coxaChute: -1.35, joelhoChute: 1.00, coxaChuteZ: 0.00, coxaApoio: -0.95, joelhoApoio: 0.75, bracoLx: -0.30, bracoLz: 0.95, bracoRx: -0.40, bracoRz: -0.95, cotoveloL: -0.40, cotoveloR: -0.40, cabecaX: 0.35, avanco: 1.55, rolarY: 3.14, altura: -0.77 },
+        { t: 0.68, leanZ: 0.00, pitchX: 1.40, chest: 0.35, coxaChute: -1.35, joelhoChute: 1.00, coxaChuteZ: 0.00, coxaApoio: -0.95, joelhoApoio: 0.75, bracoLx: -0.30, bracoLz: 0.95, bracoRx: -0.40, bracoRz: -0.95, cotoveloL: -0.40, cotoveloR: -0.40, cabecaX: 0.35, peLy: 0.00, peRy: 0.00, avanco: 1.55, rolarY: 3.14, altura: -0.77 },
         // Foul2 — DE BRUÇOS outra vez, quase a volta inteira: uma mão no relvado, as pernas a descer atrás.
-        { t: 0.95, leanZ: 0.00, pitchX: 1.72, chest: -0.10, coxaChute: 0.30, joelhoChute: 0.55, coxaChuteZ: 0.00, coxaApoio: 0.15, joelhoApoio: 0.30, bracoLx: -1.55, bracoLz: 0.25, bracoRx: -0.70, bracoRz: -0.30, cotoveloL: -1.10, cotoveloR: -1.20, cabecaX: -0.50, avanco: 2.00, rolarY: 5.81, altura: -0.14 },
+        { t: 0.95, leanZ: 0.00, pitchX: 1.72, chest: -0.10, coxaChute: 0.30, joelhoChute: 0.55, coxaChuteZ: 0.00, coxaApoio: 0.15, joelhoApoio: 0.30, bracoLx: -1.55, bracoLz: 0.25, bracoRx: -0.70, bracoRz: -0.30, cotoveloL: -1.10, cotoveloR: -1.20, cabecaX: -0.50, peLy: 0.00, peRy: 0.00, avanco: 2.00, rolarY: 5.81, altura: -0.14 },
         // Foul1 — DEITADO: a volta completa (rolarY = 2 pi), um braço esticado à frente.
-        { t: 1.25, leanZ: 0.00, pitchX: 1.57, chest: -0.08, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -1.00, bracoLz: 0.45, bracoRx: -2.70, bracoRz: -0.25, cotoveloL: -1.50, cotoveloR: -0.15, cabecaX: -0.45, avanco: 2.25, rolarY: 6.28, altura: -0.37 },
+        // Os DOIS braços ficam no plano do relvado: o esquerdo aberto para o lado
+        // (bracoLz), o direito por cima da cabeça (-3.05). Eram -1.00 com o cotovelo
+        // a -1.5 e -2.70: de bruços, rodar o braço para a frente é rodá-lo PARA O
+        // CHÃO, e os dois braços escoravam o corpo — a anca ficava a 0.49 m do
+        // relvado (relato: "depois do rolamento o jogador está parando no ar").
+        { t: 1.25, leanZ: 0.00, pitchX: 1.57, chest: -0.08, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.45, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
         // ...e assim fica 4 s (o pedido). Só a cabeça e o peito mexem um pouco.
-        { t: 5.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -1.00, bracoLz: 0.45, bracoRx: -2.70, bracoRz: -0.25, cotoveloL: -1.50, cotoveloR: -0.15, cabecaX: -0.30, avanco: 2.25, rolarY: 6.28, altura: -0.34 },
+        { t: 5.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
         // A levantar: de gatas.
-        { t: 5.85, leanZ: 0.00, pitchX: 1.35, chest: 0.00, coxaChute: -1.35, joelhoChute: 1.57, coxaChuteZ: 0.00, coxaApoio: -1.35, joelhoApoio: 1.57, bracoLx: -1.35, bracoLz: 0.15, bracoRx: -1.35, bracoRz: -0.15, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: -0.30, avanco: 2.25, rolarY: 6.28, altura: -0.10 },
+        { t: 5.55, leanZ: 0.00, pitchX: 1.35, chest: 0.00, coxaChute: -1.35, joelhoChute: 1.57, coxaChuteZ: 0.00, coxaApoio: -1.35, joelhoApoio: 1.57, bracoLx: -1.35, bracoLz: 0.15, bracoRx: -1.35, bracoRz: -0.15, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.11 },
         // Um joelho no chão.
-        { t: 6.45, leanZ: 0.00, pitchX: 0.35, chest: 0.10, coxaChute: -1.75, joelhoChute: 1.50, coxaChuteZ: 0.00, coxaApoio: -0.35, joelhoApoio: 1.55, bracoLx: -0.30, bracoLz: 0.20, bracoRx: -0.60, bracoRz: -0.20, cotoveloL: -0.40, cotoveloR: -0.90, cabecaX: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.16 },
+        { t: 5.90, leanZ: 0.00, pitchX: 0.35, chest: 0.10, coxaChute: -1.75, joelhoChute: 1.50, coxaChuteZ: 0.00, coxaApoio: -0.35, joelhoApoio: 1.55, bracoLx: -0.30, bracoLz: 0.20, bracoRx: -0.60, bracoRz: -0.20, cotoveloL: -0.40, cotoveloR: -0.90, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.17 },
         // De pé.
-        { t: 7.05, leanZ: 0.00, pitchX: 0.04, chest: 0.00, coxaChute: -0.04, joelhoChute: 0.10, coxaChuteZ: 0.00, coxaApoio: -0.04, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: 0.12, bracoRx: 0.00, bracoRz: -0.12, cotoveloL: -0.20, cotoveloR: -0.20, cabecaX: 0.00, avanco: 2.25, rolarY: 6.28, altura: 0.03 },
+        { t: 6.25, leanZ: 0.00, pitchX: 0.04, chest: 0.00, coxaChute: -0.04, joelhoChute: 0.10, coxaChuteZ: 0.00, coxaApoio: -0.04, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: 0.12, bracoRx: 0.00, bracoRz: -0.12, cotoveloL: -0.20, cotoveloR: -0.20, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: 0.03 },
     ]
 };
 if (typeof window !== 'undefined') window.QuedaClip = QuedaClip;

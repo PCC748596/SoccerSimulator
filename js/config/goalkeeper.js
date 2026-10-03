@@ -1229,7 +1229,20 @@ const GoalkeeperDive = {
     A defesa DESENHADA (penálti, falta directa) não passa por aqui — nesses o
     desfecho foi sorteado e o gesto é para se ver.
     */
-    alcanceLateralMax: 5.0,
+    /*
+    DE 4 A 6 METROS, conforme o guarda-redes — segundo pedido: *"o goleiro só
+    pode pular para defender as bolas nos pulos laterais se as bolas
+    estiverem entre 4-6 metros. Mais que isso não faz sentido. Não faz sentido
+    ele pular por pular."* Era 5.0 fixo. Agora o tecto vai de
+    `alcanceLateralMin` (GK 0) a `alcanceLateralMax` (GK 100), em linha.
+
+    E O TECTO PASSOU A VALER NOS DOIS SÍTIOS que decidem o mergulho. O segundo
+    (o `possoEspalmar`, a defesa de perto no updateGK) nunca o lia: medido em
+    3 jogos de 10 min, 6 de 11 mergulhos foram a bolas que passavam a mais de
+    6 m dele, 4 delas a mais de 8 m.
+    */
+    alcanceLateralMin: 4.0,
+    alcanceLateralMax: 6.0,
 
     /*
     =====================================================================
@@ -1379,6 +1392,38 @@ const GoalkeeperDive = {
     baliza, que foi o pedido anterior e continua a valer.
     */
     anguloFrente: 1.40,
+
+    /*
+    =========================================================================
+    O DESLIZE DE LADO — a bola baixa que passa perto
+    =========================================================================
+    Pedido, com fotografia: *"o goleiro não está escorregando deitado de lado
+    para pegar as bolas do lado próximas"*. E no mesmo recado: o PULO é para
+    as bolas a 4-6 m (ver `alcanceLateralMin`/`Max`).
+
+    O que havia para uma bola rasteira a 2.5 m: o mergulho baixo, com 70 graus
+    de tombo e, no fim do voo, a barriga a virar 80 graus para o relvado (o
+    `anguloFrente`, pedido para os mergulhos: "tem que cair de peito"). Desenhado
+    frame a frame, no chão ele ficava meio sentado de lado, tronco levantado e
+    pernas dobradas, e não escorregava deitado.
+
+    Agora, com a bola BAIXA (até 1/3 da baliza) e a menos de `lateralMax` de
+    lado, o gesto é outro:
+
+      `anguloTombo`  90 graus: deitado de lado, de perfil para a baliza;
+      `anguloFrente` a barriga quase não vira — fica de lado a escorregar;
+      `pernas`       esticadas atrás do corpo, e não dobradas para empurrar.
+
+    O voo, o deslize no relvado (`atritoChao`) e o levantar são os do mergulho.
+    Os mergulhos a 4-6 m e as bolas a meia altura continuam a cair de peito.
+    =========================================================================
+    */
+    deslizeLado: {
+        lateralMax: 4.0,
+        anguloTombo: 1.57,
+        anguloFrente: 0.15,
+        pernas: { coxaBaixo: -0.10, joelhoBaixo: 0.25, coxaCima: 0.05, joelhoCima: 0.35, chest: 0.10 }
+    },
 
     /*
     A viragem é à volta do eixo LONGO do corpo (o +Y local, da cabeça aos

@@ -121,6 +121,8 @@ const GkDive = {
             tVoo: D.vooMax,
             ang: 0,
             angMax: D.anguloMax[tipo] || D.anguloMax.meio,
+            // O deslize de lado (bola baixa e perto) — ver GoalkeeperDive.deslizeLado.
+            deslizeLado: this.ehDeslizeLado(p, alvoX, alvoY),
             /*
             QUANTO TEMPO FICA NO CHÃO — decidido aqui, uma vez, porque é do
             LANÇE e não do frame: um mergulho alto ou num canto deixa-o lá uns
@@ -163,6 +165,23 @@ const GkDive = {
         `anguloFrente` no GoalkeeperDive, com o pedido e as fotografias.
         */
         p.dive.eixoQueda = new THREE.Vector3(0, 0, -p.dive.ladoLocal).normalize();
+
+        // O deslize de lado deita de todo: ver GoalkeeperDive.deslizeLado.
+        if (p.dive.deslizeLado) p.dive.angMax = GoalkeeperDive.deslizeLado.anguloTombo;
+    },
+
+    /*
+    O DESLIZE DE LADO — a bola baixa que passa perto. Ver
+    GoalkeeperDive.deslizeLado, com o pedido. Decide-se uma vez, no arranque,
+    como o clip: o gesto não muda de identidade a meio.
+    */
+    ehDeslizeLado(p, alvoX, alvoY) {
+        const DL = GoalkeeperDive.deslizeLado;
+        if (!DL) return false;
+        const lateral = Math.abs(alvoX - p.model.position.x);
+        const alturaBaliza = (typeof ALTURA_BALIZA === 'number') ? ALTURA_BALIZA : 2.44;
+        const y = (typeof alvoY === 'number') ? alvoY : 0;
+        return lateral <= DL.lateralMax && y <= alturaBaliza * GoalkeeperDive.bandaBaixa;
     },
 
     /*
@@ -559,7 +578,10 @@ const GkDive = {
             fracFrente = (d.angMax > 0) ? Math.max(0, Math.min(1, d.ang / d.angMax)) : 0;
         }
         if (fracFrente > 0) {
-            const angF = fracFrente * ((typeof D.anguloFrente === 'number') ? D.anguloFrente : 0.62);
+            // No deslize de lado a barriga quase não vira: ver GoalkeeperDive.deslizeLado.
+            const angFrenteMax = d.deslizeLado ? D.deslizeLado.anguloFrente
+                : ((typeof D.anguloFrente === 'number') ? D.anguloFrente : 0.62);
+            const angF = fracFrente * angFrenteMax;
             this._qFrente.setFromAxisAngle(this._eixoY, angF * d.ladoLocal);
             this._qTilt.multiply(this._qFrente);
         }
@@ -1118,7 +1140,8 @@ const GkDive = {
     */
     poseChao(rig, d) {
         const S = GoalkeeperDive.sequenciaPernas;
-        const P = S && S.chao;
+        // Deitado de lado a escorregar, as pernas vão esticadas atrás do corpo.
+        const P = (d && d.deslizeLado) ? GoalkeeperDive.deslizeLado.pernas : (S && S.chao);
         const L = this.pernas(rig, d);
         if (!P) {
             L.joelhoB.rotation.x = lerpTo(L.joelhoB.rotation.x, 1.0, 0.2);

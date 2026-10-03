@@ -1109,8 +1109,8 @@ class FootballPlayer {
     A QUEDA DE QUEM SOFRE A FALTA — ver QuedaClip (config/animations.js)
     =========================================================================
     Arranca no `Officials.marcarFalta`, ANTES de o lance parado ser montado,
-    e dura o clip inteiro (7.05 s: 1.25 s a cair e a rolar, 4 s no chão,
-    1.8 s a levantar). Enquanto dura, o jogador sai da árvore e da FSM: não decide,
+    e dura o clip inteiro (6.25 s: 1.25 s a cair e a rolar, 4 s no chão,
+    1.0 s a levantar). Enquanto dura, o jogador sai da árvore e da FSM: não decide,
     não corre, não tem bola. Só o clip o mexe.
 
     A MONTAGEM DO LANCE PARADO PASSA-LHE POR CIMA, e isso não se evita: ela
@@ -4898,7 +4898,12 @@ class FootballPlayer {
         const velMax = D.velLateral + ((this.skillFor('GK') - 50) / 50) * D.velLateralSkill;
         const tDisponivel = Math.max(0, (tempoAteChegar || 0) - D.tempoLer - D.tempoImpulso);
         const tVoo = Math.min(D.vooMax, tDisponivel);
-        return Math.min(D.alcanceLateralMax, D.alcanceBraco + Math.max(0, velMax) * tVoo);
+        // O tecto vai de alcanceLateralMin (GK 0) a alcanceLateralMax (GK 100).
+        const tecto = (typeof D.alcanceLateralMin === 'number')
+            ? D.alcanceLateralMin + (D.alcanceLateralMax - D.alcanceLateralMin) *
+              THREE.MathUtils.clamp(this.skillFor('GK') / 100, 0, 1)
+            : D.alcanceLateralMax;
+        return Math.min(tecto, D.alcanceBraco + Math.max(0, velMax) * tVoo);
     }
 
     /*
@@ -6152,6 +6157,16 @@ class FootballPlayer {
                         interX = alvoInt ? alvoInt.x : Match.ball.position.x;
                         interY = alvoInt ? alvoInt.y : Match.ball.position.y;
                     }
+                    /*
+                    A DISTÂNCIA QUE CONTA PARA SE ATIRAR É ATÉ À BOLA, não até
+                    ao poste. O `interX` é cortado a ±limitGKX (o sítio onde ele
+                    pode ir), e o alcance media-se a partir dele: numa bola a
+                    passar 7-12 m ao lado — quase sempre desviada por um
+                    defensor — o corte punha-a "a 3 m, no poste", e ele
+                    atirava-se ao poste a vê-la sair. Medido: 6 de 11 mergulhos
+                    em 3 jogos. Ver `lateralReal` mais abaixo.
+                    */
+                    const interXLido = interX;
                     interX = Math.max(-limitGKX, Math.min(limitGKX, interX)); interY = Math.max(0, Math.min(2.44, interY));
 
                     /*
@@ -6251,7 +6266,7 @@ class FootballPlayer {
                     } else if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
                         this.gkEstado = 'maos';
                     } else if (!this.isPenaltyDive && (
-                        Math.abs(lateral) > this.alcanceDoMergulho(tempoAteGolo) ||
+                        Math.abs(interXLido - gkCorpo.position.x) > this.alcanceDoMergulho(tempoAteGolo) ||
                         this.bolaLongeParaMergulhar())) {
                         /*
                         LONGE DE MAIS: não se atira. Ver `alcanceDoMergulho` e
@@ -6786,6 +6801,17 @@ class FootballPlayer {
                                     altura é a âncora, ou seja a posição em que o
                                     remate o apanhou.
                                     */
+                                } else if (!this.isPenaltyDive &&
+                                    Math.abs((alvoEsp ? alvoEsp.x : espX) - gkCorpo.position.x) > this.alcanceDoMergulho(alvoEspT)) {
+                                    /*
+                                    LONGE DE MAIS PARA SE ATIRAR — o mesmo tecto
+                                    do outro ramo (ver alcanceDoMergulho). Este
+                                    não o tinha, e era daqui que saíam os
+                                    mergulhos a bolas a 6-8 m dele. Fica de pé e
+                                    desloca-se para o lado dela.
+                                    */
+                                    alvoGkX = espX;
+                                    speedLerp = 6.0;
                                 } else if (!this.horaDeMergulhar(lateralEsp, alvoEspT)) {
                                     // Reagiu e ainda ha tempo: acompanha de pe,
                                     // pelo gkAlvoX. Ver a nota do possoEspalmar.

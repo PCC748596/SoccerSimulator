@@ -66,8 +66,9 @@ Pedido, com três fotogramas L1–L3 e a regra: passes **pelo ar a partir de 20 
 Pedido, com quatro imagens Foul1–4: *"É praticamente uma queda com rolamento. No ultimo Keyframe deve ficar uns 4 segs."*
 
 - **Ordem Foul4 → 3 → 2 → 1**, confirmada pelo autor: o toque de pé; o rolamento, com as pernas no ar; de bruços, com uma mão no relvado; deitado. Referências em `tools/anim/referencias/queda_Foul1..4.png`. São fotogramas pequenos com o corpo deitado, por isso as poses foram compostas a olho e comparadas renderizadas, não traçadas junta a junta.
-- **O tempo do clip é em segundos** (`t` por keyframe, `amostrarClipQueda(t)`): 1.25 s a cair e a rolar, 4 s deitado, 1.8 s a levantar (de gatas, depois um joelho no chão, depois de pé), 7.05 s no total.
+- **O tempo do clip é em segundos** (`t` por keyframe, `amostrarClipQueda(t)`): 1.25 s a cair e a rolar, 4 s deitado, 1.0 s a levantar (de gatas, depois um joelho no chão, depois de pé), 6.25 s no total. O levantar era de 1.8 s; foi encurtado a pedido (*"tem que se levantar um pouco mais rápido"*). As poses mantêm-se, só mudaram os tempos.
 - **O rolamento é um canal novo, `rolarY`**: a torção da pélvis à volta do eixo cabeça-pés, escrita pelo `escreverPoseBolaParada`. Nos chutos não existe e fica 0. Dá uma volta inteira, 0 → 2π: de bruços, de lado, de costas com as pernas no ar (Foul3), de lado, de bruços (Foul2). Relato da primeira versão: *"a queda está ok, mas não está girando. Pára nessa posição"*. O corpo só se inclinava até ficar de cabeça para baixo e depois voltava para trás. No fim da queda o `rolarY` é reposto a 0, que é o mesmo que 2π. Sem isso, a suavização do `animateBones` desfazia a volta ao contrário. Usa os canais do tiro de meta. A pélvis é a raiz do rig, por isso o `pitchX` deita o corpo todo. O `avanco` é em metros: 2.25 m de rolamento.
+- **Deitado, os braços ficam no plano do relvado.** De bruços, rodar o braço para a frente (`bracoX` negativo) é rodá-lo para o chão. Com −1.0 e o cotovelo a −1.5, e −2.70 no outro braço, os dois escoravam o corpo e a anca ficava a 0.49 m do relvado. Relato: *"depois do rolamento o jogador está parando no ar"*. Agora o braço esquerdo abre para o lado (`bracoLz` 1.25) e o direito vai por cima da cabeça (−3.05). A anca fica a 0.15 m, a espessura do corpo.
 - **O corpo inteiro assenta no relvado** (`assentarCorpoInteiro`): conta o ponto mais baixo de todas as caixas, não só as botas. Sem isto a interpolação afundava até 0.23 m. Medido em jogo: 0.000 m.
 - **Arranca no `Officials.marcarFalta`, antes de o lance parado ser montado.** Enquanto cai, o jogador sai da árvore e da FSM. Quem cai nunca é o batedor da falta nem do penálti. A montagem teletransporta-o para o seu lugar. A queda detecta o salto (mais de 0.5 m), guarda esse lugar e devolve o corpo ao chão onde caiu. Depois de se levantar, vai a pé até lá (`voltaDaQueda`). O guarda-redes não cai.
 - **O lance espera** (`Match.algumCaidoDaFalta`). Na falta, espera só que ele se levante. Esperar também pela caminhada de volta, que pode ser de 20 a 30 m, fazia 9 de 24 faltas acabarem no prazo de 15 s sem cobrança. No penálti espera também a volta, porque ele caiu dentro da área. Medido: 23 de 23 faltas cobradas a ~9 s.
@@ -88,8 +89,56 @@ Pedido: *"na hora da falta os jogadores já se reposicionam para a cobrança enq
 Pedido: *"No carrinho, o jogador deve assumir a posição da imagem 64BA0745."* Referência em `tools/anim/referencias/carrinho_64BA0745.png`.
 
 - **A pose antiga estava deitada de lado** (`ancaRolar` 0.85), com a perna esticada enterrada no relvado. A da imagem é sentada a deslizar: perna da frente esticada até ao relvado, joelho de trás no chão com a canela deitada para trás, tronco ~43° para trás, um braço levantado para a frente e o outro em baixo, atrás.
+- **Segunda passagem, sentado de verdade** (imagem `tools/anim/referencias/carrinho_9BC0.png`). Relato com captura: ele ficava ajoelhado, com a coxa de trás a prumo e a anca meio metro acima da relva. Pedido: *"perna direita à frente levemente dobrada para o lado, perna esquerda dobrada para trás, as duas apoiadas na grama"*. O que mudou:
+  - a coxa de trás abre para o lado até ficar deitada (`coxaDobradaZ` 1.40), com a canela dobrada para trás rente ao chão;
+  - a da frente vai quase deitada, com o joelho a cair para fora (`coxaEstendidaY`, torção 0.60);
+  - o braço de apoio dobra o cotovelo, porque esticado escorava o corpo.
+- **O `applySlidePose` passou a escrever os eixos y e z das coxas**, com o sinal de `slideSide`. Antes o y ficava com o que a animação anterior tivesse deixado. O espelho (perna esquerda à frente) bate com erro 0.
 - Canal novo, `peDobrado`: o pé de trás alinhado com a canela. Sem ele o pé ficava pendurado para baixo e era o ponto mais baixo.
 - **A altura sai do corpo** (`assentarCorpoInteiro`) e já não do `alturaAnca` fixo de −0.55 m, que fica só para as sondas sem desenho. Medido em 8 carrinhos: o corpo fica assente no relvado (0.000 m).
+
+#### O árbitro: entre as linhas dos assistentes, nunca à frente da bola, a 10–15 m (js/officials.js)
+
+Pedidos: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos bandeirinhas. Não tem necessidade de passar pra frente da linha da bola do ataque."* E depois: *"entre 10-15 metros da bola durante as jogadas normais e na cobrança das faltas. No penálti e corners mantém."*
+
+- **No fim do `pontoDoArbitro`** (só no ramo da diagonal; o penálti e o canto têm posição fixa e não passam por aqui):
+  - o z do árbitro não passa o da bola no sentido em que ataca quem tem a posse;
+  - depois fica entre as duas linhas que os assistentes seguem (`_faixaArbitro`, escrita no `update`).
+  - Quando as duas regras não cabem juntas, mandam as linhas. Por exemplo, com a bola atrás da própria defesa, o árbitro fica na linha e não entra na área.
+- **A coroa passou de 20–25 m para 10–15 m** (`RefereeModel.raioMin/raioMax`).
+- **Medido em 2 × 400 s de jogo:**
+  - fora das linhas mais de 1 m: 0.2% do tempo (era 13.9%);
+  - distância à bola: mediana 13.8 m, 63% do tempo entre 9 e 16 m;
+  - à frente da bola mais de 1 m: 21% do tempo (era 38%). O alvo só fica à frente da bola em 4% dos casos; o resto é o árbitro, a 7.5 m/s, a correr atrás de bolas que mudam de sentido a 15–25 m/s.
+
+- **Andar no sítio** (relato: *"o juiz está com animação de andar sem sair da posição"*). Com uma zona morta de 6–10 cm (`paragemMax`/`arranqueMin`), ele perseguia cada centímetro da coroa a deslizar com a bola: 0.3–0.4 m/s com o ciclo de passada inteiro. A zona morta passou para 0.25/1.50 m. O alvo dele é agora amortecido (`alvoSuavizacao`, 0.35 s), porque as regras da linha da bola e das linhas dependem da posse e, numa bola dividida, o alvo saltava metros. Saltos de mais de 1 m num frame: de 561 para 237 em 5 min.
+
+#### O guarda-redes: não se atira a bolas que não alcança, e escorrega de lado nas baixas e perto (js/player.js, js/gk_dive.js, js/config/goalkeeper.js, tests/guarda_redes_queda.test.js)
+
+Pedidos: *"o goleiro só pode pular para defender as bolas nos pulos laterais se as bolas estiverem entre 4-6 metros. Mais que isso não faz sentido"* e *"o goleiro não está escorregando deitado de lado para pegar as bolas do lado próximas"*.
+
+- **O alcance media-se até ao poste, e não até à bola.** O ponto de intercepção é cortado a ±`limitGKX`, onde ele pode ir. Numa bola a passar 7–12 m ao lado (quase sempre desviada por um defensor), o corte punha-a "a 3 m, no poste" e ele atirava-se. Medido: 6 de 11 mergulhos em 3 jogos. Agora o alcance compara-se com o ponto lido antes do corte (`interXLido`). O segundo ramo de decisão (o `possoEspalmar`) não tinha teste de alcance nenhum e passou a ter.
+- **Tecto do mergulho de 4 a 6 m conforme o GK** (`alcanceLateralMin` 4.0 com GK 0, `alcanceLateralMax` 6.0 com GK 100). Era 5.0 fixo.
+- **O deslize de lado** (`GoalkeeperDive.deslizeLado`), para bola baixa (até 1/3 da baliza) a menos de 4 m de lado:
+  - tombo de 90°, deitado de perfil para a baliza;
+  - a barriga quase não vira (0.15 rad, contra 1.40 nos mergulhos);
+  - as pernas ficam esticadas e ele escorrega.
+  
+  Antes ficava meio sentado de lado no chão, com o tronco levantado e as pernas dobradas. Os mergulhos de 4–6 m e as bolas a meia altura continuam a aterrar de peito.
+- Medido em 5 jogos de 10 min: zero mergulhos para lá dos 4 m de lado. As 3 bolas baixas entre 2 e 4 m foram todas deslize de lado.
+- **Teste mexido, `guarda_redes_queda`.** O mergulho rasteiro que tem de aterrar de peito estava a 2.5 m, agora a banda do deslize, e passou para 4.5 m. Acrescentou-se o ponto 7: o deslize a 2.5 m fica de lado (9°) e não se enterra.
+
+#### O lateral: cada apoio na sua direcção, e ninguém em cima de ninguém (js/bt/player_bt.js, js/config/player_behavior.js)
+
+Pedido: *"na hora do lateral os jogadores têm que ficar melhor ajustados no campo para receber o lateral. Estão muito juntos em posições quase iguais."*
+
+- **A direcção do slot não chegava a lado nenhum.** O `aproximarNoLateral` passava-a ao `alvoDeApoioNoLateral`, que só tem seis parâmetros e a deitava fora. Os dois apoios eram puxados em linha recta para o anel de 5–10 m: quem vinha pela mesma banda acabava no mesmo ponto.
+- **Agora cada apoio tem um rumo fixo, sempre para dentro do campo.** Dos dois, o que tem o slot mais adiantado vai à frente pela linha (`apoioAnguloFrente`, 40°); o outro vai atrás (`apoioAnguloTras`, 50°). Junto à bandeirola, o rumo da frente fica dentro do campo.
+- **Quem não é apoio afasta o seu alvo** de qualquer companheiro a menos de `espacoEntreColegas` (6 m). Ver `afastarDosColegasNoLateral`.
+- **Medido em ~50 laterais forçados:**
+  - laterais com dois companheiros a menos de 4 m: de 28/51 para 5/53;
+  - distância entre os dois apoios: mediana de 5.7 m para 13.2 m;
+  - apoios a menos de 4 m um do outro: de 16 para 2.
 
 #### Os jogadores FANTASMA das sondas (js/match/match_setup.js)
 

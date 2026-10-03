@@ -3302,7 +3302,10 @@ function aproximarNoLateral(p) {
         if (outro === p || outro === batedor || outro.role === 'gk') continue;
         if (outro.model.position.distanceTo(batedor.model.position) < d) maisPertoQueEu++;
     }
-    if (maisPertoQueEu >= T.apoioQuantos) return;
+    if (maisPertoQueEu >= T.apoioQuantos) {
+        afastarDosColegasNoLateral(p, meus, batedor, T);
+        return;
+    }
 
     /*
     A DIRECÇÃO SAI DO SLOT DELE, não de onde ele calhou estar.
@@ -3315,14 +3318,46 @@ function aproximarNoLateral(p) {
     ala à frente pela linha, o lateral atrás, o CM para dentro. É também o que
     o pedido diz — o médio da ala mais perto da posição dele, mais à frente.
     */
-    const ref = p.slotTarget || p.baseTarget;
-    const alvo = alvoDeApoioNoLateral(
-        p.model.position.x, p.model.position.z,
-        batedor.model.position.x, batedor.model.position.z,
-        T.apoioMin, T.apoioMax,
-        ref ? ref.x - batedor.model.position.x : undefined,
-        ref ? ref.z - batedor.model.position.z : undefined);
-    p.dynamicTarget.set(alvo.x, ALTURA_BASE_Y, alvo.z);
+    /*
+    SEGUNDA PASSAGEM: a direcção do slot não chegava a lado nenhum. Esta
+    chamada passava-a ao `alvoDeApoioNoLateral`, que só tem seis parâmetros e
+    a deitava fora — o apoio continuava a ser o clamp radial que o comentário
+    acima diz ter sido substituído. Medido em 51 laterais: os dois apoios a
+    menos de 4 m um do outro em 16.
+
+    Agora cada um tem a SUA direcção, fixa (ver ThrowInModel.apoioAngulo*):
+    dos dois apoios, o que tem o slot mais adiantado vai à frente pela linha,
+    o outro atrás, os dois para dentro do campo. A distância ao batedor é a
+    que ele já tem, dentro da faixa `apoioMin`..`apoioMax`.
+    */
+    const bx = batedor.model.position.x, bz = batedor.model.position.z;
+    const apoios = meus
+        .filter(o => o !== batedor && o.role !== 'gk')
+        .sort((a, b) => a.model.position.distanceTo(batedor.model.position) -
+                        b.model.position.distanceTo(batedor.model.position))
+        .slice(0, T.apoioQuantos);
+    const avancoDoSlot = (o) => { const r = o.slotTarget || o.baseTarget || o.model.position; return r.z * (o.dirZ || 1); };
+    const maisAdiantado = apoios.reduce((m, o) => (!m || avancoDoSlot(o) > avancoDoSlot(m)) ? o : m, null);
+    const aFrente = (p === maisAdiantado);
+    const graus = aFrente ? (T.apoioAnguloFrente || 40) : (T.apoioAnguloTras || 50);
+    const ang = graus * Math.PI / 180;
+    const paraDentro = (bx >= 0) ? -1 : 1;
+    const sentido = (p.dirZ || 1) * (aFrente ? 1 : -1);
+    const dist = THREE.MathUtils.clamp(d, T.apoioMin, T.apoioMax);
+    let ax = bx + paraDentro * Math.sin(ang) * dist;
+    let az = bz + sentido * Math.cos(ang) * dist;
+    /*
+    Junto à bandeirola não há campo À FRENTE pela linha: o rumo da frente
+    sairia pela linha de fundo. Fica dentro do campo, a 2 m da linha, e o
+    que falta em profundidade ganha-se para dentro.
+    */
+    const limZ = CAMPO_COMP / 2 - 2.0;
+    if (Math.abs(az) > limZ) {
+        az = Math.sign(az) * limZ;
+        const falta = Math.max(0, dist * dist - (az - bz) * (az - bz));
+        ax = bx + paraDentro * Math.max(Math.sin(ang) * dist, Math.sqrt(falta));
+    }
+    p.dynamicTarget.set(ax, ALTURA_BASE_Y, az);
 
     /*
     Fica marcado que ele subiu para este lance, e de que lado. Quem lê é o
@@ -3331,6 +3366,34 @@ function aproximarNoLateral(p) {
     */
     p.apoioLateralLado = Math.sign(batedor.model.position.x) || 1;
     p.apoioLateralTimer = T.recuoDuracao;
+}
+
+/*
+QUEM NÃO É APOIO NÃO FICA EM CIMA DE NINGUÉM — ver ThrowInModel.espacoEntreColegas.
+
+O alvo de cada um vem do bloco (nível 2), que no lateral é puxado todo para a
+bola pela mola de coesão: dois do mesmo corredor acabavam a dois ou três metros
+um do outro. Quem está a menos de `espacoEntreColegas` do alvo de um companheiro
+afasta o SEU alvo metade do que falta — o outro faz a outra metade no frame
+dele. Os apoios não se mexem por isto: o lugar deles é o do lance.
+*/
+function afastarDosColegasNoLateral(p, meus, batedor, T) {
+    const espaco = T.espacoEntreColegas;
+    if (!(espaco > 0) || !p.dynamicTarget) return;
+    let px = p.dynamicTarget.x, pz = p.dynamicTarget.z;
+    for (const c of meus) {
+        if (c === p || c === batedor || c.role === 'gk' || !c.dynamicTarget) continue;
+        const dx = px - c.dynamicTarget.x, dz = pz - c.dynamicTarget.z;
+        const d = Math.hypot(dx, dz);
+        if (d >= espaco) continue;
+        // Em cima um do outro, sem direcção: afasta-se ao longo do campo.
+        const ux = (d > 0.001) ? dx / d : 0, uz = (d > 0.001) ? dz / d : 1;
+        const k = (espaco - d) / 2;
+        px += ux * k; pz += uz * k;
+    }
+    px = THREE.MathUtils.clamp(px, -(CAMPO_LARG / 2 - 1), CAMPO_LARG / 2 - 1);
+    pz = THREE.MathUtils.clamp(pz, -(CAMPO_COMP / 2 - 1), CAMPO_COMP / 2 - 1);
+    p.dynamicTarget.set(px, ALTURA_BASE_Y, pz);
 }
 
 function tratarBolaParada(p) {
