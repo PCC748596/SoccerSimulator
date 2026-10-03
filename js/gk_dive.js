@@ -465,6 +465,18 @@ const GkDive = {
                 else d.vSlide -= trav;
                 corpo.position.x += d.vSlide * dt;
                 corpo.position.y = (typeof d.yDeitado === 'number') ? d.yDeitado : D.alturaDeitado;
+                /*
+                O SALTO ALTO ASSENTA NA HORIZONTAL — ver GoalkeeperDive.rolamentoAlto.
+                No ar o tombo de 100 graus serve para chegar ao angulo da baliza;
+                no chao deixava-o de cabeca enfiada no relvado e pernas no ar. O
+                tombo desce para `angChao` aos poucos (sem estalo no frame da
+                aterragem), e e o `angMax` que desce, para o levantar partir
+                dai sem salto.
+                */
+                const RA = D.rolamentoAlto;
+                if (RA && RA.activo && d.tipo === 'alto' && d.angMax > RA.angChao) {
+                    d.angMax = lerpTo(d.angMax, RA.angChao, RA.suavizacao);
+                }
                 d.ang = d.angMax;
                 d.assentar = true;
 
@@ -581,7 +593,20 @@ const GkDive = {
             // No deslize de lado a barriga quase não vira: ver GoalkeeperDive.deslizeLado.
             const angFrenteMax = d.deslizeLado ? D.deslizeLado.anguloFrente
                 : ((typeof D.anguloFrente === 'number') ? D.anguloFrente : 0.62);
-            const angF = fracFrente * angFrenteMax;
+            let angF = fracFrente * angFrenteMax;
+            /*
+            O ROLAMENTO NO FIM DO SALTO ALTO — ver GoalkeeperDive.rolamentoAlto.
+            Uma volta inteira a volta do eixo do corpo (o mesmo da viragem da
+            barriga), no sentido em que ele vem a deslizar, durante os primeiros
+            `duracao` segundos no chao. Acaba onde comecou (2 pi), de brucos,
+            pronto para o levantar de gatas.
+            */
+            const RA = D.rolamentoAlto;
+            if (RA && RA.activo && d.tipo === 'alto' && d.fase === 'chao' && d.t < RA.duracao) {
+                const u = d.t / RA.duracao;
+                const suave = u * u * (3 - 2 * u);
+                angF += suave * Math.PI * 2 * (RA.voltas || 1);
+            }
             this._qFrente.setFromAxisAngle(this._eixoY, angF * d.ladoLocal);
             this._qTilt.multiply(this._qFrente);
         }

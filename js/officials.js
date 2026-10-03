@@ -191,6 +191,12 @@ const RefereeModel = {
     `buildBody` dos jogadores pinta as texturas da camisola e dos meiões num
     canvas 2D, e o canvas quer uma cor CSS.
     */
+    /*
+    ALTURA do árbitro e dos assistentes, em metros. Pedido: *"ajusta o juiz e
+    os bandeirinhas para 1.75 m de altura"*. Eram o boneco padrão, 1.855 m —
+    mais altos do que a maior parte dos jogadores.
+    */
+    altura: 1.75,
     corCamisa: '#14161a',
     corCalcao: '#14161a',
     corBota: '#0f1114',
@@ -614,6 +620,17 @@ const Officials = {
     criarCorpo: function (id) {
         const R = RefereeModel;
         const jogador = new FootballPlayer(id, R.corCamisa, R.corCalcao, 'TeamA');
+
+        /*
+        A ALTURA DOS OFICIAIS, fixa — ver RefereeModel.altura. O
+        `alturaDoJogador` lê a cache antes de tudo, portanto escrevê-la aqui é
+        o que faz o `aplicarAlturaAoCorpo` escalar o boneco para ela, pelo mesmo
+        caminho dos jogadores.
+        */
+        if (typeof R.altura === 'number' && typeof jogador.aplicarAlturaAoCorpo === 'function') {
+            jogador._alturaCache = R.altura;
+            jogador.aplicarAlturaAoCorpo();
+        }
 
         /*
         As chuteiras saem do baralho de aparências (`escolherAparencia`) e vêm

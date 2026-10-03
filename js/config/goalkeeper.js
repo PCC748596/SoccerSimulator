@@ -1423,6 +1423,35 @@ const GoalkeeperDive = {
     Os mergulhos a 4-6 m e as bolas a meia altura continuam a cair de peito.
     =========================================================================
     */
+    /*
+    =========================================================================
+    O SALTO ALTO AO CANTO: ASSENTA DEITADO E ROLA
+    =========================================================================
+    Pedido, com captura: *"faz uma revisão na queda do goleiro depois que pula
+    para defender no alto nos cantos. O final está como na imagem. Pode colocar
+    um rolamento no final também."* Na imagem ele está de cabeça enfiada no
+    relvado e pernas no ar.
+
+    Era o tombo do salto alto, `anguloMax.alto` = 100 graus, que no ar é o que
+    o deixa chegar ao ângulo da baliza e no chão ficava igual: com a barriga a
+    virar por cima (`anguloFrente`), a cabeça acabava abaixo das ancas.
+
+      `angChao`     no chão o tombo desce para 86 graus — deitado, a direito;
+      `suavizacao`  a que ritmo desce (por frame), para não estalar ao aterrar;
+      `duracao`     o rolamento: uma volta inteira à volta do eixo do corpo,
+      `voltas`      no sentido do deslize, nos primeiros 0.7 s no chão.
+
+    Só o salto ALTO. O baixo e o de meia altura já aterram deitados.
+    =========================================================================
+    */
+    rolamentoAlto: {
+        activo: true,
+        angChao: 1.50,
+        suavizacao: 0.20,
+        duracao: 0.70,
+        voltas: 1
+    },
+
     deslizeLado: {
         lateralMax: 4.0,
         anguloTombo: 1.40,

@@ -113,6 +113,40 @@ Pedidos: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos bandeirinh
 
 - **Andar no sítio** (relato: *"o juiz está com animação de andar sem sair da posição"*). Com uma zona morta de 6–10 cm (`paragemMax`/`arranqueMin`), ele perseguia cada centímetro da coroa a deslizar com a bola: 0.3–0.4 m/s com o ciclo de passada inteiro. A zona morta passou para 0.25/1.50 m. O alvo dele é agora amortecido (`alvoSuavizacao`, 0.35 s), porque as regras da linha da bola e das linhas dependem da posse e, numa bola dividida, o alvo saltava metros. Saltos de mais de 1 m num frame: de 561 para 237 em 5 min.
 
+#### O salto alto ao canto assenta deitado e rola (js/gk_dive.js, js/config/goalkeeper.js `GoalkeeperDive.rolamentoAlto`)
+
+Pedido, com captura (cabeça enfiada no relvado, pernas no ar): *"faz uma revisão na queda do goleiro depois que pula para defender no alto nos cantos... pode colocar um rolamento no final também"*.
+
+- **Causa:** o tombo do salto alto é de 100° (`anguloMax.alto`). No ar é o que o deixa chegar ao ângulo da baliza; no chão ficava igual e, com a barriga a virar por cima, a cabeça acabava abaixo das ancas.
+- **Agora, no chão:** o tombo desce aos poucos para 86° (`angChao`), deitado a direito. Desce o `angMax`, para o levantar partir dali sem salto.
+- **O rolamento:** nos primeiros 0.7 s no chão, uma volta inteira à volta do eixo do corpo (o mesmo eixo da viragem da barriga), no sentido do deslize. Acaba de bruços, pronto para o levantar de gatas. O assento no relvado corre todos os frames, portanto não se enterra durante a volta.
+- Só o salto alto: o baixo e o de meia altura já aterram deitados. O `guarda_redes_queda` continua a passar: 0 frames com osso sob a relva e acaba de peito.
+
+#### O árbitro e os assistentes com 1.75 m (js/officials.js `RefereeModel.altura`)
+
+Eram o boneco padrão, 1.855 m. A altura entra pelo mesmo caminho dos jogadores: a cache do `alturaDoJogador` mais o `aplicarAlturaAoCorpo`. Medido: 1.750 m, e continua a 1.751 m a andar.
+
+#### Testes ajustados ("ajusta os que falharam")
+
+- **`remate_tipo_mira`:** a `escalaGlobal` do erro de remate está em 2.03, fora do intervalo em que as faixas tinham sido medidas. Remedidas a 2.03: 6 m 59–60%, 12 m 42%, 18 m 29%, 25 m 17–18% no alvo. As faixas passaram a 50–70 / 32–52 / 19–39 / 10–28, a ±10 pontos do medido, e o tecto do intervalo passou a 2.10. Desta vez moveram-se as faixas e não só o tecto. A nota no teste regista que, de 25 m, um rematador médio acerta menos de um quinto das vezes.
+- **`gk_salta_no_momento`:** passou de 45 para 75 min de jogo, porque com o alcance medido até à bola desapareceram os mergulhos a bolas que passavam a 6–12 m e a amostra caiu para 7. Com 75 min: 10 mergulhos, média 0.33 s por chegar, pior 0.39 s. Demora ~213 s.
+
+#### Pela perna da barreira não se agarra (js/player.js, `resolverDefesaComMaos`)
+
+Na pose de barreira o "corpo" que conta para a defesa é a perna esticada até à bota (`GoalkeeperPose.barreira.alcanceDeitado`, 1.45 m), e o toque dela entrava como defesa ao corpo, que é a que mais agarra. O `gk_agarra_com_a_mao` apanhou-o: uma bola rasteira agarrada a 1.25 m da mão e 1.3 m atrás dele, com a perna rodada para lá. Agora `resolverDefesaComMaos(tipo, extensao, semAgarrar)` converte o "agarra" em espalmada quando o toque é da perna (`aoCorpo && gkBarreira`): a perna tapa e a bola ressalta.
+
+Os cinco testes de guarda-redes que falhavam ou passavam do tempo, corridos sem limite:
+
+| teste | tempo | resultado |
+|---|---|---|
+| `gk_agarra_com_a_mao` | 275 s | passa (0 de 35 agarradas de longe) |
+| `guarda_redes_espalmada` | 468 s | passa (9 espalmadas, 0 golos) |
+| `guarda_redes_bola_agarrada` | 270 s | passa |
+| `gk_salta_no_momento` | 217 s | passa |
+| `guarda_redes_queda` | 2 s | passa |
+
+O `guarda_redes_espalmada` simula 6 × 30 min e não cabe em 280 s: quem o corre na suite precisa de um tempo limite maior (600 s chega).
+
 #### O canto e a falta directa batem-se com o lançamento (js/player.js, js/fsm.js, js/config/animations.js, js/bt/player_bt.js, js/match/match_physics.js)
 
 Pedido: *"a cobrança do corner e da falta direta também deve usar a animação do lançamento"*.

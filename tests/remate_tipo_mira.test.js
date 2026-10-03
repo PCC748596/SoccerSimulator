@@ -188,11 +188,12 @@ function distribuicao(dist, tec) {
 }
 
 test('precisão por distância, com um rematador médio', () => {
+    // Remedidas à escala 2.03 — ver a nota do intervalo, no fim do ficheiro.
     const faixas = [
-        { dist: 6, min: 0.55, max: 0.75 },
-        { dist: 12, min: 0.44, max: 0.64 },
-        { dist: 18, min: 0.33, max: 0.53 },
-        { dist: 25, min: 0.22, max: 0.42 }
+        { dist: 6, min: 0.50, max: 0.70 },
+        { dist: 12, min: 0.32, max: 0.52 },
+        { dist: 18, min: 0.19, max: 0.39 },
+        { dist: 25, min: 0.10, max: 0.28 }
     ];
     for (const f of faixas) {
         const d = distribuicao(f.dist, 50);
@@ -264,10 +265,25 @@ Passam todas, mas a de 25 m está a UM ponto do chão da faixa. Da próxima vez
 que isto subir, ela cai — e cair significa que um rematador médio acerta na
 moldura menos de um quinto das vezes de 25 m, que já não é futebol. Fica dito
 aqui e não na mensagem de erro, porque quem lê o teste é quem vai decidir.
+
+TECTO A 2.10 quando a escala foi a 2.03 (quinto pedido no mesmo sentido; o
+custo está escrito no próprio ShotModel.erro). Remedido, duas corridas de
+30000 remates por distância:
+
+     6 m: 59-60% no alvo    era a faixa 55-75, passa a 50-70
+    12 m: 42%               era 44-64, passa a 32-52
+    18 m: 29%               era 33-53, passa a 19-39
+    25 m: 17-18%            era 22-42, passa a 10-28
+
+AQUI AS FAIXAS MOVERAM-SE, e não só o tecto: três das quatro ficavam abaixo
+do chão. É o que a nota de cima previa — de 25 m um rematador médio acerta na
+moldura menos de um quinto das vezes. Foi decisão do autor ("ajusta os que
+falharam"), com o custo à vista; as faixas novas ficam a ±10 pontos do medido,
+como as anteriores, para continuarem a apanhar uma mudança que não seja esta.
 */
 test('a escala global fica dentro do intervalo calibrado', () => {
     const e = ShotModel.erro.escalaGlobal;
-    assert.ok(e >= 0.95 && e <= 1.60,
+    assert.ok(e >= 0.95 && e <= 2.10,
         `escala global em ${e}: fora do intervalo em que as faixas de precisão ` +
         'acima foram medidas — remede-as antes de a deixar aqui');
 });

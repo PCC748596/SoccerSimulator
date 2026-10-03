@@ -7803,7 +7803,16 @@ class FootballPlayer {
                 esticar.
                 */
                 const aoCorpo = (distCorpoM < RAIO_CORPO) && !(distMaoM < alcanceMao);
-                if (aoCorpo) this.resolverDefesaComMaos('corpo', 0);
+                /*
+                PELA PERNA DA BARREIRA NÃO SE AGARRA. Na barreira o "corpo" é a
+                perna esticada até à bota (`alcanceDeitado`, 1.45 m), e o toque
+                dela entrava como defesa ao corpo — que agarra mais do que todas.
+                Apanhado pelo `gk_agarra_com_a_mao`: bola rasteira agarrada a
+                1.25 m da mão, 1.3 m atrás dele, com a perna rodada para lá. A
+                perna tapa e a bola ressalta; quem agarra são as mãos.
+                */
+                const pelaPerna = aoCorpo && this.gkBarreira;
+                if (aoCorpo) this.resolverDefesaComMaos('corpo', 0, pelaPerna);
                 else this.resolverDefesaComMaos('maos', distMaoM / alcanceMao);
             }
 
@@ -8656,7 +8665,7 @@ class FootballPlayer {
         return true;
     }
 
-    resolverDefesaComMaos(tipo, extensao) {
+    resolverDefesaComMaos(tipo, extensao, semAgarrar) {
         /*
         NUMA FALTA COM DESFECHO DE DEFESA, quem resolve e o PLANO.
 
@@ -8697,6 +8706,8 @@ class FootballPlayer {
             MatchStats.registarDefesa(this.team);
         }
 
+        // Um toque que não pode agarrar (a perna da barreira) vira espalmada.
+        if (decisao.resultado === 'agarra' && semAgarrar) decisao.resultado = 'espalma';
         if (decisao.resultado === 'agarra') {
             this.grabBall();
             return;

@@ -69,8 +69,14 @@ fazia com a bola ainda a caminho (medido: 92% arrancavam a mais de 5 m dela, o
 pior a 20.5 m). Sao esses que desapareceram — 13 mergulhos em 30 min passaram a
 8 —, e e isso que este teste queria. Sobe-se o tempo de jogo para a amostra
 voltar a dar dez.
+
+E SUBIU OUTRA VEZ, de 45 para 75 min, pela mesma razão: o alcance do mergulho
+passou a medir-se até à BOLA e não até ao poste, e o `possoEspalmar` ganhou o
+tecto que não tinha (ver alcanceDoMergulho). Os que desapareceram eram
+mergulhos a bolas que passavam a 6-12 m dele — 45 min passaram a dar 7. Com 75
+min: 10 mergulhos, média 0.33 s por chegar, pior 0.39 s.
 */
-for (let i = 0; i < Math.round(2700 / dt); i++) Match.update(dt);
+for (let i = 0; i < Math.round(4500 / dt); i++) Match.update(dt);
 
 const mediana = a => { const o = a.slice().sort((x, y) => x - y); return o.length ? o[Math.floor(o.length / 2)] : NaN; };
 const med = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN;
