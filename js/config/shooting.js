@@ -762,6 +762,45 @@ const BlockModel = {
     elevacaoMax: 0.60
 };
 
+/*
+=============================================================================
+O LANCE PARADO DEPOIS DE UMA FALTA MONTA-SE A ANDAR — ver
+Match.montarBolaParadaAndada (match_setpieces.js).
+=============================================================================
+Pedido: *"na hora da falta os jogadores ja se reposicionam para a cobranca
+enquanto o jogador que sofreu a falta cai e rola. O reposicionamento dos
+demais jogadores deve ocorrer somente depois que o jogador que sofreu a falta
+chega no keyframe final. E eles tem que ir pro lugar naturalmente, nao se
+teletransportando. Durante a falta os movimentos devem continuar normais."*
+=============================================================================
+*/
+const BolaParadaAndada = {
+    /*
+    Enquanto o caido rola, cada um segue o embalo que trazia e trava sozinho:
+    a velocidade cai por exp(-travagem * dt). Com 2.5/s, quem vinha a 7 m/s
+    anda ~2.8 m e esta quase parado ao fim de 1.25 s — o apito ouviu-se e o
+    lance morre aos poucos, nao num frame.
+    */
+    travagem: 2.5,
+    /*
+    A caminho do lugar, a velocidade sai da distancia: `distancia / tempoAlvo`,
+    entre `velMin` e `velMax`. Quem esta a 10 m vai a passo (2.0 m/s); quem
+    esta a 40 m vai a trote rapido (6.5 m/s) e chega em ~6 s, e nao em 13.
+    */
+    tempoAlvo: 5.0,
+    velMin: 2.0,
+    velMax: 6.5,
+    // A esta distancia do lugar considera-se la.
+    chegada: 0.3,
+    /*
+    Rede de seguranca: quem ao fim disto ainda nao chegou (preso atras de
+    alguem, um lugar inalcancavel) e posto la. O lance nao pode ficar a
+    espera para sempre. Medido, ninguem chega perto: o mais lento leva ~9 s.
+    */
+    prazo: 20.0
+};
+if (typeof window !== 'undefined') window.BolaParadaAndada = BolaParadaAndada;
+
 const FreeKickModel = {
     /*
     DECISÃO DA COBRANÇA — ver decisaoDeFalta em utils.js. Três casos:

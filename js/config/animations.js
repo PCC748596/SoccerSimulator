@@ -662,6 +662,84 @@ if (typeof window !== 'undefined') window.LancamentoClip = LancamentoClip;
 
 /*
 =============================================================================
+A QUEDA DE QUEM SOFRE A FALTA — queda com rolamento, 4 s no chão, levantar
+=============================================================================
+Pedido, com quatro imagens: *"Segue seguencia de queda do jogador de branco:
+Foul1, 2, 3 e 4. É praticamente uma queda com rolamento. No ultimo Keyframe
+deve ficar uns 4 segs."*
+
+A ORDEM É Foul4 -> Foul3 -> Foul2 -> Foul1, confirmada pelo autor a 3 de
+Outubro de 2026 (as imagens chegaram numeradas ao contrário):
+
+    Foul4   o toque: de pé, atrás do adversário
+    Foul3   o rolamento: as pernas no ar
+    Foul2   de bruços, uma mão no relvado, as pernas a descer atrás
+    Foul1   deitado — fica assim 4 s
+
+As referências estão em tools/anim/referencias/queda_Foul1..4.png. São
+fotogramas pequenos (60-90 píxeis de jogador) e o corpo está quase sempre
+deitado ou de pernas para o ar, por isso as poses foram compostas a olho e
+comparadas renderizadas ao lado das imagens, e não traçadas junta a junta.
+
+O TEMPO É EM SEGUNDOS (`t`), e não uma fracção do gesto como nos chutos: o
+gesto tem um patamar de 4 s no meio, e com keyframes igualmente espaçados
+era preciso enchê-lo de cópias. Amostra-se com `amostrarClipQueda(t)`.
+
+OS CANAIS SÃO OS DO TIRO DE META (escritos pelo `escreverPoseBolaParada`),
+mais um: `rolarY`. A pélvis é a raiz do rig, portanto `pitchX` deita o corpo
+todo (pi/2 = de bruços). O `avanco` é em METROS na direcção da queda — o
+rolamento leva-o 2.25 m.
+
+O ROLAMENTO É O `rolarY`: a torção à volta do eixo cabeça-pés, uma VOLTA
+INTEIRA (0 -> 2 pi) entre o toque no ombro e ficar deitado — de bruços, de
+lado, de costas com as pernas no ar (Foul3), de lado, de bruços (Foul2). Na
+primeira versão não existia: o corpo só se inclinava até ficar de cabeça para
+baixo e depois voltava para trás, e o relato foi *"a queda está ok, mas não
+está girando. Pára nessa posição"*. De 1.25 s ao fim fica em 2 pi, que é o
+mesmo que 0; o `actualizarQueda` repõe-no a 0 quando acaba, senão a
+suavização do `animateBones` (que leva a pélvis a 0 aos poucos) desfazia a
+volta inteira ao contrário.
+
+O `altura` daqui é indicativo. Com o corpo deitado quem toca no relvado é o
+peito, a anca ou a mão, e não a sola — o assento normal (`assentarNoChao`) só
+olha para as botas. No jogo o corpo inteiro é assentado frame a frame
+(`assentarCorpoInteiro`, player.js); entre estes keyframes, interpolado sem
+isso, chegava a afundar 0.23 m.
+=============================================================================
+*/
+const QuedaClip = {
+    duracao: 7.05,
+    // Quando chega ao keyframe Foul1 (deitado). E daqui que os outros comecam a
+    // ir para os lugares do lance parado — ver Match.montarBolaParadaAndada.
+    deitadoEm: 1.25,
+    frames: [
+        // Foul4 — O TOQUE: ainda de pé, a meio da passada, braços a abrir.
+        { t: 0.00, leanZ: 0.00, pitchX: 0.15, chest: 0.05, coxaChute: -0.55, joelhoChute: 0.35, coxaChuteZ: 0.00, coxaApoio: 0.40, joelhoApoio: 0.70, bracoLx: 0.45, bracoLz: 0.35, bracoRx: -0.55, bracoRz: -0.35, cotoveloL: -0.60, cotoveloR: -0.70, cabecaX: 0.00, avanco: 0.00, rolarY: 0.00, altura: -0.03 },
+        // A tropeçar: o tronco vai à frente, as pernas ficam para trás, os braços estendem-se.
+        { t: 0.22, leanZ: 0.00, pitchX: 0.85, chest: 0.10, coxaChute: 0.10, joelhoChute: 0.50, coxaChuteZ: 0.00, coxaApoio: 0.70, joelhoApoio: 0.90, bracoLx: -1.30, bracoLz: 0.40, bracoRx: -1.50, bracoRz: -0.40, cotoveloL: -0.50, cotoveloR: -0.40, cabecaX: -0.30, avanco: 0.55, rolarY: 0.00, altura: -0.31 },
+        // Bate com o ombro no relvado e começa a rolar (rolarY a subir).
+        { t: 0.42, leanZ: 0.00, pitchX: 1.45, chest: 0.15, coxaChute: 0.05, joelhoChute: 0.50, coxaChuteZ: 0.00, coxaApoio: 0.25, joelhoApoio: 0.70, bracoLx: -1.20, bracoLz: 0.60, bracoRx: -1.60, bracoRz: -0.30, cotoveloL: -0.60, cotoveloR: -0.50, cabecaX: 0.20, avanco: 1.05, rolarY: 1.10, altura: -0.21 },
+        // Foul3 — DE COSTAS, PERNAS NO AR: meia volta (rolarY = pi).
+        { t: 0.68, leanZ: 0.00, pitchX: 1.40, chest: 0.35, coxaChute: -1.35, joelhoChute: 1.00, coxaChuteZ: 0.00, coxaApoio: -0.95, joelhoApoio: 0.75, bracoLx: -0.30, bracoLz: 0.95, bracoRx: -0.40, bracoRz: -0.95, cotoveloL: -0.40, cotoveloR: -0.40, cabecaX: 0.35, avanco: 1.55, rolarY: 3.14, altura: -0.77 },
+        // Foul2 — DE BRUÇOS outra vez, quase a volta inteira: uma mão no relvado, as pernas a descer atrás.
+        { t: 0.95, leanZ: 0.00, pitchX: 1.72, chest: -0.10, coxaChute: 0.30, joelhoChute: 0.55, coxaChuteZ: 0.00, coxaApoio: 0.15, joelhoApoio: 0.30, bracoLx: -1.55, bracoLz: 0.25, bracoRx: -0.70, bracoRz: -0.30, cotoveloL: -1.10, cotoveloR: -1.20, cabecaX: -0.50, avanco: 2.00, rolarY: 5.81, altura: -0.14 },
+        // Foul1 — DEITADO: a volta completa (rolarY = 2 pi), um braço esticado à frente.
+        { t: 1.25, leanZ: 0.00, pitchX: 1.57, chest: -0.08, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -1.00, bracoLz: 0.45, bracoRx: -2.70, bracoRz: -0.25, cotoveloL: -1.50, cotoveloR: -0.15, cabecaX: -0.45, avanco: 2.25, rolarY: 6.28, altura: -0.37 },
+        // ...e assim fica 4 s (o pedido). Só a cabeça e o peito mexem um pouco.
+        { t: 5.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -1.00, bracoLz: 0.45, bracoRx: -2.70, bracoRz: -0.25, cotoveloL: -1.50, cotoveloR: -0.15, cabecaX: -0.30, avanco: 2.25, rolarY: 6.28, altura: -0.34 },
+        // A levantar: de gatas.
+        { t: 5.85, leanZ: 0.00, pitchX: 1.35, chest: 0.00, coxaChute: -1.35, joelhoChute: 1.57, coxaChuteZ: 0.00, coxaApoio: -1.35, joelhoApoio: 1.57, bracoLx: -1.35, bracoLz: 0.15, bracoRx: -1.35, bracoRz: -0.15, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: -0.30, avanco: 2.25, rolarY: 6.28, altura: -0.10 },
+        // Um joelho no chão.
+        { t: 6.45, leanZ: 0.00, pitchX: 0.35, chest: 0.10, coxaChute: -1.75, joelhoChute: 1.50, coxaChuteZ: 0.00, coxaApoio: -0.35, joelhoApoio: 1.55, bracoLx: -0.30, bracoLz: 0.20, bracoRx: -0.60, bracoRz: -0.20, cotoveloL: -0.40, cotoveloR: -0.90, cabecaX: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.16 },
+        // De pé.
+        { t: 7.05, leanZ: 0.00, pitchX: 0.04, chest: 0.00, coxaChute: -0.04, joelhoChute: 0.10, coxaChuteZ: 0.00, coxaApoio: -0.04, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: 0.12, bracoRx: 0.00, bracoRz: -0.12, cotoveloL: -0.20, cotoveloR: -0.20, cabecaX: 0.00, avanco: 2.25, rolarY: 6.28, altura: 0.03 },
+    ]
+};
+if (typeof window !== 'undefined') window.QuedaClip = QuedaClip;
+
+
+/*
+=============================================================================
 GOAL_KICK_CLIP — TIRO DE META, 13 keyframes
 =============================================================================
 O gesto do tiro de meta, e só dele. Vive à parte do PlayerKickClip (a falta e

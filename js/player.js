@@ -1104,6 +1104,103 @@ class FootballPlayer {
     sola assenta no relvado, como no passe. O corpo nao se desloca aqui: no
     passe o jogador ja vem a correr.
     */
+    /*
+    =========================================================================
+    A QUEDA DE QUEM SOFRE A FALTA — ver QuedaClip (config/animations.js)
+    =========================================================================
+    Arranca no `Officials.marcarFalta`, ANTES de o lance parado ser montado,
+    e dura o clip inteiro (7.05 s: 1.25 s a cair e a rolar, 4 s no chão,
+    1.8 s a levantar). Enquanto dura, o jogador sai da árvore e da FSM: não decide,
+    não corre, não tem bola. Só o clip o mexe.
+
+    A MONTAGEM DO LANCE PARADO PASSA-LHE POR CIMA, e isso não se evita: ela
+    teletransporta toda a gente para o seu lugar (`lugaresDaFalta`, a
+    barreira, o corte pelo fora-de-jogo...), por vários caminhos. Em vez de
+    ensinar cada um deles a saltá-lo, a queda vigia-se a si própria: se o
+    corpo apareceu mais de meio metro longe de onde ela o deixou, alguém o
+    mandou para um lugar — guarda-se esse lugar (`destino`) e o corpo volta
+    para o chão onde caiu. Levantado, vai A PÉ até lá (`voltaDaQueda`).
+
+    O lance espera por ele: ver `Match.algumCaidoDaFalta`. E nunca é ele que
+    bate (o batedor da falta e o do penálti filtram quem tem `queda`).
+    =========================================================================
+    */
+    iniciarQueda(infractor) {
+        if (typeof QuedaClip === 'undefined' || !this.model || this.role === 'gk') return;
+        const pos = this.model.position;
+        // A direcção: a da corrida dele; parado, para longe de quem fez a falta.
+        let dx = this.velocity.x, dz = this.velocity.z;
+        if (Math.hypot(dx, dz) < 1.0 && infractor && infractor.model) {
+            dx = pos.x - infractor.model.position.x;
+            dz = pos.z - infractor.model.position.z;
+        }
+        let d = Math.hypot(dx, dz);
+        if (d < 1e-3) { dx = Math.sin(this.model.rotation.y); dz = Math.cos(this.model.rotation.y); d = 1; }
+        dx /= d; dz /= d;
+        this.queda = {
+            t: 0, dirX: dx, dirZ: dz, rumo: Math.atan2(dx, dz),
+            x0: pos.x, z0: pos.z, x: pos.x, z: pos.z, destino: null
+        };
+        this.voltaDaQueda = null;
+        this.hasBall = false;
+        this.actionState = null;
+        this.velocity.set(0, 0, 0);
+    }
+
+    actualizarQueda(dt, headless) {
+        const q = this.queda;
+        const pos = this.model.position;
+        // Alguém o pôs num lugar (a montagem do lance parado): é para lá que vai depois.
+        if (Math.hypot(pos.x - q.x, pos.z - q.z) > 0.5) q.destino = { x: pos.x, z: pos.z };
+
+        q.t += dt;
+        const K = amostrarClipQueda(q.t);
+        q.x = q.x0 + q.dirX * K.avanco;
+        q.z = q.z0 + q.dirZ * K.avanco;
+        pos.x = q.x; pos.z = q.z;
+        this.velocity.set(0, 0, 0);
+        this.hasBall = false;
+        this.model.rotation.set(0, q.rumo, 0);
+        if (!headless && this.rig && typeof escreverPoseBolaParada === 'function') {
+            escreverPoseBolaParada(this.rig, K, this.model, 'r');
+            this.assentarCorpoInteiro();
+        } else {
+            pos.y = ALTURA_BASE_Y;
+        }
+
+        if (q.t >= QuedaClip.duracao) {
+            this.queda = null;
+            // O rolamento acaba em 2 pi, que é 0: ver a nota do `rolarY` no QuedaClip.
+            if (this.rig && this.rig.pelvis) this.rig.pelvis.rotation.y = 0;
+            if (q.destino && Match.state !== 'PLAY') this.voltaDaQueda = q.destino;
+        }
+    }
+
+    /*
+    O CORPO TODO NO RELVADO, e não só as botas. O ponto mais baixo de TODAS as
+    caixas do boneco — peito, anca, mão, joelho — assenta em ALTURA_BASE_Y,
+    que é onde o construtor do clip também o assentou. Só para a queda: de pé,
+    quem manda é o `assentarNoChao`.
+    */
+    assentarCorpoInteiro() {
+        const m = this.model;
+        m.updateMatrixWorld(true);
+        let minY = Infinity;
+        const v = _p_v1;
+        m.traverse(o => {
+            if (!o.isMesh || !o.visible || !o.geometry || !o.geometry.attributes.position) return;
+            const g = o.geometry;
+            if (!g.boundingBox) g.computeBoundingBox();
+            const b = g.boundingBox;
+            for (let c = 0; c < 8; c++) {
+                v.set((c & 1) ? b.max.x : b.min.x, (c & 2) ? b.max.y : b.min.y, (c & 4) ? b.max.z : b.min.z);
+                o.localToWorld(v);
+                if (v.y < minY) minY = v.y;
+            }
+        });
+        if (minY < Infinity) m.position.y += ALTURA_BASE_Y - minY;
+    }
+
     aplicarFrameLancamento(K) {
         if (!this.rig || typeof escreverPoseBolaParada !== 'function') return;
         escreverPoseBolaParada(this.rig, K, this.model, LancamentoClip.pernaChute);
@@ -3884,6 +3981,91 @@ class FootballPlayer {
         inicial. Aqui pára tudo: sem decisão, sem movimento, só idle.
         */
         const headless = (typeof Sim !== 'undefined' && Sim.running);
+
+        /*
+        CAÍDO DEPOIS DE UMA FALTA — ver `iniciarQueda`. Antes de tudo, incluindo
+        o congelamento do penálti: a queda corre na mesma. Um pontapé de saída
+        (golo, intervalo) acaba com ela.
+        */
+        if (this.queda) {
+            if (Match.kickoffActive) {
+                this.queda = null;
+                this.voltaDaQueda = null;
+                if (!headless) this.resetBonesToDefault();
+            } else {
+                this.actualizarQueda(dt, headless);
+                return;
+            }
+        }
+        /*
+        A CAMINHO DO LUGAR DO LANCE PARADO — ver Match.montarBolaParadaAndada.
+        Enquanto quem sofreu a falta rola, segue o embalo e trava; depois vai a
+        pe (ou a trote, se for longe) ate ao lugar que a montagem lhe deu. O
+        caido passa primeiro pelo ramo da queda e so cai aqui depois de se
+        levantar.
+        */
+        if (this.lugarBolaParada) {
+            const L = this.lugarBolaParada;
+            if (Match.state === 'PLAY' || Match.kickoffActive ||
+                (Match.state !== 'FREE_KICK' && Match.state !== 'PENALTY')) {
+                this.lugarBolaParada = null;
+            } else {
+                const B = BolaParadaAndada;
+                const pos = this.model.position;
+                L.t += dt;
+                const d = Math.hypot(L.x - pos.x, L.z - pos.z);
+                if (Match.caidoAindaARolar()) {
+                    this.velocity.multiplyScalar(Math.exp(-B.travagem * dt));
+                    this.velocity.y = 0;
+                    pos.addScaledVector(this.velocity, dt);
+                } else if (d < B.chegada || L.t > B.prazo) {
+                    // Chegou: fica onde parou (a menos de `chegada`), sem saltar
+                    // para o ponto exacto. So a rede de seguranca o poe la.
+                    if (d >= B.chegada) { pos.x = L.x; pos.z = L.z; }
+                    this.velocity.set(0, 0, 0);
+                    this.lugarBolaParada = null;
+                    if (Match.ball) lookAtBola(this.model, Match.ball.position);
+                } else {
+                    /*
+                    A velocidade decide-se UMA vez, quando arranca, com a
+                    distancia toda. Recalculada a cada frame com o que falta,
+                    ia abrandando sem nunca chegar — medido, a cobranca saia
+                    aos 15-19 s.
+                    */
+                    if (L.vel === undefined) L.vel = THREE.MathUtils.clamp(d / B.tempoAlvo, B.velMin, B.velMax);
+                    this.steerArrive(_p_v2.set(L.x, ALTURA_BASE_Y, L.z), L.vel, 1.5);
+                    pos.addScaledVector(this.velocity, dt);
+                }
+                if (this.lugarBolaParada) {
+                    if (!headless) this.animateBones(dt);
+                    else pos.y = ALTURA_BASE_Y;
+                    return;
+                }
+            }
+        }
+
+        /*
+        E DEPOIS DE SE LEVANTAR, VAI A PÉ PARA O LUGAR que a montagem do lance
+        lhe deu. A falta e o penálti ficam à espera dele. Se o jogo recomeçou
+        entretanto, a árvore volta a mandar.
+        */
+        if (this.voltaDaQueda) {
+            if (Match.state === 'PLAY' || Match.kickoffActive) {
+                this.voltaDaQueda = null;
+            } else {
+                const alvo = _p_v2.set(this.voltaDaQueda.x, ALTURA_BASE_Y, this.voltaDaQueda.z);
+                if (Math.hypot(alvo.x - this.model.position.x, alvo.z - this.model.position.z) < 0.3) {
+                    this.voltaDaQueda = null;
+                    this.velocity.set(0, 0, 0);
+                } else {
+                    this.steerArrive(alvo, 4.5, 1.0);
+                    this.model.position.addScaledVector(this.velocity, dt);
+                    if (!headless) this.animateBones(dt);
+                    else this.model.position.y = ALTURA_BASE_Y;
+                    return;
+                }
+            }
+        }
 
         if (Match.kickoffActive || Match.state === 'PENALTY') {
             /*

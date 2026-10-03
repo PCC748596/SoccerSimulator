@@ -1025,6 +1025,7 @@ class PlayerFSM {
         const peEst = (s > 0) ? rig.rFoot : rig.lFoot;
         const coxaDob = (s > 0) ? rig.lLeg : rig.rLeg;
         const joelhoDob = (s > 0) ? rig.lKnee : rig.rKnee;
+        const peDob = (s > 0) ? rig.lFoot : rig.rFoot;
 
         // O braco de apoio e o do lado em que esta deitado.
         const bracoApoio = (s > 0) ? rig.lArm : rig.rArm;
@@ -1045,6 +1046,8 @@ class PlayerFSM {
         coxaDob.rotation.x = P.coxaDobrada * k;
         coxaDob.rotation.z = 0;
         joelhoDob.rotation.x = P.joelhoDobrado * k;
+        // O pe de tras deitado no relvado, alinhado com a canela, e nao pendurado dela.
+        if (peDob && typeof P.peDobrado === 'number') peDob.rotation.x = P.peDobrado * k;
 
         // rotation.z "para fora" e positivo no braco esquerdo, negativo no direito.
         bracoApoio.rotation.z = s * P.bracoApoioZ * k;
@@ -1055,7 +1058,16 @@ class PlayerFSM {
         bracoLivre.rotation.x = P.bracoLivreX * k;
         cotoveloLivre.rotation.x = P.cotoveloLivre * k;
 
+        /*
+        A ALTURA E A DO CORPO NO RELVADO, e nao um numero fixo. Era
+        `alturaAnca * k` (-0.55 m), escolhido para a pose antiga — com ela a
+        perna esticada ficava enterrada. Com o corpo desenhado (fora das
+        sondas) assenta-se o ponto mais baixo de todas as caixas, como na queda
+        (`assentarCorpoInteiro`); nas sondas, sem desenho, fica o numero.
+        */
         p.model.position.y = ALTURA_BASE_Y + SlideTackleModel.alturaAnca * k;
+        const semDesenho = (typeof Sim !== 'undefined' && Sim.running);
+        if (!semDesenho && typeof p.assentarCorpoInteiro === 'function') p.assentarCorpoInteiro();
     }
 
     update(dt) {

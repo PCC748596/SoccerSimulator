@@ -142,6 +142,12 @@ Object.assign(Match, {
             this.setPieceTimer += dt;
             if (this.faltaPendente) {
                 this.faltaAtraso -= dt;
+                // A espera pelo caído: ver `algumCaidoDaFalta`.
+                if (this.algumCaidoDaFalta(false) || this.algumACaminhoDoLugar(false)) {
+                    this.faltaAtraso = Math.max(this.faltaAtraso, ESPERA_APOS_REPOSICAO / 2);
+                    // E o prazo da falta nao corre enquanto se espera: ver `algumACaminhoDoLugar`.
+                    this.setPieceTimer -= dt;
+                }
 
                 /*
                 APROXIMAÇÃO ANDADA. O batedor espera `recuoBatedor` metros atrás
@@ -158,7 +164,8 @@ Object.assign(Match, {
                 const FK = FreeKickModel;
                 // O guarda-redes faz a caminhada no proprio `updateGK`
                 // ('tiro_meta_espera'); esta aproximacao e so dos outros.
-                if (takerFalta && takerFalta.model && takerFalta.role !== 'gk') {
+                // A caminho do lugar quem o leva e o Player.update (lugarBolaParada).
+                if (takerFalta && takerFalta.model && takerFalta.role !== 'gk' && !takerFalta.lugarBolaParada) {
                     if (this.faltaAtraso < ESPERA_APOS_REPOSICAO / 3) {
                         const bx = this.ball.position.x, bz = this.ball.position.z;
                         let alvoX = bx;
@@ -218,6 +225,10 @@ Object.assign(Match, {
             this.setPieceTimer += dt;
             if (this.penaltiPendente) {
                 this.penaltiAtraso -= dt;
+                if (this.algumCaidoDaFalta(true) || this.algumACaminhoDoLugar(true)) {
+                    this.penaltiAtraso = Math.max(this.penaltiAtraso, ESPERA_APOS_REPOSICAO / 2);
+                    this.setPieceTimer -= dt;
+                }
 
                 /*
                 APROXIMAÇÃO ANDADA, igual à da falta (ver o ramo faltaPendente
@@ -232,7 +243,9 @@ Object.assign(Match, {
                 */
                 const takerPen = this.setPieceTaker;
                 const PMa = PenaltyModel;
-                if (takerPen && takerPen.model && !takerPen.actionState) {
+                // A caminho do lugar quem o leva e o Player.update (lugarBolaParada):
+                // zerar-lhe aqui a velocidade todos os frames deixava-o preso.
+                if (takerPen && takerPen.model && !takerPen.actionState && !takerPen.lugarBolaParada) {
                     if (this.penaltiAtraso < ESPERA_APOS_REPOSICAO / 3) {
                         const dirPx = takerPen.model.position.x - this.ball.position.x;
                         const dirPz = takerPen.model.position.z - this.ball.position.z;
@@ -918,6 +931,52 @@ Object.assign(Match, {
                 this._pf_stats.time = 0;
             }
         }
+    },
+
+    /*
+    O LANCE ESPERA POR QUEM CAIU — ver QuedaClip e `iniciarQueda` (player.js).
+
+    A espera normal da falta é de 3 s (ESPERA_APOS_REPOSICAO); a queda dura
+    quase 7 s. Sem esperar, a falta era cobrada com ele deitado no relvado — e
+    a bola em jogo com um jogador que não decide nem se mexe. Enquanto alguém
+    está caído, a espera fica presa a meio (`ESPERA_APOS_REPOSICAO / 2`):
+    quando ele se levanta, falta o último terço — a aproximação andada do
+    batedor — e mais nada.
+
+    NA FALTA NÃO SE ESPERA PELA CAMINHADA DE VOLTA (`comVolta` false). O lugar
+    que a montagem lhe dá pode estar a 20-30 m: esperando também por isso,
+    medido em 24 faltas, 9 acabavam no prazo de 15 s sem cobrança. Ele vai a
+    andar enquanto o batedor se aproxima, como na realidade. NO PENÁLTI
+    ESPERA-SE (`comVolta` true): caiu dentro da área, e tem de sair dela.
+    */
+    /*
+    ALGUEM AINDA VAI A CAMINHO DO LUGAR — ver Match.montarBolaParadaAndada.
+
+    O lance nao arranca sem eles, e o PRAZO (`SetPiecePrazos`) tambem nao
+    corre enquanto se espera: os 15 s da falta foram medidos com toda a gente
+    posta no lugar no proprio frame, e quem vem de 40 m a trote leva ~6 s.
+    Quem esta preso tem a rede do `BolaParadaAndada.prazo`.
+
+    QUEM SOFREU A FALTA SO CONTA NO PENALTI (`comVitima`). Na falta ele
+    levanta-se aos 7 s e o lugar dele fica a 11-24 m: esperar por ele punha
+    a cobranca aos ~14 s, medido. Vai a andar enquanto o batedor se aproxima,
+    como ja fazia. No penalti caiu dentro da area e tem de sair dela.
+    */
+    algumACaminhoDoLugar: function (comVitima) {
+        const v = this.bolaParadaVitima;
+        const aCaminho = p => !!(p && p.lugarBolaParada && (comVitima || p !== v));
+        return this.players.some(aCaminho) || this.opponents.some(aCaminho);
+    },
+
+    // Quem sofreu a falta ainda esta a cair e a rolar (antes do keyframe deitado)?
+    caidoAindaARolar: function () {
+        const v = this.bolaParadaVitima;
+        return !!(v && v.queda && typeof QuedaClip !== 'undefined' && v.queda.t < QuedaClip.deitadoEm);
+    },
+
+    algumCaidoDaFalta: function (comVolta) {
+        const caido = p => !!(p && (p.queda || (comVolta && p.voltaDaQueda)));
+        return this.players.some(caido) || this.opponents.some(caido);
     },
 
     runTeamAI: function () {

@@ -61,6 +61,36 @@ Pedido, com três fotogramas L1–L3 e a regra: passes **pelo ar a partir de 20 
 - **O sorteio "pelo ar ou rasteiro" passou do contacto para o arranque** (`passePeloAr`, no `initiatePass`), porque o clip escolhe-se quando o gesto arranca; o `executePassGameplay` respeita-o. A probabilidade é a mesma (`PassModel.passeArco.chanceArco`). O lançamento em profundidade já decidia o alto antes (`throughBallAlto`); o cruzamento fica de fora.
 - Medido em jogo: 14% dos passes usam o gesto, **todos** saem pelo ar, pé de chute a 0.23 m da bola no contacto. A proporção pelo ar por distância não mudou (~metade a partir dos 15 m).
 
+#### A queda de quem sofre a falta — `QuedaClip` (js/config/animations.js, js/pose.js, js/player.js, js/officials.js, js/match/match_setpieces.js, js/match/match_loop.js)
+
+Pedido, com quatro imagens Foul1–4: *"É praticamente uma queda com rolamento. No ultimo Keyframe deve ficar uns 4 segs."*
+
+- **Ordem Foul4 → 3 → 2 → 1**, confirmada pelo autor: o toque de pé; o rolamento, com as pernas no ar; de bruços, com uma mão no relvado; deitado. Referências em `tools/anim/referencias/queda_Foul1..4.png`. São fotogramas pequenos com o corpo deitado, por isso as poses foram compostas a olho e comparadas renderizadas, não traçadas junta a junta.
+- **O tempo do clip é em segundos** (`t` por keyframe, `amostrarClipQueda(t)`): 1.25 s a cair e a rolar, 4 s deitado, 1.8 s a levantar (de gatas, depois um joelho no chão, depois de pé), 7.05 s no total.
+- **O rolamento é um canal novo, `rolarY`**: a torção da pélvis à volta do eixo cabeça-pés, escrita pelo `escreverPoseBolaParada`. Nos chutos não existe e fica 0. Dá uma volta inteira, 0 → 2π: de bruços, de lado, de costas com as pernas no ar (Foul3), de lado, de bruços (Foul2). Relato da primeira versão: *"a queda está ok, mas não está girando. Pára nessa posição"*. O corpo só se inclinava até ficar de cabeça para baixo e depois voltava para trás. No fim da queda o `rolarY` é reposto a 0, que é o mesmo que 2π. Sem isso, a suavização do `animateBones` desfazia a volta ao contrário. Usa os canais do tiro de meta. A pélvis é a raiz do rig, por isso o `pitchX` deita o corpo todo. O `avanco` é em metros: 2.25 m de rolamento.
+- **O corpo inteiro assenta no relvado** (`assentarCorpoInteiro`): conta o ponto mais baixo de todas as caixas, não só as botas. Sem isto a interpolação afundava até 0.23 m. Medido em jogo: 0.000 m.
+- **Arranca no `Officials.marcarFalta`, antes de o lance parado ser montado.** Enquanto cai, o jogador sai da árvore e da FSM. Quem cai nunca é o batedor da falta nem do penálti. A montagem teletransporta-o para o seu lugar. A queda detecta o salto (mais de 0.5 m), guarda esse lugar e devolve o corpo ao chão onde caiu. Depois de se levantar, vai a pé até lá (`voltaDaQueda`). O guarda-redes não cai.
+- **O lance espera** (`Match.algumCaidoDaFalta`). Na falta, espera só que ele se levante. Esperar também pela caminhada de volta, que pode ser de 20 a 30 m, fazia 9 de 24 faltas acabarem no prazo de 15 s sem cobrança. No penálti espera também a volta, porque ele caiu dentro da área. Medido: 23 de 23 faltas cobradas a ~9 s.
+
+#### O lance parado depois de uma falta monta-se A ANDAR (js/match/match_setpieces.js, js/match/match_loop.js, js/player.js, js/officials.js, js/config/shooting.js)
+
+Pedido: *"na hora da falta os jogadores já se reposicionam para a cobrança enquanto o jogador que sofreu a falta cai e rola. O reposicionamento dos demais jogadores deve ocorrer somente depois que o jogador que sofreu a falta chega no keyframe final. E eles tem que ir pro lugar naturalmente, não se teletransportando."*
+
+- **`Match.montarBolaParadaAndada`.** Corre o `setupSetPiece` como sempre e lê onde ele deixou cada um: esse passa a ser o lugar (`lugarBolaParada`). Depois devolve o corpo ao sítio de onde saiu, com a velocidade e a direcção que tinha. Os caminhos da montagem que teletransportam (lugares por sector, barreira, 9.15 m, corte do fora-de-jogo, forma recuada) ficam todos como estavam. Só as faltas com queda passam por aqui. Quem chama o `triggerFreeKick` directamente (testes, painel, fora-de-jogo) monta como sempre.
+- **Enquanto o caído rola** (até `QuedaClip.deitadoEm`, 1.25 s), cada um segue o embalo que trazia e trava sozinho (`BolaParadaAndada.travagem`). Depois vai para o lugar, a uma velocidade decidida uma vez com a distância toda: `distância / tempoAlvo`, entre 2.0 e 6.5 m/s. Recalculada a cada frame, abrandava sem nunca chegar e a cobrança saía aos 15–19 s.
+- **O guarda-redes também vai a pé** quando está de pé e sem bola (`gkEstado` 'idle' ou 'maos'). O `reporGuardaRedes` punha-o 2.3–11 m ao lado num frame.
+- **O lance espera pelos que vão a caminho** (`algumACaminhoDoLugar`), e o prazo de 15 s não corre durante essa espera. Quem sofreu a falta só conta no penálti, porque tem de sair da área. Na falta ele vai a andar enquanto o batedor se aproxima.
+- **Dois sítios zeravam a velocidade do batedor** em todos os frames da espera: a aproximação andada da falta e a do penálti. Saltam-no enquanto ele vai a caminho. No penálti ficava preso, e a rede de segurança (`BolaParadaAndada.prazo`, 20 s) acabava por o pôr no lugar.
+- Medido em 20 faltas: zero teletransportes. O maior passo por frame é 0.13 m (correr). Faltas cobradas a 9–11 s, penálti a 14 s. Os 21 testes de bola parada passam.
+
+#### O carrinho na pose da imagem 64BA0745 (js/config/defense.js `SlideTackleModel.pose`, js/fsm.js `applySlidePose`)
+
+Pedido: *"No carrinho, o jogador deve assumir a posição da imagem 64BA0745."* Referência em `tools/anim/referencias/carrinho_64BA0745.png`.
+
+- **A pose antiga estava deitada de lado** (`ancaRolar` 0.85), com a perna esticada enterrada no relvado. A da imagem é sentada a deslizar: perna da frente esticada até ao relvado, joelho de trás no chão com a canela deitada para trás, tronco ~43° para trás, um braço levantado para a frente e o outro em baixo, atrás.
+- Canal novo, `peDobrado`: o pé de trás alinhado com a canela. Sem ele o pé ficava pendurado para baixo e era o ponto mais baixo.
+- **A altura sai do corpo** (`assentarCorpoInteiro`) e já não do `alturaAnca` fixo de −0.55 m, que fica só para as sondas sem desenho. Medido em 8 carrinhos: o corpo fica assente no relvado (0.000 m).
+
 #### Os jogadores FANTASMA das sondas (js/match/match_setup.js)
 
 Apanhado com um "guarda-redes expulso" que afinal tinha `role: 'def'`. O `createTeams` faz `push` de onze jogadores e não esvazia as listas — quem esvazia é o `trocarEquipas`. Um **segundo `Match.init` no mesmo processo** dava 22 por equipa: os onze novos e onze fantasmas com os valores do construtor (`role: 'def'`, `pos: 'GK'`), que disputavam duelos e levavam cartões.

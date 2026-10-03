@@ -553,7 +553,7 @@ Object.assign(Match, {
                 ? ladoDaBola(bolaFK.x, attDir) : null;
 
             let takerFK = (typeof batedorDaFalta === 'function')
-                ? batedorDaFalta(attackingPlayers, criterioFK, p => p.skillFor('TEC'), ladoBolaFK)
+                ? batedorDaFalta(attackingPlayers.filter(p => !p.queda), criterioFK, p => p.skillFor('TEC'), ladoBolaFK)
                 : null;
 
             /*
@@ -1030,7 +1030,8 @@ Object.assign(Match, {
             // Bate o melhor rematador da equipa.
             let takerPen = null, melhorTec = -1;
             attackingPlayers.forEach(p => {
-                if (p.role === 'gk') return;
+                // Quem está caído da falta não bate (ver iniciarQueda).
+                if (p.role === 'gk' || p.queda) return;
                 const t = p.skillFor('TEC');
                 if (t > melhorTec) { melhorTec = t; takerPen = p; }
             });
@@ -1403,6 +1404,70 @@ Object.assign(Match, {
             this.golKickBolaAtraso = 0;
             this.golKickBolaAlvo = null;
         }
+    },
+
+    /*
+    =========================================================================
+    O LANCE PARADO MONTADO A ANDAR — depois de uma falta com queda
+    =========================================================================
+    Pedido: *"na hora da falta os jogadores ja se reposicionam para a cobranca
+    enquanto o jogador que sofreu a falta cai e rola. O reposicionamento dos
+    demais jogadores deve ocorrer somente depois que o jogador que sofreu a
+    falta chega no keyframe final. E eles tem que ir pro lugar naturalmente,
+    nao se teletransportando. Durante a falta os movimentos devem continuar
+    normais."*
+
+    O `setupSetPiece` POE toda a gente no lugar, por muitos caminhos (os
+    lugares do sector, a barreira, os 9.15 m, o corte do fora-de-jogo, a
+    forma recuada...), e cada um deles e afinado e medido. Em vez de os
+    reescrever um a um, corre-se a montagem como sempre e LE-SE o resultado:
+    o lugar de cada um e onde a montagem o deixou. Depois o corpo volta para
+    onde estava, com a velocidade e a direccao que tinha, e o lugar fica
+    guardado (`lugarBolaParada`) para ele la ir a pe — ver o ramo no
+    Player.update.
+
+      . enquanto o caido rola (ate `QuedaClip.deitadoEm`), cada um segue o
+        embalo que trazia e trava sozinho (`BolaParadaAndada.travagem`);
+      . quando ele fica deitado, todos vao para o lugar, a velocidade feita
+        da distancia;
+      . o lance espera ate o ultimo chegar (Match.algumACaminhoDoLugar).
+
+    O GUARDA-REDES TAMBEM VAI A PE, mas so se estiver de pe e sem bola
+    (`gkEstado` 'idle' ou 'maos' — este e o de pe a preparar-se para um
+    remate, que e como muitas vezes o apanha um penalti). Medido antes de entrar: o `reporGuardaRedes`
+    punha-o 2.3 a 11 m ao lado num frame. A meio de um mergulho ou com a bola
+    ele tem a sua propria historia — o `reporGuardaRedes` ja nao lhe toca a
+    meio do mergulho — e o que bate a falta na propria area faz a caminhada
+    do tiro de meta (`tiro_meta_espera`). Enquanto anda, o passo e o do
+    `animateBones`, como os outros.
+
+    So as faltas com queda passam por aqui. Quem chama o `triggerFreeKick`
+    directamente (os testes, o botao do painel, o fora-de-jogo) monta como
+    sempre, no proprio frame.
+    =========================================================================
+    */
+    montarBolaParadaAndada: function (montar, vitima) {
+        const antes = this.players.concat(this.opponents)
+            .filter(p => p && p.model && !p.expulso &&
+                (p.role !== 'gk' || (!p.hasBall && (p.gkEstado === 'idle' || p.gkEstado === 'maos'))))
+            .map(p => ({
+                p: p, x: p.model.position.x, z: p.model.position.z,
+                ry: p.model.rotation.y, v: p.velocity.clone()
+            }));
+        montar();
+        // A montagem pode ter acabado em PLAY (sem batedor, por exemplo): ai ninguem vai a lado nenhum.
+        if (this.state !== 'FREE_KICK' && this.state !== 'PENALTY') return;
+        for (const a of antes) {
+            const p = a.p;
+            const lugar = { x: p.model.position.x, z: p.model.position.z, t: 0 };
+            p.model.position.x = a.x;
+            p.model.position.z = a.z;
+            p.model.rotation.y = a.ry;
+            p.velocity.copy(a.v);
+            p.velocity.y = 0;
+            p.lugarBolaParada = lugar;
+        }
+        this.bolaParadaVitima = vitima;
     },
 
     triggerFreeKick: function (forceTeam = null) {

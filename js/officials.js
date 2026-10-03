@@ -2028,11 +2028,29 @@ const Officials = {
         */
         const pi = infractor.model.position, pv = vitima.model.position;
         const pos = { x: (pi.x + pv.x) / 2, z: (pi.z + pv.z) / 2 };
-        if (this.ehPenalti(pos.x, pos.z, infractor.team)) {
-            if (typeof MatchStats !== 'undefined') MatchStats[vitima.team].penaltis++;
-            Match.triggerPenalty(vitima.team);
+
+        /*
+        QUEM SOFRE A FALTA CAI — ver QuedaClip e `iniciarQueda` (player.js).
+        Tem de ser ANTES do `triggerFreeKick` / `triggerPenalty`: a montagem do
+        lance escolhe o batedor e os lugares, e tem de saber que ele está no
+        chão. O ponto da falta já foi lido acima, com ele ainda de pé.
+        */
+        if (vitima.role !== 'gk' && typeof vitima.iniciarQueda === 'function') {
+            vitima.iniciarQueda(infractor);
+        }
+        const penalti = this.ehPenalti(pos.x, pos.z, infractor.team);
+        if (penalti && typeof MatchStats !== 'undefined') MatchStats[vitima.team].penaltis++;
+        const montar = penalti
+            ? () => Match.triggerPenalty(vitima.team)
+            : () => Match.triggerFreeKick(vitima.team);
+        /*
+        Com queda, o lance monta-se A ANDAR: ninguem salta para o lugar, e so
+        depois de ele ficar deitado e que vao. Ver Match.montarBolaParadaAndada.
+        */
+        if (vitima.queda && typeof Match.montarBolaParadaAndada === 'function') {
+            Match.montarBolaParadaAndada(montar, vitima);
         } else {
-            Match.triggerFreeKick(vitima.team);
+            montar();
         }
 
         /*

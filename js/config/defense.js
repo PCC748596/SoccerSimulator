@@ -257,27 +257,47 @@ const SlideTackleModel = {
     alturaBola: 0.8,        // ressalto vertical do toque
     bloqueioAposToque: 0.9, // segundos sem poder tocar outra vez (está no chão)
 
-    // A pose, em radianos. `lado` = +1 estica a perna direita, -1 a esquerda.
+    /*
+    A POSE, em radianos. `lado` = +1 estica a perna direita, -1 a esquerda.
+
+    Refeita sobre a imagem 64BA0745 (tools/anim/referencias/
+    carrinho_64BA0745.png). Pedido: *"no carrinho, o jogador deve assumir a
+    posição da imagem 64BA0745. Está um pouco diferente no jogo."*
+
+    Na imagem: SENTADO a deslizar, a perna da frente esticada até ao relvado,
+    a de trás com o JOELHO NO CHÃO e a canela deitada para trás, o tronco ~43
+    graus para trás, um braço levantado para cima e para a frente e o outro em
+    baixo, atrás, a apoiar. A de antes estava DEITADA DE LADO (`ancaRolar`
+    0.85), com a perna esticada enterrada abaixo do relvado — o `alturaAnca`
+    fixo descia o corpo 0.55 m sem olhar para a pose. Agora a altura sai do
+    corpo (ver applySlidePose); o `alturaAnca` fica só para as sondas.
+
+    Ângulos do rig: coxa e braço + = para trás; com a anca 0.75 para trás,
+    a perna da frente a -0.02 fica 44 graus abaixo da horizontal (chega ao
+    relvado), a de trás a 0.45 aponta quase a prumo e o joelho dobra 1.90 —
+    a canela fica deitada para trás.
+    */
     pose: {
-        ancaRolar: 0.85,    // deita-se sobre a anca do lado oposto ao pé que estica
-        ancaTras: -0.25,
-        peito: -0.15,
-        peitoRolar: 0.15,
+        ancaRolar: 0.15,    // quase nada de lado: está sentado, não deitado
+        ancaTras: -0.75,    // o tronco ~43 graus para trás
+        peito: 0.0,
+        peitoRolar: 0.10,
 
-        coxaEstendida: -0.95,
-        joelhoEstendido: 0.10,
-        peEstendido: -0.20,
+        coxaEstendida: -0.02,
+        joelhoEstendido: 0.05,
+        peEstendido: -0.30,
 
-        coxaDobrada: -0.10,
-        joelhoDobrado: 1.55,
+        coxaDobrada: 0.45,  // a de trás: o joelho no chão...
+        joelhoDobrado: 1.90,// ...e a canela deitada para trás
+        peDobrado: 1.20,    // o pé alinhado com a canela, no relvado
 
-        bracoApoioZ: 1.35,  // braço de trás, aberto e no chão a apoiar
-        bracoApoioX: 0.70,
-        cotoveloApoio: -0.30,
+        bracoApoioZ: 0.30,  // braço de trás, em baixo e atrás, a apoiar
+        bracoApoioX: 1.40,
+        cotoveloApoio: -0.20,
 
-        bracoLivreZ: 0.50,  // braço da frente, para equilíbrio
-        bracoLivreX: -0.50,
-        cotoveloLivre: -0.60
+        bracoLivreZ: 0.25,  // o outro levantado, para cima e para a frente
+        bracoLivreX: -1.70,
+        cotoveloLivre: -0.30
     }
 };
 

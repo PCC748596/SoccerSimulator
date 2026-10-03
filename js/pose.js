@@ -1258,7 +1258,13 @@ function escreverPoseBolaParada(rig, K, corpo, pernaChute) {
 
     rig.pelvis.rotation.z = leanZ;
     rig.pelvis.rotation.x = K.pitchX || 0;
-    rig.pelvis.rotation.y = 0;
+    /*
+    `rolarY` — a TORÇÃO do corpo à volta do próprio eixo (cabeça-pés). Com a
+    ordem XYZ do three, o Y aplica-se depois do `pitchX`: com o corpo deitado
+    (pitchX pi/2), rolarY pi põe-no de costas e 2 pi de bruços outra vez. Só a
+    queda o usa (QuedaClip, o rolamento); nos chutos não existe e fica 0.
+    */
+    rig.pelvis.rotation.y = K.rolarY || 0;
 
     rig.chest.rotation.x = K.chest || 0;
     rig.chest.rotation.y = 0;
@@ -1493,6 +1499,24 @@ meta. A pose aplica-se pelo `escreverPoseBolaParada` — ver
 */
 function amostrarClipLancamento(norm) {
     return amostrarClipBolaParada(LancamentoClip, norm);
+}
+
+/*
+A QUEDA (QuedaClip) amostra-se em SEGUNDOS desde o toque, e não numa fracção:
+os keyframes trazem o seu `t`. Linear entre vizinhos, como os outros. Passado
+o fim, fica o último (de pé).
+*/
+function amostrarClipQueda(t) {
+    const fr = QuedaClip.frames;
+    let i = 0;
+    while (i < fr.length - 2 && t >= fr[i + 1].t) i++;
+    const a = fr[i], b = fr[i + 1];
+    const u = THREE.MathUtils.clamp((t - a.t) / Math.max(1e-6, b.t - a.t), 0, 1);
+    const K = {};
+    for (const k in a) {
+        if (typeof a[k] === 'number') K[k] = a[k] + ((b[k] !== undefined ? b[k] : a[k]) - a[k]) * u;
+    }
+    return K;
 }
 
 /*
