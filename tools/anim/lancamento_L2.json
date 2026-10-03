@@ -1,0 +1,73 @@
+{
+ "nome": "Lancamento L2 - contacto (principal 9)",
+ "frente": "esquerda",
+ "bola": [
+  25,
+  44,
+  2.5
+ ],
+ "juntas": {
+  "cabeca": [
+   36,
+   18.5
+  ],
+  "pescoco": [
+   38,
+   21.5
+  ],
+  "anca": [
+   35.5,
+   38
+  ],
+  "ombroE": [
+   38,
+   23
+  ],
+  "cotoveloE": [
+   34,
+   28
+  ],
+  "maoE": [
+   30.5,
+   29.5
+  ],
+  "ombroD": [
+   40,
+   23
+  ],
+  "cotoveloD": [
+   43,
+   30
+  ],
+  "maoD": [
+   43,
+   35
+  ],
+  "joelhoChute": [
+   31,
+   44
+  ],
+  "tornozeloChute": [
+   27,
+   46
+  ],
+  "bicoChute": [
+   25,
+   46
+  ],
+  "joelhoApoio": [
+   35,
+   45
+  ],
+  "tornozeloApoio": [
+   33,
+   49.5
+  ],
+  "bicoApoio": [
+   31,
+   50
+  ]
+ },
+ "imagem": "referencias/lancamento_L2.png",
+ "leitura": "Ordem L1 -> L2 -> L3 confirmada pelo autor a 2 de Outubro de 2026: aproximacao, contacto, seguimento. Na L3 o jogador esta virado para a DIREITA (a perna alta e a que ja chutou)."
+}

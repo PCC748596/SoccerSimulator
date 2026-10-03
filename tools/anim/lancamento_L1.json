@@ -1,0 +1,73 @@
+{
+ "nome": "Lancamento L1 - aproximacao (principal 1)",
+ "frente": "esquerda",
+ "bola": [
+  12.5,
+  28,
+  3
+ ],
+ "juntas": {
+  "cabeca": [
+   47,
+   11.5
+  ],
+  "pescoco": [
+   49,
+   14
+  ],
+  "anca": [
+   50,
+   30
+  ],
+  "ombroE": [
+   48,
+   17
+  ],
+  "cotoveloE": [
+   42,
+   19
+  ],
+  "maoE": [
+   36,
+   19.5
+  ],
+  "ombroD": [
+   50,
+   17
+  ],
+  "cotoveloD": [
+   52,
+   23
+  ],
+  "maoD": [
+   52.5,
+   28
+  ],
+  "joelhoChute": [
+   42,
+   34.5
+  ],
+  "tornozeloChute": [
+   35,
+   38.5
+  ],
+  "bicoChute": [
+   33.5,
+   39
+  ],
+  "joelhoApoio": [
+   49,
+   37
+  ],
+  "tornozeloApoio": [
+   50,
+   42
+  ],
+  "bicoApoio": [
+   48,
+   42.5
+  ]
+ },
+ "imagem": "referencias/lancamento_L1.png",
+ "leitura": "Ordem L1 -> L2 -> L3 confirmada pelo autor a 2 de Outubro de 2026: aproximacao, contacto, seguimento. Na L3 o jogador esta virado para a DIREITA (a perna alta e a que ja chutou)."
+}

@@ -1099,6 +1099,17 @@ class FootballPlayer {
     correr a seguir: o passe é lento o bastante (0.35 s) para se ver o boneco
     no ar se ninguém lhe descer o corpo até à bota.
     */
+    /*
+    O frame do LANCAMENTO (LancamentoClip): os canais do tiro de meta, e depois a
+    sola assenta no relvado, como no passe. O corpo nao se desloca aqui: no
+    passe o jogador ja vem a correr.
+    */
+    aplicarFrameLancamento(K) {
+        if (!this.rig || typeof escreverPoseBolaParada !== 'function') return;
+        escreverPoseBolaParada(this.rig, K, this.model, LancamentoClip.pernaChute);
+        this.assentarNoChao();
+    }
+
     aplicarFramePasse(K) {
         if (!this.rig) return;
         aplicarPoseRemate(this.rig, K);
@@ -3154,7 +3165,38 @@ class FootballPlayer {
                 ? Math.hypot(alvoFT.x - this.model.position.x, alvoFT.z - this.model.position.z)
                 : null;
         }
-        this.actionState = new ActionState('pass', {
+        /*
+        PELO AR OU RASTEIRO DECIDE-SE AQUI, e nao no contacto.
+
+        Pedido: o passe pelo ar a partir de 20 m tem gesto proprio, o
+        lancamento (LancamentoClip). O clip escolhe-se quando o gesto arranca —
+        e o sorteio "pelo ar ou rasteiro" do passe normal acontecia so no
+        contacto (`resolverElevacaoPasse`, no executePassGameplay), ja com o
+        gesto a meio. Antecipa-se o sorteio para aqui, a mesma probabilidade
+        (`PassModel.passeArco.chanceArco`) e o mesmo forcar do estilo "longo";
+        o contacto respeita o que saiu (`passePeloAr`).
+
+        O lancamento em profundidade ja decidia o alto antes (`throughBallAlto`,
+        no findThroughBall). O cruzamento fica de fora: tem trajectoria propria
+        e nao usa clip.
+        */
+        const PA = (typeof PassModel !== 'undefined') ? PassModel.passeArco : null;
+        const distPasse = (typeof this.passeDistancia === 'number') ? this.passeDistancia
+            : (this.passTarget && this.passTarget.model
+                ? this.model.position.distanceTo(this.passTarget.model.position) : 0);
+        if (this.isCross) {
+            this.passePeloAr = undefined;
+        } else if (this.isThroughBall) {
+            this.passePeloAr = !!this.throughBallAlto;
+        } else if (PA) {
+            const forcarArco = (typeof Tatics !== 'undefined' && Tatics.passe === 'longo');
+            this.passePeloAr = (distPasse > PA.rasteiroMax) &&
+                (forcarArco || Math.random() < PA.chanceArco);
+        }
+        const LANC_MIN = 20.0;
+        this.passeLancamento = !this.isCross && !!this.passePeloAr && distPasse >= LANC_MIN &&
+            typeof LancamentoClip !== 'undefined';
+        this.actionState = new ActionState(this.passeLancamento ? 'lancamento' : 'pass', {
             onContact: () => { if (this.hasBall && this.passTarget) executePassGameplay(this); }
         });
         // Consumido: o próximo passe volta a decidir o seu próprio ponto.

@@ -123,7 +123,14 @@ const ActionAnimClips = {
     de pé. Desde que o clip foi refeito com a ordem certa das fotografias
     (ver GoalKickClip), o contacto é a meio e o seguimento joga-se depois.
     */
-    goalKick: { duration: 0.55, contactTime: 8 / 12 }
+    goalKick: { duration: 0.55, contactTime: 8 / 12 },
+    /*
+    LANCAMENTO (ver LancamentoClip) — o passe pelo ar a partir de 20 m. Mesma
+    estrutura do tiro de meta, contacto no keyframe 9 de 13. Mais curto do que
+    o tiro de meta (0.45 contra 0.55 s): no passe o jogador vem lancado e nao
+    faz a corrida de aproximacao a partir de parado.
+    */
+    lancamento: { duration: 0.45, contactTime: 8 / 12 }
 };
 
 /*
@@ -580,6 +587,78 @@ const PlayerKickClip = {
         { avanco: 1.00, leanZ: -0.10, pitchX: 0.15, chest: -0.10, coxaChute: -0.70, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 0.75, joelhoApoio: 0.45, bracoLx: 0.00, bracoLz: 1.55, bracoRx: -0.10, bracoRz: -1.55, cotoveloL: -0.05, cotoveloR: -0.05, peRx: -0.25, peLx: -0.35, cabecaX: -0.20, altura: 0.18 }
     ]
 };
+
+/*
+=============================================================================
+O LANCAMENTO — o passe longo e levantado, com o peito do pe
+=============================================================================
+Pedido, com tres fotogramas: *"jogador fazendo lancamento: L1, L2 e L3"*, e a
+regra: passes PELO AR a partir de 20 m. O passe rasteiro e o curto continuam
+no PassClip (parte de dentro do pe).
+
+A ORDEM E L1 -> L2 -> L3, confirmada pelo autor a 2 de Outubro de 2026:
+aproximacao, contacto, seguimento. Na L3 o jogador esta virado para a DIREITA —
+a perna alta e a que ja chutou, a frente. As tres imagens tem 61 a 71 pixeis de
+altura; as fichas e os tracados estao em `tools/anim/` (lancamento_L1..L3).
+
+O BALANCO ATRAS NAO ESTA NAS TRES IMAGENS, e foi buscar-se ao tiro de meta
+(fotografia 26): o lancamento levantado e o tiro de meta sao, no corpo, o mesmo
+chuto. Sem balanco a perna ia da aproximacao ao contacto sem ir atras.
+
+MESMA ESTRUTURA DO GoalKickClip — treze keyframes, principais em 1, 5, 9 e 13,
+o `altura` resolvido keyframe a keyframe (o pe mais baixo assenta na relva) —
+e os mesmos canais, aplicados pelo `escreverPoseBolaParada`. O `avanco` existe
+mas NAO se usa: no passe o jogador ja vem a correr, e e a velocidade dele que o
+leva.
+
+Varrido em 41 amostras da interpolacao, o pe mais baixo afunda no maximo 0.016
+m e flutua no maximo 0.006 m, nos valores como estao escritos (a duas casas).
+=============================================================================
+*/
+const LancamentoClip = {
+    pernaChute: 'r',
+    contactFrame: 9,
+    frames: [
+        // ===== PRINCIPAL 1 — L1 — A APROXIMACAO =====
+        // A perna de chute vai a frente (61 graus), o tronco quase a prumo, o
+        // braco do lado contrario estendido. A bola esta longe, a frente.
+        { avanco: 0.00, leanZ: -0.14, pitchX: 0.05, chest: 0.02, coxaChute: -1.11, joelhoChute: 0.05, coxaChuteZ: -0.08, coxaApoio: -0.19, joelhoApoio: 0.34, bracoLx: 0.32, bracoLz: 0.28, bracoRx: -1.25, bracoRz: -0.28, cotoveloL: -0.22, cotoveloR: -0.24, peRx: -0.25, peLx: -0.15, cabecaX: -0.25, altura: 0.02, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 2 — interpolado entre os principais 1 e 5.
+        { avanco: 0.25, leanZ: -0.12, pitchX: 0.04, chest: 0.02, coxaChute: -0.44, joelhoChute: 0.10, coxaChuteZ: -0.05, coxaApoio: -0.38, joelhoApoio: 0.35, bracoLx: 0.62, bracoLz: 0.30, bracoRx: -1.35, bracoRz: -0.30, cotoveloL: -0.19, cotoveloR: -0.20, peRx: -0.24, peLx: -0.17, cabecaX: -0.19, altura: -0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 3 — interpolado entre os principais 1 e 5.
+        { avanco: 0.50, leanZ: -0.11, pitchX: 0.02, chest: 0.02, coxaChute: 0.22, joelhoChute: 0.14, coxaChuteZ: -0.01, coxaApoio: -0.57, joelhoApoio: 0.35, bracoLx: 0.91, bracoLz: 0.32, bracoRx: -1.44, bracoRz: -0.31, cotoveloL: -0.16, cotoveloR: -0.17, peRx: -0.22, peLx: -0.20, cabecaX: -0.12, altura: -0.03, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 4 — interpolado entre os principais 1 e 5.
+        { avanco: 0.75, leanZ: -0.09, pitchX: 0.01, chest: 0.03, coxaChute: 0.88, joelhoChute: 0.19, coxaChuteZ: 0.02, coxaApoio: -0.77, joelhoApoio: 0.36, bracoLx: 1.21, bracoLz: 0.33, bracoRx: -1.54, bracoRz: -0.33, cotoveloL: -0.13, cotoveloR: -0.13, peRx: -0.21, peLx: -0.22, cabecaX: -0.06, altura: -0.13, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 5 — O BALANCO ATRAS (nao esta nas tres imagens) =====
+        // E o do tiro de meta (fotografia 26, GoalKickClip principal 5): pe de
+        // apoio a frente, perna de chute 88 graus atras. Sem ele o gesto ia da
+        // aproximacao ao contacto sem a perna ir atras — empurrava a bola.
+        { avanco: 1.00, leanZ: -0.08, pitchX: 0.00, chest: 0.03, coxaChute: 1.54, joelhoChute: 0.23, coxaChuteZ: 0.05, coxaApoio: -0.96, joelhoApoio: 0.37, bracoLx: 1.50, bracoLz: 0.35, bracoRx: -1.64, bracoRz: -0.35, cotoveloL: -0.10, cotoveloR: -0.10, peRx: -0.20, peLx: -0.25, cabecaX: 0.00, altura: -0.25, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 6 — interpolado entre os principais 5 e 9.
+        { avanco: 1.00, leanZ: -0.10, pitchX: -0.03, chest: 0.01, coxaChute: 1.15, joelhoChute: 0.20, coxaChuteZ: 0.00, coxaApoio: -0.71, joelhoApoio: 0.29, bracoLx: 1.23, bracoLz: 0.35, bracoRx: -1.40, bracoRz: -0.35, cotoveloL: -0.18, cotoveloR: -0.20, peRx: -0.24, peLx: -0.19, cabecaX: -0.02, altura: -0.13, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 7 — interpolado entre os principais 5 e 9.
+        { avanco: 1.00, leanZ: -0.12, pitchX: -0.06, chest: 0.00, coxaChute: 0.76, joelhoChute: 0.17, coxaChuteZ: -0.05, coxaApoio: -0.46, joelhoApoio: 0.21, bracoLx: 0.95, bracoLz: 0.35, bracoRx: -1.16, bracoRz: -0.35, cotoveloL: -0.25, cotoveloR: -0.30, peRx: -0.28, peLx: -0.12, cabecaX: -0.05, altura: -0.05, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 8 — interpolado entre os principais 5 e 9.
+        { avanco: 1.00, leanZ: -0.14, pitchX: -0.08, chest: -0.02, coxaChute: 0.36, joelhoChute: 0.13, coxaChuteZ: -0.10, coxaApoio: -0.21, joelhoApoio: 0.13, bracoLx: 0.68, bracoLz: 0.35, bracoRx: -0.92, bracoRz: -0.35, cotoveloL: -0.33, cotoveloR: -0.39, peRx: -0.31, peLx: -0.06, cabecaX: -0.08, altura: 0.00, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 9 — L2 — CONTACTO (contactFrame) =====
+        // Pernas juntas debaixo do corpo, o pe de chute rente a relva e 5 cm a
+        // frente do de apoio. Tronco 9 graus para tras. A coxa de chute resolve-se
+        // para o pe passar rente a relva, como no tiro de meta.
+        { avanco: 1.00, leanZ: -0.16, pitchX: -0.11, chest: -0.04, coxaChute: -0.03, joelhoChute: 0.10, coxaChuteZ: -0.15, coxaApoio: 0.04, joelhoApoio: 0.05, bracoLx: 0.40, bracoLz: 0.35, bracoRx: -0.67, bracoRz: -0.35, cotoveloL: -0.40, cotoveloR: -0.49, peRx: -0.35, peLx: 0.00, cabecaX: -0.10, altura: 0.02, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 10 — interpolado entre os principais 9 e 13.
+        { avanco: 1.00, leanZ: -0.15, pitchX: -0.11, chest: -0.04, coxaChute: -0.35, joelhoChute: 0.09, coxaChuteZ: -0.10, coxaApoio: 0.28, joelhoApoio: 0.05, bracoLx: 0.11, bracoLz: 0.40, bracoRx: -0.43, bracoRz: -0.40, cotoveloL: -0.34, cotoveloR: -0.41, peRx: -0.30, peLx: -0.05, cabecaX: -0.10, altura: 0.04, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 11 — interpolado entre os principais 9 e 13.
+        { avanco: 1.00, leanZ: -0.13, pitchX: -0.11, chest: -0.04, coxaChute: -0.66, joelhoChute: 0.08, coxaChuteZ: -0.05, coxaApoio: 0.52, joelhoApoio: 0.06, bracoLx: -0.19, bracoLz: 0.45, bracoRx: -0.19, bracoRz: -0.45, cotoveloL: -0.28, cotoveloR: -0.32, peRx: -0.25, peLx: -0.10, cabecaX: -0.10, altura: 0.02, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 12 — interpolado entre os principais 9 e 13.
+        { avanco: 1.00, leanZ: -0.11, pitchX: -0.12, chest: -0.04, coxaChute: -0.98, joelhoChute: 0.06, coxaChuteZ: 0.00, coxaApoio: 0.76, joelhoApoio: 0.06, bracoLx: -0.49, bracoLz: 0.50, bracoRx: 0.06, bracoRz: -0.50, cotoveloL: -0.21, cotoveloR: -0.24, peRx: -0.20, peLx: -0.15, cabecaX: -0.10, altura: -0.06, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 13 — L3 — O SEGUIMENTO =====
+        // Perna de chute esticada 81 graus A FRENTE, a de apoio a ficar 51 graus
+        // atras: as pernas abertas 132 graus, como na imagem. Na L3 o jogador
+        // esta virado para a DIREITA (confirmado pelo autor).
+        { avanco: 1.00, leanZ: -0.10, pitchX: -0.12, chest: -0.04, coxaChute: -1.30, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 1.00, joelhoApoio: 0.07, bracoLx: -0.79, bracoLz: 0.55, bracoRx: 0.30, bracoRz: -0.55, cotoveloL: -0.15, cotoveloR: -0.15, peRx: -0.15, peLx: -0.20, cabecaX: -0.10, altura: -0.18, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+    ]
+};
+if (typeof window !== 'undefined') window.LancamentoClip = LancamentoClip;
 
 /*
 =============================================================================

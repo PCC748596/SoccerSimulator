@@ -5,6 +5,92 @@ Consulta este ficheiro para saber **onde** mexer antes de abrir o código.
 
 ## Últimas Actualizações (Outubro 2026)
 
+### Sessão de 1-3 de Outubro de 2026 — o tiro de meta refeito na ordem certa, o lançamento, o guarda-redes que bate faltas, e os jogadores fantasma das sondas
+
+#### `GoalKickClip` (js/config/animations.js) — refeito: a perna de chute nunca passava pela bola
+
+As quatro fotografias de referência que chegaram eram as MESMAS de Setembro (idênticas byte a byte às de `tools/anim/referencias/goalkick_23..26.png`). O clip tinha sido feito com elas na ordem errada, e o resultado era um tiro de meta **sem chuto**: a perna ia atrás no balanço, ficava lá, descia, e a bola saía no último frame com o guarda-redes de pé. O próprio clip dizia que o contacto era *"deduzido, não há imagem deste instante"* — havia, era a 23, lida como o início do gesto.
+
+- **A ordem é 24 → 26 → 23 → 25**, confirmada pelo autor a 2 de Outubro (em Setembro tinha sido dada 24, 23, 25, 26). As provas estão no cabeçalho do clip: na 26 a bola **ainda está parada** ao lado do pé de apoio (é antes do contacto); na 25 **já não há bola** (é depois); e a 25 está virada para a esquerda como as outras — lida para a direita, a perna esticada dava "77 graus atrás", e é à frente.
+- **Contacto no keyframe 9** (`contactFrame: 9`, `ActionAnimClips.goalKick.contactTime` 8/12). A bola sai a meio do gesto e o seguimento (10–13) vê-se depois dela.
+- **No contacto manda a bola, não o traçado.** A 23 é tirada de trás a três quartos e encurta a perna que vai à frente: o ângulo lido (-46°) punha o pé meio metro acima da bola. A coxa e o joelho de chute do keyframe 9 resolvem-se para o pé passar rente à relva, 5 cm à frente do de apoio.
+- A regra de Setembro *"no contacto as pernas abrem 83 graus"* deixa de valer: foi medida no que se julgava o contacto e era o balanço. O contacto real (23) mede 35°.
+- Medido em jogo, no instante em que a bola sai: pé de chute a **0.12 m** da bola (raio 0.11). Varrido em 41 amostras, nenhum pé afunda mais de 1.8 cm.
+- **`tools/anim/` corrigido**: três das quatro fichas tinham os nomes `Chute`/`Apoio` trocados e a 25 dizia `"frente": "direita"`. Cada ficha tem agora um campo `leitura`. O README ensinava a ordem errada (tirada da distância em píxeis) e passou a dizer que é a **bola** que decide a ordem, e a avisar do encurtamento das vistas de trás.
+
+#### O pé de apoio planta ao lado da bola, e fica lá (js/player.js)
+
+Relato, com captura: *"o pé de apoio no tiro de meta tem que ficar ao lado da bola. Está ficando à frente da bola."*
+
+- O ponto de apoio (0.10 m atrás da bola, 0.32 m ao lado) era aplicado à **origem do corpo**. No balanço a coxa de apoio está 55° à frente e o pé fica **0.71 m** à frente da anca — por isso plantava ~0.6 m à frente da bola.
+- Por baixo havia um segundo defeito: com o corpo parado do keyframe 5 ao 9, o pé recuava 0.48 m em relação a ele, ou seja **escorregava para trás** durante o chuto.
+- Agora, em cada frame do chuto do chão (depois da rotação, ver "QUEM VAI AO PONTO DE APOIO E O PÉ"), lê-se onde está o pé de apoio face ao corpo e põe-se o corpo de maneira que **o pé** caia no ponto de apoio, ao ritmo do `avanco`. Medido frame a frame: o pé planta a 0.32 m ao lado da bola e desliza **no máximo 1.8 cm** do plantar ao fim do gesto.
+- **O `gkKickTipo` deixou de se apagar no contacto** (`kickFromGround`), e apaga-se no fim do gesto. Com o contacto a meio, o resto do gesto passava a ser desenhado com o clip do **pontapé da mão**: o pé saltava 27 cm num frame e o corpo congelava.
+
+#### O guarda-redes bate as faltas na própria área (js/match/match_setpieces.js, js/match/match_loop.js, js/player.js)
+
+Revisão dos gestos do guarda-redes: ele **nunca** batia faltas (`batedorDaFalta` exclui-o, e na defesa batia o central). Agora, com a bola dentro da grande área de quem cobra, bate o guarda-redes, com o **gesto do tiro de meta** (`FreeKickModel.guardaRedesBateNaArea`).
+
+- A montagem põe-no em `tiro_meta_espera` e o ciclo da falta passa-o a `tiro_meta` no instante em que libertaria outro batedor. O `kickFromGround` regista `free_kick_taken` e a regra do repositor `falta` quando é falta.
+- **Uma saída antecipada em `player.update`** mandava o batedor da falta pela FSM e saía antes do `updateGK`: o guarda-redes ficava parado em `tiro_meta` até ao prazo (o `updateGK` era chamado zero vezes). Ganhou `&& this.role !== 'gk'`.
+- Num cenário montado, 4 em 4: dentro da área bate ele e a bola sai a ~20 m/s para a frente; fora dela bate o central.
+
+#### O alívio e o recuo de urgência com o gesto do tiro de meta (js/player.js)
+
+Os dois usavam o `PlayerKickClip` genérico. Passaram a `chutarComGestoDeTiroDeMeta`, que usa o `GoalKickClip` **e** o deslize do corpo até ao pé de apoio — e aponta o pé para onde a bola **vai estar** no contacto (`preverBolaEm`), porque aqui a bola rola sempre. Num recuo montado, com a bola a 5 m/s, o pé de chute chega ao contacto a 0.17 m dela (com o gesto antigo, 0.65–1.18 m). São lances raros: zero em 60 minutos de jogo medido.
+
+#### A segunda defesa (js/gk_dive.js, `GoalkeeperDive.recargaLevantaJa`)
+
+Depois de espalmar, ele ficava deitado o `tempoChao` inteiro (2.0 s no mergulho alto, a pedido). Medido: em 10 de 18 defesas sem agarrar a bola ficava **viva na área** com ele deitado. Agora, com a bola na grande área dele e sem ser de um colega, o prazo cai para o deslize da queda (0.35 s). Com a bola longe fica o tempo do pedido. Nesta amostra não custava golos — é realismo, não calibração.
+
+#### O guarda-redes enterrava-se no relvado no fim da queda (js/player.js, js/gk_dive.js)
+
+Relato, com captura: *"o goleiro está se enfiando no chão no final da queda"*.
+
+- **A causa estava numa linha de `player.update`**: quando ele espalma para canto, o estado passa a `CORNER_KICK` com ele ainda deitado, e a guarda que tira o guarda-redes do `animateBones` não tinha a excepção `|| gkAMergulhar` — que a linha irmã, a que escolhe quem corre o `updateGK`, já tinha. O `animateBones` acaba no `assentarNoChao`, que desce o corpo até a sola tocar na relva: com ele deitado, enterrava-o. Encontrado envolvendo o `GkDive.update`: em 156 de 156 frames enterrados o corpo estava bem no fim do mergulho, e era esta linha que o baixava.
+- O `GkDive.update` passou também a assentar o corpo **todos os frames** (só sobe, nunca desce), e a correr o `maosForaDoRelvado` várias vezes por frame no voo e na aterragem (os braços são reescritos de raiz em cada frame pelo clip e pelo IK, e uma chamada com o tecto não chegava).
+- Resultado: corpo abaixo da relva **0 em 1332** frames de mergulho (eram 57); mãos 17 (eram 106), profundidade máxima 0.20 m (era 0.99).
+- `tests/bola_parada_com_prazo.test.js` procura a forma da guarda por regex e passou a aceitar o parêntese.
+
+#### O `LancamentoClip` — o passe pelo ar a partir de 20 m (js/config/animations.js, js/pose.js, js/player.js, js/fsm.js)
+
+Pedido, com três fotogramas L1–L3 e a regra: passes **pelo ar a partir de 20 m** têm gesto próprio; o rasteiro e o curto continuam no `PassClip`.
+
+- **Ordem L1 → L2 → L3** (aproximação, contacto, seguimento), confirmada pelo autor; na L3 o jogador está virado para a **direita**. As imagens têm 61–71 px de altura; fichas e traçados em `tools/anim/lancamento_L1..L3`.
+- **O balanço atrás não está nas três imagens** e vem do tiro de meta (fotografia 26). Mesma estrutura do `GoalKickClip`: principais em 1, 5, 9 e 13, contacto no 9, `ActionAnimClips.lancamento` com 0.45 s.
+- **O sorteio "pelo ar ou rasteiro" passou do contacto para o arranque** (`passePeloAr`, no `initiatePass`), porque o clip escolhe-se quando o gesto arranca; o `executePassGameplay` respeita-o. A probabilidade é a mesma (`PassModel.passeArco.chanceArco`). O lançamento em profundidade já decidia o alto antes (`throughBallAlto`); o cruzamento fica de fora.
+- Medido em jogo: 14% dos passes usam o gesto, **todos** saem pelo ar, pé de chute a 0.23 m da bola no contacto. A proporção pelo ar por distância não mudou (~metade a partir dos 15 m).
+
+#### Os jogadores FANTASMA das sondas (js/match/match_setup.js)
+
+Apanhado com um "guarda-redes expulso" que afinal tinha `role: 'def'`. O `createTeams` faz `push` de onze jogadores e não esvazia as listas — quem esvazia é o `trocarEquipas`. Um **segundo `Match.init` no mesmo processo** dava 22 por equipa: os onze novos e onze fantasmas com os valores do construtor (`role: 'def'`, `pos: 'GK'`), que disputavam duelos e levavam cartões.
+
+- **O jogo e o `lote_jogos.js` estavam limpos** (um `init` só; o lote troca de jogo pelo `trocarEquipas`). As calibrações feitas no lote mantêm-se.
+- **As sondas com várias sementes estavam contaminadas a partir da segunda.** Revisto: a condução, remedida limpa, dá 0.53 m (antes 0.54); as "213 faltas por 90" e os "11 GK" de sondas anteriores eram estes fantasmas.
+- O `Match.init` faz agora a limpeza do `trocarEquipas` (menos tirar bonecos da cena, que é nova). Quatro `init` seguidos: onze por equipa em todos.
+
+#### Condução: os toques escolhidos pelo autor (js/config/player_behavior.js)
+
+`touchLong` 2.5, `touchMedium` 1.6, `touchShort` 1.4 (escolha do autor). Medido sem fantasmas: a bola a **0.53 m** do portador de mediana, 82% do tempo a menos de um metro. Os "2.77 m" registados na entrada anterior estavam inflacionados pela sonda (contava frames com a bola já noutro jogador).
+
+#### Testes mexidos, e porquê
+
+- `tests/recuo_com_o_pe.test.js` — dizia *"o clip do tiro de meta (playerKick)"*, de quando esse era o nome; passou a `goalKick`, e o objecto isolado ganhou o `chutarComGestoDeTiroDeMeta`.
+- `tests/reposicao_do_guarda_redes.test.js` — o cenário (adversários colados a 1.2 m em todos os frames) gerava uma falta real **sobre o guarda-redes** com a bola nas mãos, e ele ia batê-la; desliga-se a detecção de faltas só durante a contagem dos 8 s.
+- `tests/bola_parada_com_prazo.test.js` — a regex da guarda aceita o parêntese novo.
+
+#### Testes que falham, e o que se sabe deles
+
+- **Já falhavam no commit, iguais:** `remate_tipo_mira` (a faixa de precisão é de antes do +30% de erro nos remates) e `gk_agarra_com_a_mao`, `guarda_redes_bola_agarrada`, `guarda_redes_espalmada`, que não terminam nem com 570 s — nem no commit.
+- **Dependem de um jogo só, e o fluxo mudou:** `guarda_redes_tiro_de_meta` (pede 2 tiros de meta em 8 min), `estilos_tres_pedidos` (Fox in the Box: em 3 sementes, 3.1–7.1 m agora contra 5.0–7.5 m no commit, alvo igual em 1.5 m) e `saida_de_bola_ritmo` (19% na semente do teste; nas outras quatro 8%, contra 5–9% no commit). Alargar estas réguas a várias sementes é decisão do autor.
+
+#### Armadilhas desta sessão
+
+- **Imagens que chegam a meio de um turno não ficam em disco** — só as que vêm numa mensagem própria. Sem ficheiro não há traçado.
+- **A ordem das fotografias decide-se pela bola** (parada ao lado do pé = antes; fora da imagem = depois), nunca por distâncias em píxeis.
+- **Uma vista de trás encurta a perna que vai à frente** — o ângulo lido não é o ângulo do corpo.
+- **Sondas com várias sementes: confirmar onze por equipa** antes de confiar em qualquer número (ver os fantasmas).
+
 ### Sessão de 30 de Setembro – 1 de Outubro de 2026 — a leitura da trajectória, a condução que empurra a bola, e três correcções minhas que pioraram o que iam arranjar
 
 #### `trajectoriaDaBola` e `interceptarBola` (js/utils.js) + `AlcanceDaBola` (js/config/player_behavior.js) — a camada que faltava

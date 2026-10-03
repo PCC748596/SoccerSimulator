@@ -349,8 +349,20 @@ function executePassGameplay(p) {
         }
 
         const forcarArco = (Tatics.passe === 'longo');
+        /*
+        O SORTEIO "PELO AR OU RASTEIRO" FOI FEITO NO ARRANQUE (`passePeloAr`, no
+        initiatePass) — e o que escolhe o clip do lancamento. Aqui respeita-se:
+        pelo ar resolve so a elevacao para a distancia de agora; rasteiro nao
+        sobe. Sem decisao previa (um passe montado por outro caminho), fica o
+        sorteio de sempre.
+        */
+        const decidido = (typeof p.passePeloAr === 'boolean') ? p.passePeloAr : null;
+        p.passePeloAr = undefined;
         const elev = (p.isGkThrow || usouBalistica)
-            ? null : resolverElevacaoPasse(distToTarget, forcarArco);
+            ? null
+            : (decidido === null
+                ? resolverElevacaoPasse(distToTarget, forcarArco)
+                : (decidido ? resolverElevacaoPasse(distToTarget, true) : null));
 
         if (usouBalistica) {
             // Ja resolvido acima (entrega do guarda-redes).
@@ -2103,7 +2115,14 @@ class PlayerFSM {
                     O CRUZAMENTO fica de fora: é outro gesto (inclinar para
                     trás e levantar a bola) e merece clip próprio.
                     */
-                    if (p.passeComClip && typeof amostrarClipPasse === 'function') {
+                    /*
+                    O LANCAMENTO TEM O SEU CLIP — ver LancamentoClip e a escolha
+                    no initiatePass. O seguimento esta no proprio clip (keyframes
+                    10-13), por isso nao passa pelo PassFollowThrough.
+                    */
+                    if (p.passeLancamento && typeof amostrarClipLancamento === 'function') {
+                        p.aplicarFrameLancamento(amostrarClipLancamento(norm));
+                    } else if (p.passeComClip && typeof amostrarClipPasse === 'function') {
                         const KP = amostrarClipPasse(norm);
                         /*
                         SEGUIMENTO A MEDIDA DO PASSE -- ver PassFollowThrough.

@@ -1,0 +1,68 @@
+{
+ "nome": "Lancamento L3 - seguimento, perna de chute A FRENTE (principal 13)",
+ "frente": "direita",
+ "juntas": {
+  "cabeca": [
+   40.5,
+   17
+  ],
+  "pescoco": [
+   42,
+   20
+  ],
+  "anca": [
+   44.5,
+   36
+  ],
+  "ombroE": [
+   42,
+   21.5
+  ],
+  "cotoveloE": [
+   40,
+   28
+  ],
+  "maoE": [
+   38.5,
+   33
+  ],
+  "ombroD": [
+   45,
+   21.5
+  ],
+  "cotoveloD": [
+   50,
+   26.5
+  ],
+  "maoD": [
+   53,
+   30
+  ],
+  "joelhoChute": [
+   54,
+   37.5
+  ],
+  "tornozeloChute": [
+   62,
+   38
+  ],
+  "bicoChute": [
+   64,
+   39.5
+  ],
+  "joelhoApoio": [
+   36,
+   43
+  ],
+  "tornozeloApoio": [
+   29,
+   48
+  ],
+  "bicoApoio": [
+   27,
+   49
+  ]
+ },
+ "imagem": "referencias/lancamento_L3.png",
+ "leitura": "Ordem L1 -> L2 -> L3 confirmada pelo autor a 2 de Outubro de 2026: aproximacao, contacto, seguimento. Na L3 o jogador esta virado para a DIREITA (a perna alta e a que ja chutou)."
+}

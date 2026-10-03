@@ -1487,6 +1487,15 @@ function amostrarClipGoalKick(norm) {
 }
 
 /*
+O LANCAMENTO (LancamentoClip): os mesmos canais e o mesmo amostrador do tiro de
+meta. A pose aplica-se pelo `escreverPoseBolaParada` — ver
+`aplicarFrameLancamento` em player.js.
+*/
+function amostrarClipLancamento(norm) {
+    return amostrarClipBolaParada(LancamentoClip, norm);
+}
+
+/*
 Amostra o clip do remate (ShotClip) num tempo normalizado 0..1.
 */
 function amostrarClipRemate(norm) {
