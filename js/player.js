@@ -1299,6 +1299,24 @@ class FootballPlayer {
 
         Era o `'shot'` (remate de jogo corrido); ver PlayerKickClip.
         */
+        /*
+        A FALTA DIRECTA (remate) BATE-SE COM O LANÇAMENTO — ver
+        iniciarLancamentoBolaParada. Os outros desfechos (passe, cruzamento)
+        continuam com o PlayerKickClip, aqui em baixo.
+        */
+        if (decisao === 'remate' && typeof LancamentoClip !== 'undefined' &&
+            typeof LancamentoBolaParada !== 'undefined') {
+            const ddx = Match.ball.position.x - this.model.position.x;
+            const ddz = Match.ball.position.z - this.model.position.z;
+            const dd = Math.hypot(ddx, ddz) || 1;
+            this.iniciarLancamentoBolaParada(ddx / dd, ddz / dd, () => {
+                Match.mudarEstado('PLAY', 'free_kick_taken');
+                Match.marcarRepositor(this, 'falta');
+                this.executarFalta(decisao);
+            });
+            return;
+        }
+
         const clip = 'playerKick';
         const dur = ActionAnimClips[clip] ? ActionAnimClips[clip].contactTime : (7 / 11);
 
@@ -1337,6 +1355,45 @@ class FootballPlayer {
     /*
     O CONTACTO da falta: disparado no `contactTime` do clip. Ver `baterFalta`.
     */
+    /*
+    =========================================================================
+    O LANÇAMENTO NA BOLA PARADA — o canto e a falta directa
+    =========================================================================
+    Pedido: *"a cobrança do corner e da falta direta também deve usar a
+    animação do lançamento"*. O canto não tinha gesto nenhum (a velocidade da
+    bola era escrita no frame em que o tempo acabava, com ele parado); a falta
+    directa usava o PlayerKickClip.
+
+    `dirX`/`dirZ` é para onde a bola vai. O corpo corre de onde está até ao
+    ponto em que o pé DIREITO fica em cima da bola no contacto (ver
+    LancamentoBolaParada), ao ritmo do `avanco` do clip, e vira-se para lá
+    (ver o SET_PIECE_KICK na FSM). `onContact` é quem joga a bola.
+    =========================================================================
+    */
+    iniciarLancamentoBolaParada(dirX, dirZ, onContact) {
+        const L = LancamentoBolaParada;
+        const b = Match.ball.position;
+        // O eixo +x local do corpo, virado para (dirX, dirZ), é (dirZ, -dirX): a
+        // esquerda dele. O pé direito fica `peLado` para a direita da origem.
+        const fim = {
+            x: b.x - dirX * L.peFrente + dirZ * L.peLado,
+            z: b.z - dirZ * L.peFrente - dirX * L.peLado
+        };
+        const inicio = { x: this.model.position.x, z: this.model.position.z };
+        this.velocity.set(0, 0, 0);
+        this.bolaParadaLancamento = { dirX: dirX, dirZ: dirZ };
+        this.actionState = new ActionState('lancamentoBolaParada', {
+            onPrepare: (ctx, norm) => {
+                const K = amostrarClipLancamento(norm);
+                const k = (typeof K.avanco === 'number') ? K.avanco : Math.min(1, norm * 3);
+                this.model.position.x = inicio.x + (fim.x - inicio.x) * k;
+                this.model.position.z = inicio.z + (fim.z - inicio.z) * k;
+            },
+            onContact: onContact
+        });
+        this.fsm.changeState('SET_PIECE_KICK');
+    }
+
     executarFalta(decisao) {
         if (decisao === 'remate') {
             /*

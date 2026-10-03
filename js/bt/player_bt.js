@@ -3401,6 +3401,8 @@ function tratarBolaParada(p) {
     const s = fsm.currentState;
 
     if (Match.state === 'CORNER_KICK') {
+        // O batedor a meio do lançamento (SET_PIECE_KICK) não é interrompido.
+        if (p === Match.setPieceTaker && s === 'SET_PIECE_KICK' && p.actionState) return;
         if (s !== 'SET_PIECE_TAKER' && s !== 'SET_PIECE_WAIT') {
             fsm.changeState('SET_PIECE_WAIT');
         }

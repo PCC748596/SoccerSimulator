@@ -130,8 +130,33 @@ const ActionAnimClips = {
     o tiro de meta (0.45 contra 0.55 s): no passe o jogador vem lancado e nao
     faz a corrida de aproximacao a partir de parado.
     */
-    lancamento: { duration: 0.45, contactTime: 8 / 12 }
+    lancamento: { duration: 0.45, contactTime: 8 / 12 },
+    /*
+    O LANÇAMENTO NA BOLA PARADA — o canto e a falta directa. Pedido: *"a
+    cobrança do corner e da falta direta também deve usar a animação do
+    lançamento"*. O mesmo LancamentoClip, mais devagar do que no passe: aqui ele
+    arranca PARADO e faz a corrida dentro do gesto (o `avanco` do clip chega a
+    1 no keyframe 5, o pé de apoio planta e o corpo não anda mais). 0.80 s põe
+    o contacto aos 0.53 s, praticamente onde estava o do PlayerKickClip (0.55).
+    Ver Player.iniciarLancamentoBolaParada.
+    */
+    lancamentoBolaParada: { duration: 0.80, contactTime: 8 / 12 }
 };
+
+/*
+ONDE FICA O CORPO PARA O PÉ BATER NA BOLA, no lançamento de bola parada.
+
+Medido no rig, com o corpo virado para a frente, no keyframe de contacto do
+LancamentoClip (o 9): o pé DIREITO fica 0.17 m à frente da origem do corpo e
+0.26 m para a direita. No PlayerKickClip o pé fica 0.55 m à frente e quase ao
+centro — e é por isso que o `paragemNoContacto` da falta é 0.55. Com o
+lançamento, parar o corpo a 0.55 m da bola deixava o pé a 0.38 m dela.
+*/
+const LancamentoBolaParada = {
+    peFrente: 0.17,
+    peLado: 0.26
+};
+if (typeof window !== 'undefined') window.LancamentoBolaParada = LancamentoBolaParada;
 
 /*
 =============================================================================

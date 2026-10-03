@@ -1410,7 +1410,12 @@ const GoalkeeperDive = {
     Agora, com a bola BAIXA (até 1/3 da baliza) e a menos de `lateralMax` de
     lado, o gesto é outro:
 
-      `anguloTombo`  90 graus: deitado de lado, de perfil para a baliza;
+      `anguloTombo`  80 graus: deitado de lado, de perfil para a baliza. Era
+                     90, e a direito o braço de baixo ficava sob a bola e
+                     abaixo do relvado — a correcção das mãos rodava-lhe o
+                     ombro e, com a bola agarrada, uma mão ia parar a 0.60 m
+                     da outra (tests/guarda_redes_bola_agarrada). A 80 graus o
+                     braço tem folga e continua a ler-se deitado;
       `anguloFrente` a barriga quase não vira — fica de lado a escorregar;
       `pernas`       esticadas atrás do corpo, e não dobradas para empurrar.
 
@@ -1420,7 +1425,7 @@ const GoalkeeperDive = {
     */
     deslizeLado: {
         lateralMax: 4.0,
-        anguloTombo: 1.57,
+        anguloTombo: 1.40,
         anguloFrente: 0.15,
         pernas: { coxaBaixo: -0.10, joelhoBaixo: 0.25, coxaCima: 0.05, joelhoCima: 0.35, chest: 0.10 }
     },

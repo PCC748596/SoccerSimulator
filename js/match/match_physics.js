@@ -671,6 +671,14 @@ Object.assign(Match, {
         const considerar = (p) => {
             if (p.touchLock > 0) return;
             /*
+            O BATEDOR A MEIO DO LANÇAMENTO (canto, falta directa) NÃO DISPUTA A
+            BOLA — ver Player.iniciarLancamentoBolaParada. No canto ele parte de
+            AO LADO da bola, e a corrida passa-lhe rente: medido, 2 de 8 cantos
+            acabavam com ele a dominá-la a meio do gesto (BALL_CONTROL_RIGHT) e
+            o canto ficava por bater. A bola sai no contacto do próprio gesto.
+            */
+            if (p.bolaParadaLancamento && p.actionState) return;
+            /*
             A REGRA DOS DOIS TOQUES: quem repos a bola nao lhe volta a tocar
             antes de outro jogador o fazer. Ver `Match.repositor`
             (match_state.js), que diz de onde vem a marca e porque existe.

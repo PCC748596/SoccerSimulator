@@ -113,6 +113,19 @@ Pedidos: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos bandeirinh
 
 - **Andar no sítio** (relato: *"o juiz está com animação de andar sem sair da posição"*). Com uma zona morta de 6–10 cm (`paragemMax`/`arranqueMin`), ele perseguia cada centímetro da coroa a deslizar com a bola: 0.3–0.4 m/s com o ciclo de passada inteiro. A zona morta passou para 0.25/1.50 m. O alvo dele é agora amortecido (`alvoSuavizacao`, 0.35 s), porque as regras da linha da bola e das linhas dependem da posse e, numa bola dividida, o alvo saltava metros. Saltos de mais de 1 m num frame: de 561 para 237 em 5 min.
 
+#### O canto e a falta directa batem-se com o lançamento (js/player.js, js/fsm.js, js/config/animations.js, js/bt/player_bt.js, js/match/match_physics.js)
+
+Pedido: *"a cobrança do corner e da falta direta também deve usar a animação do lançamento"*.
+
+- **O canto não tinha gesto.** A velocidade da bola era escrita no frame em que o tempo acabava, com o batedor parado. A falta directa (decisão `'remate'` do `baterFalta`) usava o `PlayerKickClip`. As outras faltas (passe, cruzamento) continuam com ele.
+- **`Player.iniciarLancamentoBolaParada(dirX, dirZ, onContact)`.** Mesmo `LancamentoClip`, com entrada própria em `ActionAnimClips.lancamentoBolaParada`: 0.80 s, contacto aos 0.53 s, onde estava o do `PlayerKickClip` (0.55). O corpo corre ao ritmo do `avanco` do clip até ao ponto em que o pé direito fica em cima da bola no contacto. O `SET_PIECE_KICK` vira-o para onde a bola vai e desenha o lançamento.
+- **Onde o corpo pára** (`LancamentoBolaParada`, medido no rig no keyframe de contacto): o pé direito fica 0.17 m à frente e 0.26 m à direita da origem. O `paragemNoContacto` de 0.55 m é do `PlayerKickClip` e deixava o pé a 0.38 m da bola.
+- **No canto**, o alvo, a força e o receptor decidem-se no arranque do gesto. A bola só sai no contacto (`baterCanto`).
+- **Duas guardas:**
+  - a árvore já não tira o batedor do `SET_PIECE_KICK` durante o canto;
+  - o batedor a meio do gesto fica fora da disputa da bola (`considerar`, match_physics.js). No canto ele parte de ao lado da bola e a corrida passava-lhe rente: 2 de 8 cantos acabavam com ele a dominá-la a meio do gesto e o canto ficava por bater.
+- **Medido** em 8 cantos e 8 faltas directas forçados: todos batidos pelo gesto. O pé direito fica a 0.09–0.11 m da bola no contacto, encostado, porque o raio da bola é 0.11 m.
+
 #### O guarda-redes: não se atira a bolas que não alcança, e escorrega de lado nas baixas e perto (js/player.js, js/gk_dive.js, js/config/goalkeeper.js, tests/guarda_redes_queda.test.js)
 
 Pedidos: *"o goleiro só pode pular para defender as bolas nos pulos laterais se as bolas estiverem entre 4-6 metros. Mais que isso não faz sentido"* e *"o goleiro não está escorregando deitado de lado para pegar as bolas do lado próximas"*.
@@ -120,7 +133,7 @@ Pedidos: *"o goleiro só pode pular para defender as bolas nos pulos laterais se
 - **O alcance media-se até ao poste, e não até à bola.** O ponto de intercepção é cortado a ±`limitGKX`, onde ele pode ir. Numa bola a passar 7–12 m ao lado (quase sempre desviada por um defensor), o corte punha-a "a 3 m, no poste" e ele atirava-se. Medido: 6 de 11 mergulhos em 3 jogos. Agora o alcance compara-se com o ponto lido antes do corte (`interXLido`). O segundo ramo de decisão (o `possoEspalmar`) não tinha teste de alcance nenhum e passou a ter.
 - **Tecto do mergulho de 4 a 6 m conforme o GK** (`alcanceLateralMin` 4.0 com GK 0, `alcanceLateralMax` 6.0 com GK 100). Era 5.0 fixo.
 - **O deslize de lado** (`GoalkeeperDive.deslizeLado`), para bola baixa (até 1/3 da baliza) a menos de 4 m de lado:
-  - tombo de 90°, deitado de perfil para a baliza;
+  - tombo de 80°, deitado de perfil para a baliza. Começou a 90°, mas a direito o braço de baixo ficava sob a bola e abaixo do relvado. A correcção das mãos rodava-lhe o ombro, e numa bola agarrada as mãos ficavam a 0.60 m uma da outra (`guarda_redes_bola_agarrada`). A 80° fica em 0.26 m;
   - a barriga quase não vira (0.15 rad, contra 1.40 nos mergulhos);
   - as pernas ficam esticadas e ele escorrega.
   

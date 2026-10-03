@@ -1222,7 +1222,7 @@ class PlayerFSM {
                 const esperaCobranca = (Match.state === 'CORNER_KICK' &&
                     typeof ESPERA_COBRANCA_CANTO === 'number')
                     ? ESPERA_COBRANCA_CANTO : ESPERA_APOS_REPOSICAO;
-                if (Match.setPieceTimer > esperaCobranca && !Match.cantoBolaAlvo) {
+                if (Match.setPieceTimer > esperaCobranca && !Match.cantoBolaAlvo && !p.actionState) {
                     if (Match.state === 'CORNER_KICK') {
                         const lado = Math.sign(Match.ball.position.x) || 1;
                         const teammates = (p.team === 'TeamA') ? Match.players : Match.opponents;
@@ -1281,6 +1281,13 @@ class PlayerFSM {
                         const vHoriz = vCanto * Math.cos(elevCanto);
                         const vy = vCanto * Math.sin(elevCanto);
 
+                        /*
+                        O CANTO BATE-SE COM O LANÇAMENTO. Alvo, força e
+                        receptor ficam decididos aqui, no arranque; a bola só
+                        sai no contacto do gesto, e é aí que corre tudo o que
+                        vem a seguir. Ver iniciarLancamentoBolaParada.
+                        */
+                        const baterCanto = () => {
                         Match.ballVel.set((dx / d) * vHoriz, vy, (dz / d) * vHoriz);
                         Match.mudarEstado('PLAY', 'canto_batido');
                         Match.ballCarrier = null;
@@ -1321,6 +1328,13 @@ class PlayerFSM {
                                 pl.fsm.changeState('MOVE_TO_POS');
                             }
                         });
+                        };
+                        if (typeof LancamentoClip !== 'undefined' && typeof LancamentoBolaParada !== 'undefined' &&
+                            typeof p.iniciarLancamentoBolaParada === 'function') {
+                            p.iniciarLancamentoBolaParada(dx / d, dz / d, baterCanto);
+                        } else {
+                            baterCanto();
+                        }
                     }
                 }
                 break;
@@ -2549,8 +2563,11 @@ class PlayerFSM {
             */
             case 'SET_PIECE_KICK':
                 {
-                    // Virado para a baliza adversária, como no remate.
-                    _v1.set(0, 0, p.targetGoalZ);
+                    // Virado para a baliza adversária, como no remate — ou, no
+                    // lançamento de bola parada, para onde a bola vai.
+                    const BL = p.bolaParadaLancamento;
+                    if (BL) _v1.set(p.model.position.x + BL.dirX * 10, 0, p.model.position.z + BL.dirZ * 10);
+                    else _v1.set(0, 0, p.targetGoalZ);
                     _v2.set(p.model.position.x * 2 - _v1.x, p.model.position.y,
                         p.model.position.z * 2 - _v1.z);
                     _m1.lookAt(p.model.position, _v2, p.model.up);
@@ -2562,9 +2579,15 @@ class PlayerFSM {
 
                 if (p.actionState) {
                     const normPK = p.actionState.update(dt, p);
-                    p.aplicarFramePlayerKick(amostrarClipPlayerKick(normPK));
-                    if (p.actionState.isDone()) {
+                    // O canto e a falta directa: ver iniciarLancamentoBolaParada.
+                    if (p.bolaParadaLancamento && typeof amostrarClipLancamento === 'function') {
+                        p.aplicarFrameLancamento(amostrarClipLancamento(normPK));
+                    } else {
+                        p.aplicarFramePlayerKick(amostrarClipPlayerKick(normPK));
+                    }
+                    if (p.actionState && p.actionState.isDone()) {
                         p.actionState = null;
+                        p.bolaParadaLancamento = null;
                         p.resetBonesToDefault();
                         this.changeState('IDLE');
                     }
