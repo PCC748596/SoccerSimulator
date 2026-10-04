@@ -2206,7 +2206,16 @@ class PlayerFSM {
                         p.aplicarFramePasse(KP);
                     }
 
-                    if (p.actionState.isDone() || !p.hasBall) {
+                    /*
+                    O LANÇAMENTO NÃO ACABA NO CONTACTO. O `!p.hasBall` fecha o
+                    gesto no frame em que a bola sai do pé — e no lançamento
+                    isso é o keyframe 9 de 17: o seguimento e a recuperação
+                    nunca se viam e a perna caía a direito (relato: "a perna
+                    volta muito rápido para a posição reta"). Corre até ao fim;
+                    só perde o gesto quem perde a bola ANTES de a chutar.
+                    */
+                    const lancamentoACorrer = p.passeLancamento && p.actionState.executed && !p.actionState.isDone();
+                    if (!lancamentoACorrer && (p.actionState.isDone() || !p.hasBall)) {
                         p.actionState = null;
                         // A pose do clip fica escrita no rig: sem repor, ele
                         // sai do passe com a perna onde o keyframe 8 a deixou.

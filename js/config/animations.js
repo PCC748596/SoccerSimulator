@@ -130,7 +130,7 @@ const ActionAnimClips = {
     o tiro de meta (0.45 contra 0.55 s): no passe o jogador vem lancado e nao
     faz a corrida de aproximacao a partir de parado.
     */
-    lancamento: { duration: 0.45, contactTime: 8 / 12 },
+    lancamento: { duration: 0.60, contactTime: 8 / 16 },   // 17 keyframes: ver LancamentoClip, "os quatro do fim"
     /*
     O LANÇAMENTO NA BOLA PARADA — o canto e a falta directa. Pedido: *"a
     cobrança do corner e da falta direta também deve usar a animação do
@@ -140,7 +140,7 @@ const ActionAnimClips = {
     o contacto aos 0.53 s, praticamente onde estava o do PlayerKickClip (0.55).
     Ver Player.iniciarLancamentoBolaParada.
     */
-    lancamentoBolaParada: { duration: 0.80, contactTime: 8 / 12 }
+    lancamentoBolaParada: { duration: 1.07, contactTime: 8 / 16 }   // contacto aos 0.53 s, como antes
 };
 
 /*
@@ -640,6 +640,22 @@ Varrido em 41 amostras da interpolacao, o pe mais baixo afunda no maximo 0.016
 m e flutua no maximo 0.006 m, nos valores como estao escritos (a duas casas).
 =============================================================================
 */
+/*
+OS QUATRO KEYFRAMES DO FIM (14 a 17), acrescentados a 4 de Outubro de 2026.
+Relato: *"na animação do lançamento parece que faltam frames no final depois
+que a bola é chutada. A perna volta muito rápido para a posição reta. Meio que
+teletransportando sem o movimento natural."*
+
+O clip acabava no seguimento (13), com a perna de chute 75 graus à frente e a de
+apoio esticada atrás; a seguir vinha a passada ou o `resetBonesToDefault`, e a
+perna caía a direito de um frame para o outro. Agora ela desce (15, joelho
+dobrado, a de apoio a vir para baixo do corpo) e assenta numa passada (17).
+Varrido 12..17 em 41 amostras: afunda no máximo 0.005 m, não flutua.
+
+O CONTACTO FICA NO MESMO INSTANTE em segundos: o keyframe continua a ser o 9,
+agora de 17 (`contactTime` 8/16), e as durações subiram na proporção (ver
+ActionAnimClips.lancamento e .lancamentoBolaParada).
+*/
 const LancamentoClip = {
     pernaChute: 'r',
     contactFrame: 9,
@@ -681,6 +697,18 @@ const LancamentoClip = {
         // atras: as pernas abertas 132 graus, como na imagem. Na L3 o jogador
         // esta virado para a DIREITA (confirmado pelo autor).
         { avanco: 1.00, leanZ: -0.10, pitchX: -0.12, chest: -0.04, coxaChute: -1.30, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 1.00, joelhoApoio: 0.07, bracoLx: -0.79, bracoLz: 0.55, bracoRx: 0.30, bracoRz: -0.55, cotoveloL: -0.15, cotoveloR: -0.15, peRx: -0.15, peLx: -0.20, cabecaX: -0.10, altura: -0.18, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 14 — interpolado: a perna de chute começa a descer, o joelho a dobrar.
+        { avanco: 1.00, leanZ: -0.08, pitchX: -0.07, chest: -0.02, coxaChute: -1.02, joelhoChute: 0.30, coxaChuteZ: 0.04, coxaApoio: 0.83, joelhoApoio: 0.21, bracoLx: -0.57, bracoLz: 0.45, bracoRx: 0.22, bracoRz: -0.45, cotoveloL: -0.22, cotoveloR: -0.22, peRx: -0.12, peLx: -0.15, cabecaX: -0.08, altura: -0.13, maoRx: 0.15, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 15 — A RECUPERAÇÃO =====
+        // A perna de chute a meio da descida, joelho dobrado; a de apoio vem para
+        // baixo do corpo. Ver a nota "OS QUATRO KEYFRAMES DO FIM" no cabeçalho.
+        { avanco: 1.00, leanZ: -0.05, pitchX: -0.02, chest: 0.00, coxaChute: -0.75, joelhoChute: 0.55, coxaChuteZ: 0.02, coxaApoio: 0.65, joelhoApoio: 0.35, bracoLx: -0.35, bracoLz: 0.35, bracoRx: 0.15, bracoRz: -0.35, cotoveloL: -0.30, cotoveloR: -0.30, peRx: -0.10, peLx: -0.10, cabecaX: -0.05, altura: -0.09, maoRx: 0.10, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // 16 — interpolado entre os principais 15 e 17.
+        { avanco: 1.00, leanZ: -0.02, pitchX: 0.02, chest: 0.01, coxaChute: -0.52, joelhoChute: 0.38, coxaChuteZ: 0.01, coxaApoio: 0.48, joelhoApoio: 0.32, bracoLx: -0.28, bracoLz: 0.24, bracoRx: 0.18, bracoRz: -0.23, cotoveloL: -0.32, cotoveloR: -0.32, peRx: -0.05, peLx: -0.05, cabecaX: -0.02, altura: -0.02, maoRx: 0.05, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        // ===== PRINCIPAL 17 — O PÉ ASSENTA =====
+        // Uma passada normal: o pé de chute pousado à frente, o tronco direito.
+        // Daqui a passada de corrida retoma sem salto.
+        { avanco: 1.00, leanZ: 0.00, pitchX: 0.06, chest: 0.02, coxaChute: -0.30, joelhoChute: 0.20, coxaChuteZ: 0.00, coxaApoio: 0.30, joelhoApoio: 0.30, bracoLx: -0.20, bracoLz: 0.12, bracoRx: 0.20, bracoRz: -0.12, cotoveloL: -0.35, cotoveloR: -0.35, peRx: 0.00, peLx: 0.00, cabecaX: 0.00, altura: 0.03, maoRx: 0.00, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
     ]
 };
 if (typeof window !== 'undefined') window.LancamentoClip = LancamentoClip;

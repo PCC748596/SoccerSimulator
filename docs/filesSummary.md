@@ -113,6 +113,20 @@ Pedidos: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos bandeirinh
 
 - **Andar no sítio** (relato: *"o juiz está com animação de andar sem sair da posição"*). Com uma zona morta de 6–10 cm (`paragemMax`/`arranqueMin`), ele perseguia cada centímetro da coroa a deslizar com a bola: 0.3–0.4 m/s com o ciclo de passada inteiro. A zona morta passou para 0.25/1.50 m. O alvo dele é agora amortecido (`alvoSuavizacao`, 0.35 s), porque as regras da linha da bola e das linhas dependem da posse e, numa bola dividida, o alvo saltava metros. Saltos de mais de 1 m num frame: de 561 para 237 em 5 min.
 
+#### O lançamento acaba com movimento, sem a perna a cair a direito (js/config/animations.js `LancamentoClip`, js/fsm.js PASS)
+
+Relato: *"na animação do lançamento parece que faltam frames no final depois que a bola é chutada. A perna volta muito rápido para a posição reta."*
+
+- **No passe, o gesto acabava no contacto.** O `case 'PASS'` fecha o gesto quando `!p.hasBall`, e a bola sai do pé no keyframe 9: o seguimento (10–13) nunca se via. Agora o lançamento corre até ao fim e só se perde o gesto se a bola se perder antes do chuto. Medido: o gesto chega a 97% do clip; antes era cortado a 50%.
+- **Na bola parada, o clip acabava com a perna 75° no ar** e o `resetBonesToDefault` punha-a a direito num frame.
+- **Quatro keyframes novos (14–17):**
+  - a perna de chute desce com o joelho a dobrar;
+  - a de apoio vem para baixo do corpo;
+  - o pé assenta numa passada.
+  
+  Varrido 12..17: afunda no máximo 0.005 m.
+- **O contacto fica no mesmo instante.** Keyframe 9 de 17, `contactTime` 8/16, com as durações na proporção: passe 0.45 → 0.60 s, bola parada 0.80 → 1.07 s. Medido em jogo: no passe, o pé a 0.23 m da bola no contacto, como antes; no canto e na falta directa, contacto aos 0.53 s com o pé a 0.02–0.04 m da bola.
+
 #### A saída aos pés do guarda-redes (js/player.js `iniciarSaidaAosPes`/`actualizarSaidaAosPes`, js/config/goalkeeper.js `GoalkeeperDive.saidaAosPes`)
 
 Pedido, com fotografia (3021): *"saída de bola nos pés dos jogadores próximos"*. Não existia: no cara a cara ele saía da baliza e esperava o remate.
