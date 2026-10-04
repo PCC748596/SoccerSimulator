@@ -361,7 +361,10 @@ console.log(LF + '6 — o lance parado dispara o gesto');
 
     // E o gesto é mantido no update dos árbitros, depois do mover.
     const k = srcOff.indexOf('update: function (dt)');
-    const upd = srcOff.slice(k, k + 4000);
+    // O corpo inteiro do update, e nao 4000 caracteres: a janela partiu a 4 de
+    // Outubro de 2026 com o bloco da antecipacao do arbitro (ler a jogada).
+    const fimUpd = srcOff.indexOf(String.fromCharCode(10) + '    },', k);
+    const upd = srcOff.slice(k, fimUpd > k ? fimUpd : k + 4000);
     if (!/tickSinal/.test(upd)) erro('o update não mantém o gesto');
     else ok('o update mantém o gesto');
 }

@@ -289,6 +289,12 @@ function togglePlayerNumber() {
     document.getElementById('btn-playernumber').innerText = 'PlayerNumber: ' + (window.showPlayerNumber ? 'ON' : 'OFF');
     document.getElementById('btn-playernumber').classList.toggle('active', window.showPlayerNumber);
 }
+// O nome do jogador (o da camisola, de data/player_skills.js) sobre a cabeça.
+function togglePlayerNames() {
+    window.showPlayerNames = !window.showPlayerNames;
+    document.getElementById('btn-playernames').innerText = 'PlayerNames: ' + (window.showPlayerNames ? 'ON' : 'OFF');
+    document.getElementById('btn-playernames').classList.toggle('active', window.showPlayerNames);
+}
 function togglePlayerPoints() {
     window.showPlayerPoints = !window.showPlayerPoints;
     document.getElementById('btn-playerpoints').innerText = 'PlayerPoints: ' + (window.showPlayerPoints ? 'ON' : 'OFF');

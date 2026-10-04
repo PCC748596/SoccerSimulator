@@ -802,11 +802,15 @@ if (typeof window !== 'undefined') window.QuaseGoloModel = QuaseGoloModel;
 
 const QuedaClip = {
     /*
-    O LEVANTAR É RÁPIDO: 1.0 s do chão até de pé (5.25 -> 6.25). Era 1.8 s, e
+    O LEVANTAR É RÁPIDO: 1.0 s do chão até de pé (4.25 -> 5.25). Era 1.8 s, e
     o pedido foi *"depois da falta e dos segundos caído, o jogador tem que se
     levantar um pouco mais rápido"*. As poses são as mesmas, só os tempos.
+
+    E SÓ 3 s NO CHÃO (1.25 -> 4.25), eram 4. Pedido de 4 de Outubro de 2026:
+    *"depois da falta deixa o jogador caído somente 3 segundos"*. Os frames
+    do levantar recuaram 1.0 s todos juntos.
     */
-    duracao: 6.25,
+    duracao: 5.25,
     // Quando chega ao keyframe Foul1 (deitado). E daqui que os outros comecam a
     // ir para os lugares do lance parado — ver Match.montarBolaParadaAndada.
     deitadoEm: 1.25,
@@ -829,13 +833,13 @@ const QuedaClip = {
         // relvado (relato: "depois do rolamento o jogador está parando no ar").
         { t: 1.25, leanZ: 0.00, pitchX: 1.57, chest: -0.08, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.45, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
         // ...e assim fica 4 s (o pedido). Só a cabeça e o peito mexem um pouco.
-        { t: 5.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
+        { t: 4.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
         // A levantar: de gatas.
-        { t: 5.55, leanZ: 0.00, pitchX: 1.35, chest: 0.00, coxaChute: -1.35, joelhoChute: 1.57, coxaChuteZ: 0.00, coxaApoio: -1.35, joelhoApoio: 1.57, bracoLx: -1.35, bracoLz: 0.15, bracoRx: -1.35, bracoRz: -0.15, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.11 },
+        { t: 4.55, leanZ: 0.00, pitchX: 1.35, chest: 0.00, coxaChute: -1.35, joelhoChute: 1.57, coxaChuteZ: 0.00, coxaApoio: -1.35, joelhoApoio: 1.57, bracoLx: -1.35, bracoLz: 0.15, bracoRx: -1.35, bracoRz: -0.15, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.11 },
         // Um joelho no chão.
-        { t: 5.90, leanZ: 0.00, pitchX: 0.35, chest: 0.10, coxaChute: -1.75, joelhoChute: 1.50, coxaChuteZ: 0.00, coxaApoio: -0.35, joelhoApoio: 1.55, bracoLx: -0.30, bracoLz: 0.20, bracoRx: -0.60, bracoRz: -0.20, cotoveloL: -0.40, cotoveloR: -0.90, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.17 },
+        { t: 4.90, leanZ: 0.00, pitchX: 0.35, chest: 0.10, coxaChute: -1.75, joelhoChute: 1.50, coxaChuteZ: 0.00, coxaApoio: -0.35, joelhoApoio: 1.55, bracoLx: -0.30, bracoLz: 0.20, bracoRx: -0.60, bracoRz: -0.20, cotoveloL: -0.40, cotoveloR: -0.90, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.17 },
         // De pé.
-        { t: 6.25, leanZ: 0.00, pitchX: 0.04, chest: 0.00, coxaChute: -0.04, joelhoChute: 0.10, coxaChuteZ: 0.00, coxaApoio: -0.04, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: 0.12, bracoRx: 0.00, bracoRz: -0.12, cotoveloL: -0.20, cotoveloR: -0.20, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: 0.03 },
+        { t: 5.25, leanZ: 0.00, pitchX: 0.04, chest: 0.00, coxaChute: -0.04, joelhoChute: 0.10, coxaChuteZ: 0.00, coxaApoio: -0.04, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: 0.12, bracoRx: 0.00, bracoRz: -0.12, cotoveloL: -0.20, cotoveloR: -0.20, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: 0.03 },
     ]
 };
 if (typeof window !== 'undefined') window.QuedaClip = QuedaClip;

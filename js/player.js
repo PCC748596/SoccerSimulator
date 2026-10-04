@@ -4694,6 +4694,27 @@ class FootballPlayer {
             if (this.role === 'gk' && this.gkEstado === 'mergulho' &&
                 this.dive && this.dive.agarrou) {
                 // nada a fazer: a bola está na mão, posta pelo GkDive.
+            } else if (this.role === 'gk' && this.gkEstado === 'lancando' &&
+                this.gkKickAction && !this.gkKickAction.executed &&
+                !(typeof Sim !== 'undefined' && Sim.running)) {
+                /*
+                NO LANÇAMENTO, A BOLA ESTÁ NA MÃO QUE LANÇA — posta pelo
+                `colarBolaAMao` do updateGK, que corre ANTES daqui.
+
+                Relato, duas vezes (capturas DC86 e a seguinte): *"no
+                lançamento de mão baixo do goleiro a bola ainda está
+                aparecendo nas costas"*. A primeira correcção foi no clip (o
+                recuo do braço), e não chegava: medido no caminho do browser,
+                a mão descia de 0.80 para 0.31 m e a bola ficava entre 0.8 e
+                1.14 m, rente ao tronco — era o ramo de baixo a reescrevê-la
+                com uma "animação manual" do lançamento POR CIMA (a subir a
+                1.6 m e a recuar para trás do corpo), por cima da mão. Com o
+                tronco dobrado do lançamento por baixo, isso é a bola em cima
+                das costas.
+
+                No headless o rig não é animado (a mão não se mexe) e o ramo
+                de baixo continua a valer, como antes.
+                */
             } else if (this.role === 'gk' && (this.gkEstado === 'segurando' || this.gkEstado === 'apanhar' || this.gkEstado === 'chutando' || this.gkEstado === 'lancando')) {
                 // GR segura a bola nas mãos, junto ao PEITO (não à cintura) —
                 // não ao nível do pé como no dribble de um jogador de campo
@@ -4874,10 +4895,12 @@ class FootballPlayer {
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT, PlayerPOS e PlayerPlayingStyle)
-        if (this.inViewport && !headless && (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints || window.speedMultiplier === "frame")) {
+        if (this.inViewport && !headless && (window.showPlayerNumber || window.showPlayerNames || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints || window.speedMultiplier === "frame")) {
             this.labelSprite.visible = true;
             let parts = [];
             if (window.showPlayerNumber) parts.push(this.num);
+            // O nome da camisola; sem skills (jogador de teste) o rotulo cai na posicao.
+            if (window.showPlayerNames) parts.push(this.nomeCamisola || this.pos);
             if (window.showPlayerPOS) parts.push(this.pos);
             if (window.showPlayerBT) parts.push(this.fsm.currentState);
             if (window.showPlayerPlayingStyle && this.playingStyle && !this.playingStyleDesligado) parts.push(this.playingStyle);

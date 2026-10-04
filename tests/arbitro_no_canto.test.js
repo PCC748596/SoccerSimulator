@@ -38,11 +38,13 @@ const PenaltyModel = extrairObjecto(srcSh, 'PenaltyModel');
 const RefereeModel = extrairObjecto(srcOf, 'RefereeModel');
 
 // Só o método, isolado: o resto do officials.js arrasta o FootballPlayer.
-const iniM = srcOf.indexOf('    pontoDoArbitro: function (bola) {');
+// A assinatura ganhou `bolaReal` a 4 de Outubro de 2026 (o arbitro le a
+// jogada e mira a bola prevista; o piso dos 6 m mede a real).
+const iniM = srcOf.indexOf('    pontoDoArbitro: function (bola, bolaReal) {');
 assert.ok(iniM > 0, 'pontoDoArbitro desapareceu');
 const fimM = srcOf.indexOf(LF + '    },', iniM) + 7;
-const corpo = srcOf.slice(iniM, fimM).replace('pontoDoArbitro: function (bola) {',
-    'function pontoDoArbitro(bola) {').replace(/\},\s*$/, '}');
+const corpo = srcOf.slice(iniM, fimM).replace('pontoDoArbitro: function (bola, bolaReal) {',
+    'function pontoDoArbitro(bola, bolaReal) {').replace(/\},\s*$/, '}');
 
 const CAMPO_COMP = 106, CAMPO_LARG = 68;
 

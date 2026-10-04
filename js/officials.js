@@ -66,9 +66,22 @@ const RefereeModel = {
     hoje."* A coroa só vale na diagonal (jogo corrido e faltas); o penálti e o
     canto têm posição fixa e não passam por ela. O "não à frente da bola" é o
     fim do `pontoDoArbitro`.
+
+    TERCEIRO PEDIDO, 6 a 12 m (4 de Outubro de 2026): *"o juiz ainda esta
+    ficando muito perto do lance. Tem que ficar entre 6-12 metros"*. Medido
+    com a coroa a 10-15, em jogo corrido: 6% do tempo abaixo de 6 m e 44%
+    acima de 15. A coroa passou a 7-11 (o meio da faixa pedida, com folga dos
+    dois lados para o atraso de quem corre atras da bola), e os 6 m passaram a
+    ser um PISO DURO (`distMinDura`), aplicado no fim do `pontoDoArbitro`
+    depois de todas as travas: era a trava "nunca a frente da bola" que o
+    encostava, ao por-lhe o z igual ao da bola.
     */
-    raioMin: 10.0,           // mais perto do que isto, afasta-se
-    raioMax: 15.0,           // mais longe do que isto, aproxima-se
+    raioMin: 7.0,            // mais perto do que isto, afasta-se
+    raioMax: 11.0,           // mais longe do que isto, aproxima-se
+    distMinDura: 6.0,        // o alvo nunca fica mais perto da bola do que isto
+    margemFuga: 1.5,         // abaixo de distMinDura + isto, foge sem amortecer nem recuar
+    antecipacao: 0.6,        // s: a coroa e posta a volta da bola prevista (ver o update)
+    antecipacaoVelMax: 8.0,  // m/s: uma bola mais rapida do que isto antecipa-se menos tempo
     /*
     Folga até à linha, para o alvo da coroa nunca cair fora do campo: com a bola
     encostada à linha de fundo, 20 m para o lado de lá sairia do relvado.
@@ -1087,7 +1100,7 @@ const Officials = {
     Onde o árbitro quer estar: o RUMO sai da diagonal dele, a DISTÂNCIA sai da
     coroa à volta da bola (`raioMin`/`raioMax`). Devolve {x, z}.
     */
-    pontoDoArbitro: function (bola) {
+    pontoDoArbitro: function (bola, bolaReal) {
         const R = RefereeModel;
 
         /*
@@ -1272,6 +1285,56 @@ const Officials = {
 
         const limX = CAMPO_LARG / 2 - R.margemDoCampo;
         const limZ = CAMPO_COMP / 2 - R.margemDoCampo;
+
+        /*
+        O PISO DE 6 m — ver RefereeModel.distMinDura. Depois das travas, que
+        sao elas que o encostam a bola. Afasta-se primeiro PARA O LADO (mantem
+        o z que as travas escolheram); se a linha lateral nao deixar, recua no
+        sentido da baliza de quem ataca, que e o lado onde ele pode estar.
+        */
+        if (typeof R.distMinDura === 'number') {
+            /*
+            ABAIXO DO PISO, VAI PARA O MEIO DA COROA, e nao para a borda.
+            Empurrado so ate aos 6 m ele ficava la a 5.9 (a zona morta do
+            passo) — medido nas faltas: quase todas as leituras "perto" eram
+            5.9-6.0 m, com as travas a por o alvo em cima da bola e o piso a
+            tira-lo so ate a borda.
+            */
+            const Dmin = R.distMinDura;
+            const D = Math.max(Dmin, (R.raioMin + R.raioMax) / 2);
+            /*
+            O piso vale para a bola prevista E para a real: primeiro afasta-se
+            da prevista (que e onde o alvo foi posto), depois confirma-se que
+            tambem nao ficou em cima da real.
+            */
+            const afastar = (bx, bz) => {
+                const ex = alvoX - bx, ez = alvoZ - bz, de = Math.hypot(ex, ez);
+                if (de >= Dmin) return;
+                const k = (de > 0.001) ? D / de : 0;
+                if (k > 0) { alvoX = bx + ex * k; alvoZ = bz + ez * k; }
+            };
+            if (bolaReal) afastar(bolaReal.x, bolaReal.z);
+            let ddx = alvoX - bola.x, ddz = alvoZ - bola.z;
+            if (Math.hypot(ddx, ddz) < Dmin) {
+                if (Math.abs(ddz) < D) {
+                    let lado = Math.sign(ddx);
+                    if (!lado) lado = (arb && arb.model) ? (Math.sign(arb.model.position.x - bola.x) || 1) : 1;
+                    let nx = bola.x + lado * Math.sqrt(D * D - ddz * ddz);
+                    if (Math.abs(nx) > limX) nx = bola.x - lado * Math.sqrt(D * D - ddz * ddz);
+                    alvoX = nx;
+                }
+                ddx = THREE.MathUtils.clamp(alvoX, -limX, limX) - bola.x;
+                if (Math.hypot(ddx, ddz) < D) {
+                    let dirAt = 0;
+                    if (typeof Match !== 'undefined' && Match.possessionTeam) {
+                        const lst = (Match.possessionTeam === 'TeamA') ? Match.players : Match.opponents;
+                        dirAt = (lst && lst[0] && lst[0].dirZ) ? lst[0].dirZ : 0;
+                    }
+                    const recua = -(dirAt || Math.sign(ddz) || 1);
+                    alvoZ = bola.z + recua * Math.sqrt(Math.max(0, D * D - ddx * ddx));
+                }
+            }
+        }
         return {
             x: THREE.MathUtils.clamp(alvoX, -limX, limX),
             z: THREE.MathUtils.clamp(alvoZ, -limZ, limZ)
@@ -1910,10 +1973,43 @@ const Officials = {
             return;
         }
 
-        const alvoArb = this.pontoDoArbitro(Match.ball.position);
+        /*
+        ELE LE A JOGADA: a coroa e posta a volta de onde a bola VAI ESTAR daqui
+        a `antecipacao` segundos (pela velocidade do portador, ou da propria
+        bola se ela vai solta), e nao de onde ela esta. Sem isto um central a
+        conduzir na direccao dele a 6-7 m/s chegava-lhe sempre: o alvo era
+        refeito a volta da bola deste frame, e o passo dele (`d / tempoDeAjuste`)
+        abrandava a medida que chegava a um ponto que ja estava velho.
+        A previsao e para o ponto; o piso dos 6 m continua medido a bola real
+        (ver o fim do pontoDoArbitro, que recebe as duas).
+        */
+        const bolaReal = Match.ball.position;
+        let bolaRef = bolaReal;
+        if (typeof R.antecipacao === 'number' && R.antecipacao > 0) {
+            const car = Match.ballCarrier;
+            const v = (car && car.velocity) ? car.velocity : Match.ballVel;
+            const vh = Math.hypot(v.x, v.z);
+            const tAnt = R.antecipacao * Math.min(1, (R.antecipacaoVelMax || 8) / Math.max(0.001, vh));
+            bolaRef = { x: bolaReal.x + v.x * tAnt, y: bolaReal.y, z: bolaReal.z + v.z * tAnt };
+        }
+        const alvoArb = this.pontoDoArbitro(bolaRef, bolaReal);
         // Amortecido: ver RefereeModel.alvoSuavizacao.
         const S = this.arbitro;
-        if (!S.alvoSuave || !(R.alvoSuavizacao > 0)) {
+        /*
+        A FUGA — com a bola a menos de `distMinDura + margemFuga` metros, ele
+        sai dali JA: sem o amortecimento do alvo (que lhe dava um alvo a meio
+        metro e um arranque a 2 m/s) e a correr de frente para onde vai, sem o
+        travao do recuo (`recuoVelocidade`, 70%, que o deixava nos 5 m/s
+        enquanto um central conduzia a 6-7 na direccao dele). Medido antes
+        disto, em jogo corrido abaixo de 6 m: metade das leituras eram passes a
+        passar-lhe ao lado, a outra metade um portador a vir para cima dele com
+        o arbitro a recuar a 5 m/s.
+        */
+        const dBola = Math.hypot(S.model.position.x - Match.ball.position.x,
+            S.model.position.z - Match.ball.position.z);
+        const emFuga = (typeof R.distMinDura === 'number') &&
+            dBola < R.distMinDura + (R.margemFuga || 0);
+        if (!S.alvoSuave || !(R.alvoSuavizacao > 0) || emFuga) {
             S.alvoSuave = { x: alvoArb.x, z: alvoArb.z };
         } else {
             const k = 1 - Math.exp(-dt / R.alvoSuavizacao);
@@ -1921,7 +2017,7 @@ const Officials = {
             S.alvoSuave.z += (alvoArb.z - S.alvoSuave.z) * k;
         }
         this.mover(this.arbitro, S.alvoSuave.x, S.alvoSuave.z, R.velocidade, dt,
-            Match.ball.position);
+            emFuga ? null : Match.ball.position);
 
         // Depois do mover: e ele que escreve a pose dos bracos, e o gesto
         // tem de ficar por cima dela (ver tickSinal).

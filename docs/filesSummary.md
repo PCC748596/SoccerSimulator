@@ -144,6 +144,30 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### O árbitro a 6–12 m, a bola na mão que lança, e 3 s no chão depois da falta (js/officials.js, js/player.js, js/config/animations.js `QuedaClip`)
+
+**O árbitro.**
+- **Pedido:** *"o juiz ainda está ficando muito perto do lance... tem que ficar entre 6-12 metros"*.
+- **Medido com a coroa a 10–15 m** (`scratchpad/arb/dist.js`, 2 jogos de 20 min): em jogo corrido 7% do tempo abaixo de 6 m e 63% acima de 12; nas faltas, 12–14% abaixo de 6 m.
+- **O que mudou:**
+  - **A coroa passou a 7–11 m** (`raioMin`/`raioMax`).
+  - **Piso duro de 6 m** (`distMinDura`) no fim do `pontoDoArbitro`, depois das travas. Era a trava "nunca à frente da bola" que o encostava, ao pôr-lhe o z igual ao da bola. Abaixo do piso o alvo vai para o MEIO da coroa: empurrado só até 6 m, ele ficava lá a 5.9.
+  - **Ele lê a jogada:** a coroa é posta à volta da bola prevista a `antecipacao` (0.6 s), pela velocidade do portador. O piso mede a bola real. Sem isto, um central a conduzir na direcção dele a 6–7 m/s chegava-lhe sempre.
+  - **Fuga** abaixo de `distMinDura + margemFuga` (7.5 m): o alvo deixa de ser amortecido e ele corre de frente para onde vai, sem o travão do recuo (70%, ~5 m/s).
+- **Depois:**
+  - em jogo corrido, 4–6% abaixo de 6 m, metade deles passes a passar-lhe ao lado; ~56% entre 6 e 12 m; mediana 11 m;
+  - nas faltas, 0–2% abaixo de 6 m, fora a cerimónia do cartão (4 m, de propósito);
+  - **por resolver:** acima de 12 m ficam ~38%, que é ele a seguir um ataque rápido por trás da linha da bola.
+- **Teste `arbitro_no_canto`:** passou a extrair a função pela assinatura nova, `pontoDoArbitro(bola, bolaReal)`.
+
+**A bola nas costas no lançamento por baixo — segunda vez, e esta era a causa.**
+- **O sintoma:** a correcção do clip (o recuo do braço) não chegava. Medido no caminho do browser (`scratchpad/lanc2/sonda.js`), a mão descia de 0.80 para 0.31 m e a bola ficava entre 0.8 e 1.14 m, rente ao tronco.
+- **A causa:** um ramo do `player.update`, que corre DEPOIS do `updateGK`, tinha uma "animação manual" do lançamento POR CIMA (a bola a subir a 1.6 m e a recuar para trás do corpo). Reescrevia a bola por cima do `colarBolaAMao`.
+- **A correcção:** como já se fazia no mergulho, esse ramo deixa a bola em paz enquanto o gesto não a larga. Fora do headless, porque aí o rig não é animado.
+- **Depois:** a bola acompanha a mão até à largada, ao lado da anca, e sai de 0.47 m (era 0.82).
+
+**A queda da falta: 3 s no chão** (eram 4). Pedido: *"depois da falta deixa o jogador caído somente 3 segundos"*. Os frames do levantar recuaram 1.0 s, e o `QuedaClip.duracao` passou de 6.25 para 5.25.
+
 #### Três acertos no guarda-redes: o encaixe ajoelhado, o corpo acima do relvado e a bola nas costas (js/config/goalkeeper.js `GoalkeeperPose.encaixe`, js/player.js, js/config/animations.js `GoalkeeperUnderarmThrowClip`)
 
 **O encaixe baixo** (capturas 14BD e 45F1).
