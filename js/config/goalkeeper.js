@@ -974,7 +974,18 @@ const GkSaltoAlto = {
     Este tecto existe para uma bola quase parada nao pedir uma previsao de
     segundos, que a essa distancia ja nao vale nada.
     */
-    tempoMaxPrevisao: 0.45
+    tempoMaxPrevisao: 0.45,
+
+    /*
+    O SALTO QUE ATACA A BOLA — ver o ramo 'salto_alto' em player.js. Na subida
+    (0.3 s) o corpo vai ao ponto de encontro a ate `velHorizontal` m/s, e no
+    maximo `deslocMax` metros: o passo e o impulso de um guarda-redes que sai
+    a um cruzamento. Na saida ao cruzamento ele so salta com o ponto a menos
+    de `deslocMax`. Pedido de 4 de Outubro de 2026: *"vai na direcao da bola,
+    mas nao salta para tentar pegar ou dar um soco"*.
+    */
+    velHorizontal: 5.0,
+    deslocMax: 1.8
 };
 
 if (typeof window !== 'undefined') window.GkSaltoAlto = GkSaltoAlto;

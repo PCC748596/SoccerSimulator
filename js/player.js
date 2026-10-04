@@ -7004,6 +7004,28 @@ class FootballPlayer {
                         this.gkSaiuAoCruzamento = true;
                     }
 
+                    /*
+                    VAI AO PONTO ONDE A APANHA COM AS MAOS, e nao ao ponto onde
+                    ela aterra. Relato: *"o goleiro, durante o cruzamento, vai
+                    na direcao da bola, mas nao salta para tentar pegar ou dar
+                    um soco"*.
+
+                    O ponto de queda fica metros DEPOIS do sitio onde a bola
+                    passa a altura das maos dele — ela continua a descer em
+                    diagonal. Medido a 4 de Outubro de 2026, 12 jogos: em 97
+                    saidas ao cruzamento, 74 saltos e 5 bolas agarradas ou
+                    socadas; no inicio do salto a bola estava a 6 m e passava a
+                    2.75 m dele (medianas). Era o mesmo erro que o cabeceio dos
+                    jogadores de campo ja tinha resolvido (ver actReceivePass).
+                    */
+                    const encontroSaida = (quedaNaPequena && typeof interceptarBola === 'function')
+                        ? interceptarBola(this, { gestos: ['gk_salto', 'gk_maos'] })
+                        : null;
+                    if (encontroSaida) {
+                        alvoGkX = encontroSaida.x;
+                        alvoGkZ = encontroSaida.z;
+                    }
+
                     let distToBall = gkCorpo.position.distanceTo(Match.ball.position);
                     /*
                     O SALTO NAO PODE PARTIR CEDO — era aqui que a saida ao
@@ -7057,11 +7079,17 @@ class FootballPlayer {
                         */
                         const SA_T = (typeof GkSaltoAlto !== 'undefined')
                             ? GkSaltoAlto.tempoDeSubida : 0.30;
-                        const encontro = (typeof interceptarBola === 'function')
-                            ? interceptarBola(this, { gestos: ['gk_salto', 'gk_maos'] })
-                            : null;
+                        const encontro = encontroSaida;
+                        /*
+                        E SO SALTA PERTO DO PONTO: o salto leva-o ate
+                        `GkSaltoAlto.deslocMax` (ver o ramo 'salto_alto'), nao
+                        mais. Saltar de mais longe era ver a bola passar.
+                        */
+                        const deslocMaxSalto = (typeof GkSaltoAlto !== 'undefined' &&
+                            typeof GkSaltoAlto.deslocMax === 'number') ? GkSaltoAlto.deslocMax : 1.8;
                         if (encontro) {
-                            podeSaltar = (encontro.t <= SA_T + 0.10);
+                            podeSaltar = (encontro.t <= SA_T + 0.10) &&
+                                (encontro.distancia <= deslocMaxSalto);
                         } else {
                             // Sem leitura (bola ja tocada, ja no chao) fica o
                             // criterio antigo, que pelo menos nao inventa.
@@ -7108,6 +7136,15 @@ class FootballPlayer {
                         const prev = (SA && tPrev > 0 && typeof preverBolaEm === 'function')
                             ? preverBolaEm(tPrev) : null;
                         this.gkSaltoAlvoY = prev ? prev.y : Match.ball.position.y;
+                        /*
+                        E PARA ONDE O SALTO O LEVA no plano: o ponto de
+                        encontro das maos, se ha leitura, senao onde a bola vai
+                        estar quando chegar a ele. Ver o ramo 'salto_alto'.
+                        */
+                        const enc = (quedaNaPequena && encontroSaida) ? encontroSaida : null;
+                        this.gkSaltoAlvoXZ = enc ? { x: enc.x, z: enc.z }
+                            : (prev ? { x: prev.x, z: prev.z } : null);
+                        this.gkSaltoDesloc = 0;
                     }
                 } 
                 else if (!isAttacking) {
@@ -8366,6 +8403,26 @@ class FootballPlayer {
                     jumpH = THREE.MathUtils.clamp(preciso, SA.saltoMin, tectoSalto);
                 }
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + jumpH, 0.25);
+
+                /*
+                O SALTO VAI A BOLA, e nao so para cima. Era um salto no sitio:
+                se a bola passava a dois metros, ele subia ao lado dela. Na
+                subida o corpo desloca-se para o ponto guardado no arranque
+                (`gkSaltoAlvoXZ`), ate `deslocMax` metros e a `velHorizontal`
+                — o passo e o impulso de quem ataca a bola.
+                */
+                if (SA && this.gkSaltoAlvoXZ && typeof SA.velHorizontal === 'number') {
+                    const ax = this.gkSaltoAlvoXZ.x - gkCorpo.position.x;
+                    const az = this.gkSaltoAlvoXZ.z - gkCorpo.position.z;
+                    const dAlvo = Math.hypot(ax, az);
+                    const resta = Math.max(0, (SA.deslocMax || 1.8) - (this.gkSaltoDesloc || 0));
+                    const passo = Math.min(dAlvo, SA.velHorizontal * dt, resta);
+                    if (dAlvo > 0.05 && passo > 0) {
+                        gkCorpo.position.x += (ax / dAlvo) * passo;
+                        gkCorpo.position.z += (az / dAlvo) * passo;
+                        this.gkSaltoDesloc = (this.gkSaltoDesloc || 0) + passo;
+                    }
+                }
 
                 /*
                 Procedural: braços por cima da cabeça, mas inclinam pro lado

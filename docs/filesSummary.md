@@ -144,6 +144,38 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### O guarda-redes ataca o cruzamento, e a bola alta passa a ser disputada (js/player.js, js/config/goalkeeper.js `GkSaltoAlto`, js/bt/player_bt.js `tratarDisputaAerea`, js/config/defense.js `DisputaAerea`)
+
+Relatos (4 de Outubro de 2026): *"o Goleiro, durante o cruzamento, vai na direção da bola, mas não salta para tentar pegar ou dar um soco para longe"* e *"normalmente só um jogador pula para cabecear a bola. Não tem disputa."*
+
+Medido com `scratchpad/aereo/sonda.js`: cada bola alta (acima de 1.20 m, sem dono) com queda prevista dentro da área, em 12 jogos de 20 minutos.
+
+| | antes | GR | GR + disputa |
+|---|---|---|---|
+| bolas altas para a área | 420 | 419 | 475 |
+| GR sai (`gkSaiuAoCruzamento`) | 97 | 94 | 113 |
+| GR salta (`salto_alto`) | 74 | 44 | 51 |
+| **GR agarra ou soca** | **5** | 35 | **40** |
+| GR é o primeiro a tocar | 28 | 62 | 72 |
+| **os dois lados saltam** | **55 (13%)** | 61 | **107 (23%)** |
+| defensor no ar toca primeiro | 32 | 22 | 54 |
+
+**O guarda-redes.**
+- **O defeito:** ele corria para o ponto onde a bola ATERRA. Esse ponto fica metros depois do sítio onde ela passa à altura das mãos, porque continua a descer em diagonal. No início do salto a bola estava a 6 m e passava a 2.75 m dele (medianas).
+- **O salto era só vertical,** no sítio onde ele estava.
+- **O que mudou:**
+  - na saída ao cruzamento ele corre para o ponto de encontro das mãos (`interceptarBola` com os gestos `gk_salto`/`gk_maos`);
+  - só salta com esse ponto a menos de `GkSaltoAlto.deslocMax` (1.8 m);
+  - na subida, o corpo desloca-se até ele a `velHorizontal` (5 m/s). É o passo de quem ataca a bola. O ponto guarda-se no arranque (`gkSaltoAlvoXZ`).
+
+**A disputa.**
+- **O que havia:** o canto já tinha a contestação (`tratarMarcacaoNoCanto`). A bola corrida não tinha nada: ela vai endereçada a um atacante, ele corre ao ponto de cabeceio, e a equipa que defende fica na marcação.
+- **O que mudou:** `tratarDisputaAerea` corre logo a seguir à marcação do canto. Com a bola alta jogada pelo adversário, a equipa que defende manda `DisputaAerea.porEquipa` (1) jogador ao ponto dele de cabeceio:
+  - é o mais perto do ponto onde a bola desce à altura da cabeça, e só a menos de `raioMax` (12 m);
+  - o salto é o do `avaliarSaltoDeCabeceio`.
+- **Quando ninguém vai:** se o próprio guarda-redes saiu à bola, ou se ela vai endereçada a um defensor.
+- **Limite conhecido:** "ninguém saltou" continua em ~49%. Essa conta inclui remates altos e alívios, que ninguém deve cabecear.
+
 #### Penáltis a 5× o real: a cautela na área tinha sido apagada (js/bt/player_bt.js `podeDesarmar`, js/officials.js, js/config/defense.js `CautelaNaArea`)
 
 O painel de 50 jogos (4 de Outubro de 2026) dava **1.38 penáltis por jogo**, contra os ~0.27 reais. O painel não mostra este número; somei-o dos registos por equipa.

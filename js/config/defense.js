@@ -1050,3 +1050,25 @@ const OffsideModel = {
 };
 
 if (typeof window !== 'undefined') window.OffsideModel = OffsideModel;
+
+/*
+=============================================================================
+DISPUTA AEREA DA BOLA CORRIDA — ver tratarDisputaAerea (bt/player_bt.js)
+=============================================================================
+Com a bola alta jogada pelo adversario, a equipa que defende manda os
+`porEquipa` jogadores mais perto do ponto de cabeceio a disputa-la, desde que
+estejam a menos de `raioMax` metros dele. `alturaReferencia` e a altura da
+testa media (acima da base) a que se le esse ponto para escolher; cada um
+corre depois para o SEU ponto (a testa dele). Pedido de 4 de Outubro de 2026:
+*"normalmente so um jogador pula para cabecear a bola. Nao tem disputa."*
+=============================================================================
+*/
+const DisputaAerea = {
+    activo: true,
+    alturaMin: 1.5,
+    alturaReferencia: 1.75,
+    porEquipa: 1,
+    raioMax: 12.0
+};
+
+if (typeof window !== 'undefined') window.DisputaAerea = DisputaAerea;

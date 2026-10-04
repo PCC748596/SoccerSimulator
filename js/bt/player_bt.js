@@ -4588,6 +4588,88 @@ function tratarMarcacaoNoCanto(p) {
     return true;
 }
 
+/*
+=============================================================================
+DISPUTA AEREA FORA DO CANTO — o defensor vai a bola alta do adversario
+=============================================================================
+Relato (4 de Outubro de 2026): *"normalmente so um jogador pula para cabecear
+a bola. Nao tem disputa."*
+
+O canto ja tinha a contestacao (ver tratarMarcacaoNoCanto, modo A BOLA). Num
+cruzamento de bola corrida, ou numa bola longa, nao havia nada: a bola vai
+endereçada a um atacante, ele e que corre ao ponto de cabeceio, e a equipa que
+defende fica na marcacao e no bloco. Medido em 12 jogos, 420 bolas altas a
+cair na area: em 56% ninguem saltou, em 13% saltaram os dois lados, e 47%
+cairam sem ninguem lhes tocar no ar.
+
+Agora, com a bola alta jogada pelo ADVERSARIO, a equipa que defende manda
+`DisputaAerea.porEquipa` jogadores — os mais perto do ponto onde ela desce a
+altura da cabeca — a esse ponto, ao ritmo de la chegar a tempo. O salto e o do
+`avaliarSaltoDeCabeceio`, que dispara sozinho com a bola ao alcance: dois
+corpos no ar, e o executeHeader a decidir quem lhe toca.
+
+Ninguem vai se o proprio guarda-redes saiu a bola (`gkSaiuAoCruzamento`): a
+bola e dele, e um central a saltar por cima dele e o choque que se evita.
+=============================================================================
+*/
+const _disputaAerea = { chave: null, escolhidos: new Set() };
+
+function escolherDisputaAerea() {
+    const D = (typeof DisputaAerea !== 'undefined') ? DisputaAerea : null;
+    const b = Match.ball.position;
+    const chave = b.x + ':' + b.y + ':' + b.z;
+    if (_disputaAerea.chave === chave) return _disputaAerea.escolhidos;
+    _disputaAerea.chave = chave;
+    _disputaAerea.escolhidos.clear();
+
+    if (!D || !D.activo || Match.state !== 'PLAY' || Match.ballCarrier) return _disputaAerea.escolhidos;
+    if (b.y < D.alturaMin || Match.ballVel.lengthSq() < 1.0) return _disputaAerea.escolhidos;
+    const quemJogou = Match.lastTouchedPlayer;
+    if (!quemJogou || typeof preverBolaEmAltura !== 'function') return _disputaAerea.escolhidos;
+
+    // O ponto de referencia: onde ela desce a altura de uma cabeca media.
+    const ponto = preverBolaEmAltura(ALTURA_BASE_Y + D.alturaReferencia);
+    if (!ponto) return _disputaAerea.escolhidos;
+
+    const defensores = (quemJogou.team === 'TeamA') ? Match.opponents : Match.players;
+    const gk = defensores.find(q => q.role === 'gk');
+    if (gk && gk.gkSaiuAoCruzamento) return _disputaAerea.escolhidos;
+    // Bola endereçada a um dos defensores (um alivio deles devolvido) nao e disputa.
+    if (Match.intendedReceiver && Match.intendedReceiver.team !== quemJogou.team) return _disputaAerea.escolhidos;
+
+    const candidatos = [];
+    for (const q of defensores) {
+        if (!q || q.expulso || q.role === 'gk' || !q.model) continue;
+        const d = Math.hypot(q.model.position.x - ponto.x, q.model.position.z - ponto.z);
+        if (d > D.raioMax) continue;
+        candidatos.push({ q, d });
+    }
+    candidatos.sort((a, c) => a.d - c.d);
+    for (let i = 0; i < Math.min(D.porEquipa, candidatos.length); i++) _disputaAerea.escolhidos.add(candidatos[i].q);
+    return _disputaAerea.escolhidos;
+}
+
+function tratarDisputaAerea(p) {
+    if (typeof Match === 'undefined' || !Match.ball || p.role === 'gk' || p.hasBall) return false;
+    if (!escolherDisputaAerea().has(p)) return false;
+
+    const alvo = alvoAereoDoJogador(p);
+    if (!alvo) return false;
+    p.dynamicTarget.set(alvo.x, ALTURA_BASE_Y, alvo.z);
+    p.speedMult = ritmoParaChegarATempo(p, alvo, p.speedMult);
+    const tolCab = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaPonto === 'number')
+        ? HeaderModel.toleranciaPonto : 0.30;
+    if (Math.hypot(p.model.position.x - alvo.x, p.model.position.z - alvo.z) < tolCab) {
+        // Ja esta debaixo dela: espera de frente, como no actReceivePass.
+        p.velocity.set(0, 0, 0);
+        p.fsm.changeState('IDLE');
+        lookAtBola(p.model, Match.ball.position);
+    } else {
+        p.fsm.changeState('MOVE_TO_POS');
+    }
+    return true;
+}
+
 /* --- Ponto de entrada --------------------------------------------------- */
 
 const PlayerAI = {
@@ -4621,6 +4703,9 @@ const PlayerAI = {
         estilos. Ver tratarMarcacaoNoCanto.
         */
         if (tratarMarcacaoNoCanto(player)) return;
+
+        // A disputa aerea da bola corrida — ver tratarDisputaAerea.
+        if (tratarDisputaAerea(player)) return;
 
         /*
         1. BT do Playing Style — só na FASE DE ATAQUE da equipa.
