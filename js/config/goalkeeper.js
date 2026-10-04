@@ -178,7 +178,26 @@ const GoalkeeperPose = {
         anguloMaxGraus: 30.0,
         lateralMax: 1.5,
 
-        altura: -0.39,         // quadril baixo (soma a ALTURA_BASE_Y)
+        /*
+        O JOELHO DE TRAS NO RELVADO. Relato de 4 de Outubro de 2026, com
+        captura (14BD): *"o jogador esta flutuando um pouco. O joelho da perna
+        esquerda pode encostar no chao para que a outra perna fique na posicao
+        correta"*. Medido na pose antiga, assentada pelas botas como o jogo a
+        assenta (`assentarNoChao`): o joelho de tras a 0.18 m do relvado e a
+        bota da frente a 0.18 m tambem — so a ponta do pe de tras tocava.
+
+        Os angulos novos sairam de uma busca (scratchpad/encaixe/busca.js) a
+        pedir as TRES coisas no chao ao mesmo tempo: o joelho da perna de tras,
+        a ponta do pe dela (`peAberto`) e a sola da perna da frente (`peRecolhido`
+        a compensar a canela, para ficar plana). Resultado: joelho 0.000, ponta
+        0.011, sola 0.001, com o pe da frente 0.45 m a frente da anca. A
+        `altura` e a do corpo nessa pose: 0.38 m abaixo da origem, menos a
+        ALTURA_BASE_Y.
+
+        Os nomes ficam os antigos, embora enganem: a perna "aberta" (lado da
+        bola) e a que AJOELHA, e a "recolhida" e a de apoio, a frente.
+        */
+        altura: -0.35,         // quadril baixo (soma a ALTURA_BASE_Y)
         chest: 0.95,           // tronco inclinado para a frente
         cabeca: -0.45,         // cabeça a olhar a bola no chão
         /*
@@ -239,8 +258,8 @@ const GoalkeeperPose = {
         olhar para a COMPACIDADE (distância do pé à anca) e não só para o
         ângulo de cada segmento.
         */
-        coxaAberta: 0.35, joelhoAberto: 1.22, aberturaAberta: 0.18,
-        coxaRecolhida: -1.33, joelhoRecolhido: 1.33, aberturaRecolhida: 0.10,
+        coxaAberta: 0.20, joelhoAberto: 1.70, aberturaAberta: 0.18, peAberto: 0.60,
+        coxaRecolhida: -1.30, joelhoRecolhido: 1.50, aberturaRecolhida: 0.10, peRecolhido: -0.30,
 
         /*
         AS MÃOS JUNTO AO CHÃO E FECHADAS NA BOLA. `bracoX` negativo é para a
@@ -278,8 +297,19 @@ const GoalkeeperPose = {
         (o `raioEncaixe` é 0.52 e ele está ajoelhado): dá para a bola ainda a
         chegar e não dá para uma bola que já se foi.
         */
-        esperaMax: 1.2,
+        esperaMax: 2.5,
         esperaRaio: 2.2,
+        /*
+        E ENQUANTO A BOLA AINDA VEM. Relato, com captura (45F1): *"o goleiro
+        esta levantando antes de encaixar a bola"*. Uma bola rasteira lenta
+        ainda estava a 3-4 m quando o gesto fazia 1 s, fora do `esperaRaio`,
+        e ele levantava-se com ela a chegar. Agora tambem fica enquanto ela se
+        aproxima dele a mais de `esperaVelMin` m/s e a menos de
+        `esperaRaioVindo` metros; o `esperaMax` subiu de 1.2 para 2.5 s para
+        caber essa chegada.
+        */
+        esperaVelMin: 0.8,
+        esperaRaioVindo: 12.0,
 
         /*
         O CORPO, PARA O TESTE DE CONTACTO — e é obrigatório, como na barreira.

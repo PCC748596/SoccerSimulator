@@ -4568,7 +4568,21 @@ class FootballPlayer {
             if (this.role === 'gk') {
                 if (!headless) {
                     if (Match.state === 'PENALTY' || Match.state === 'FREE_KICK') this.updateGK(dt);
-                    else this.resetBonesToDefault();
+                    else {
+                        this.resetBonesToDefault();
+                        /*
+                        E ASSENTA-SE, como os outros. Relato de 4 de Outubro
+                        de 2026, com captura (A9CFE): *"a posicao do goleiro
+                        durante o jogo, as vezes, fica acima do gramado"*.
+                        Medido no caminho do browser: nos ~3 s do pontape de
+                        saida (inicio e depois de cada golo) o `updateGK` nao
+                        corre, e era ele quem chamava o `assentarNoChao` do
+                        guarda-redes — os de campo assentam pelo
+                        `animateBones`. Com o corpo na `ALTURA_BASE_Y` e a pose
+                        de pe, a sola ficava a 0.10 m do relvado.
+                        */
+                        this.assentarNoChao();
+                    }
                 }
             } else {
                 if (!headless) this.animateBones(dt);
@@ -7972,6 +7986,11 @@ class FootballPlayer {
                     gkRig[recolhe + 'Foot'].rotation.x =
                         lerpTo(gkRig[recolhe + 'Foot'].rotation.x, EP.peRecolhido, ve);
                 }
+                // E a ponta do pe da perna que ajoelha, apoiada atras.
+                if (gkRig[abre + 'Foot'] && typeof EP.peAberto === 'number') {
+                    gkRig[abre + 'Foot'].rotation.x =
+                        lerpTo(gkRig[abre + 'Foot'].rotation.x, EP.peAberto, ve);
+                }
 
                 // Os dois bracos para a frente e para baixo, fechados na bola.
                 gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, EP.bracoX, ve);
@@ -8362,9 +8381,21 @@ class FootballPlayer {
                     const EN2 = GoalkeeperPose.encaixe;
                     const tecto = (typeof EN2.esperaMax === 'number') ? EN2.esperaMax : 1.2;
                     const raio = (typeof EN2.esperaRaio === 'number') ? EN2.esperaRaio : 2.2;
-                    aindaAEncaixar = (tM < GoalkeeperPose.maosDur + tecto) &&
-                        !!Match.ball &&
-                        Match.ball.position.distanceTo(gkCorpo.position) <= raio;
+                    let alcance = false;
+                    if (Match.ball) {
+                        const dB = Match.ball.position.distanceTo(gkCorpo.position);
+                        alcance = (dB <= raio);
+                        /*
+                        A BOLA AINDA VEM — ver GoalkeeperPose.encaixe.
+                        esperaVelMin: a velocidade dela na direccao dele.
+                        */
+                        if (!alcance && typeof EN2.esperaVelMin === 'number' && dB > 0.01) {
+                            const vEle = (Match.ballVel.x * (gkCorpo.position.x - Match.ball.position.x) +
+                                Match.ballVel.z * (gkCorpo.position.z - Match.ball.position.z)) / dB;
+                            alcance = (vEle >= EN2.esperaVelMin) && (dB <= (EN2.esperaRaioVindo || 12));
+                        }
+                    }
+                    aindaAEncaixar = (tM < GoalkeeperPose.maosDur + tecto) && alcance;
                 }
                 if (!aindaAEncaixar) {
                     // A barreira é deste lance e só deste: sem isto a pose

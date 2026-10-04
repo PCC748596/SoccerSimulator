@@ -144,6 +144,38 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### Três acertos no guarda-redes: o encaixe ajoelhado, o corpo acima do relvado e a bola nas costas (js/config/goalkeeper.js `GoalkeeperPose.encaixe`, js/player.js, js/config/animations.js `GoalkeeperUnderarmThrowClip`)
+
+**O encaixe baixo** (capturas 14BD e 45F1).
+- **Pedido:** *"o jogador está flutuando um pouco. O joelho da perna esquerda pode encostar no chão... O goleiro está levantando antes de encaixar a bola"*.
+- **Medido na pose antiga**, assentada pelas botas como o `assentarNoChao` faz: o joelho de trás ficava a 0.18 m do relvado e a sola da frente também. Só a ponta do pé de trás tocava.
+- **Ângulos novos**, de uma busca a pedir as três coisas no chão ao mesmo tempo:
+  - a perna que ajoelha: coxa 0.20, joelho 1.70, `peAberto` 0.60;
+  - a de apoio: coxa −1.30, joelho 1.50, `peRecolhido` −0.30;
+  - `altura` −0.35.
+  
+  Medido: joelho a 0.000, ponta do pé a 0.011 e sola a 0.001 m. Os nomes antigos enganam: a perna "aberta" é a que ajoelha.
+- **O levantar cedo:** depois de `maosDur` (1 s) ele só esperava com a bola a menos de 2.2 m. Uma rasteira lenta ainda vinha a 3–4 m, e ele levantava-se com ela a chegar.
+  - Agora também espera enquanto a bola se aproxima dele a mais de `esperaVelMin` (0.8 m/s) e a menos de `esperaRaioVindo` (12 m).
+  - O `esperaMax` subiu de 1.2 para 2.5 s.
+
+**O guarda-redes acima do relvado** (captura A9CFE).
+- **Medido no caminho do browser** (`Sim.running = false`): nos ~3 s do pontapé de saída (início e depois de cada golo) a sola dele ficava a 0.10 m do relvado.
+- **A causa:** nessa pausa o `player.update` dá-lhe só `resetBonesToDefault()`. O `updateGK`, que é quem lhe chama o `assentarNoChao`, não corre. Os de campo assentam pelo `animateBones`.
+- **A correcção:** passou a assentar-se aí também. Depois, nenhuma leitura de 3 s acima de 5 cm.
+
+**A bola nas costas no lançamento por baixo** (captura DC86).
+- **A causa:** a bola segue a mão direita (`colarBolaAMao`), e era a mão que ia para o sítio errado. No recuo (frame 4) o braço a 0.40 para trás, com o tronco inclinado, levava-a a 1.05 m de altura, acima da linha das costas.
+- **A correcção:** o recuo passou a `bracoRx` 0.10 com o braço aberto 0.30 para fora. A mão passa ao lado da anca (0.90 m, sem ir para trás das costas).
+
+#### Painel de 50 jogos depois da cautela na área e da disputa aérea (4 de Outubro de 2026)
+
+- **Golos 2.74 → 1.80 (71%).** A maior parte é a dos penáltis: 1.38 → 0.30 por jogo, ~0.8 golos a menos com 75% de conversão. O resto é o guarda-redes a agarrar cruzamentos e a disputa de cabeça.
+- **No alvo ou perto:** xG total 2.83 (100%), xG por remate 0.114 (104%), remates 24.8 (95%), faltas 22.9.
+- **Conversão:** marca-se 64% do xG (era 66%). A finalização converte abaixo do xG de forma estável; está por calibrar à parte.
+- **`duelosAereos` quase sempre 0/0.** A estatística só conta com o adversário no ar a menos de 4 m no frame exacto do cabeceio. A sonda de 12 jogos dá os dois lados no ar em 23% das bolas altas na área, portanto é provável que conte de menos.
+- **Jogo 42 encravado** (portador em CARRY, bola parada na linha de fundo, 573 s). Não reproduzido: 0 encraves em 52 jogos seeded com a configuração do painel (`scratchpad/encrave/lote.js`, que corre o `Sim.run` no headless).
+
 #### O guarda-redes ataca o cruzamento, e a bola alta passa a ser disputada (js/player.js, js/config/goalkeeper.js `GkSaltoAlto`, js/bt/player_bt.js `tratarDisputaAerea`, js/config/defense.js `DisputaAerea`)
 
 Relatos (4 de Outubro de 2026): *"o Goleiro, durante o cruzamento, vai na direção da bola, mas não salta para tentar pegar ou dar um soco para longe"* e *"normalmente só um jogador pula para cabecear a bola. Não tem disputa."*

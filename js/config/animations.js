@@ -1572,6 +1572,12 @@ const GoalkeeperUnderarmThrowClip = {
     baixo para cima com impulso de perna — estocada funda, o joelho de trás
     quase na relva, a mão a passar rente ao chão; (4) follow-through.
 
+    O RECUO DO BRACO E BAIXO, ao lado da anca (frame 4: `bracoRx` 0.10 com
+    o braco aberto 0.30 para fora). Relato de 4 de Outubro de 2026, com
+    captura (DC86): *"a bola fica nas costas do goleiro"*. Com o tronco
+    inclinado, um braco a 0.40 para tras levava a mao a 1.05 m de altura,
+    acima da linha das costas — a bola, colada a mao, ficava em cima delas.
+
     O clip antigo tinha o sinal do braço trocado (x negativo é PARA A FRENTE:
     o "braço atrás" ia à frente) e o braço esquerdo atrás em vez de à frente.
 
@@ -1587,13 +1593,13 @@ const GoalkeeperUnderarmThrowClip = {
         // 2  (igual, as mãos juntas na bola)
         { pelvis: 0.35, chest: 0.25, coxaL: -0.80, joelhoL: 0.95, coxaR: -0.80, joelhoR: 0.95, bracoLx: -0.75, bracoLz: -0.05, bracoRx: -0.75, bracoRz: 0.05, cotoveloL: -0.35, cotoveloR: -0.35, altura: 0.02 },
         // 3  Começa o passo: perna esquerda sai, braço direito começa a ir atrás
-        { pelvis: 0.38, chest: 0.23, coxaL: -0.97, joelhoL: 0.98, coxaR: -0.43, joelhoR: 0.73, bracoLx: -1.08, bracoLz: 0.12, bracoRx: -0.18, bracoRz: 0.00, cotoveloL: -0.32, cotoveloR: -0.22, altura: 0.07 },
+        { pelvis: 0.38, chest: 0.23, coxaL: -0.97, joelhoL: 0.98, coxaR: -0.43, joelhoR: 0.73, bracoLx: -1.08, bracoLz: 0.12, bracoRx: -0.33, bracoRz: -0.12, cotoveloL: -0.32, cotoveloR: -0.22, altura: 0.07 },
         // 4  FASE 2 — passo à frente com a esquerda, braço de lançamento atrás, braço esquerdo à frente (equilíbrio)
-        { pelvis: 0.40, chest: 0.20, coxaL: -1.15, joelhoL: 1.00, coxaR: -0.05, joelhoR: 0.50, bracoLx: -1.40, bracoLz: 0.30, bracoRx: 0.40, bracoRz: -0.05, cotoveloL: -0.30, cotoveloR: -0.10, altura: 0.02 },
+        { pelvis: 0.40, chest: 0.20, coxaL: -1.15, joelhoL: 1.00, coxaR: -0.05, joelhoR: 0.50, bracoLx: -1.40, bracoLz: 0.30, bracoRx: 0.10, bracoRz: -0.30, cotoveloL: -0.30, cotoveloR: -0.10, altura: 0.02 },
         // 5  O corpo desce sobre a perna da frente, o braço começa a vir
-        { pelvis: 0.60, chest: 0.25, coxaL: -1.60, joelhoL: 1.40, coxaR: -0.05, joelhoR: 1.20, bracoLx: -1.60, bracoLz: 0.40, bracoRx: -0.35, bracoRz: -0.03, cotoveloL: -0.30, cotoveloR: -0.05, altura: -0.16 },
+        { pelvis: 0.60, chest: 0.25, coxaL: -1.60, joelhoL: 1.40, coxaR: -0.05, joelhoR: 1.20, bracoLx: -1.60, bracoLz: 0.40, bracoRx: -0.40, bracoRz: -0.15, cotoveloL: -0.30, cotoveloR: -0.05, altura: -0.16 },
         // 6  Quase em baixo, o braço passa pela vertical do ombro
-        { pelvis: 0.65, chest: 0.28, coxaL: -1.85, joelhoL: 1.23, coxaR: -0.20, joelhoR: 1.40, bracoLx: -1.60, bracoLz: 0.45, bracoRx: -0.75, bracoRz: -0.01, cotoveloL: -0.30, cotoveloR: -0.02, altura: -0.30 },
+        { pelvis: 0.65, chest: 0.28, coxaL: -1.85, joelhoL: 1.23, coxaR: -0.20, joelhoR: 1.40, bracoLx: -1.60, bracoLz: 0.45, bracoRx: -0.77, bracoRz: -0.07, cotoveloL: -0.30, cotoveloR: -0.02, altura: -0.30 },
         // 7  CONTACTO — FASE 3: estocada funda (joelho de trás rente à relva), mão perto do chão à frente do pé
         { pelvis: 0.70, chest: 0.30, coxaL: -2.10, joelhoL: 1.05, coxaR: -0.35, joelhoR: 1.60, bracoLx: -1.60, bracoLz: 0.50, bracoRx: -1.15, bracoRz: 0.00, cotoveloL: -0.30, cotoveloR: 0.00, altura: -0.31 },
         // 8  FASE 4 — follow-through: a mão continua para a frente e para cima
