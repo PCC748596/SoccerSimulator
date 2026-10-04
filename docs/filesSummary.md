@@ -245,6 +245,12 @@ Pedidos: *"o goleiro só pode pular para defender as bolas nos pulos laterais se
 - Medido em 5 jogos de 10 min: zero mergulhos para lá dos 4 m de lado. As 3 bolas baixas entre 2 e 4 m foram todas deslize de lado.
 - **Teste mexido, `guarda_redes_queda`.** O mergulho rasteiro que tem de aterrar de peito estava a 2.5 m, agora a banda do deslize, e passou para 4.5 m. Acrescentou-se o ponto 7: o deslize a 2.5 m fica de lado (9°) e não se enterra.
 
+- **A correr de costas com a passada de frente.** Relato: *"o juiz está correndo para um lado de costas com a animação de corrida para a frente"*. Medido em 2 × 5 min: 8.1% do tempo a andar, de costas, a 2.3 m/s de mediana e até 7.5 m/s. Duas causas:
+  - **O ajuste curto virado para a bola, que recuava com o ciclo de passada a andar para a frente (2111 de 2214 frames).** Agora, quando o movimento é para trás da frente dele (cosseno < −0.30, `recuoAlinhamento`), o ciclo anda ao contrário e a velocidade cai para 70% (`recuoVelocidade`).
+  - **O gesto da falta, que rodava o corpo de perfil mesmo a correr.** Agora não gesticula acima de 2.5 m/s (`sinalVelMax`): o tempo do gesto pára e o braço fica com o `mover`. O penálti, que aponta a marca sem rodar o corpo, não passa por aqui.
+  
+  Depois: de costas 7.4% do tempo, todos com o recuo animado, mediana 1.7 m/s, máximo 4.0. Os 5 testes do árbitro passam.
+
 #### O lateral: cada apoio na sua direcção, e ninguém em cima de ninguém (js/bt/player_bt.js, js/config/player_behavior.js)
 
 Pedido: *"na hora do lateral os jogadores têm que ficar melhor ajustados no campo para receber o lateral. Estão muito juntos em posições quase iguais."*

@@ -173,6 +173,18 @@ const RefereeModel = {
     a `paragemMax`. Um árbitro a acompanhar dá meia dúzia de passos e pára; não
     arrasta os pés atrás de cada centímetro que a bola anda.
     */
+    /*
+    RECUAR. Virado para a bola, ele ajusta-se com passos curtos — e quando o
+    ajuste é para TRÁS, a passada tem de andar ao contrário: era a passada de
+    frente com o corpo a ir para trás (medido em 10 min: 8.1% do tempo a andar
+    de costas, quase tudo neste ajuste). Para trás anda-se mais devagar:
+    `recuoVelocidade` da velocidade que teria. `recuoAlinhamento` é a partir
+    de que ângulo conta como recuar (cosseno entre a frente e o movimento).
+    */
+    recuoVelocidade: 0.70,
+    recuoAlinhamento: -0.30,
+    // Acima disto (m/s) o gesto da falta não roda o corpo: ver tickSinal.
+    sinalVelMax: 2.5,
     paragemMax: 0.25,
     arranqueMin: 1.50,
     suavizacaoVel: 0.20,
@@ -1425,6 +1437,17 @@ const Officials = {
 
         const amp = 1 - lateralidade * (L ? L.reducaoPassada : 0);
 
+        /*
+        RECUAR: o movimento é para trás em relação à frente dele. A passada anda
+        ao contrário e a velocidade encolhe — ver RefereeModel.recuoVelocidade.
+        */
+        let recua = false;
+        if (d > 0.0001) {
+            const fx = Math.sin(o.model.rotation.y), fz = Math.cos(o.model.rotation.y);
+            recua = ((fx * dx + fz * dz) / d) < R.recuoAlinhamento;
+        }
+        if (recua) velMax *= R.recuoVelocidade;
+
         let passo = 0;
         if (!o.paradoNoAlvo && d > 0.0001) {
             passo = Math.min(d, velMax * amp * dt);
@@ -1448,7 +1471,8 @@ const Officials = {
             aqui era metade do deslize.
             */
             const P0 = getGaitPose(0, vel);
-            o.animTimer += (vel * dt) / (P0.passada * amp);
+            // A recuar o ciclo anda para trás: as pernas passam de trás para a frente.
+            o.animTimer += (recua ? -1 : 1) * (vel * dt) / (P0.passada * amp);
             const t = ((o.animTimer % 1.0) + 1.0) % 1.0;
             const P = getGaitPose(t, vel);
 
@@ -1615,6 +1639,18 @@ const Officials = {
             if (aindaNoLance && !chegou) arb.sinal.timer = RefereeModel.duracaoSinal;
             else arb.sinal.ateChegar = false;
         }
+
+        /*
+        A CORRER NÃO SE GESTICULA A FALTA. O gesto da falta roda o corpo de
+        perfil para o braço apontar o ataque; com ele a correr, isso punha-o a
+        correr de lado ou de COSTAS com a passada de frente (relato: *"o juiz
+        está correndo para um lado de costas com a animação de corrida para a
+        frente"*). Acima de `sinalVelMax` o gesto espera: o tempo dele não corre
+        e o braço fica com o `mover`. O penálti (aponta a marca, sem rodar o
+        corpo) não passa por aqui.
+        */
+        const ehFaltaAqui = Math.abs(arb.sinal.elev - RefereeModel.elevacaoSinal) < 0.01;
+        if (ehFaltaAqui && (arb.velAnim || 0) > RefereeModel.sinalVelMax) return;
 
         arb.sinal.timer -= dt;
         if (arb.sinal.timer <= 0) {
