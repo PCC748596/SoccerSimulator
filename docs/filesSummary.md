@@ -113,6 +113,48 @@ Pedidos: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos bandeirinh
 
 - **Andar no sítio** (relato: *"o juiz está com animação de andar sem sair da posição"*). Com uma zona morta de 6–10 cm (`paragemMax`/`arranqueMin`), ele perseguia cada centímetro da coroa a deslizar com a bola: 0.3–0.4 m/s com o ciclo de passada inteiro. A zona morta passou para 0.25/1.50 m. O alvo dele é agora amortecido (`alvoSuavizacao`, 0.35 s), porque as regras da linha da bola e das linhas dependem da posse e, numa bola dividida, o alvo saltava metros. Saltos de mais de 1 m num frame: de 561 para 237 em 5 min.
 
+#### O penálti: os pés do guarda-redes, o batedor ao lado e a passada até à bola (js/config/goalkeeper.js, js/player.js, js/config/shooting.js, js/match/match_setpieces.js, js/fsm.js)
+
+- **Guarda-redes: pés na linha, solas assentes, cabeça na bola** (captura F300). A inclinação da anca levava tudo com ela: botas 0.28 m à frente da linha, solas a 20°, cabeça 34° para baixo.
+  - **Geometria:** a correcção foi na geometria da pose: coxa 20° à frente (`coxa` −0.70) e canela 43° para trás (`joelho` 1.10). Os pés ficam por baixo da anca e os joelhos à frente.
+  - **Pés e cabeça:** `pe` −0.75 assenta as solas e `cabeca` −0.48 levanta o pescoço o que o tronco baixou.
+  - **Medido:** botas a 8 cm da linha, solas a 5°, cabeça a −7° (a bola está a ~6° abaixo).
+  - **O que não funcionou:** recuar a âncora para compensar não serviu, porque o corpo dele não recua mais de ~0.13 m da linha e ficava a andar contra o limite (`pesAFrente` ficou a 0).
+- **O batedor ao lado da bola** (captura 4A70). `PenaltyModel.desvioBatedor`: 1.2 m para o lado contrário ao pé bom (destro para a esquerda, canhoto para a direita), 4.6 m atrás. A corrida até à bola sai na diagonal.
+- **O batedor deslizava até à bola** (capturas D020, 53F2). A aproximação andada do penálti punha-lhe a velocidade e o `SET_PIECE_WAIT` zerava-a todos os frames. A excepção do batedor só existia para a falta. Ele ficava parado a 4.75 m e o gesto do remate arrastava-o 4.4 m a 11.5 m/s com a pose parada. Com a excepção também para o penálti: anda até 2 m a 2.6 m/s com a passada, e o gesto cobre os 2 m finais a ~4 m/s.
+
+#### O fim do salto alto como a queda da falta (js/gk_dive.js `updateComoQueda`, js/config/goalkeeper.js `quedaNoAlto`, tests/guarda_redes_queda.test.js)
+
+Relato, com cinco capturas: *"está caindo com o corpo de lado... bate no chão e meio que entra no gramado... faz um giro estranho e termina com o braço direito por baixo do corpo... o melhor seria cair com o peito para baixo, abrir os braços e ficar uns segundos caído, como na queda da falta, e levantar como se levanta na falta"*.
+
+- **O rolamento de 3 de Outubro foi desligado** (`rolamentoAlto.activo` false): era ele o "giro estranho".
+- **No salto alto a barriga vira-se mais cedo** (`fracFrentePorTipo.alto` 0.35 em vez de 0.70), para aterrar de peito.
+- **No salto alto sem bola agarrada, ao tocar no relvado passa para o `QuedaClip`:**
+  - corpo virado para onde a cabeça ficou;
+  - de bruços com os braços abertos (o keyframe Foul1);
+  - fica o prazo do lance (`tempoChaoAlto`, mais curto se a bola continuar viva na área);
+  - levanta-se pelos keyframes da falta: de gatas, um joelho, de pé.
+  
+  O deslize no relvado continua o do mergulho. Com a bola agarrada fica o levantar de sempre, com ela ao peito.
+- **Teste `guarda_redes_queda`:** na sequência da queda, a viragem da barriga mede-se na pélvis, porque o deitado vem da pélvis e não do modelo. Resultado: 90° no chão no salto alto, rasteiro 68° e deslize de lado 8°, como antes.
+
+#### O frame em que o guarda-redes agarra a bola (js/gk_dive.js)
+
+Os braços do frame são escritos antes do contacto (esticados à bola). No frame em que agarra, uma mão ficava esticada com a bola já ao peito: 1.06 m de uma mão e 0.44 m da outra (`guarda_redes_bola_agarrada`, num deslize de lado). Agora o `defender` marca `abracarJa` e o fim do `update` fecha os braços nesse mesmo frame.
+
+Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
+
+#### O quase golo: as mãos na cabeça (js/config/animations.js `QuaseGoloModel`, js/player.js `aplicarQuaseGolo`, js/match/match_loop.js `talvezLamentar`, js/fsm.js)
+
+Pedido, com fotografia (LooseGol): *"quando um jogador chutar para fora perto do gol ou o goleiro fizer uma defesa e colocar para fora, ele vai fazer uma animação de quase gol"*.
+
+- **Gatilho:**
+  - o remate fica registado no contacto (`Match.ultimoRemate`, com a idade);
+  - quando a bola sai pela linha de fundo (o `setupSetPiece` do pontapé de baliza e do canto), se o remate tem menos de 4 s e a bola passou a menos de 2.5 m de um poste e a menos de 1.5 m acima da trave, ou se a última a tocar foi o guarda-redes adversário, o rematador ganha `lamento`.
+- **A camada** é só da parte de cima, por cima do que as pernas estiverem a fazer: braços para cima e rodados para dentro, cotovelos para fora, mãos na cabeça, cabeça para trás. Dura 2.5 s, com 0.35 s de entrada e saída. Os ângulos saíram de uma busca no rig: as mãos a ~5 cm do centro da cabeça e os cotovelos a 0.54 m um do outro.
+- **Aplicada nos dois fins do `animateBones`** (o do jogador parado e o da passada), depois do `nivelarCabeca`.
+- **Medido em 3 jogos de 15 min:** 32 saídas pela linha de fundo, 5 quase golos (4 remates rentes, 1 defesa para fora).
+
 #### O guarda-redes de costas para a bola, e os cotovelos ao segurá-la (js/utils.js `virarParaSuave`, js/player.js, js/config/goalkeeper.js `GoalkeeperPose.segurar`)
 
 - **De costas para a bola depois do penálti.** Relato, com quatro capturas: *"o goleiro virou de costas para a bola. Quando a bola chegou nele ele virou de frente novamente"*.

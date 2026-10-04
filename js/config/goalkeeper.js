@@ -1564,8 +1564,39 @@ const GoalkeeperDive = {
         chanceFalta: 0.35
     },
 
+    /*
+    =========================================================================
+    O FIM DO SALTO ALTO É O DA QUEDA DA FALTA
+    =========================================================================
+    Pedido: *"o melhor seria apenas cair com o peito para baixo e, ao tocar com
+    os braços na grama, abrir os braços e ficar uns segundos caído, como na
+    queda da falta. E levantar como se levanta na falta também, usando os
+    braços para empurrar para cima. Ele está simplesmente girando e
+    levantando."*
+
+    Com `quedaNoAlto`, num salto alto SEM a bola agarrada, no instante em que
+    toca no relvado o guarda-redes passa para o QuedaClip (config/animations.js):
+    a pose deitada da falta (de bruços, braços abertos), o tempo de chão do
+    lance (`tempoChaoAlto`, mais curto se a bola continuar viva na área — a
+    segunda defesa), e o levantar da falta (de gatas, um joelho, de pé).
+    Com a bola agarrada fica o levantar de sempre, com ela ao peito.
+
+    `fracFrentePorTipo` adianta a viragem da barriga no salto alto: aos 35% do
+    voo em vez dos 70%, para chegar ao chão já de peito para baixo (relato:
+    "está caindo com o corpo de lado").
+    =========================================================================
+    */
+    quedaNoAlto: true,
+    fracFrentePorTipo: { alto: 0.35 },
+
     rolamentoAlto: {
-        activo: true,
+        /*
+        DESLIGADO a 4 de Outubro: relato, com cinco capturas, *"depois ele faz
+        um giro estranho e termina o movimento com o braço direito por baixo do
+        corpo"* — era este rolamento. O fim do salto alto passou a ser o da
+        queda da falta: ver `quedaNoAlto`.
+        */
+        activo: false,
         angChao: 1.50,
         suavizacao: 0.20,
         duracao: 0.70,

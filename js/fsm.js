@@ -653,6 +653,8 @@ Nada aqui mudou de conteudo — os pesos de resultado, o duelo com o bloqueador
 e o aviso ao guarda-redes sao os mesmos.
 */
 function executeShotGameplay(p) {
+    // Quem rematou e há quanto tempo: ver Match.talvezLamentar (o quase golo).
+    if (typeof Match !== 'undefined') Match.ultimoRemate = { p: p, idade: 0 };
     /*
     xG E ATAQUE PERIGOSO, no instante do contacto e antes de se saber o
     desfecho — que é a definição de xG: quanto VALIA a oportunidade, não o que
@@ -1113,7 +1115,17 @@ class PlayerFSM {
                     const o = offsetInquietacao(p.jostleAngulo, p.jostleRaio || 0);
                     _v1.set(p.jostleAncora.x + o.x, ALTURA_BASE_Y, p.jostleAncora.z + o.z);
                     p.velocity = p.steerArrive(_v1, J.velocidade, 0);
-                } else if (!(p === Match.setPieceTaker && Match.state === 'FREE_KICK' && Match.faltaPendente && Match.faltaAtraso < (typeof ESPERA_APOS_REPOSICAO !== 'undefined' ? ESPERA_APOS_REPOSICAO / 3 : 1.0))) {
+                } else if (!(p === Match.setPieceTaker && (
+                    (Match.state === 'FREE_KICK' && Match.faltaPendente && Match.faltaAtraso < (typeof ESPERA_APOS_REPOSICAO !== 'undefined' ? ESPERA_APOS_REPOSICAO / 3 : 1.0)) ||
+                    /*
+                    E O BATEDOR DO PENÁLTI, pela mesma razão. Relato: *"na hora da
+                    cobrança do pênalti o jogador sai da posição parado e vai
+                    deslizando até chegar na bola"*. A aproximação andada do
+                    penálti (Match.update) punha-lhe a velocidade e esta linha
+                    zerava-a todos os frames: medido, ficava parado a 4.75 m e o
+                    gesto do remate levava-o à bola a 11.5 m/s, com a pose parada.
+                    */
+                    (Match.state === 'PENALTY' && Match.penaltiPendente && Match.penaltiAtraso < (typeof ESPERA_APOS_REPOSICAO !== 'undefined' ? ESPERA_APOS_REPOSICAO / 3 : 1.0))))) {
                     // O batedor da falta só mantém a velocidade durante a aproximação andada
                     // (último terço da espera). Durante a espera inicial e para os outros jogadores, velocidade é 0.
                     p.velocity.set(0, 0, 0);

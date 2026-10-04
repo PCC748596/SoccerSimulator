@@ -86,7 +86,16 @@ function mergulhar(tipo, dirX, alvoY, lateral) {
         if (!vivo || !d) break;
 
         gk.model.updateWorldMatrix(true, true);
-        _f.set(0, 0, 1).applyQuaternion(gk.model.quaternion);
+        /*
+        NA QUEDA DA FALTA A BARRIGA MEDE-SE NA PÉLVIS. No salto alto, desde 4 de
+        Outubro de 2026, o chão e o levantar são os do QuedaClip (ver
+        GoalkeeperDive.quedaNoAlto): o deitado vem da PÉLVIS do rig e o modelo
+        fica só virado para onde a cabeça ficou — medida no modelo dava 0. No
+        resto do mergulho continua a ser o modelo, como sempre foi.
+        */
+        let _qMedir = gk.model.quaternion;
+        if (d.comoQueda) { _qMedir = new THREE.Quaternion(); gk.rig.pelvis.getWorldQuaternion(_qMedir); }
+        _f.set(0, 0, 1).applyQuaternion(_qMedir);
         const picada = Math.asin(Math.max(-1, Math.min(1, -_f.y))) * 180 / Math.PI;
 
         let baixo = null, baixoY = Infinity;

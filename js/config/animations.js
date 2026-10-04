@@ -760,6 +760,46 @@ olha para as botas. No jogo o corpo inteiro é assentado frame a frame
 isso, chegava a afundar 0.23 m.
 =============================================================================
 */
+/*
+=============================================================================
+O QUASE GOLO — as mãos na cabeça (imagem LooseGol de referência)
+=============================================================================
+Pedido: *"quando um jogador chutar para fora perto do gol, ou o goleiro fizer
+uma defesa e colocar para fora, ele vai fazer uma animação de quase gol"*.
+
+É uma camada só da PARTE DE CIMA do corpo, por cima do que as pernas estiverem
+a fazer (parar, andar para o lugar do canto ou do pontapé de baliza): os dois
+braços sobem e dobram até as mãos ficarem na cabeça, e a cabeça vai para trás —
+a fotografia. Entra e sai em `transicao` segundos e dura `duracao`.
+
+QUANDO (Match.talvezLamentar): a bola sai pela linha de fundo até
+`janelaRemate` segundos depois de um remate dele, e
+  . passou a menos de `margemPoste` metros de um poste e a menos de
+    `margemTrave` acima da trave, ou
+  . a última a tocar-lhe foi o guarda-redes (uma defesa para fora).
+=============================================================================
+*/
+const QuaseGoloModel = {
+    duracao: 2.5,
+    transicao: 0.35,
+    janelaRemate: 4.0,
+    margemPoste: 2.5,
+    margemTrave: 1.5,
+    /*
+    Os braços (x negativo = para cima/à frente; z para fora; y a rodar o braço
+    para dentro), os cotovelos e a cabeça. Encontrados por busca no rig: as
+    duas mãos a ~5 cm do centro da cabeça, os cotovelos 0.54 m afastados,
+    para fora — a fotografia. Só a subir e a dobrar (sem o y), as mãos ficavam
+    abertas acima dos ombros, longe da cabeça.
+    */
+    bracoX: -2.0,
+    bracoZ: 0.9,
+    bracoY: -1.2,
+    cotovelo: -2.0,
+    cabeca: -0.40
+};
+if (typeof window !== 'undefined') window.QuaseGoloModel = QuaseGoloModel;
+
 const QuedaClip = {
     /*
     O LEVANTAR É RÁPIDO: 1.0 s do chão até de pé (5.25 -> 6.25). Era 1.8 s, e

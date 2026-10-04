@@ -334,6 +334,10 @@ const GkDive = {
         // O relógio do GESTO, que atravessa as fases (ver `poseDoClip`).
         d.tGesto = (d.tGesto || 0) + dt;
 
+        // O fim do salto alto como a queda da falta: ver GoalkeeperDive.quedaNoAlto.
+        if (d.comoQueda) return this.updateComoQueda(p, dt, corpo, rig, d);
+
+
         switch (d.fase) {
             case 'ler':
                 /*
@@ -454,6 +458,20 @@ const GkDive = {
                     d.t = 0;
                     d.vSlide = d.v0x;
                     d.assentar = true;
+                    /*
+                    O SALTO ALTO ACABA COMO A QUEDA DA FALTA — ver
+                    GoalkeeperDive.quedaNoAlto. A cabeça dele, deitado, aponta
+                    para o lado do mergulho: é para lá que o corpo fica virado
+                    na pose deitada da falta.
+                    */
+                    if (D.quedaNoAlto && d.tipo === 'alto' && !d.agarrou &&
+                        typeof QuedaClip !== 'undefined' && typeof amostrarClipQueda === 'function') {
+                        corpo.updateMatrixWorld(true);
+                        this._v.set(0, 1, 0).applyQuaternion(corpo.quaternion);
+                        const hx = this._v.x, hz = this._v.z;
+                        d.comoQueda = { t: 0, fase: 'chao',
+                            yaw: (Math.hypot(hx, hz) > 0.05) ? Math.atan2(hx, hz) : Math.atan2(d.dirX || 1, 0) };
+                    }
                 }
                 break;
             }
@@ -580,7 +598,9 @@ const GkDive = {
         levantar. Ao levantar desfaz-se com o tombo, pelo mesmo factor.
         */
         let fracFrente = 0;
-        const FF = (typeof D.fracFrente === 'number') ? D.fracFrente : 0.7;
+        const FF = (D.fracFrentePorTipo && typeof D.fracFrentePorTipo[d.tipo] === 'number')
+            ? D.fracFrentePorTipo[d.tipo]
+            : ((typeof D.fracFrente === 'number') ? D.fracFrente : 0.7);
         if (d.fase === 'voo') {
             const kf = Math.min(1, d.t / Math.max(0.001, d.tVoo));
             fracFrente = Math.max(0, (kf - FF) / Math.max(0.001, 1 - FF));
@@ -612,6 +632,17 @@ const GkDive = {
         }
 
         corpo.quaternion.copy(d.qFacing).multiply(this._qTilt);
+
+        /*
+        O FRAME EM QUE AGARROU: os braços fecham-se sobre a bola já aqui, e não
+        no frame seguinte. Os braços deste frame foram escritos ANTES do
+        contacto (esticados para ela); sem isto uma mão ficava onde estava
+        esticada com a bola já ao peito — medido, 1.06 m de uma mão e 0.44 da
+        outra (guarda_redes_bola_agarrada). Aqui no fim e não dentro do
+        `defender`: lá, as mãos saltavam para o peito com a bola ainda no ponto
+        do contacto (gk_agarra_com_a_mao e guarda_redes_espalmada mediam isso).
+        */
+        if (d.abracarJa) { d.abracarJa = false; if (rig) this.poseAbracoBola(rig, d); }
 
         /*
         E SO AGORA SE ASSENTA: o assento mede ossos no MUNDO, portanto tem de
@@ -937,6 +968,7 @@ const GkDive = {
 
         if (decisao.resultado === 'agarra') {
             d.agarrou = true;
+            d.abracarJa = true;   // ver o fim do `update`: os braços fecham-se neste frame
             d.maoAgarrou = melhorMao;
             // Posse já; a pose continua a ser do mergulho até ele se levantar.
             p.grabBall(true);
@@ -1362,6 +1394,71 @@ const GkDive = {
             const cotovelo = rig[lado[1]];
             if (cotovelo) cotovelo.rotation.x = lerpTo(cotovelo.rotation.x, P.cotovelo, w);
         }
+    },
+
+    /*
+    O CHÃO E O LEVANTAR DO SALTO ALTO, pelo QuedaClip — ver
+    GoalkeeperDive.quedaNoAlto. O corpo fica virado para onde a cabeça ficou
+    (`yaw`), de bruços com os braços abertos (o keyframe Foul1 da queda) durante
+    o prazo do lance, e levanta-se pelos keyframes da falta: de gatas, um joelho,
+    de pé. O deslize no relvado continua o mesmo do mergulho.
+    */
+    updateComoQueda(p, dt, corpo, rig, d) {
+        const D = GoalkeeperDive;
+        const Q = QuedaClip;
+        const c = d.comoQueda;
+        c.t += dt;
+        const headless = (typeof Sim !== 'undefined' && Sim.running);
+
+        // O deslize e a travagem no relvado, como no chão do mergulho.
+        if (typeof d.vSlide === 'number' && d.vSlide !== 0) {
+            const trav = D.atritoChao * dt * Math.sign(d.vSlide);
+            if (Math.abs(d.vSlide) <= Math.abs(trav)) d.vSlide = 0;
+            else d.vSlide -= trav;
+            corpo.position.x += d.vSlide * dt;
+        }
+
+        // O fim dos segundos deitado da falta: o keyframe a seguir ao `deitadoEm`.
+        const fimDeitado = Q.frames.find(f => f.t > Q.deitadoEm);
+        const tDeitado = fimDeitado ? fimDeitado.t : Q.deitadoEm;
+        const tLevantar = Q.duracao - tDeitado;  // o levantar da falta
+        let tq;
+        if (c.fase === 'chao') {
+            tq = Math.min(tDeitado, Q.deitadoEm + c.t);
+            let prazo = (typeof d.tempoChao === 'number') ? d.tempoChao : D.tempoChao;
+            // A segunda defesa: com a bola viva na área, levanta-se mais cedo.
+            if (D.recargaLevantaJa && typeof Match !== 'undefined' && Match.state === 'PLAY' &&
+                Match.ball && typeof Area !== 'undefined' &&
+                Area.contem(Match.ball.position.x, Match.ball.position.z, p.ownGoalZ) &&
+                !(Match.ballCarrier && Match.ballCarrier.team === p.team)) {
+                prazo = Math.min(prazo, D.tempoChao);
+            }
+            if (c.t >= prazo) { c.fase = 'levantar'; c.t = 0; d.fase = 'levantar'; d.t = 0; }
+        } else {
+            tq = tDeitado + Math.min(tLevantar, c.t);
+        }
+
+        const K = amostrarClipQueda(tq);
+        this._qFrente.setFromAxisAngle(this._eixoY, c.yaw);
+        corpo.quaternion.copy(this._qFrente);
+        if (rig && typeof escreverPoseBolaParada === 'function') {
+            escreverPoseBolaParada(rig, K, corpo, 'r');
+            // Sem desenho fica o `altura` do próprio keyframe (resolvido com o
+            // corpo no relvado quando o QuedaClip foi construído).
+            if (!headless && typeof p.assentarCorpoInteiro === 'function') p.assentarCorpoInteiro();
+        }
+
+        if (c.fase === 'levantar' && c.t >= tLevantar) {
+            corpo.position.y = ALTURA_BASE_Y;
+            corpo.quaternion.copy(d.qFacing);
+            p.resetBonesToDefault();
+            p.gkEstado = 'idle';
+            p.gkRecuperacao = (typeof D.recuperacao === 'number') ? D.recuperacao : 0;
+            p.gkTempoMergulho = 0;
+            p.dive = null;
+            return false;
+        }
+        return true;
     },
 
     poseLevantar(rig, s, comBola) {

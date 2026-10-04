@@ -4370,6 +4370,11 @@ class FootballPlayer {
         if (this.touchLock > 0) this.touchLock = Math.max(0, this.touchLock - dt);
         if (this.overlapTimer > 0) this.overlapTimer = Math.max(0, this.overlapTimer - dt);
         if (this.pedindoBola > 0) this.pedindoBola = Math.max(0, this.pedindoBola - dt);
+        // O quase golo (ver QuaseGoloModel): o relógio da camada das mãos na cabeça.
+        if (this.lamento) {
+            this.lamento.t += dt;
+            if (typeof QuaseGoloModel === 'undefined' || this.lamento.t >= QuaseGoloModel.duracao) this.lamento = null;
+        }
 
         /*
         JOGADAS COMBINADAS (ver JogadasCombinadas em config.js). Os dois pedidos
@@ -5543,6 +5548,30 @@ class FootballPlayer {
         return Math.atan2(fx * dz - fz * dx, fx * dx + fz * dz);
     }
 
+    /*
+    O QUASE GOLO — ver QuaseGoloModel. Só a parte de cima: braços, cotovelos e
+    cabeça, por cima da pose que as pernas já têm. Chamado nos dois fins do
+    `animateBones` (o do jogador parado e o da passada), sempre DEPOIS do
+    `nivelarCabeca`: aqui a cabeça vai para trás, que é o gesto.
+    */
+    aplicarQuaseGolo() {
+        if (!this.lamento || !this.rig || typeof QuaseGoloModel === 'undefined') return;
+        const Q = QuaseGoloModel;
+        const t = this.lamento.t;
+        const w = Math.max(0, Math.min(1, Math.min(t / Q.transicao, (Q.duracao - t) / Q.transicao)));
+        const r = this.rig;
+        const mistura = (a, b) => a + (b - a) * w;
+        r.lArm.rotation.x = mistura(r.lArm.rotation.x, Q.bracoX);
+        r.rArm.rotation.x = mistura(r.rArm.rotation.x, Q.bracoX);
+        r.lArm.rotation.z = mistura(r.lArm.rotation.z, Q.bracoZ);
+        r.rArm.rotation.z = mistura(r.rArm.rotation.z, -Q.bracoZ);
+        r.lArm.rotation.y = mistura(r.lArm.rotation.y, Q.bracoY || 0);
+        r.rArm.rotation.y = mistura(r.rArm.rotation.y, -(Q.bracoY || 0));
+        r.lElbow.rotation.x = mistura(r.lElbow.rotation.x, Q.cotovelo);
+        r.rElbow.rotation.x = mistura(r.rElbow.rotation.x, Q.cotovelo);
+        if (r.neck) r.neck.rotation.x = mistura(r.neck.rotation.x, Q.cabeca);
+    }
+
     animateBones(dt) {
         let speed = this.velocity.length(); let rig = this.rig;
 
@@ -5850,6 +5879,7 @@ class FootballPlayer {
             só no outro ramo.
             */
             this.nivelarCabeca();
+            this.aplicarQuaseGolo();
             this.assentarNoChao();
             return;
         }
@@ -6017,6 +6047,9 @@ class FootballPlayer {
 
         // A pose já está escrita: a cabeça não pode ficar a olhar para cima.
         this.nivelarCabeca();
+
+        // O quase golo por cima da passada: ver aplicarQuaseGolo.
+        this.aplicarQuaseGolo();
 
         // A pose já está escrita: agora o corpo desce até a bota tocar.
         this.assentarNoChao();

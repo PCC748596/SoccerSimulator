@@ -57,6 +57,11 @@ Object.assign(Match, {
         */
         if (typeof limparRecuoParaGR === 'function') limparRecuoParaGR();
 
+        // A bola saiu pela linha de fundo: foi quase golo? Ver talvezLamentar.
+        if ((type === 'GOAL_KICK' || type === 'CORNER_KICK') && typeof this.talvezLamentar === 'function') {
+            this.talvezLamentar();
+        }
+
         this.mudarEstado(type, 'setpiece_' + type.toLowerCase());
         this.setPieceTeam = team;
 

@@ -1,6 +1,8 @@
 Object.assign(Match, {
     update: function (dt) {
         if (!this._pf_stats) this._pf_stats = { count: 0, time: 0 };
+        // A idade do último remate (ver talvezLamentar, o quase golo).
+        if (this.ultimoRemate) this.ultimoRemate.idade += dt;
         const medir = this._profilingActivo();
         const t0 = medir ? performance.now() : 0;
         for (let p of this.players) { p.debugPoints = null; }
@@ -962,6 +964,24 @@ Object.assign(Match, {
     a cobranca aos ~14 s, medido. Vai a andar enquanto o batedor se aproxima,
     como ja fazia. No penalti caiu dentro da area e tem de sair dela.
     */
+    /*
+    O QUASE GOLO — ver QuaseGoloModel (config/animations.js). Chamado pelo
+    setupSetPiece quando a bola sai pela linha de fundo (pontapé de baliza ou
+    canto): se foi um remate de há pouco que passou rente à baliza, ou uma
+    defesa do guarda-redes para fora, o rematador leva as mãos à cabeça.
+    */
+    talvezLamentar: function () {
+        const Q = (typeof QuaseGoloModel !== 'undefined') ? QuaseGoloModel : null;
+        const r = this.ultimoRemate;
+        this.ultimoRemate = null;
+        if (!Q || !r || !r.p || r.p.expulso || r.idade > Q.janelaRemate || !this.ball) return;
+        const b = this.ball.position;
+        const rente = Math.abs(b.x) < LARGURA_BALIZA / 2 + Q.margemPoste && b.y < ALTURA_BALIZA + Q.margemTrave;
+        const ultimo = this.lastTouchedPlayer;
+        const defesa = !!(ultimo && ultimo.role === 'gk' && ultimo.team !== r.p.team);
+        if (rente || defesa) r.p.lamento = { t: 0 };
+    },
+
     algumACaminhoDoLugar: function (comVitima) {
         const v = this.bolaParadaVitima;
         const aCaminho = p => !!(p && p.lugarBolaParada && (comVitima || p !== v));
