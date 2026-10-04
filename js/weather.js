@@ -29,12 +29,15 @@ const Weather = {
     /*
     OPACIDADE DA SOMBRA DAS NUVENS — 0.20 é 20%.
 
-    As nuvens já não entram no mapa de sombras (ver `_criarNuvens`); o que
-    faz a sombra delas é este escurecimento da luz direcional, aplicado como
-    FRAÇÃO da intensidade do preset e não como valor absoluto — 0.20 fixo
-    apagava quase por completo a Lua (0.12) e a chuva de dia (0.25).
+    As nuvens não entram no mapa de sombras (ver `_criarNuvens`); a sombra
+    delas é uma mancha suave no relvado, desta opacidade, projetada pelo Sol
+    (ver `_criarSombraDaNuvem` e o `update`). Com menos Sol do que no dia
+    limpo a mancha fica proporcionalmente mais fraca.
     */
     opacidadeSombraNuvem: 0.20,
+    // A mancha fica um pouco acima das linhas do campo (0.02), para não piscar com elas.
+    alturaSombraNuvem: 0.04,
+    sombrasGroup: null,
     rainParticles: null,
     rainCount: 3500,
     rainSpeed: 45,
@@ -559,9 +562,123 @@ const Weather = {
 
             this.cloudGroup.add(cloudCluster);
             this.clouds.push(cloudCluster);
+            this._criarSombraDaNuvem(cloudCluster);
         }
 
         this.scene.add(this.cloudGroup);
+    },
+
+    /*
+    A SOMBRA DA NUVEM NO RELVADO.
+
+    Relato: *"acho que as nuvens não estão dando sombra no campo"*. E não
+    estavam: desde que saíram do mapa de sombras (ver `_criarNuvens`), a
+    "sombra" era só a luz do Sol a baixar até 20% no campo TODO quando uma
+    nuvem passava por cima do centro — sem forma, sem sítio, nada que se visse
+    a atravessar o relvado.
+
+    Agora cada nuvem tem uma mancha no chão: um plano com a pegada da própria
+    nuvem (as caixas vistas de cima, cada uma desenhada como um borrão de
+    bordas suaves), preto a `opacidadeSombraNuvem` (os mesmos 20% do pedido
+    "muito hard"). No `update` a mancha é projetada ao longo da direção do Sol,
+    por isso anda com a nuvem e cai onde a luz a põe. Sem nevoeiro (com ele, a
+    mancha ao longe tingia-se da cor do nevoeiro) e sem escrever profundidade.
+    */
+    _criarSombraDaNuvem(cluster) {
+        if (typeof document === 'undefined') return;
+        if (!this._planosRelva) this._planosRelva = [];
+        if (!this.sombrasGroup) {
+            this.sombrasGroup = new THREE.Group();
+            this.sombrasGroup.name = "Weather_CloudShadows";
+            this.scene.add(this.sombrasGroup);
+        }
+
+        // A pegada da nuvem vista de cima: cada caixa, com o seu tamanho.
+        const blocos = [];
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const m of cluster.children) {
+            const g = m.geometry && m.geometry.parameters;
+            const r = g ? g.width * 0.5 : 3;
+            blocos.push({ x: m.position.x, z: m.position.z, r });
+            minX = Math.min(minX, m.position.x - r); maxX = Math.max(maxX, m.position.x + r);
+            minZ = Math.min(minZ, m.position.z - r); maxZ = Math.max(maxZ, m.position.z + r);
+        }
+        if (!blocos.length) return;
+        const margem = 8;   // o desfoque das bordas precisa de espaço
+        minX -= margem; maxX += margem; minZ -= margem; maxZ += margem;
+        const larg = maxX - minX, comp = maxZ - minZ;
+
+        const N = 256;
+        const cvs = document.createElement('canvas');
+        cvs.width = N; cvs.height = N;
+        const ctx = cvs.getContext('2d');
+        if (!ctx || typeof ctx.createRadialGradient !== 'function') return;
+        const sx = N / larg, sz = N / comp;
+        for (const b of blocos) {
+            const cx = (b.x - minX) * sx, cy = (b.z - minZ) * sz;
+            // O borrão vai além da caixa: é isso que tira o recorte duro.
+            const raio = (b.r + 4) * Math.max(sx, sz);
+            const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, raio);
+            grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+            grad.addColorStop(0.5, 'rgba(0,0,0,0.30)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(cx - raio, cy - raio, raio * 2, raio * 2);
+        }
+        const tex = new THREE.CanvasTexture(cvs);
+
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            map: tex,
+            transparent: true,
+            opacity: this.opacidadeSombraNuvem,
+            depthWrite: false,
+            fog: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+            polygonOffsetUnits: -2
+        });
+        // Recortada ao relvado: fora dele (ver `_recortarSombrasAoRelvado`) a mancha ficava a pairar no vazio.
+        mat.clippingPlanes = this._planosRelva;
+        const sombra = new THREE.Mesh(new THREE.PlaneGeometry(larg, comp), mat);
+        sombra.rotation.x = -Math.PI / 2;
+        sombra.castShadow = false;
+        sombra.receiveShadow = false;
+        sombra.renderOrder = 1;
+        sombra.visible = false;
+        // O centro da pegada em relação ao centro da nuvem (a nuvem não é simétrica).
+        sombra.userData.dx = (minX + maxX) * 0.5;
+        sombra.userData.dz = (minZ + maxZ) * 0.5;
+        this.sombrasGroup.add(sombra);
+        cluster.userData.sombra = sombra;
+    },
+
+    /*
+    Os quatro planos que recortam as manchas das nuvens ao relvado. O relvado
+    pode nascer depois do Weather (e é recriado ao montar o campo), por isso
+    os planos são escritos no próprio array partilhado pelas matérias, no
+    `update`, quando ele existe. O recorte por matéria precisa do
+    `localClippingEnabled` do renderer — não há outros planos no jogo.
+    */
+    _recortarSombrasAoRelvado() {
+        const relva = window.relva;
+        const r = window.rendererCore;
+        if (!relva || !this._planosRelva || !relva.geometry || !relva.geometry.parameters) return;
+        if (this._relvaRecortada === relva) return;
+        relva.updateMatrixWorld(true);
+        const c = new THREE.Vector3().setFromMatrixPosition(relva.matrixWorld);
+        const mx = relva.geometry.parameters.width * 0.5;
+        const mz = relva.geometry.parameters.height * 0.5;
+        this._planosRelva.length = 0;
+        this._planosRelva.push(
+            new THREE.Plane(new THREE.Vector3(1, 0, 0), -(c.x - mx)),
+            new THREE.Plane(new THREE.Vector3(-1, 0, 0), c.x + mx),
+            new THREE.Plane(new THREE.Vector3(0, 0, 1), -(c.z - mz)),
+            new THREE.Plane(new THREE.Vector3(0, 0, -1), c.z + mz));
+        if (r) r.localClippingEnabled = true;
+        // As matérias têm de recompilar com o número novo de planos.
+        if (this.sombrasGroup) this.sombrasGroup.children.forEach(m => { m.material.needsUpdate = true; });
+        this._relvaRecortada = relva;
     },
 
     _atualizarNuvens(pConfig) {
@@ -840,17 +957,39 @@ const Weather = {
     },
 
     update(dt) {
-        let maxSombra = 0;
 
         // Nuvens só se movem em céu limpo e nublado (estáticas em encoberto e chuva).
         // Em pausa o céu congela, mas a luz continua a convergir (ver mais abaixo).
         const moverNuvens = !window.isPaused
             && (this.condicao === 'limpo' || this.condicao === 'nublado');
 
+        this._recortarSombrasAoRelvado();
+
+        // Em pausa as nuvens param, mas as manchas ficam onde estão.
+        const ceuComSombra = (this.condicao === 'limpo' || this.condicao === 'nublado');
+
+        // A direção do Sol (da Terra para ele) e a força da sombra, para as manchas das nuvens.
+        let dirSol = null;
+        if (this.dirLight) {
+            const alvo = this.dirLight.target ? this.dirLight.target.position : null;
+            const v = this.dirLight.position.clone();
+            if (alvo) v.sub(alvo);
+            if (v.y > 0.1) dirSol = v.normalize();
+        }
+        const r = window.rendererCore;
+        const sombrasLigadas = !r || r.shadowMap.enabled;
+        const op = (typeof this.opacidadeSombraNuvem === 'number') ? this.opacidadeSombraNuvem : 0.20;
+        // Com menos Sol, menos sombra: o dia limpo (0.95) é o pleno; a Lua quase não a faz.
+        const refSol = this.presets.dia.limpo.solIntensidade || 1;
+        const opSombra = op * Math.min(1, (this.baseSolIntensidade || refSol) / refSol);
+
         if (this.cloudGroup && this.cloudGroup.visible) {
             const boundsX = 260;
             this.clouds.forEach(c => {
-                if (!c.visible) return;
+                if (!c.visible) {
+                    if (c.userData.sombra) c.userData.sombra.visible = false;
+                    return;
+                }
 
                 if (moverNuvens) {
                     c.position.x += c.userData.speedX * dt;
@@ -863,33 +1002,31 @@ const Weather = {
                 }
 
                 // A sombra só faz sentido para nuvens que passam: em encoberto e chuva
-                // as nuvens estão paradas e escurecer aqui daria um escurecimento
-                // permanente somado ao preset, que já é escuro por si.
-                if (!moverNuvens) return;
+                // a luz é difusa (o céu todo é nuvem) e não há sombra com forma.
+                const sombra = c.userData.sombra;
+                if (!sombra) return;
+                sombra.visible = ceuComSombra && sombrasLigadas && !!dirSol;
+                if (!sombra.visible) return;
 
-                // Quanto está a nuvem a cobrir o centro do campo (X: -85..85, Z: -75..75),
-                // alargado pelo tamanho real do aglomerado
-                const alcanceX = 85 + c.userData.larguraX * 0.5;
-                const alcanceZ = 75 + c.userData.larguraZ * 0.5;
-                const distX = Math.abs(c.position.x);
-                const distZ = Math.abs(c.position.z);
-                if (distX < alcanceX && distZ < alcanceZ) {
-                    const fatorX = Math.max(0, 1 - distX / alcanceX);
-                    const fatorZ = Math.max(0, 1 - distZ / alcanceZ);
-                    const fator = fatorX * fatorZ;
-                    if (fator > maxSombra) maxSombra = fator;
-                }
+                // Projetada no relvado ao longo da direção do Sol.
+                const ox = c.position.x + sombra.userData.dx;
+                const oz = c.position.z + sombra.userData.dz;
+                const k = c.position.y / dirSol.y;
+                sombra.position.set(ox - dirSol.x * k, this.alturaSombraNuvem, oz - dirSol.z * k);
+                sombra.material.opacity = opSombra;
             });
+        }
+        if (this.sombrasGroup && !(this.cloudGroup && this.cloudGroup.visible)) {
+            this.sombrasGroup.children.forEach(m => { m.visible = false; });
         }
 
         /*
-        A SOMBRA DA NUVEM, agora que ela não entra no mapa de sombras: um
-        escurecimento suave da luz direcional à passagem. Ver
-        `opacidadeSombraNuvem` lá em cima para o valor e o porquê da fração.
+        A luz do Sol volta sempre à do preset. O escurecimento do campo todo à
+        passagem de uma nuvem morreu: a sombra agora tem forma e sítio (ver
+        `_criarSombraDaNuvem`). O lerp fica para as mudanças de preset.
         */
         if (this.dirLight && this.baseSolIntensidade !== undefined) {
-            const op = (typeof this.opacidadeSombraNuvem === 'number') ? this.opacidadeSombraNuvem : 0.20;
-            const solAlvo = this.baseSolIntensidade * (1 - op * maxSombra);
+            const solAlvo = this.baseSolIntensidade;
             this.dirLight.intensity += (solAlvo - this.dirLight.intensity) * Math.min(1.0, dt * 2.5);
         }
 

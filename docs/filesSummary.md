@@ -144,6 +144,23 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### As nuvens voltaram a fazer sombra no relvado (js/weather.js `_criarSombraDaNuvem`, `_recortarSombrasAoRelvado`, `update`)
+
+Relato: *"acho que as nuvens não estão dando sombra no campo"*.
+
+**O que estava:** as nuvens tinham saído do mapa de sombras (pedido "sombras muito hard"). A "sombra" passou a ser só a luz do Sol a baixar até 20% no campo todo quando uma nuvem passava pelo centro, sem forma e sem sítio.
+
+**O que mudou:**
+- **Uma mancha por nuvem:** um plano no relvado com a pegada da própria nuvem. Cada caixa vista de cima é um borrão radial de bordas suaves, numa textura de canvas.
+- **Opacidade:** preto a `opacidadeSombraNuvem` (os mesmos 20%), proporcional ao Sol do preset. O dia limpo é o pleno; à noite quase não se vê.
+- **Posição:** projetada ao longo da direção do Sol (posição da luz menos alvo) a partir da altura da nuvem, por isso anda com ela.
+- **Material:** fica a 0.04 m (acima das linhas, a 0.02), com `polygonOffset`. Não escreve profundidade e não leva nevoeiro.
+- **Recorte ao relvado:** quatro planos de recorte (`localClippingEnabled`), para não pairar no vazio fora do estádio.
+- **Quando aparece:** só em céu limpo e nublado (em encoberto e chuva a luz é difusa), e só com as sombras ligadas. Em pausa as manchas ficam paradas.
+- **O escurecimento global da luz foi removido.** A luz volta sempre à intensidade do preset.
+
+**Verificado:** num render no Chrome headless (cena de teste com o `weather.js` real), com as manchas no relvado e recortadas à borda. Os testes `chuva_afecta_o_jogo` e `respingos_de_chuva` passam.
+
 #### O guarda-redes a andar com a cabeça no ar (js/player.js, ramo `andando`)
 
 Relato, com captura (14FC): *"o goleiro está andando com a cabeça meio levantada"*. A postura do penálti levanta o pescoço (`cabeca` −0.48) e roda os pés (`pe` −0.75), e só o ramo parado os escrevia de volta. Depois de um penálti ele ficava a andar com a cabeça no ar o resto do jogo. No ramo a andar, o pescoço e os pés voltam a 0 (`lerpTo`, 0.2). Medido: 9 frames em 7313 com a cabeça levantada a andar, todos na transição.
