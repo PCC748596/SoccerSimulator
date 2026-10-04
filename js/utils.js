@@ -1285,13 +1285,47 @@ Devolve o ângulo que FALTA depois de aplicar, em radianos e sem sinal: quem
 chama pode decidir esperar por ele.
 =============================================================================
 */
+/*
+O RUMO LÊ-SE DO QUATERNIÃO, e não de `rotation.y`.
+
+Relato, com quatro capturas: *"depois da cobrança do pênalti o goleiro virou de
+costas para a bola. Quando a bola chegou nele ele virou de frente novamente."*
+
+Quem escreve a orientação por quaternião (o `lookAtBola`, o mergulho) deixa um
+rumo de 180 graus guardado em Euler como (x=pi, y=0, z=pi) — o mesmo rumo, outra
+escrita. Lido por `rotation.y` dava 0: a conta da volta partia do sítio errado e
+virava-o para o lado contrário. É exactamente o guarda-redes que olha para -z.
+Medido em 20 penáltis: 4.2% dos frames depois do remate com a bola a mais de 100
+graus da frente dele, 72 de 111 no estado 'maos', que é quem chama isto.
+
+Agora o rumo actual sai da direcção da FRENTE do modelo, e a volta aplica-se à
+volta do eixo vertical do MUNDO (premultiply): o rumo muda e qualquer
+inclinação que o corpo tenha fica onde está.
+*/
+const _qVirar = (typeof THREE !== 'undefined') ? new THREE.Quaternion() : null;
+const _eixoVirarY = (typeof THREE !== 'undefined') ? new THREE.Vector3(0, 1, 0) : null;
 function virarParaSuave(model, ponto, k) {
     if (!model || !ponto) return 0;
     const alvo = Math.atan2(ponto.x - model.position.x, ponto.z - model.position.z);
-    let d = alvo - model.rotation.y;
+    const q = model.quaternion;
+    let atual;
+    if (q && _qVirar) {
+        const fx = 2 * (q.x * q.z + q.w * q.y);
+        const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
+        atual = Math.atan2(fx, fz);
+    } else {
+        atual = model.rotation.y;
+    }
+    let d = alvo - atual;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
-    model.rotation.y += d * Math.max(0, Math.min(1, k));
+    const passo = d * Math.max(0, Math.min(1, k));
+    if (q && _qVirar) {
+        _qVirar.setFromAxisAngle(_eixoVirarY, passo);
+        q.premultiply(_qVirar);
+    } else {
+        model.rotation.y += passo;
+    }
     return Math.abs(d);
 }
 

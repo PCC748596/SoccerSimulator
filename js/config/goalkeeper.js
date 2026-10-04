@@ -433,17 +433,57 @@ const GoalkeeperPose = {
         altura: -0.05
     },
 
-    // Posição para defender o penálti (Match.state === 'PENALTY'):
-    // Um pouco agachado, joelhos para a frente, tronco direito (não inclinado).
+    /*
+    Posição para defender o penálti (Match.state === 'PENALTY', e a falta
+    directa contra ele). A POSTURA DE PRONTIDÃO — pedido, com duas fotografias
+    (5020 e 8754) e uma captura do jogo (B9133): *"a posição do goleiro na hora
+    do pênalti precisa de ajuste"*.
+
+    A de antes era "sentado numa cadeira": coxas 46 graus à frente, tronco
+    DIREITO e braços abertos à altura dos ombros — de lado lia-se como alguém
+    sentado com um joelho no ar. A das fotografias inclina o corpo A PARTIR DA
+    ANCA: pernas bem abertas, joelhos dobrados por cima dos pés, tronco ~35
+    graus à frente, mãos em baixo, à altura dos joelhos, viradas para o batedor.
+
+    `pelvis` é essa inclinação (a pélvis é a raiz do rig: inclina o tronco e
+    as pernas juntos); por isso a `coxa` e o `chest` são RELATIVOS a ela:
+      coxa  -1.05 + pelvis 0.35 = coxa a -0.70 do vertical (40 graus à frente)
+      chest  0.25 + pelvis 0.35 = tronco a 0.60 (35 graus à frente)
+      braço -0.90 + tronco 0.60 = braço a -0.30 (mãos à frente dos joelhos)
+    */
     penalti: {
-        chest: 0.05,
-        joelho: 0.80,
-        coxa: -0.80,
-        abertura: 0.25,
-        bracoZ: 0.90,
-        bracoX: -0.35,
-        cotovelo: -0.35,
-        altura: 0.0
+        pelvis: 0.35,
+        chest: 0.25,
+        joelho: 1.10,
+        coxa: -0.70,
+        abertura: 0.32,
+        bracoZ: 0.35,
+        bracoX: -0.90,
+        cotovelo: -0.40,
+        altura: -0.15,
+        /*
+        OS PÉS E A CABEÇA — segundo pedido, com captura (F300): *"os pés têm que
+        ficar em cima da linha. Solas dos pés retas. Cabeça olhando a bola."*
+        A inclinação da anca leva tudo com ela: medido, as botas ficavam 0.28 m
+        à frente da linha, as solas inclinadas 20 graus e a cabeça a olhar 34
+        graus para baixo (a bola está a 11 m: são ~6).
+
+          `pe`      roda os pés o que a canela inclinou (0.35 rad), sola assente;
+          `cabeca`  levanta o pescoço o que o tronco baixou;
+          `pesAFrente` quanto se recua a âncora do penálti (0: fica na linha).
+                    Não se usa: o corpo dele não recua para lá de ~0.13 m da
+                    linha, e com a âncora atrás disso ele ficava a andar contra
+                    o limite. A correcção foi na GEOMETRIA: com a coxa a -1.05
+                    os pés ficavam 0.28 m à frente da anca; agora coxa 20 graus
+                    à frente e canela 43 para trás, os pés por baixo da anca e
+                    os joelhos à frente, como numa postura agachada a sério:
+                      coxa  -0.70 + pelvis 0.35 = coxa a -0.35 do vertical
+                      canela -0.35 + joelho 1.10 = canela a +0.75
+                      pé    -0.75 (o que a canela inclinou: sola assente)
+        */
+        pe: -0.75,
+        cabeca: -0.48,
+        pesAFrente: 0.0
     },
 
     // Sem perigo: descontraído, praticamente direito.
@@ -519,9 +559,20 @@ const GoalkeeperPose = {
         muda o angulo de onde a bisseccao parte.
         =====================================================================
         */
-        bracoZ: 0.18,
+        /*
+        OS COTOVELOS ABERTOS — pedido: *"os cotovelos estão muito fechados.
+        Têm que ficar mais abertos. As mãos podem ficar um pouco mais
+        fechadas."* O `bracoZ` passou de 0.18 a 0.45 e deixou de ser um ponto
+        de partida: o fecho das mãos na bola passou a ser feito pela rotação do
+        ombro (`fechoPeloOmbro`, o tecto em radianos da bissecção — ver
+        `fecharMaosNaBolaPeloOmbro`, player.js), que não mexe nos cotovelos.
+        `maoFecho` dobra os pulsos para dentro, a abraçar a bola.
+        */
+        bracoZ: 0.45,
         bracoX: -0.45,
         cotovelo: -2.15,
+        fechoPeloOmbro: 1.2,
+        maoFecho: 0.35,
 
         /*
         A BOLA NAS MÃOS, E NÃO ao lado delas.

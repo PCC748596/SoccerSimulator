@@ -113,6 +113,27 @@ Pedidos: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos bandeirinh
 
 - **Andar no sítio** (relato: *"o juiz está com animação de andar sem sair da posição"*). Com uma zona morta de 6–10 cm (`paragemMax`/`arranqueMin`), ele perseguia cada centímetro da coroa a deslizar com a bola: 0.3–0.4 m/s com o ciclo de passada inteiro. A zona morta passou para 0.25/1.50 m. O alvo dele é agora amortecido (`alvoSuavizacao`, 0.35 s), porque as regras da linha da bola e das linhas dependem da posse e, numa bola dividida, o alvo saltava metros. Saltos de mais de 1 m num frame: de 561 para 237 em 5 min.
 
+#### O guarda-redes de costas para a bola, e os cotovelos ao segurá-la (js/utils.js `virarParaSuave`, js/player.js, js/config/goalkeeper.js `GoalkeeperPose.segurar`)
+
+- **De costas para a bola depois do penálti.** Relato, com quatro capturas: *"o goleiro virou de costas para a bola. Quando a bola chegou nele ele virou de frente novamente"*.
+  - **Causa:** o `virarParaSuave` lia o rumo em `model.rotation.y`, mas quem escreve a orientação por quaternião (`lookAtBola`, mergulho) deixa um rumo de 180° guardado em Euler como (π, 0, π). Lido como 0, a conta da volta virava-o para o lado contrário. É exactamente o guarda-redes que olha para −z.
+  - **Agora:** o rumo sai da direcção da frente do modelo e a volta aplica-se à volta do eixo vertical do mundo (`premultiply`).
+  - **Medido em 20 penáltis:** frames depois do remate com a bola a mais de 100° da frente passaram de 4.2% para 0.9%; os do estado `maos` de 72 para 0. Os que sobram são a meio do mergulho, com o corpo deitado.
+- **Os cotovelos ao segurar a bola.** Pedido: *"os cotovelos estão muito fechados. Têm que ficar mais abertos. As mãos podem ficar um pouco mais fechadas."*
+  - **Causa:** o fecho das mãos na bola aduzia o braço, e isso trazia o cotovelo junto. Medido: cotovelos a 0.16 m um do outro, mais juntos do que as mãos (0.26 m), com os antebraços cruzados à frente do peito.
+  - **Agora:** a abertura fica fixa (`bracoZ` 0.45) e o fecho é pela rotação interna do ombro (`fecharMaosNaBolaPeloOmbro`, tecto `fechoPeloOmbro`). Os pulsos dobram para dentro (`maoFecho` 0.35).
+  - **Medido:** cotovelos a 0.60 m um do outro, mãos a 0.21 m (o diâmetro da bola).
+  - Os testes de guarda-redes, tiro de meta e penálti passam.
+
+#### A postura do guarda-redes no penálti (js/config/goalkeeper.js `GoalkeeperPose.penalti`, js/player.js)
+
+Pedido, com duas fotografias (5020, 8754) e uma captura do jogo (B9133): *"a posição do goleiro na hora do pênalti precisa de ajuste"*.
+
+- **A de antes era "sentado numa cadeira":** coxas 46° à frente, tronco direito, braços abertos à altura dos ombros. De lado lia-se como alguém sentado com um joelho no ar. A posição estava certa (ao centro, na linha, virado para o batedor); era só a pose.
+- **Agora é a postura de prontidão das fotografias:** inclinada a partir da anca (`pelvis` 0.35), tronco ~35° à frente, coxas 40° à frente, joelhos dobrados por cima dos pés, pernas bem abertas e mãos à altura dos joelhos. A `coxa` e o `chest` são relativos à pélvis; as contas estão no comentário da pose.
+- **A pélvis endireitava-se no ramo de repouso** do `updateGK` todos os frames, antes da pose. Agora essa linha vai para a inclinação da pose de penálti quando ele está nela (penálti, ou falta contra a equipa dele), senão as duas puxavam a pélvis para sítios diferentes.
+- Os testes `penalti_*` e `falta_directa` passam.
+
 #### O lançamento acaba com movimento, sem a perna a cair a direito (js/config/animations.js `LancamentoClip`, js/fsm.js PASS)
 
 Relato: *"na animação do lançamento parece que faltam frames no final depois que a bola é chutada. A perna volta muito rápido para a posição reta."*

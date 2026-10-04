@@ -1038,7 +1038,11 @@ Object.assign(Match, {
             this.setPieceTaker = takerPen || null;
 
             if (takerPen) {
-                takerPen.model.position.set(0, ALTURA_BASE_Y, marcaZ - attDir * PM.recuoBatedor);
+                // Ao lado da linha da bola, do lado contrário ao pé bom (ver PenaltyModel.desvioBatedor).
+                // A esquerda de quem corre no sentido `attDir` é x = +attDir.
+                const ladoDesvio = (takerPen.pe === 'e') ? -1 : 1;
+                takerPen.model.position.set(ladoDesvio * attDir * (PM.desvioBatedor || 0),
+                    ALTURA_BASE_Y, marcaZ - attDir * PM.recuoBatedor);
                 lookAtBola(takerPen.model, this.ball.position);
                 takerPen.fsm.changeState('SET_PIECE_WAIT');
             }

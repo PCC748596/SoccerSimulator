@@ -1412,6 +1412,16 @@ const PenaltyModel = {
     raioMeiaLua: typeof Area !== 'undefined' ? Area.raioMeiaLua : 9.15,        // ninguém dentro disto além do batedor
     margemArea: typeof Area !== 'undefined' ? Area.profundidade : 16.5,         // linha da grande área
     recuoBatedor: 4.6,         // onde ele espera, atrás da bola
+    /*
+    E UM POUCO AO LADO DELA, para o lado contrário ao pé de chute — pedido, com
+    captura (4A70): *"o jogador na hora da cobrança deve ficar ligeiramente
+    desalinhado para a bola, para o lado do pé contrário da cobrança. Pé direito
+    deslocado um pouco para a esquerda, pé esquerdo um pouco para a direita."*
+    Metros para o lado, a `recuoBatedor` atrás: 1.2 m dá uns 15 graus de
+    corrida. A aproximação andada (Match.update) leva-o à bola em linha recta,
+    portanto a corrida sai na diagonal.
+    */
+    desvioBatedor: 1.2,
     areaX: typeof Area !== 'undefined' ? Area.meiaLargura : 20.16,             // meia-largura da grande área
     folgaArco: 0.6,            // quanto ficam PARA LÁ da meia-lua
     folgaArea: 0.8,            // e para lá da linha da área

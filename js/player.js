@@ -604,6 +604,47 @@ class FootballPlayer {
         this.model.position.y += correccao * A.suavizacao;
     }
 
+    /*
+    O MESMO FECHO, MAS PELA ROTAÇÃO DO OMBRO — os cotovelos ficam abertos.
+
+    Pedido, com captura vista de cima: *"os cotovelos estão muito fechados. Têm
+    que ficar mais abertos."* O `fecharMaosNaBola` aproxima os punhos ADUZINDO o
+    braço (rotation.z), e aduzir traz o cotovelo junto com a mão: medido, com a
+    bola segura os cotovelos ficavam a 0.16 m um do outro — mais juntos do que
+    as mãos (0.26), os antebraços cruzados à frente do peito.
+
+    Aqui a abertura (`bracoZ`) fica onde a pose a pôs, com os cotovelos para
+    fora, e quem fecha as mãos na bola é a rotação interna do ombro
+    (rotation.y): com o cotovelo dobrado, ela traz os antebraços para dentro, à
+    volta da bola, sem mexer nos cotovelos. Bissecção como a outra.
+    */
+    fecharMaosNaBolaPeloOmbro(bracoZ, yMax) {
+        const rig = this.rig;
+        const L = LateralPose;
+        if (!rig || !rig.lHand || !rig.rHand || !L) return 0;
+        const alvo = 2 * BallPhysics.raio;
+        rig.lArm.rotation.z = bracoZ;
+        rig.rArm.rotation.z = -bracoZ;
+        const aplicar = (y) => { rig.lArm.rotation.y = y; rig.rArm.rotation.y = -y; };
+        let lo = -yMax, hi = yMax;
+        aplicar(lo); const dLo = this.distanciaEntreMaos();
+        aplicar(hi); const dHi = this.distanciaEntreMaos();
+        if (dLo === null || dHi === null) { aplicar(0); return 0; }
+        if (alvo <= Math.min(dLo, dHi)) { const y = dLo <= dHi ? lo : hi; aplicar(y); return y; }
+        if (alvo >= Math.max(dLo, dHi)) { const y = dLo >= dHi ? lo : hi; aplicar(y); return y; }
+        const crescente = dHi > dLo;
+        let y = 0;
+        for (let i = 0; i < L.fechoIteracoes; i++) {
+            y = (lo + hi) / 2;
+            aplicar(y);
+            const d = this.distanciaEntreMaos();
+            if (d === null || Math.abs(d - alvo) < L.fechoTolerancia) break;
+            if ((d < alvo) === crescente) lo = y; else hi = y;
+        }
+        aplicar(y);
+        return y;
+    }
+
     fecharMaosNaBola(bracoZBase) {
         const rig = this.rig;
         const L = LateralPose;
@@ -6534,7 +6575,7 @@ class FootballPlayer {
             */
             const gkStyleAtual = GoalkeeperStyle[this.gkStyle] || GoalkeeperStyle.defensive;
             const ancora = (typeof Match !== 'undefined' && Match.state === 'PENALTY')
-                ? { x: 0, z: this.ownGoalZ }
+                ? { x: 0, z: this.ownGoalZ - this.dirZ * ((GoalkeeperPose.penalti && GoalkeeperPose.penalti.pesAFrente) || 0) }
                 : naLinhaDaFalta
                 ? { x: gkCorpo.position.x, z: this.ownGoalZ }
                 : gkAnchor(
@@ -7382,7 +7423,16 @@ class FootballPlayer {
             _v1.set(Match.ball.position.x, gkCorpo.position.y, lookZ);
             lookAtBola(gkCorpo, _v1);
 
-            gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, 0, 0.25);
+            /*
+            A pélvis volta a direito — menos na postura do penálti, que inclina o
+            corpo a partir da anca (ver GoalkeeperPose.penalti.pelvis). É AQUI e
+            não na pose de baixo, senão as duas linhas puxavam a pélvis para
+            sítios diferentes no mesmo frame e ela ficava a meio.
+            */
+            const naPosturaDePenalti = (Match.state === 'PENALTY' || Match.state === 'FREE_KICK') &&
+                this.team !== Match.setPieceTeam;
+            const pelvisAlvo = (naPosturaDePenalti && GoalkeeperPose.penalti.pelvis) || 0;
+            gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, pelvisAlvo, 0.25);
             gkRig.pelvis.rotation.y = lerpTo(gkRig.pelvis.rotation.y, 0, 0.25);
             gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, 0, 0.25);
 
@@ -7508,6 +7558,18 @@ class FootballPlayer {
 
                 gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, P.chest, 0.2);
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + P.altura, 0.2);
+
+                /*
+                A postura de penálti: as solas assentes, a cabeça na bola e os
+                PÉS NA LINHA — ver GoalkeeperPose.penalti (pe, cabeca,
+                pesNaLinha). As outras poses não trazem estes canais e os pés e
+                o pescoço voltam a direito.
+                */
+                const peAlvo = (typeof P.pe === 'number') ? P.pe : 0;
+                const cabAlvo = (typeof P.cabeca === 'number') ? P.cabeca : 0;
+                if (gkRig.lFoot) gkRig.lFoot.rotation.x = lerpTo(gkRig.lFoot.rotation.x, peAlvo, 0.2);
+                if (gkRig.rFoot) gkRig.rFoot.rotation.x = lerpTo(gkRig.rFoot.rotation.x, peAlvo, 0.2);
+                if (gkRig.neck) gkRig.neck.rotation.x = lerpTo(gkRig.neck.rotation.x, cabAlvo, 0.2);
             }
 
             if (this.hasBall || this.actionState) {
@@ -8690,7 +8752,15 @@ class FootballPlayer {
             apesar do `bolaAcima` positivo — era o corpo a andar por baixo
             dela.
             */
-            if (P.fecharPunhos) this.fecharMaosNaBola(P.bracoZ);
+            if (P.fecharPunhos) {
+                if (typeof P.fechoPeloOmbro === 'number') this.fecharMaosNaBolaPeloOmbro(P.bracoZ, P.fechoPeloOmbro);
+                else this.fecharMaosNaBola(P.bracoZ);
+            }
+            // Os pulsos dobram para dentro, a abraçar a bola (ver GoalkeeperPose.segurar.maoFecho).
+            if (typeof P.maoFecho === 'number' && gkRig.lHand && gkRig.rHand) {
+                gkRig.lHand.rotation.z = -P.maoFecho;
+                gkRig.rHand.rotation.z = P.maoFecho;
+            }
             this.colarBolaAsMaos(P.bolaAcima);
         } else if (this.gkEstado === 'chutando' || this.gkEstado === 'lancando') {
             const isThrow = (this.gkEstado === 'lancando');
