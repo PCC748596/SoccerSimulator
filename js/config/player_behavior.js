@@ -496,6 +496,35 @@ const CarryModel = {
     margemDisputa: 0.15,
 
     /*
+    O TOQUE ORIENTADO — ver `direccaoDoToque` (utils.js), com o pedido e a
+    medição. Os ângulos são em graus em relação à corrida (+ e - para os dois
+    lados); o 0 está sempre lá, e é ele que fica quando nenhum ângulo ganha
+    por mérito.
+
+    `pesoDesvio` é o que impede o toque de andar aos ziguezagues: um ângulo de
+    45 graus perde `pesoDesvio` pontos à partida, e só passa se o objectivo e
+    o espaço lhe derem mais do que isso. `espacoMax` é a partir de quantos
+    metros de folga o espaço já não conta mais.
+    */
+    toqueOrientado: {
+        angulos: [-45, -30, -15, 0, 15, 30, 45],
+        pesoObjectivo: 1.0,
+        pesoEspaco: 1.0,
+        pesoLead: 0.3,
+        pesoDesvio: 0.12,
+        espacoMax: 8.0,
+        espacoAFrente: 5.0,   // o corredor do espaço: da bola até aqui à frente
+        margemLateral: 1.0,
+        margemFundo: 1.5,
+        // Zonas do objectivo (em metros, no referencial de ataque).
+        zonaAtaque: 22.0,     // daqui para a frente é o último terço
+        larguraCentro: 16.0,  // |x| abaixo disto é por dentro (remate)
+        recuoRemate: 11.0,    // objectivo do remate: a marca de penálti
+        cruzamentoX: 29.0,    // objectivo do cruzamento: perto da linha lateral...
+        cruzamentoRecuo: 6.0  // ...e a 6 m da linha de fundo
+    },
+
+    /*
     E QUEM ENTRA NA DISPUTA. A conta era a distância em linha recta ao ponto
     onde a bola vai ficar, e por isso o defesa colado às COSTAS ganhava sempre
     a corrida — para lá chegar teria de passar por cima do portador, a correr

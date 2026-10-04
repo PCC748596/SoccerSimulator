@@ -197,6 +197,39 @@ const RefereeModel = {
     mais altos do que a maior parte dos jogadores.
     */
     altura: 1.75,
+
+    /*
+    O CARTÃO — ver Officials.mostrarCartao. Pedido, com três fotografias:
+    *"o juiz vai se posicionar na frente do jogador a uns 4 metros. Apontar pra
+    ele com o braço esquerdo e erguer o cartão com o braço direito. Depois faz a
+    ação de colocar o cartão no bolso novamente. A partir daí o jogo corre
+    normalmente."*
+
+      `distancia`   a que distância do jogador ele pára para mostrar
+      `tMostrar`    quanto tempo o cartão fica no ar
+      `tGuardar`    o gesto de o meter no bolso do peito
+      `tIrMax`      tecto para chegar ao jogador (longe, mostra de onde está)
+      `largura`/`alturaCartao` do cartão em metros (o de verdade: 8 x 11 cm;
+                    aqui 12 x 16, para se ler a partir da câmara de jogo)
+    */
+    cartao: {
+        distancia: 4.0,
+        tMostrar: 1.6,
+        tGuardar: 0.8,
+        tIrMax: 6.0,
+        chegou: 0.35,
+        largura: 0.12,
+        alturaCartao: 0.16,
+        corAmarelo: '#f2d21b',
+        corVermelho: '#d6201f',
+        suavizacao: 0.25,
+        // Os braços, em radianos (convenção do rig: x negativo = para a frente/cima).
+        apontarX: -1.45, apontarZ: 0.10,       // braço esquerdo a apontar para ele
+        erguerX: -2.95, erguerZ: -0.12,        // braço direito, cartão no ar
+        erguerCotovelo: -0.35,
+        bolsoX: -0.40, bolsoZ: 0.30,           // braço direito ao bolso do peito
+        bolsoCotovelo: -1.75
+    },
     corCamisa: '#14161a',
     corCalcao: '#14161a',
     corBota: '#0f1114',
@@ -1834,6 +1867,13 @@ const Officials = {
         // O árbitro anda entre estas duas linhas: ver o fim do pontoDoArbitro.
         this._faixaArbitro = { min: linhaA, max: linhaB };
 
+        // O cartão manda no árbitro enquanto dura: ver mostrarCartao.
+        if (this.cartaoEmCurso) {
+            this.tickCartao(dt);
+            this.atualizarVista();
+            return;
+        }
+
         const alvoArb = this.pontoDoArbitro(Match.ball.position);
         // Amortecido: ver RefereeModel.alvoSuavizacao.
         const S = this.arbitro;
@@ -1853,6 +1893,127 @@ const Officials = {
 
         // Depois de mover, para os discos nao ficarem um frame atras.
         this.atualizarVista();
+    },
+
+    /*
+    =========================================================================
+    O CARTÃO MOSTRADO — ver RefereeModel.cartao, com o pedido.
+    =========================================================================
+    Três fases:
+
+      'ir'       o árbitro vai até `distancia` do jogador, do lado de onde vem,
+                 e vira-se para ele;
+      'mostrar'  braço esquerdo a apontar para o jogador, o direito em cima com
+                 o cartão (`tMostrar`);
+      'guardar'  o direito traz o cartão ao bolso do peito (`tGuardar`).
+
+    Enquanto dura, o jogador pára virado para o árbitro (Player.update) e o
+    lance parado ESPERA (Match.algumCaidoDaFalta). No VERMELHO a expulsão é no
+    fim, para se ver o cartão a ser-lhe mostrado. Sem árbitros na cena (o botão
+    do painel) não há cerimónia: o cartão conta e o vermelho expulsa logo.
+    =========================================================================
+    */
+    mostrarCartao: function (jogador, cor) {
+        if (!this.arbitro || !this._ativo || !jogador || !jogador.model) return false;
+        const C = RefereeModel.cartao;
+        this.cartaoEmCurso = { jogador: jogador, cor: cor, fase: 'ir', t: 0 };
+        // O cartão vive na mão direita; cria-se uma vez e muda de cor.
+        const rig = this.arbitro.rig;
+        if (!this._cartaoMesh && rig && rig.rHand && typeof THREE !== 'undefined') {
+            const esc = this.arbitro.model.scale.x || 1;
+            const geo = new THREE.BoxGeometry(C.largura / esc, C.alturaCartao / esc, 0.004 / esc);
+            this._cartaoMesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: C.corAmarelo }));
+            // Acima do punho (com o braço erguido o "para baixo" da mão aponta ao céu).
+            this._cartaoMesh.position.set(0, -(C.alturaCartao * 0.75) / esc, 0);
+            rig.rHand.add(this._cartaoMesh);
+        }
+        if (this._cartaoMesh) {
+            this._cartaoMesh.material.color.set(cor === 'vermelho' ? C.corVermelho : C.corAmarelo);
+            this._cartaoMesh.visible = false;
+        }
+        return true;
+    },
+
+    cartaoAMostrar: function () {
+        return !!this.cartaoEmCurso;
+    },
+
+    acabarCartao: function () {
+        const c = this.cartaoEmCurso;
+        this.cartaoEmCurso = null;
+        if (this._cartaoMesh) this._cartaoMesh.visible = false;
+        const arb = this.arbitro;
+        if (arb && arb.rig) {
+            arb.rig.rArm.rotation.set(0, 0, arb.rig.rArm.rotation.z * 0);
+            arb.rig.lArm.rotation.set(0, 0, 0);
+        }
+        if (c && c.jogador && c.jogador.expulsaoPendente) {
+            c.jogador.expulsaoPendente = false;
+            this.expulsar(c.jogador);
+        }
+    },
+
+    /*
+    Corre em vez do posicionamento normal do árbitro enquanto o cartão dura.
+    Os braços escrevem-se DEPOIS do `mover`, pela mesma razão do `tickSinal`.
+    */
+    tickCartao: function (dt) {
+        const c = this.cartaoEmCurso;
+        const arb = this.arbitro;
+        const C = RefereeModel.cartao;
+        const R = RefereeModel;
+        if (!c || !arb) return;
+        if (typeof Match !== 'undefined' && Match.kickoffActive) { this.acabarCartao(); return; }
+        c.t += dt;
+        const jp = c.jogador.model.position;
+        const ap = arb.model.position;
+
+        if (c.fase === 'ir') {
+            // Do lado de onde ele vem, a `distancia` do jogador.
+            let ux = ap.x - jp.x, uz = ap.z - jp.z;
+            const ul = Math.hypot(ux, uz) || 1; ux /= ul; uz /= ul;
+            const ax = jp.x + ux * C.distancia, az = jp.z + uz * C.distancia;
+            this.mover(arb, ax, az, R.velocidade, dt, jp);
+            if (Math.hypot(ax - ap.x, az - ap.z) <= C.chegou || c.t >= C.tIrMax) {
+                c.fase = 'mostrar'; c.t = 0;
+                arb.sinal = null;
+            }
+            return;
+        }
+
+        // Parado, virado para o jogador.
+        this.mover(arb, ap.x, ap.z, R.velocidade, dt, jp);
+        arb.model.rotation.y = Math.atan2(jp.x - ap.x, jp.z - ap.z);
+        /*
+        A POSE TEM MEMÓRIA PRÓPRIA, como o `corpoY` do sinal de falta: o `mover`
+        (que corre antes) leva os braços para baixo todos os frames, e suavizar
+        a partir do valor dele deixava o braço do cartão a 62% do caminho
+        (medido: -1.84 rad em vez de -2.95).
+        */
+        const rig = arb.rig;
+        const k = C.suavizacao;
+        if (rig) {
+            if (!c.pose) c.pose = { lx: rig.lArm.rotation.x, lz: rig.lArm.rotation.z, le: rig.lElbow.rotation.x,
+                rx: rig.rArm.rotation.x, rz: rig.rArm.rotation.z, re: rig.rElbow.rotation.x };
+            const P = c.pose;
+            const mostrar = (c.fase === 'mostrar');
+            P.lx = lerpTo(P.lx, mostrar ? C.apontarX : 0, k);
+            P.lz = lerpTo(P.lz, mostrar ? C.apontarZ : 0.08, k);
+            P.le = lerpTo(P.le, mostrar ? -0.05 : -0.3, k);
+            P.rx = lerpTo(P.rx, mostrar ? C.erguerX : C.bolsoX, k);
+            P.rz = lerpTo(P.rz, mostrar ? C.erguerZ : C.bolsoZ, k);
+            P.re = lerpTo(P.re, mostrar ? C.erguerCotovelo : C.bolsoCotovelo, k);
+            rig.lArm.rotation.set(P.lx, 0, P.lz);
+            rig.lElbow.rotation.x = P.le;
+            rig.rArm.rotation.set(P.rx, 0, P.rz);
+            rig.rElbow.rotation.x = P.re;
+        }
+        if (this._cartaoMesh) {
+            // Sai do bolso a subir e volta a desaparecer quando lá chega.
+            this._cartaoMesh.visible = (c.fase === 'mostrar') || (c.t < C.tGuardar * 0.8);
+        }
+        if (c.fase === 'mostrar' && c.t >= C.tMostrar) { c.fase = 'guardar'; c.t = 0; }
+        else if (c.fase === 'guardar' && c.t >= C.tGuardar) this.acabarCartao();
     },
 
     setVisivel: function (on) {
@@ -2108,7 +2269,12 @@ const Officials = {
                 if (infractor.temAmarelo) MatchStats[infractor.team].cartoes.amarelos++;
                 MatchStats[infractor.team].cartoes.vermelhos++;
             }
-            this.expulsar(infractor);
+            /*
+            Com árbitro em campo a expulsão é no fim do cartão (ver
+            mostrarCartao): ele tem de estar lá para o cartão lhe ser mostrado.
+            */
+            if (this.arbitro && this._ativo) infractor.expulsaoPendente = true;
+            else this.expulsar(infractor);
         }
 
         /*
@@ -2155,6 +2321,11 @@ const Officials = {
         */
         if (cartao === 'amarelo') this.anunciar('YELLOW CARD');
         else if (cartao === 'vermelho') this.anunciar('RED CARD');
+        // E o gesto: ver mostrarCartao. Se não houver cerimónia, o vermelho sai já.
+        if (cartao && !this.mostrarCartao(infractor, cartao) && infractor.expulsaoPendente) {
+            infractor.expulsaoPendente = false;
+            this.expulsar(infractor);
+        }
 
         if (typeof EventBus !== 'undefined') {
             EventBus.emit('FOUL', {

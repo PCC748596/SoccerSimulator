@@ -975,6 +975,8 @@ Object.assign(Match, {
     },
 
     algumCaidoDaFalta: function (comVolta) {
+        // O cartão a ser mostrado também segura o lance (ver Officials.mostrarCartao).
+        if (typeof Officials !== 'undefined' && Officials.cartaoAMostrar && Officials.cartaoAMostrar()) return true;
         const caido = p => !!(p && (p.queda || (comVolta && p.voltaDaQueda)));
         return this.players.some(caido) || this.opponents.some(caido);
     },

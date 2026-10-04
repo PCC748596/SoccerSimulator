@@ -113,6 +113,75 @@ Pedidos: *"O Juiz deve acompanhar as jogadas entre as duas linhas dos bandeirinh
 
 - **Andar no sítio** (relato: *"o juiz está com animação de andar sem sair da posição"*). Com uma zona morta de 6–10 cm (`paragemMax`/`arranqueMin`), ele perseguia cada centímetro da coroa a deslizar com a bola: 0.3–0.4 m/s com o ciclo de passada inteiro. A zona morta passou para 0.25/1.50 m. O alvo dele é agora amortecido (`alvoSuavizacao`, 0.35 s), porque as regras da linha da bola e das linhas dependem da posse e, numa bola dividida, o alvo saltava metros. Saltos de mais de 1 m num frame: de 561 para 237 em 5 min.
 
+#### A saída aos pés do guarda-redes (js/player.js `iniciarSaidaAosPes`/`actualizarSaidaAosPes`, js/config/goalkeeper.js `GoalkeeperDive.saidaAosPes`)
+
+Pedido, com fotografia (3021): *"saída de bola nos pés dos jogadores próximos"*. Não existia: no cara a cara ele saía da baliza e esperava o remate.
+
+- **Estado novo, `saida_pes`, com movimento próprio.** O mergulho (`GkDive`) só desliza no eixo da baliza, e aqui ele vai para a frente.
+- **Quando:**
+  - um avançado com a bola, ou uma bola solta com um avançado a menos de 2.5 m, dentro da área e a vir para a baliza;
+  - a bola a 1–6 m do guarda-redes;
+  - nenhum defesa dele a menos de 1.5 m da bola (aí é o defesa que disputa).
+  
+  Decide-se uma vez por aproximação: 35% + (GK − 50)/100 × 0.40.
+- **Dois tempos.** Até 3 m de distância, corre para a bola a 7 m/s com a passada dos jogadores. Desiste se o avançado rematar ou perder a bola, e o resto do guarda-redes volta a mandar (incluindo o mergulho ao remate). A 3 m, atira-se:
+  1. agacha;
+  2. lança-se para a bola e cai de lado (80°), atravessado no caminho do avançado, com o peito e as mãos para a bola, uma perna dobrada e a outra esticada;
+  3. desliza;
+  4. fica no chão e levanta-se.
+  
+  A bota é posta de maneira que o peito caia em cima do ponto onde a bola vai estar.
+- **O contacto** é a geometria do corpo deitado: segmento da bota até 1.75 m pelo lado da queda, raio 0.55 m, mais as mãos à frente do peito. Bola acima de 0.7 m não se apanha.
+- **O desfecho:**
+  - com a bola nos pés do avançado, há duelo (0.55 + (GK − TEC)/100 × 0.60). Ganha: a bola é dele e passa pela mesma regra das outras defesas (agarra, espalma, roça). Agarrada, fica ao peito enquanto ele está deitado (`grabBall(manterPose)`).
+  - perde: o avançado passa e, se o corpo lhe apanhou as pernas, é falta com 35% de probabilidade, e penálti.
+  - bola solta: é dele, pela mesma regra.
+- **Medido:**
+  - no cenário de cara a cara, o avançado remata sempre antes do contacto, porque remata com o guarda-redes a menos de 7 m (`gkAoAlcance`, pedido anterior). A saída força o remate, e isso fica;
+  - em 6 jogos de 10 min, com a probabilidade a 45%: 6 saídas, 4 com a bola agarrada, 1 mergulho falhado (bola no ar);
+  - a primeira versão (raio 0.40, probabilidade 70%, sem a regra do defesa perto) dava 10 saídas e 5 mergulhos falhados.
+
+- **Duas correcções depois da suite:**
+  - **Só as mãos agarram:** um toque do corpo deitado (pernas, anca) tapa e a bola ressalta, como a perna da barreira.
+  - **As mãos medem-se onde o rig as pôs.** A pose passou a escrever-se também sem desenho, só o assento fino no relvado fica para quando há desenho. Com uma estimativa geométrica, o `gk_agarra_com_a_mao` apanhou uma bola agarrada a 0.97 m da mão.
+  
+  Com isto, em 6 jogos de 10 min: 9 saídas, 3 tocam na bola (espalmam) e nenhuma agarra.
+- O gatilho vive num método (`talvezSairAosPes`) e não no `updateGK`: o `gk_agarra_no_fim_do_gesto` lê o ramo `'idle'` pelo primeiro `gkEstado === 'idle'` desse método.
+
+#### O cartão mostrado pelo árbitro (js/officials.js `mostrarCartao`/`tickCartao`, `RefereeModel.cartao`; js/player.js; js/match/match_loop.js)
+
+Pedido, com três fotografias: *"o juiz vai se posicionar na frente do jogador a uns 4 metros. Apontar pra ele com o braço esquerdo e erguer o cartão com o braço direito. Depois faz a ação de colocar o cartão no bolso novamente. A partir daí o jogo corre normalmente."*
+
+- **Três fases:**
+  1. `ir`: até 4 m do jogador, do lado de onde vem, com tecto de 6 s;
+  2. `mostrar` (1.6 s): braço esquerdo a apontar para ele, o direito em cima com o cartão;
+  3. `guardar` (0.8 s): o cartão ao bolso do peito.
+- **O cartão** é um rectângulo de 12 × 16 cm na mão direita, amarelo ou vermelho.
+- **A pose tem memória própria**, como o `corpoY` do sinal de falta: o `mover` leva os braços para baixo todos os frames, e com isso o braço do cartão ficava a −1.84 rad em vez de −2.95.
+- **Quem leva o cartão pára virado para o árbitro desde que ele vem ter consigo.** A andar para o lugar da falta, o árbitro corria atrás dele e mostrava o cartão a 5.5 m, no tecto de tempo (9 de 12 cartões). Agora chega em 2–5 s e mostra a ~4.3 m.
+- **O lance parado espera pelo fim do cartão** (`Match.algumCaidoDaFalta`). No vermelho, a expulsão passa para o fim da cerimónia (`expulsaoPendente`), para o cartão lhe ser mostrado. Sem árbitros em campo (o botão do painel), não há cerimónia e o vermelho expulsa logo.
+
+#### O toque de condução em ângulo (js/utils.js `direccaoDoToque`, js/fsm.js CARRY, js/config/player_behavior.js `CarryModel.toqueOrientado`)
+
+Pedido: *"os jogadores com a bola dominada só adiantam a bola para frente praticamente. Não adiantam em ângulo. Podem adiantar em ângulo também, caso seja melhor para abrir espaço para uma jogada, para ter mais espaço para chute, para cruzamento."*
+
+- **Antes:** medido em 3 jogos de 10 min (82 toques), 98% saíam a menos de 5° da corrida e nenhum passava dos 6°. O toque saía sempre na direcção da velocidade.
+- **Agora o toque experimenta −45° a +45° à volta da corrida.** Fica a direcção com melhor nota:
+  - alinhamento com o objectivo, linear no ângulo;
+  - espaço livre no corredor onde ele vai correr, da bola até 5 m à frente;
+  - tamanho do toque que ainda ganha;
+  - menos um custo por se desviar da corrida.
+- **O objectivo depende da zona:**
+  - no último terço, por dentro, é a marca de penálti (abrir para o remate);
+  - na ala do último terço, é o sítio do cruzamento (29 m do eixo, 6 m da linha de fundo);
+  - no resto do campo, é o alvo de condução que ele escolheu.
+- **Filtros:** cada direcção passa pelo `maiorToqueSeguro`, portanto um ângulo que o adversário ganha não entra. A bola não pode ficar fora do campo.
+- **Primeira afinação não serviu:** com o espaço medido só no ponto da bola e o alinhamento pelo cosseno, os toques continuaram 99% a direito. Os pontos de chegada de toques de 1–2.5 m ficam todos perto uns dos outros. O espaço passou a medir-se no corredor.
+- **Medido em 6 jogos de 10 min (209 toques):**
+  - 30% dos toques saem a 15° ou mais;
+  - por dentro no último terço, 44%; pela ala, 56%; no meio-campo, 25%;
+  - recuperação da bola depois do toque: 91%, igual à de antes. Os toques em ângulo recuperam 94% e os a direito 91%.
+
 #### O salto alto ao canto assenta deitado e rola (js/gk_dive.js, js/config/goalkeeper.js `GoalkeeperDive.rolamentoAlto`)
 
 Pedido, com captura (cabeça enfiada no relvado, pernas no ar): *"faz uma revisão na queda do goleiro depois que pula para defender no alto nos cantos... pode colocar um rolamento no final também"*.
@@ -129,6 +198,7 @@ Eram o boneco padrão, 1.855 m. A altura entra pelo mesmo caminho dos jogadores:
 #### Testes ajustados ("ajusta os que falharam")
 
 - **`remate_tipo_mira`:** a `escalaGlobal` do erro de remate está em 2.03, fora do intervalo em que as faixas tinham sido medidas. Remedidas a 2.03: 6 m 59–60%, 12 m 42%, 18 m 29%, 25 m 17–18% no alvo. As faixas passaram a 50–70 / 32–52 / 19–39 / 10–28, a ±10 pontos do medido, e o tecto do intervalo passou a 2.10. Desta vez moveram-se as faixas e não só o tecto. A nota no teste regista que, de 25 m, um rematador médio acerta menos de um quinto das vezes.
+- **`laterais_largura`:** passou de uma semente para três na mesma conta (1000, 1001, 1002). A 1000 era sempre a pior das seis medidas e passou de 7.0% para 9.3% sem nada mudar nos laterais; as outras cinco, no mesmo código, davam 4.2 / 7.1 / 0.7 / 5.1 / 1.2. Somadas: 5.1% em 8728 leituras, contra o tecto de 9.0%.
 - **`gk_salta_no_momento`:** passou de 45 para 75 min de jogo, porque com o alcance medido até à bola desapareceram os mergulhos a bolas que passavam a 6–12 m e a amostra caiu para 7. Com 75 min: 10 mergulhos, média 0.33 s por chegar, pior 0.39 s. Demora ~213 s.
 
 #### Pela perna da barreira não se agarra (js/player.js, `resolverDefesaComMaos`)

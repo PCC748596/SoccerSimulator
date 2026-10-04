@@ -1864,10 +1864,37 @@ class PlayerFSM {
                         for (const opp of allOpps) {
                             p._advDisputa.push({ x: opp.model.position.x, z: opp.model.position.z });
                         }
-                        leadDist = maiorToqueSeguro(
-                            p.model.position.x, p.model.position.z,
-                            forward.x, forward.z, curSpeed, leadDist, p._advDisputa);
-                        if (leadDist <= 0) break;   // sem toque seguro: bola no pé
+                        /*
+                        E PARA ONDE — ver `direccaoDoToque` (utils.js) e
+                        CarryModel.toqueOrientado. O objectivo depende da zona:
+                        por dentro no último terço, abrir para o remate (a marca
+                        de penálti); pela ala, ganhar o sítio do cruzamento; no
+                        resto, o alvo de condução que ele escolheu.
+                        */
+                        const TO = CarryModel.toqueOrientado;
+                        if (TO && typeof direccaoDoToque === 'function' && typeof p.targetGoalZ === 'number') {
+                            const px = p.model.position.x, pz = p.model.position.z;
+                            const zDir = pz * p.dirZ;
+                            let objX = p.dynamicTarget.x, objZ = p.dynamicTarget.z;
+                            if (zDir > TO.zonaAtaque) {
+                                if (Math.abs(px) < TO.larguraCentro) {
+                                    objX = 0; objZ = p.targetGoalZ - p.dirZ * TO.recuoRemate;
+                                } else {
+                                    objX = Math.sign(px) * TO.cruzamentoX;
+                                    objZ = p.targetGoalZ - p.dirZ * TO.cruzamentoRecuo;
+                                }
+                            }
+                            const escolha = direccaoDoToque(px, pz, forward.x, forward.z, curSpeed,
+                                leadDist, p._advDisputa, objX, objZ);
+                            if (!escolha) break;   // nenhuma direcção serve: bola no pé
+                            forward.set(escolha.x, 0, escolha.z);
+                            leadDist = escolha.lead;
+                        } else {
+                            leadDist = maiorToqueSeguro(
+                                p.model.position.x, p.model.position.z,
+                                forward.x, forward.z, curSpeed, leadDist, p._advDisputa);
+                            if (leadDist <= 0) break;   // sem toque seguro: bola no pé
+                        }
                     }
 
                     /*

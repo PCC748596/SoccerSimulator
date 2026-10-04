@@ -43,6 +43,22 @@ Sim.running = true;
 const alvoX = [];
 let porDentroDosCentrais = 0, amostras = 0;
 
+/*
+TRÊS SEMENTES NA MESMA CONTA, e não uma.
+
+A semente única (1000) era sempre a pior das seis medidas (ver a nota do
+tecto, mais abaixo), e em Outubro de 2026 passou de 7.0% para 9.3% sem nada
+mudar nos laterais — mudaram o guarda-redes (a saída aos pés, o alcance do
+mergulho) e o toque de condução, e com eles o caminho das posses. As outras
+cinco, no mesmo código: 4.2 / 7.1 / 0.7 / 5.1 / 1.2. Somando as leituras de
+1000, 1001 e 1002 a conta mede o posicionamento e não o lance que calhou.
+*/
+for (const semente of [1000, 1001, 1002]) {
+if (semente !== 1000) {
+    Math.random = mulberry32(semente);
+    Match.init(scene);
+    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(scene);
+}
 for (let i = 0; i < Math.round(240 / dt); i++) {
     Match.update(dt);
     if (i % 12 || Match.state !== 'PLAY') continue;
@@ -60,6 +76,7 @@ for (let i = 0; i < Math.round(240 / dt); i++) {
             if (cbs.length >= 2 && p.model.position.x * meuLado < Math.max(...cbs)) porDentroDosCentrais++;
         }
     }
+}
 }
 
 const media = alvoX.reduce((a, b) => a + b, 0) / alvoX.length;

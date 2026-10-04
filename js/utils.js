@@ -2536,6 +2536,93 @@ function maiorToqueSeguro(px, pz, dirX, dirZ, velPortador, leadInicial, adversar
     return 0;
 }
 
+/*
+=============================================================================
+PARA ONDE VAI O TOQUE DE CONDUÇÃO — e não só "para a frente"
+=============================================================================
+Pedido: *"os jogadores com a bola dominada só adiantam a bola para frente,
+praticamente. Não adiantam em ângulo. Podem adiantar em ângulo também, caso seja
+melhor para abrir espaço para uma jogada, para ter mais espaço para chute, para
+cruzamento."*
+
+Medido antes (3 jogos de 10 min, 82 toques): 98% dos toques saíam a menos de 5
+graus da corrida, e nenhum passava dos 6. O toque saía SEMPRE na direcção da
+velocidade, que é para onde ele já ia.
+
+Agora o toque experimenta os ângulos de `CarryModel.toqueOrientado.angulos` à
+volta da corrida e fica com o de melhor nota:
+
+    nota = pesoObjectivo · alinhamento com o objectivo   (0..1)
+         + pesoEspaco    · espaço livre onde a bola fica (0..1, até espacoMax)
+         + pesoLead      · tamanho do toque que ainda ganha / o pedido
+         - pesoDesvio    · |ângulo| / maior ângulo
+
+O OBJECTIVO vem de quem chama (o CARRY, em fsm.js): na zona de remate é a
+marca de penálti (abrir o ângulo para o remate); na ala do último terço é o
+sítio do cruzamento; no resto do campo é o alvo de condução que ele escolheu.
+O DESVIO custa porque mudar o toque de direcção obriga-o a mudar a corrida: só
+compensa quando o ganho é real, senão fica o toque a direito.
+
+Cada direcção passa pelo `maiorToqueSeguro`: um toque em ângulo que um
+adversário ganha não entra. E a bola não pode ficar fora do campo.
+
+Pura: sem Match, sem THREE. Devolve { x, z, lead, angulo } ou null (nenhuma
+direcção serve — sem toque, bola no pé).
+=============================================================================
+*/
+function direccaoDoToque(px, pz, fwdX, fwdZ, velPortador, leadInicial, adversarios, objX, objZ) {
+    const T = (typeof CarryModel !== 'undefined') ? CarryModel.toqueOrientado : null;
+    const angulos = (T && T.angulos) || [0];
+    const angMax = Math.max(1e-6, ...angulos.map(a => Math.abs(a)));
+    const limX = CAMPO_LARG / 2 - ((T && T.margemLateral) || 1.0);
+    const limZ = CAMPO_COMP / 2 - ((T && T.margemFundo) || 1.5);
+    const espacoMax = (T && T.espacoMax) || 8.0;
+
+    let ox = objX - px, oz = objZ - pz;
+    const ol = Math.hypot(ox, oz);
+    if (ol > 1e-6) { ox /= ol; oz /= ol; } else { ox = fwdX; oz = fwdZ; }
+
+    let melhor = null;
+    for (const graus of angulos) {
+        const a = graus * Math.PI / 180;
+        const c = Math.cos(a), s = Math.sin(a);
+        const dx = fwdX * c - fwdZ * s, dz = fwdX * s + fwdZ * c;
+        const lead = maiorToqueSeguro(px, pz, dx, dz, velPortador, leadInicial, adversarios);
+        if (!(lead > 0)) continue;
+        const lx = px + dx * lead, lz = pz + dz * lead;
+        if (Math.abs(lx) > limX || Math.abs(lz) > limZ) continue;
+
+        /*
+        O ESPAÇO MEDE-SE NO CORREDOR em que ele vai correr — de onde a bola
+        fica até `espacoAFrente` metros à frente dela — e não só no ponto da
+        bola. Os pontos de chegada de toques de 1-2.5 m ficam todos perto uns
+        dos outros e o espaço neles quase não variava com o ângulo; o
+        corredor é o que muda, e é o que "abrir espaço" quer dizer.
+        */
+        const fx = lx + dx * ((T && T.espacoAFrente) || 5.0), fz = lz + dz * ((T && T.espacoAFrente) || 5.0);
+        let espaco = espacoMax;
+        for (const o of adversarios) {
+            const sx = fx - lx, sz = fz - lz;
+            const k = Math.max(0, Math.min(1, ((o.x - lx) * sx + (o.z - lz) * sz) / (sx * sx + sz * sz)));
+            espaco = Math.min(espaco, Math.hypot(o.x - (lx + sx * k), o.z - (lz + sz * k)));
+        }
+
+        /*
+        Alinhamento LINEAR no ângulo ao objectivo (1 = em cheio, 0 = de
+        costas). Com o cosseno, os ângulos pequenos quase não se distinguiam:
+        um objectivo a 36 graus dava ao toque de 30 só +0.09 sobre o a direito.
+        */
+        const dif = Math.acos(Math.max(-1, Math.min(1, dx * ox + dz * oz)));
+        const alinhamento = 1 - dif / Math.PI;
+        const nota = (T ? T.pesoObjectivo : 1) * alinhamento
+            + (T ? T.pesoEspaco : 0) * (espaco / espacoMax)
+            + (T ? T.pesoLead : 0) * (lead / Math.max(1e-6, leadInicial))
+            - (T ? T.pesoDesvio : 0) * (Math.abs(graus) / angMax);
+        if (!melhor || nota > melhor.nota) melhor = { x: dx, z: dz, lead, angulo: graus, nota };
+    }
+    return melhor;
+}
+
 function pertoDaLinhaDeFundo(p) {
     const avanco = p.model.position.z * p.dirZ;
     return (CAMPO_COMP / 2 - avanco) < CarryModel.margemLinhaFundo;

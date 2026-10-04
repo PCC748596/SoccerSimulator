@@ -1444,6 +1444,75 @@ const GoalkeeperDive = {
     Só o salto ALTO. O baixo e o de meia altura já aterram deitados.
     =========================================================================
     */
+    /*
+    =========================================================================
+    A SAÍDA AOS PÉS — o guarda-redes atira-se à bola nos pés do avançado
+    =========================================================================
+    Pedido, com fotografia (3021): *"saída de bola nos pés dos jogadores
+    próximos"*. Não existia: no cara a cara ele saía da baliza e esperava o
+    remate. Ver Player.iniciarSaidaAosPes / actualizarSaidaAosPes.
+
+    QUANDO: um avançado com a bola (ou uma bola solta com um avançado a
+    `disputaAvancado` dela, depois de um toque mais comprido) DENTRO DA ÁREA, a
+    vir para a baliza, com a bola entre `distMin` e `distMax` do guarda-redes.
+    Decide-se UMA vez por aproximação: `chance` + (GK - 50) / 100 x `pesoGK`.
+
+    O GESTO: `tAgachar` a baixar-se, `tVoo` a lançar-se para a bola,
+    `tDeslize` a escorregar no relvado, `tChao` deitado e `tLevantar` a
+    levantar-se. Cai de lado (`tombo`), atravessado no caminho do avançado,
+    com o peito e as mãos para a bola — a fotografia.
+
+    O DESFECHO, no primeiro contacto do corpo deitado com a bola:
+      . bola nos pés dele: duelo — `base` + (GK - TEC do avançado) / 100 x
+        `pesoDuelo`. Ganha: a bola é dele (agarra, espalma ou roça, pela mesma
+        regra das outras defesas). Perde: o avançado passa por ele, e se o
+        corpo lhe apanhar as pernas é falta com `chanceFalta` — e penálti.
+      . bola solta: é dele, pela mesma regra.
+    =========================================================================
+    */
+    saidaAosPes: {
+        activo: true,
+        distMin: 1.0,
+        /*
+        DOIS TEMPOS: a `distMax` ele SAI A CORRER para a bola (a `velCorrida`),
+        e a `distMergulho` atira-se. Medido em 30 caras a cara: o avançado
+        chega com a bola a 3.8-6 m dele em 13; nos outros remata de ~10 m. Com
+        o gatilho só a 3.5 m a saída não acontecia nunca. Se o avançado
+        rematar ou perder a bola durante a corrida (`corridaMax` no máximo),
+        desiste e o resto do guarda-redes volta a mandar.
+        */
+        distMax: 6.0,
+        distMergulho: 3.0,
+        velCorrida: 7.0,
+        corridaMax: 1.2,
+        disputaAvancado: 2.5,
+        velAvancadoMin: 1.0,       // o avançado tem de vir na direcção da baliza
+        /*
+        Era 0.70: em 6 jogos de 10 min deu 10 saídas, ~7 por equipa por 90
+        min — muitas mais do que um guarda-redes faz.
+        */
+        chance: 0.35,
+        // Com um defesa dele a menos disto da bola, é o defesa que disputa.
+        defesaPerto: 1.5,
+        pesoGK: 0.40,
+        tAgachar: 0.12,
+        tVoo: 0.25,
+        tDeslize: 0.35,
+        tChao: 0.55,
+        tLevantar: 0.55,
+        tombo: 1.40,               // 80 graus, como o deslize de lado
+        // O corpo deitado, para o contacto: da bota até `comprimento` pelo lado
+        // da queda, `raio` de largura; as mãos `alcanceMaos` à frente do peito.
+        comprimento: 1.75,
+        raio: 0.55,                // era 0.40: duas bolas passaram a 0.49 e 0.92 m
+        alcanceMaos: 0.55,
+        peitoNoCorpo: 1.25,        // onde fica o peito, a partir da bota
+        alturaBolaMax: 0.70,
+        base: 0.55,
+        pesoDuelo: 0.60,
+        chanceFalta: 0.35
+    },
+
     rolamentoAlto: {
         activo: true,
         angChao: 1.50,
