@@ -1041,7 +1041,9 @@ function aplicarPoseLancamentoGR(rig, K) {
     if (!rig) return;
     rig.chest.rotation.x = K.chest;
     rig.chest.rotation.z = 0;
-    rig.pelvis.rotation.x = 0;
+    // A reposição por baixo dobra-se pela ANCA (ver GoalkeeperUnderarmThrowClip);
+    // o lançamento por cima não traz `pelvis` e fica a direito como sempre.
+    rig.pelvis.rotation.x = (typeof K.pelvis === 'number') ? K.pelvis : 0;
     rig.pelvis.rotation.z = 0;
 
     rig.lLeg.rotation.x = K.coxaL;
@@ -1718,6 +1720,8 @@ function amostrarClipLancamentoGR(norm, clip) {
     const a = fr[i], b = fr[i + 1];
     const mix = (k) => a[k] + (b[k] - a[k]) * u;
     return {
+        // A anca: só a reposição por baixo a traz (ver aplicarPoseLancamentoGR).
+        pelvis: (a.pelvis || 0) + ((b.pelvis || 0) - (a.pelvis || 0)) * u,
         chest: mix('chest'),
         coxaL: mix('coxaL'),
         joelhoL: mix('joelhoL'),

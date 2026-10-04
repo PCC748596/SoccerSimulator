@@ -1012,6 +1012,25 @@ class PlayerFSM {
     `intens` vai de 0 (de pe) a 1 (pose completa), o que da a entrada e a saida
     suaves sem precisar de keyframes.
     */
+    // O ponto mais baixo das malhas de um ramo do rig (o braço de apoio do carrinho).
+    fundoDoRamo(raiz) {
+        if (!raiz) return Infinity;
+        raiz.updateMatrixWorld(true);
+        let m = Infinity;
+        const v = _v4;
+        raiz.traverse(o => {
+            if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+            if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+            const b = o.geometry.boundingBox;
+            for (let c = 0; c < 8; c++) {
+                v.set((c & 1) ? b.max.x : b.min.x, (c & 2) ? b.max.y : b.min.y, (c & 4) ? b.max.z : b.min.z);
+                o.localToWorld(v);
+                if (v.y < m) m = v.y;
+            }
+        });
+        return m;
+    }
+
     applySlidePose(intens) {
         const p = this.p;
         const rig = p.rig;
@@ -1029,16 +1048,28 @@ class PlayerFSM {
         const joelhoDob = (s > 0) ? rig.lKnee : rig.rKnee;
         const peDob = (s > 0) ? rig.lFoot : rig.rFoot;
 
-        // O braco de apoio e o do lado em que esta deitado.
-        const bracoApoio = (s > 0) ? rig.lArm : rig.rArm;
-        const cotoveloApoio = (s > 0) ? rig.lElbow : rig.rElbow;
-        const bracoLivre = (s > 0) ? rig.rArm : rig.lArm;
-        const cotoveloLivre = (s > 0) ? rig.rElbow : rig.lElbow;
+        /*
+        O BRAÇO DE APOIO É O DO LADO DA PERNA ESTICADA. Relato, com captura
+        (B4688): *"a posição dos braços tem que estar invertida: o braço
+        esquerdo deveria estar para o alto e o braço direito para baixo, com a
+        mão apoiada na grama durante o escorregamento."* Era ao contrário (o do
+        lado da perna dobrada a apoiar).
+        */
+        const bracoApoio = (s > 0) ? rig.rArm : rig.lArm;
+        const cotoveloApoio = (s > 0) ? rig.rElbow : rig.lElbow;
+        const bracoLivre = (s > 0) ? rig.lArm : rig.rArm;
+        const cotoveloLivre = (s > 0) ? rig.lElbow : rig.rElbow;
 
+        /*
+        A ANCA fica deitada para o lado da perna dobrada (as duas pernas no
+        relvado) e é o TRONCO que se inclina para o lado do braço de apoio, para
+        a mão chegar à relva. Deitar a anca para o lado do braço levantava a
+        perna dobrada do chão.
+        */
         rig.pelvis.rotation.z = -s * P.ancaRolar * k;
         rig.pelvis.rotation.x = P.ancaTras * k;
         rig.chest.rotation.x = P.peito * k;
-        rig.chest.rotation.z = -s * P.peitoRolar * k;
+        rig.chest.rotation.z = s * P.peitoRolar * k;
 
         /*
         Os eixos y (torção da coxa) e z (abrir para o lado) também se
@@ -1062,11 +1093,11 @@ class PlayerFSM {
         if (peDob && typeof P.peDobrado === 'number') peDob.rotation.x = P.peDobrado * k;
 
         // rotation.z "para fora" e positivo no braco esquerdo, negativo no direito.
-        bracoApoio.rotation.z = s * P.bracoApoioZ * k;
+        bracoApoio.rotation.z = -s * P.bracoApoioZ * k;
         bracoApoio.rotation.x = P.bracoApoioX * k;
         cotoveloApoio.rotation.x = P.cotoveloApoio * k;
 
-        bracoLivre.rotation.z = -s * P.bracoLivreZ * k;
+        bracoLivre.rotation.z = s * P.bracoLivreZ * k;
         bracoLivre.rotation.x = P.bracoLivreX * k;
         cotoveloLivre.rotation.x = P.cotoveloLivre * k;
 
@@ -1079,7 +1110,27 @@ class PlayerFSM {
         */
         p.model.position.y = ALTURA_BASE_Y + SlideTackleModel.alturaAnca * k;
         const semDesenho = (typeof Sim !== 'undefined' && Sim.running);
-        if (!semDesenho && typeof p.assentarCorpoInteiro === 'function') p.assentarCorpoInteiro();
+        /*
+        PELAS PERNAS E PELA ANCA, não pela mão. Relato: *"no carrinho, o jogador
+        ainda está meio flutuando: as pernas têm que estar encostadas no
+        gramado"*. Com o corpo inteiro a contar, a mão de apoio era o ponto mais
+        baixo e escorava-o — as pernas ficavam no ar. A mão vai ao relvado pela
+        pose; quem assenta são as pernas.
+        */
+        if (!semDesenho && typeof p.assentarCorpoInteiro === 'function') {
+            p.assentarCorpoInteiro([rig.lArm, rig.rArm]);
+            /*
+            E A MÃO DE APOIO À SUPERFÍCIE. A inclinação do tronco que a leva à
+            relva foi medida num jogador de altura média; nos mais altos ela
+            entrava até 7 cm. Se entrar, o tronco endireita-se o que for preciso
+            (por passos, até quatro), com as pernas onde estão.
+            */
+            for (let i = 0; i < 4; i++) {
+                const fundo = this.fundoDoRamo(bracoApoio);
+                if (!(fundo < ALTURA_BASE_Y - 0.005)) break;
+                rig.chest.rotation.z -= s * Math.min(0.25, (ALTURA_BASE_Y - fundo) * 2.0);
+            }
+        }
     }
 
     update(dt) {

@@ -281,7 +281,7 @@ const SlideTackleModel = {
         ancaRolar: 0.15,    // quase nada de lado: está sentado, não deitado
         ancaTras: -0.75,    // o tronco ~43 graus para trás
         peito: 0.0,
-        peitoRolar: 0.10,
+        peitoRolar: 0.60,   // o tronco inclina-se para o lado do braço de apoio (ver abaixo)
 
         /*
         SENTADO NA RELVA, as duas pernas assentes — segundo pedido, com a
@@ -313,9 +313,17 @@ const SlideTackleModel = {
         joelhoDobrado: 1.90,
         peDobrado: 0.0,
 
-        bracoApoioZ: 0.30,  // braço de trás, em baixo e atrás, a apoiar
-        bracoApoioX: 0.90,
-        cotoveloApoio: -0.90,
+        /*
+        O BRAÇO DE APOIO, agora o do lado da perna esticada (ver applySlidePose),
+        esticado para trás e para baixo até a mão tocar na relva. Procurado no rig:
+        com o TRONCO inclinado 0.60 para esse lado (`peitoRolar`) e a anca como
+        estava (as pernas no chão), a mão fica a ~9 cm do relvado (medido no
+        pulso), 0.27 m atrás e 0.34 m ao lado da anca. Inclinar a anca em vez do
+        tronco levantava a perna dobrada do chão.
+        */
+        bracoApoioZ: 0.30,
+        bracoApoioX: 0.80,
+        cotoveloApoio: 0.0,
 
         bracoLivreZ: 0.25,  // o outro levantado, para cima e para a frente
         bracoLivreX: -1.70,

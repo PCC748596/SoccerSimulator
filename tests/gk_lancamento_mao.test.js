@@ -68,8 +68,15 @@ test('no gesto por baixo a mao chega ao relvado no contacto', () => {
     numero e do gesto antigo e nao e este teste que o deve mexer.
     */
     assert.ok(cima.bracoRx > 0.5, 'o gesto por cima deixou de largar a bola no alto');
-    assert.ok(Math.abs(baixo.bracoRx) < 0.35,
-        `no gesto por baixo o braco esta a ${baixo.bracoRx.toFixed(2)} rad: nao esta rente`);
+    /*
+    O braco MEDIDO NO MUNDO (braco + anca + peito), e nao no rig: desde o
+    gesto refeito pela imagem CFE16 (4 de Outubro de 2026) o tronco inclina
+    pela anca (`pelvis`) e o braco e relativo a ele. No contacto o rig diz
+    -1.15, mas no mundo o braco esta quase na vertical, a apontar ao relvado.
+    */
+    const bracoMundo = baixo.bracoRx + (baixo.pelvis || 0) + baixo.chest;
+    assert.ok(Math.abs(bracoMundo) < 0.35,
+        `no gesto por baixo o braco esta a ${bracoMundo.toFixed(2)} rad do vertical: nao esta rente`);
     assert.ok(baixo.altura < -0.25,
         `o corpo nao desce no rolamento (altura ${baixo.altura.toFixed(2)})`);
 });

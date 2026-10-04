@@ -1227,13 +1227,23 @@ class FootballPlayer {
     que é onde o construtor do clip também o assentou. Só para a queda: de pé,
     quem manda é o `assentarNoChao`.
     */
-    assentarCorpoInteiro() {
+    assentarCorpoInteiro(ignorar) {
         const m = this.model;
         m.updateMatrixWorld(true);
         let minY = Infinity;
         const v = _p_v1;
+        /*
+        `ignorar` (opcional): ramos do rig que NÃO contam — o carrinho tira os
+        braços, para a mão de apoio não escorar o corpo (ver applySlidePose).
+        */
+        const fora = (o) => {
+            if (!ignorar || !ignorar.length) return false;
+            for (let a = o; a; a = a.parent) if (ignorar.indexOf(a) >= 0) return true;
+            return false;
+        };
         m.traverse(o => {
             if (!o.isMesh || !o.visible || !o.geometry || !o.geometry.attributes.position) return;
+            if (fora(o)) return;
             const g = o.geometry;
             if (!g.boundingBox) g.computeBoundingBox();
             const b = g.boundingBox;
@@ -7567,6 +7577,16 @@ class FootballPlayer {
                 altura e o assento — a mesma conta dos outros vinte e um.
                 */
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + P.altura, 0.2);
+                /*
+                A ANDAR, A CABEÇA E OS PÉS VOLTAM A DIREITO. Relato, com
+                captura: *"o goleiro está andando com a cabeça meio levantada"*.
+                A postura do penálti levanta o pescoço (e roda os pés) e só o
+                ramo parado, aqui em baixo, os escrevia: depois de um penálti
+                ele ficava a andar com a cabeça no ar o resto do jogo.
+                */
+                if (gkRig.neck) gkRig.neck.rotation.x = lerpTo(gkRig.neck.rotation.x, 0, 0.2);
+                if (gkRig.lFoot) gkRig.lFoot.rotation.x = lerpTo(gkRig.lFoot.rotation.x, 0, 0.2);
+                if (gkRig.rFoot) gkRig.rFoot.rotation.x = lerpTo(gkRig.rFoot.rotation.x, 0, 0.2);
             } else {
                 let P;
                 if ((Match.state === 'PENALTY' || Match.state === 'FREE_KICK') && this.team !== Match.setPieceTeam) {

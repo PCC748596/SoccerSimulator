@@ -154,8 +154,14 @@ console.log('3 — E A MEDIDA, com o jogo a correr');
     semente — e qualquer retoque no guarda-redes muda quais acontecem. Com uma
     semente so, este bloco reprovava por "amostra curta" a cada mudanca, sem
     que nada do que ele mede estivesse errado.
+
+    31 e 77 entraram a 4 de Outubro de 2026, com a reposição por baixo refeita
+    (imagem CFE16). A bola passou a sair de outro ponto da mão e os cinco jogos
+    seguiram outros caminhos, com mais saltos altos, que quase nunca agarram:
+    0 agarradas nas cinco. O guarda-redes chega aos mergulhos no mesmo estado
+    (anca a 0, mesma altura), por isso é a amostra que encolheu, e não a medida.
     */
-    const SEMENTES = [99, 7, 1234, 555, 20260911];
+    const SEMENTES = [99, 7, 1234, 555, 20260911, 31, 77];
     const dt = 1 / 60;
     const cena = new THREE.Scene();
     if (typeof Sim === 'undefined') global.Sim = {};

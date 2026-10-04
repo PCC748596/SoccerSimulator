@@ -144,6 +144,39 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### O guarda-redes a andar com a cabeça no ar (js/player.js, ramo `andando`)
+
+Relato, com captura (14FC): *"o goleiro está andando com a cabeça meio levantada"*. A postura do penálti levanta o pescoço (`cabeca` −0.48) e roda os pés (`pe` −0.75), e só o ramo parado os escrevia de volta. Depois de um penálti ele ficava a andar com a cabeça no ar o resto do jogo. No ramo a andar, o pescoço e os pés voltam a 0 (`lerpTo`, 0.2). Medido: 9 frames em 7313 com a cabeça levantada a andar, todos na transição.
+
+#### O carrinho: pernas no relvado e os braços trocados (js/fsm.js `applySlidePose`, js/config/defense.js `SlideTackleModel.pose`)
+
+Relato, com captura (B4688): *"o jogador ainda está meio flutuando. As pernas têm que estar encostadas no gramado. A posição dos braços tem que estar invertida: braço esquerdo para o alto e o braço direito para baixo, com a mão apoiada na grama durante o escorregamento"*.
+
+- **Os braços trocaram de papel:** o de apoio é o do lado da perna esticada (o direito no carrinho com a direita) e o livre sobe.
+- **O tronco inclina para o lado do apoio pelo peito** (`peitoRolar` 0.60), e não pela anca: rolar a anca levantava a perna dobrada do relvado. A anca tem um rolar pequeno no sentido contrário (`ancaRolar` 0.15).
+- **As pernas ganharam canais** (y, z e o pé da dobrada) para ficarem as duas deitadas.
+- **O assento** usa `assentarCorpoInteiro` sem contar os braços, para o corpo assentar pelas pernas. A seguir, uma correcção por frame endireita o rolar do peito se a mão de apoio entrar no relvado (até 4 iterações).
+- **Medido:** pernas a 0.000 m do relvado, mão de apoio entre −0.4 e +0.7 cm.
+
+#### A reposição por baixo do guarda-redes, refeita (js/config/animations.js `GoalkeeperUnderarmThrowClip`, js/pose.js, tests/gk_lancamento_mao.test.js)
+
+Pedido, com a sequência CFE16: *"A reposição por baixo tb está errada"*. As quatro fases da imagem:
+
+1. preparação baixa, bola nas duas mãos à altura dos joelhos;
+2. passo com a perna esquerda, braço de lançamento atrás, braço esquerdo à frente;
+3. estocada funda, com a mão a passar rente ao chão;
+4. follow-through.
+
+- **O clip antigo tinha o sinal do braço trocado:** x negativo é para a frente, por isso o "braço atrás" ia à frente. O braço esquerdo também ficava atrás.
+- **Novo canal `pelvis`** (rotação x da anca) no `aplicarPoseLancamentoGR` e no `amostrarClipLancamentoGR`. É o que deixa a estocada ser funda sem deitar o tronco, porque as coxas são relativas à anca. Os outros clips não o têm e ficam a 0.
+- **Keyframes construídos em ângulos de mundo** e convertidos para o rig. A `altura` de cada frame foi resolvida pelo ponto mais baixo do corpo.
+- **No contacto (frame 7 de 10):** os dois pés assentes (a 2 cm um do outro), o joelho de trás a 13 cm do relvado e a mão direita a 0.30 m do chão.
+- **Teste `gk_lancamento_mao`:** o braço "rente" mede-se agora no mundo (braço + anca + peito), porque o rig diz −1.15 com o tronco inclinado.
+- **Teste `guarda_redes_bola_agarrada`:** ganhou as sementes 31 e 77.
+  - **O que aconteceu:** com a bola a sair de outro ponto da mão, os cinco jogos seguiram outros caminhos, com mais saltos altos, e fizeram 0 agarradas.
+  - **Bissectado nas três mudanças:** foi só o lançamento.
+  - **Não é defeito:** o guarda-redes chega aos mergulhos no mesmo estado (anca a 0, mesma altura). Com as sete sementes: 2 agarradas, bola ao peito a 0.31 m no máximo e assimetria das mãos de 0.04 m.
+
 #### O quase golo: as mãos na cabeça (js/config/animations.js `QuaseGoloModel`, js/player.js `aplicarQuaseGolo`, js/match/match_loop.js `talvezLamentar`, js/fsm.js)
 
 Pedido, com fotografia (LooseGol): *"quando um jogador chutar para fora perto do gol ou o goleiro fizer uma defesa e colocar para fora, ele vai fazer uma animação de quase gol"*.
