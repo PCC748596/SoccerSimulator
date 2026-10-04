@@ -37,6 +37,8 @@ const Weather = {
     opacidadeSombraNuvem: 0.20,
     // A mancha fica um pouco acima das linhas do campo (0.02), para não piscar com elas.
     alturaSombraNuvem: 0.04,
+    // Velocidade das nuvens: 0.70 = 30% mais lentas que o original (5 a 15 km/h).
+    fatorVelocidadeNuvens: 0.70,
     sombrasGroup: null,
     rainParticles: null,
     rainCount: 3500,
@@ -546,15 +548,17 @@ const Weather = {
                 (Math.random() - 0.5) * 380
             );
 
-            // Velocidade reduzida pela metade: 5 a 15 km/h (1.39m/s a 4.17m/s em unidades 3D)
-            const speedKmh = 5 + Math.random() * 10; // 5 a 15 km/h
+            // Velocidade reduzida pela metade: 5 a 15 km/h (1.39m/s a 4.17m/s em unidades 3D).
+            // E depois menos 30% (pedido: "reduz em 30% a velocidade das nuvens"):
+            // 3.5 a 10.5 km/h, 0.97 a 2.92 m/s. O deslize lateral (speedZ) desce na mesma proporção.
+            const speedKmh = (5 + Math.random() * 10) * this.fatorVelocidadeNuvens;
             const speedMs = speedKmh / 3.6;
 
             // Dimensões reais do aglomerado (blocos base de 6 unidades), usadas
             // para que uma nuvem grande faça mais sombra do que uma pequena
             cloudCluster.userData = {
                 speedX: speedMs,
-                speedZ: (Math.random() - 0.5) * 0.25,
+                speedZ: (Math.random() - 0.5) * 0.25 * this.fatorVelocidadeNuvens,
                 larguraX: widthBlocks * 6,
                 larguraZ: lengthBlocks * 6,
                 material: mat

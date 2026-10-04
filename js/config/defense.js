@@ -46,7 +46,20 @@ const CautelaNaArea = {
     um empurrao, e mede o corpo. `factorContacto` multiplica a probabilidade
     de o contacto virar falta quando o choque e na area do infractor.
     */
-    factorContacto: 0.12
+    /*
+    0.12 -> 0.06 a 4 de Outubro de 2026: com a cautela do desarme reposta e o
+    guarda-redes com a bola nas maos fora dos choques, 24 jogos davam 0.54
+    penaltis por jogo, 6 deles de contacto (1.4% dos contactos faltosos).
+    */
+    factorContacto: 0.06,
+    /*
+    E NO DUELO PERDIDO (Officials.avaliarDueloPerdido). As duas primeiras
+    regras cortam as TENTATIVAS de desarme na area; esta corta a fraccao das
+    falhadas que viram falta. Medido a 4 de Outubro de 2026, 18 jogos: 125
+    faltas de desarme, 11 delas penalti (9%). Com 0.30 ficavam 7 em 135 (5%)
+    em 24 jogos; passou a 0.15.
+    */
+    factorFaltaDuelo: 0.15
 };
 
 if (typeof window !== 'undefined') window.CautelaNaArea = CautelaNaArea;

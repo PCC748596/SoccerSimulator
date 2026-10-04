@@ -57,6 +57,21 @@ Object.assign(Match, {
         */
         if (typeof limparRecuoParaGR === 'function') limparRecuoParaGR();
 
+        /*
+        E A BOLA NAS MAOS DO GUARDA-REDES TAMBEM ACABA AQUI. A marca
+        `gkHoldingBall` so era desligada no fim normal da reposicao
+        (GK_RELEASE_BALL), no golo e no pontapé de saida. Medido a 4 de Outubro
+        de 2026 (semente 7 do saida_de_bola_ritmo): o guarda-redes agarra a
+        bola, 0.6 s depois e marcada uma falta noutro sitio, a montagem do
+        livre tira-lha das maos — e a marca ficou ligada os 20 minutos
+        seguintes, com a equipa toda a "sair a jogar" pelo jogo fora.
+        Mesma razao do recuo acima: um lance parado e uma fase nova.
+        */
+        if (this.gkHoldingBall) {
+            this.gkHoldingBall.TeamA = false;
+            this.gkHoldingBall.TeamB = false;
+        }
+
         // A bola saiu pela linha de fundo: foi quase golo? Ver talvezLamentar.
         if ((type === 'GOAL_KICK' || type === 'CORNER_KICK') && typeof this.talvezLamentar === 'function') {
             this.talvezLamentar();

@@ -2429,6 +2429,17 @@ const Officials = {
         let prob = (tipo === 'carrinho' ? F.probCarrinhoFalhado : F.probDesarmeFalhado) * F.escala;
         // O MEDO DO ADVERTIDO, tambem fora do carrinho — ver cautelaDoAdvertido.
         prob *= this._cautelaDe(defensor);
+        /*
+        CAUTELA NA AREA, tambem no duelo perdido (ver CautelaNaArea em
+        config/defense.js): o defensor que falha o desarme na propria area
+        recolhe a perna. O ponto e o mesmo com que se julga o penalti.
+        */
+        if (typeof CautelaNaArea !== 'undefined' && typeof CautelaNaArea.factorFaltaDuelo === 'number' &&
+            defensor.model && portador.model) {
+            const cx = (defensor.model.position.x + portador.model.position.x) / 2;
+            const cz = (defensor.model.position.z + portador.model.position.z) / 2;
+            if (this.ehPenalti(cx, cz, defensor.team)) prob *= CautelaNaArea.factorFaltaDuelo;
+        }
         if (Math.random() >= prob) return;
 
         this.marcarFalta(defensor, portador, Object.assign({
@@ -2475,6 +2486,18 @@ const Officials = {
                     const dbz = Match.ball.position.z - mz;
                     if (dbx * dbx + dby * dby + dbz * dbz > raioDisputa2) continue;
                 }
+
+                /*
+                COM A BOLA NAS MAOS DO GUARDA-REDES NAO HA DISPUTA. A bola esta
+                "perto do contacto" porque esta no peito dele, mas ninguem a
+                pode jogar. Medido a 4 de Outubro de 2026, 18 jogos: 3 penaltis
+                apitados contra o guarda-redes a SEGURAR a bola, por um choque
+                com um avancado que passava.
+                */
+                const comBolaNasMaos = (p) => p.role === 'gk' && p.hasBall &&
+                    (p.gkEstado === 'segurando' || p.gkEstado === 'apanhar' ||
+                     p.gkEstado === 'chutando' || p.gkEstado === 'lancando');
+                if (comBolaNasMaos(a) || comBolaNasMaos(b)) continue;
 
                 const chave = a.model.id + ':' + b.model.id;
                 if (this._arrefecimento.has(chave)) continue;

@@ -347,7 +347,14 @@ console.log(LF + '6 — o lance parado dispara o gesto');
 {
     const srcMatch = semCR(fs.readFileSync(path.join(raiz, 'js/match/match_setpieces.js'), 'utf8'));
     const i = srcMatch.indexOf('setupSetPiece: function');
-    const corpo = srcMatch.slice(i, i + 4000);
+    /*
+    O CORPO INTEIRO DA FUNCAO, e nao os primeiros 4000 caracteres: a janela
+    fixa partiu a 4 de Outubro de 2026 com um bloco novo no inicio do
+    setupSetPiece (a limpeza do gkHoldingBall), sem nada ter mudado nas
+    chamadas que este teste procura.
+    */
+    const fimSetup = srcMatch.indexOf(String.fromCharCode(10) + '    },', i);
+    const corpo = srcMatch.slice(i, fimSetup > i ? fimSetup : i + 4000);
     if (!/sinalizarMarcacao/.test(corpo)) {
         erro('o setupSetPiece não sinaliza — o braço nunca sobe');
     } else ok('o setupSetPiece sinaliza');

@@ -171,7 +171,14 @@ console.log(LF + '3 — a etiqueta não fica lá para sempre');
 console.log(LF + '4 — as marcações chamam mesmo isto');
 {
     const i = srcMatch.indexOf('setupSetPiece: function');
-    const corpo = srcMatch.slice(i, i + 4000);
+    /*
+    O CORPO INTEIRO DA FUNCAO, e nao os primeiros 4000 caracteres: a janela
+    fixa partiu a 4 de Outubro de 2026 com um bloco novo no inicio do
+    setupSetPiece (a limpeza do gkHoldingBall), sem nada ter mudado nas
+    chamadas que este teste procura.
+    */
+    const fimSetup = srcMatch.indexOf(String.fromCharCode(10) + '    },', i);
+    const corpo = srcMatch.slice(i, fimSetup > i ? fimSetup : i + 4000);
     if (!/Officials\.anunciar/.test(corpo)) {
         erro('o setupSetPiece não anuncia — os lances parados ficam sem etiqueta');
     } else ok('o setupSetPiece anuncia a marcação');

@@ -144,6 +144,40 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### Penáltis a 5× o real: a cautela na área tinha sido apagada (js/bt/player_bt.js `podeDesarmar`, js/officials.js, js/config/defense.js `CautelaNaArea`)
+
+O painel de 50 jogos (4 de Outubro de 2026) dava **1.38 penáltis por jogo**, contra os ~0.27 reais. O painel não mostra este número; somei-o dos registos por equipa.
+
+**Causa principal: a cautela do defensor na própria área estava morta.**
+- O commit *"feat: implement match replay system"* (7 de Setembro) apagou do `podeDesarmar` o bloco que lia `CautelaNaArea.semCarrinho` e `factorDesarme`.
+- A configuração ficou a ser lida por ninguém. O defensor fazia carrinho e desarme dentro da área como em qualquer outro sítio.
+
+**Medido com uma sonda que regista a origem de cada falta** (`scratchpad/pen2/sonda.js`, 18 a 24 jogos de 20 min):
+
+| passo | penáltis/jogo | faltas/jogo | origem dos penáltis |
+|---|---|---|---|
+| antes | 1.11 | 24.8 | 11 desarme, 5 contacto, 2 carrinho, 2 GR |
+| cautela reposta + `factorFaltaDuelo` 0.30 | 0.50 | 23.8 | 3 desarme, 3 contacto, **3 GR a segurar a bola** |
+| + GR com a bola nas mãos fora dos choques | 0.54 | 24.4 | 7 desarme, 6 contacto |
+| + `factorFaltaDuelo` 0.15, `factorContacto` 0.06 | **0.25** | 23.9 | 3 desarme, 2 contacto, 1 saída aos pés |
+
+**O que mudou:**
+- **`podeDesarmar` (player_bt.js):** o bloco reposto. Na própria área (ponto do contacto) não há carrinho, e o desarme de pé sai com `factorDesarme`.
+- **`avaliarDueloPerdido` (officials.js):** o desarme falhado na própria área vira falta com `factorFaltaDuelo` (0.15). As duas primeiras regras cortam as tentativas; esta corta a fracção das falhadas que viram falta.
+- **`detectarContactos` (officials.js):** um choque com o guarda-redes que tem a bola nas mãos (`segurando`, `apanhar`, `chutando`, `lancando`) não é disputa e já não é falta. Davam penáltis contra o guarda-redes a segurar a bola.
+- **`factorContacto`** passou de 0.12 para 0.06.
+
+**De caminho, um defeito antigo (js/match/match_setpieces.js `setupSetPiece`):** a marca `Match.gkHoldingBall` só era desligada no fim normal da reposição, no golo e no pontapé de saída.
+- **O caso:** o guarda-redes agarra a bola e, 0.6 s depois, é marcada uma falta noutro sítio. A montagem do livre tira-lhe a bola das mãos e a marca fica ligada o resto do jogo.
+- **O que se via:** a equipa a "sair a jogar" com o jogo a correr. Apareceu no `saida_de_bola_ritmo` (semente 7: 40% de leituras lentas, com 46 367 leituras de um só episódio de 20 minutos).
+- **A correcção:** o `setupSetPiece` limpa as duas marcas, como já limpava o recuo para o guarda-redes. O teste volta a 10%.
+
+**Testes ajustados a seguir (nenhum por mudança no que medem):**
+- **`etiqueta_do_arbitro` e `sinal_do_arbitro`** liam os primeiros 4000 caracteres do `setupSetPiece` (que tem 71 mil). O bloco novo empurrou as chamadas para 4265 e 4471. Passaram a ler o corpo inteiro da função.
+- **`gk_agarra_com_a_mao`** reconstruía o trajecto da bola com `posição − velocidade × dt`; passou a usar o `Match.prevBallPos`, como o CCD do salto alto.
+  - **O caso que o expôs:** semente 99. O código agarrou com a mão a 0.825 m do trajecto real (`alcanceSalto` 0.85). A bola tinha mudado de velocidade nesse frame e o teste via 1.00 m.
+  - **Depois:** pior caso 0.82 m.
+
 #### As nuvens voltaram a fazer sombra no relvado (js/weather.js `_criarSombraDaNuvem`, `_recortarSombrasAoRelvado`, `update`)
 
 Relato: *"acho que as nuvens não estão dando sombra no campo"*.
@@ -158,6 +192,7 @@ Relato: *"acho que as nuvens não estão dando sombra no campo"*.
 - **Recorte ao relvado:** quatro planos de recorte (`localClippingEnabled`), para não pairar no vazio fora do estádio.
 - **Quando aparece:** só em céu limpo e nublado (em encoberto e chuva a luz é difusa), e só com as sombras ligadas. Em pausa as manchas ficam paradas.
 - **O escurecimento global da luz foi removido.** A luz volta sempre à intensidade do preset.
+- **Velocidade:** 30% mais lentas (`fatorVelocidadeNuvens` 0.70): 3.5 a 10.5 km/h em vez de 5 a 15. Pedido: *"Reduz em 30% a velocidade das nuvens."*
 
 **Verificado:** num render no Chrome headless (cena de teste com o `weather.js` real), com as manchas no relvado e recortadas à borda. Os testes `chuva_afecta_o_jogo` e `respingos_de_chuva` passam.
 

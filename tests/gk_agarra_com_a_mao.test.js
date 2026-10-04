@@ -89,9 +89,19 @@ proto.grabBall = function () {
         */
         const b = Match.ball.position;
         const dtB = (typeof Match.delta === 'number' && Match.delta > 0) ? Match.delta : 1 / 60;
-        const ax = b.x - Match.ballVel.x * dtB;
-        const ay = b.y - Match.ballVel.y * dtB;
-        const az = b.z - Match.ballVel.z * dtB;
+        /*
+        O INICIO DO TRAJECTO E O `prevBallPos`, como no codigo (o CCD do salto
+        alto, player.js), e nao `posicao - velocidade * dt`. As duas coincidem
+        enquanto a bola nao muda de velocidade no frame; quando muda, a
+        reconstrucao pela velocidade encurta o trajecto. Medido a 4 de Outubro
+        de 2026 (semente 99, t=1092.9 s): o codigo agarrou com a mao a 0.825 m
+        do trajecto real (alcanceSalto 0.85), a bola andou 0.28 m num frame com
+        velocidade de 0.10 m/frame, e este teste via 1.00 m.
+        */
+        const pb = Match.prevBallPos;
+        const ax = pb ? pb.x : b.x - Match.ballVel.x * dtB;
+        const ay = pb ? pb.y : b.y - Match.ballVel.y * dtB;
+        const az = pb ? pb.z : b.z - Match.ballVel.z * dtB;
 
         let mao = Infinity;
         for (const nome of ['lHand', 'rHand']) {
