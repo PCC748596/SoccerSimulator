@@ -144,6 +144,18 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### A animação do soco no ar (js/player.js `planearSocoNoSalto`, `animarSocoNoSalto`, `armarBracoDoSoco`, js/config/goalkeeper.js `GkSaidaCruzamento.socoAnim`)
+
+Pedido: *"o goleiro está dando o soco, mas a animação não aparece. Ele tem que pular e fazer o movimento do soco no ar. Braço para trás e para frente acertando a bola."*
+
+- **O que havia:** o soco (cruzamento com um adversário a 2 m) era só uma troca de velocidade da bola no frame do contacto (`resolverSaidaAoCruzamento`). Nenhum braço fazia o gesto.
+- **Agora, três passos:**
+  1. **Na corrida ao ponto de encontro**, marcado e a menos de 4 m dele, o braço do lado da bola vai armado para trás: ombro x +0.75, cotovelo −1.90, tronco para trás. É aplicado no fim do `updateGK`, por cima da passada.
+  2. **No arranque do salto** (`planearSocoNoSalto`) decide-se o soco e o braço. A decisão manda no `resolverSaidaAoCruzamento`, para o gesto e o desfecho não divergirem.
+  3. **No ar** (`animarSocoNoSalto`) o braço golpeia para a frente em 0.09 s: ombro x −2.50, cotovelo −0.15, tronco para a frente. Segura-o aí 0.2 s depois do contacto.
+- **Por que armar já na corrida:** o contacto real chega só ~0.14 s depois do arranque do salto (0.08 a 0.23, medido em 24 saltos), curto de mais para um gesto de 0.22 s. Tentei saltar mais cedo e não mudou nada: o gatilho do salto é limitado pela distância ao ponto, não pelo tempo.
+- **Medido no caminho do navegador** (`scratchpad/soco/sonda.js`, 9 jogos de 20 min): ~28 saltos com soco, quase todos já a vir armados; o contacto cai com o braço a meio ou no fim do golpe (x entre −1.1 e −2.0).
+
 #### O pouso do mergulho rasteiro, e a verificação dos cartões e do lamento (js/config/goalkeeper.js `deslizeLado`, `sequenciaBracos.chao`, `tempoChao`, js/gk_dive.js `poseBracosChao`, js/match/match_physics.js, js/config/animations.js `QuaseGoloModel`)
 
 **O pouso do goleiro.** Pedido, com captura de referência: *"o último frame do salto, antes de levantar, tem que ser mais parecido com esse. O goleiro ainda está se apoiando em um braço só após a queda."* A referência: de peito para o relvado, um braço esticado à frente no chão, o outro dobrado sob o peito, as pernas arrastadas com os joelhos dobrados, o corpo todo deitado.

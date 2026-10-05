@@ -818,6 +818,32 @@ não à pequena área.
 const GkSaidaCruzamento = {
     raioSemMarcacao: 2.0,    // adversário mais perto do que isto = marcado
     chanceSegurar: 0.95,     // sem marcação, agarra; nos outros 5% escapa-lhe
+    /*
+    A ANIMACAO DO SOCO, no ar. Relato de 5 de Outubro de 2026: *"o goleiro esta
+    dando o soco, mas a animacao nao aparece. Ele tem que pular e fazer o
+    movimento do soco no ar. Braco para tras e para frente acertando a bola"*.
+
+    Antes, o soco era so uma troca de velocidade da bola no frame do contacto
+    (resolverSaidaAoCruzamento) — nenhum braco fazia gesto nenhum. Agora, ao
+    arrancar o salto com marcacao, ele decide socar (`gkSoco`), escolhe o braco
+    do lado da bola, e o gesto e cronometrado pelo instante PREVISTO do
+    contacto (`interceptarBola`): arma para tras (`armar` s), golpeia para a
+    frente (`golpe` s) a chegar a bola, e segura o braco la `segura` s.
+    Angulos do ombro: `x` negativo leva a mao a frente (ver GoalkeeperDive).
+    */
+    /*
+    O CONTACTO REAL chega `contacto` s (0.14) depois do arranque do salto:
+    medido em 24 saltos com soco, de 0.08 a 0.23 — pouco para um gesto de
+    0.22 s. Por isso o braco ja vai ARMADO desde a corrida ao ponto de
+    encontro (`armaDistancia`: a menos de 4 m do ponto, com marcacao), e no ar
+    so falta o golpe (`golpe` s, a acabar no contacto).
+    */
+    socoAnim: {
+        contacto: 0.14, armaDistancia: 4.0,
+        armar: 0.13, golpe: 0.09, segura: 0.20,
+        armaX: 0.75, armaZ: 0.55, armaCotovelo: -1.90, peitoArma: -0.25,
+        golpeX: -2.50, golpeZ: 0.35, golpeCotovelo: -0.15, peitoGolpe: 0.30
+    },
     anguloSocoGraus: 10,     // o soco abre até isto para cada lado da trajectória
     velocidadeSoco: 16.0,    // m/s à saída do punho
     elevacaoSoco: 0.35,      // fraccão da velocidade que vai para cima

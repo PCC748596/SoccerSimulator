@@ -6456,6 +6456,9 @@ class FootballPlayer {
         interromper um mergulho continua a poder, e o guarda-redes cai de pé
         em vez de flutuar.
         */
+        // O braco armado do soco renova-se todos os frames (ver o ramo do cruzamento).
+        this.gkSocoArma = null;
+
         if (this.gkEstado !== 'mergulho' && this.dive) {
             const qFacing = this.dive.qFacing;
             this.dive = null;
@@ -7062,6 +7065,22 @@ class FootballPlayer {
                         alvoGkX = encontroSaida.x;
                         alvoGkZ = encontroSaida.z;
                     }
+                    /*
+                    VAI A CORRER COM O BRACO DO SOCO ARMADO — ver
+                    GkSaidaCruzamento.socoAnim. Marcado, e a menos de
+                    `armaDistancia` do ponto de encontro: o braco do lado da
+                    bola vai atras (aplicado no fim do updateGK) e no ar so
+                    falta o golpe.
+                    */
+                    {
+                        const SOCO = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento.socoAnim : null;
+                        if (SOCO && encontroSaida && quedaNaPequena && encontroSaida.distancia <= SOCO.armaDistancia &&
+                            this.estaMarcadoNaSaida()) {
+                            _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
+                            const ex = encontroSaida.x - this.model.position.x, ez = encontroSaida.z - this.model.position.z;
+                            this.gkSocoArma = ((_v1.x * ex + _v1.z * ez) >= 0) ? 'r' : 'l';
+                        }
+                    }
 
                     let distToBall = gkCorpo.position.distanceTo(Match.ball.position);
                     /*
@@ -7140,6 +7159,8 @@ class FootballPlayer {
                     if (podeSaltar && Match.ball.position.y > 1.2 && Match.ball.position.y < 3.2) {
                         this.gkEstado = 'salto_alto';
                         this.gkTempoMergulho = 0;
+                        this._gkSocoArmouAntes = !!this._gkSocoArmouUlt;
+                        this.planearSocoNoSalto(quedaNaPequena ? encontroSaida : null);
                         /*
                         A QUE ALTURA VAI ESTAR A BOLA quando ele la chegar —
                         ver GkSaltoAlto. Guarda-se AQUI e nao se recalcula por
@@ -8519,6 +8540,7 @@ class FootballPlayer {
                 */
                 gkCorpo.position.y = ALTURA_BASE_Y;
                 this.gkEstado = 'idle';
+                this.gkSoco = null;
                 this.resetBonesToDefault();
             }
 
@@ -8547,6 +8569,8 @@ class FootballPlayer {
             if (t < 0.7 && typeof GkDive !== 'undefined' && GkDive.apontarBracos) {
                 GkDive.apontarBracos(gkRig);
             }
+            // O braco do soco, por cima do IK: arma para tras e golpeia para a frente.
+            if (this.gkSoco) this.animarSocoNoSalto(t);
 
             /*
             A MÃO REAL, LIDA DO RIG — e não uma fórmula.
@@ -9132,7 +9156,27 @@ class FootballPlayer {
         de `idle` (mergulho, mãos, lançamento) ele escreve a altura sozinho e o
         assento sai logo à entrada.
         */
+        // O braco do soco armado na corrida ao ponto de encontro: por cima da passada.
+        this._gkSocoArmouUlt = !!(this.gkSocoArma && this.gkEstado === 'idle');
+        if (this._gkSocoArmouUlt) this.armarBracoDoSoco(this.gkSocoArma, 0.35);
         this.assentarNoChao();
+    }
+
+    /*
+    O BRACO ARMADO PARA TRAS (cotovelo dobrado, mao ao lado do ombro): a pose
+    de `socoAnim.arma*`. `w` e o lerp; no salto o `animarSocoNoSalto` parte
+    daqui e so golpeia.
+    */
+    armarBracoDoSoco(lado, w) {
+        const rig = this.rig;
+        const S = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento.socoAnim : null;
+        if (!rig || !S) return;
+        const sinal = (lado === 'r') ? -1 : 1;
+        const arm = rig[lado + 'Arm'], cot = rig[lado + 'Elbow'];
+        arm.rotation.x = lerpTo(arm.rotation.x, S.armaX, w);
+        arm.rotation.z = lerpTo(arm.rotation.z, sinal * S.armaZ, w);
+        cot.rotation.x = lerpTo(cot.rotation.x, S.armaCotovelo, w);
+        rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, S.peitoArma, w);
     }
 
     /*
@@ -9163,6 +9207,78 @@ class FootballPlayer {
       cada lado, e uma componente para cima que a tira da area.
     =====================================================================
     */
+    /*
+    O SOCO NO AR — a decisao e o gesto. Ver GkSaidaCruzamento.socoAnim.
+
+    Corre no arranque do salto da saida ao cruzamento. Marcado (um adversario a
+    `raioSemMarcacao` dele) = soco, como no `resolverSaidaAoCruzamento`; o
+    braco e o do lado da bola, e `tc` o instante previsto do contacto, que
+    cronometra o gesto. Sem leitura de contacto (`encontro` nulo) usa 0.30 s,
+    que e a duracao da subida do salto.
+    */
+    // Um adversario a `raioSemMarcacao` dele: e o criterio do soco (ver resolverSaidaAoCruzamento).
+    estaMarcadoNaSaida() {
+        const S = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
+        if (!S || typeof Match === 'undefined') return false;
+        const adversarios = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        for (const o of adversarios) {
+            if (!o || !o.model || o.role === 'gk') continue;
+            if (o.model.position.distanceTo(this.model.position) <= S.raioSemMarcacao) return true;
+        }
+        return false;
+    }
+
+    planearSocoNoSalto(encontro) {
+        this.gkSoco = null;
+        const S = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
+        if (!S || !S.socoAnim || !this.gkSaiuAoCruzamento || typeof Match === 'undefined') return;
+        if (!this.estaMarcadoNaSaida()) return;
+        // O braco do lado da bola, no referencial do modelo (a equipa B esta virada ao contrario).
+        _v1.set(1, 0, 0).applyQuaternion(this.model.quaternion);
+        const bx = (encontro ? encontro.x : Match.ball.position.x) - this.model.position.x;
+        const bz = (encontro ? encontro.z : Match.ball.position.z) - this.model.position.z;
+        const lado = (_v1.x * bx + _v1.z * bz) >= 0 ? 'r' : 'l';
+        const tc = S.socoAnim.contacto;
+        this.gkSoco = { marcado: true, lado: lado, tc: tc, golpeado: false, tGolpe: null, preArmado: !!this._gkSocoArmouAntes };
+    }
+
+    animarSocoNoSalto(t) {
+        const rig = this.rig;
+        const S = GkSaidaCruzamento.socoAnim;
+        const so = this.gkSoco;
+        if (!rig || !so) return;
+        const lado = so.lado;
+        const arm = rig[lado + 'Arm'], cot = rig[lado + 'Elbow'];
+        const sinal = (lado === 'r') ? -1 : 1;          // rArm abre com z negativo
+        const tGolpeFim = so.tc;
+        const tGolpeIni = tGolpeFim - S.golpe;
+        // Ja vinha armado da corrida: segura. Senao arma, comprimido, desde o arranque.
+        const tArmaIni = so.preArmado ? -1 : 0;
+        const liso = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+        // Depois do contacto, segura o braco la e solta.
+        if (so.golpeado && so.tGolpe === null) so.tGolpe = t;
+        const fim = (so.tGolpe !== null ? so.tGolpe : tGolpeFim) + S.segura;
+        if (t > fim) { this.gkSoco = null; return; }
+        if (t < tArmaIni) return;
+        let x, z, c, peito;
+        if (t < tGolpeIni) {                              // arma: para tras
+            const u = so.preArmado ? 1 : liso((t - tArmaIni) / Math.max(0.001, tGolpeIni - tArmaIni));
+            if (so.x0 === undefined) { so.x0 = arm.rotation.x; so.z0 = arm.rotation.z; so.c0 = cot.rotation.x; }
+            x = THREE.MathUtils.lerp(so.x0, S.armaX, u);
+            z = THREE.MathUtils.lerp(so.z0, sinal * S.armaZ, u);
+            c = THREE.MathUtils.lerp(so.c0, S.armaCotovelo, u);
+            peito = S.peitoArma * u;
+        } else {                                          // golpe: para a frente
+            const u = liso((t - tGolpeIni) / Math.max(0.001, S.golpe));
+            x = THREE.MathUtils.lerp(S.armaX, S.golpeX, u);
+            z = THREE.MathUtils.lerp(sinal * S.armaZ, sinal * S.golpeZ, u);
+            c = THREE.MathUtils.lerp(S.armaCotovelo, S.golpeCotovelo, u);
+            peito = THREE.MathUtils.lerp(S.peitoArma, S.peitoGolpe, u);
+        }
+        arm.rotation.x = x; arm.rotation.z = z; cot.rotation.x = c;
+        rig.chest.rotation.x = peito;
+    }
+
     resolverSaidaAoCruzamento() {
         const S = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento : null;
         if (!S || typeof Match === 'undefined' || !Match.ball) return false;
@@ -9227,6 +9343,10 @@ class FootballPlayer {
             typeof MatchStats[this.team].cruzamentosCortadosGK === 'number') {
             MatchStats[this.team].cruzamentosCortadosGK++;
         }
+
+        // A decisao tomada no arranque do salto manda: o gesto ja foi desenhado (ver planearSocoNoSalto).
+        if (this.gkSoco) marcado = this.gkSoco.marcado;
+        if (this.gkSoco && marcado) this.gkSoco.golpeado = true;
 
         if (!marcado) {
             if (Math.random() < S.chanceSegurar) {
