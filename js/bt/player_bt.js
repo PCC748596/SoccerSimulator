@@ -191,7 +191,7 @@ class PlayerContext {
         // O orçamento escala com o Estilo Ofensivo da equipa: correr com a
         // bola é o plano do contra-ataque, não do jogo de posse.
         const maxDist = (naDefesa ? (CarryModel.distanciaMaxDefesa || 6.0) : CarryModel.distanciaMax)
-            * multiplicadorConducao() * tendCond;
+            * multiplicadorConducao(this.p) * tendCond;
         if ((this.p.carryDist || 0) < maxDist) return true;
 
         /*
@@ -238,10 +238,31 @@ class PlayerContext {
 Multiplicador do orçamento de condução, vindo do Estilo Ofensivo da equipa
 (TeamPlayStyles.conducao, config.js). 1.0 se o estilo não o definir.
 */
-function multiplicadorConducao() {
+function multiplicadorConducao(p) {
     if (typeof TeamPlayStyles === 'undefined' || typeof Tatics === 'undefined') return 1.0;
     const e = TeamPlayStyles[Tatics.teamPlayStyle] || TeamPlayStyles.positional;
-    return (e && typeof e.conducao === 'number') ? e.conducao : 1.0;
+    let m = (e && typeof e.conducao === 'number') ? e.conducao : 1.0;
+    // Jogo de alas: quem joga na ala leva a bola mais longe (TeamPlayStyles.alas).
+    if (p && e && e.alas && p.model && Math.abs(p.model.position.x) >= e.alas.larguraAla) m *= e.alas.conducaoAlas;
+    return m;
+}
+
+/*
+O ESTILO DA EQUIPA, para quem precisa de ler os campos novos (afinidade,
+contra, corridas, alas) — ver o cabecalho do TeamPlayStyles.
+*/
+function estiloDaEquipa() {
+    if (typeof TeamPlayStyles === 'undefined' || typeof Tatics === 'undefined') return null;
+    return TeamPlayStyles[Tatics.teamPlayStyle] || TeamPlayStyles.positional;
+}
+
+/*
+A velocidade do sprint no contra-ataque: a do estilo (`contra.velocidade`) ou, sem
+ela, a de sempre (`orig`, 1.25).
+*/
+function velContraAtaque(orig) {
+    const e = estiloDaEquipa();
+    return (e && e.contra && typeof e.contra.velocidade === 'number') ? e.contra.velocidade : orig;
 }
 
 /* =========================================================================
@@ -267,7 +288,11 @@ function findThroughBall(ctx) {
         ctx._throughBall = null;
         return null;
     }
-    if (Math.random() > PassModel.throughBallChance) {
+    const eeL = estiloDaEquipa();
+    let chanceLanc = PassModel.throughBallChance * ((eeL && typeof eeL.lancamento === 'number') ? eeL.lancamento : 1);
+    // No contra-ataque a bola nas costas procura-se ainda mais (TeamPlayStyles.contra).
+    if (eeL && eeL.contra && typeof Match !== 'undefined' && Match.counterAttackTeam === p.team) chanceLanc *= 1.6;
+    if (Math.random() > chanceLanc) {
         ctx._throughBall = null;
         return null;
     }
@@ -365,6 +390,12 @@ function findThroughBall(ctx) {
         // a função devolvia 0 em toda a parte — nunca chegou a ser autorada.
         // Saiu com a camada; a nota é a distância e o ganho de profundidade.
         let nota = 100 - dist * 0.5 + (linhaNoNosso - mateZ) * 2.0;
+        // Quem recebe conta: o estilo da equipa procura o homem dele (afinidade) e, no
+        // contra-ataque, o RAPIDO (velocidade) — ver TeamPlayStyles.
+        if (eeL) {
+            if (eeL.afinidade && mate.playingStyle && !mate.playingStyleDesligado && eeL.afinidade[mate.playingStyle]) nota += eeL.afinidade[mate.playingStyle] * 0.5;
+            if (eeL.velocidade) nota += Math.max(0, mate.skillFor('SPEED') - 50) * eeL.velocidade * 0.8;
+        }
 
         /*
         NAS LATERAIS DA ÁREA, o lançamento RASTEIRO cede ao cruzamento — a
@@ -496,8 +527,13 @@ function findCross(ctx) {
     const p = ctx.p;
     const C = CrossModel;
 
+    // O jogo de alas alarga a zona em que se pensa em cruzar (TeamPlayStyles.cruzamentoZona).
+    const eeC = estiloDaEquipa();
+    const zonaC = (eeC && eeC.cruzamentoZona) ? eeC.cruzamentoZona : null;
+    const alaXC = zonaC ? zonaC.alaX : C.alaX;
+    const zonaZC = zonaC ? zonaC.zonaZ : C.zonaZ;
     const meuX = Math.abs(p.model.position.x);
-    if (meuX < C.alaX || ctx.zoneAhead < C.zonaZ) { ctx._cross = null; return null; }
+    if (meuX < alaXC || ctx.zoneAhead < zonaZC) { ctx._cross = null; return null; }
 
     /*
     ESCOLHA DO ALVO — por nota, não pelo mais central.
@@ -1918,7 +1954,7 @@ function actCarry(ctx) {
         let vel = C.velocidadeBase + ((skill - 50) / 50) * C.velocidadePorSkill;
         if (p.carryRecuo) vel *= C.recuoMult;
         if (typeof Match !== 'undefined' && Match.counterAttackTeam === p.team) {
-            vel *= C.contraAtaqueMult;
+            vel *= (typeof velContraAtaque === 'function') ? velContraAtaque(C.contraAtaqueMult) : C.contraAtaqueMult;
         }
         p.speedMult = vel;
     }
@@ -2220,7 +2256,7 @@ function actChaseBall(ctx) {
     }
 
     p.speedMult = (5.8 + ((ctx.skillSpeed - 50) / 50) * 1.5) * 1.25 * 0.9;
-    if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
+    if (Match.counterAttackTeam === p.team) p.speedMult *= velContraAtaque(1.25);
 
     /*
     BOLA NO AR: O ALVO É ONDE ELA CRUZA A ALTURA DA TESTA.
@@ -2318,7 +2354,7 @@ function actIntercept(ctx) {
     const p = ctx.p;
     const ponto = ctx.pontoIntercepcao || Match.ball.position;
     p.speedMult = (5.8 + ((ctx.skillSpeed - 50) / 50) * 1.5) * 1.25 * 0.9;
-    if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
+    if (Match.counterAttackTeam === p.team) p.speedMult *= velContraAtaque(1.25);
     p.dynamicTarget.set(ponto.x, ALTURA_BASE_Y, ponto.z);
     p.fsm.changeState('INTERCEPT');
 }
@@ -2609,6 +2645,19 @@ function podeInfiltrar(ctx) {
     if (isAttacker) chance = 0.05;
     if (isMidfielder) chance = 0.015;
 
+    /*
+    O ESTILO DA EQUIPA E O PLAYING STYLE DE QUEM CORRE — ver TeamPlayStyles.corridas.
+    No contra-ataque quem e rapido e do tipo que desmarca arranca muito mais.
+    */
+    const ee = estiloDaEquipa();
+    if (ee) {
+        if (typeof ee.corridas === 'number') chance *= ee.corridas;
+        if (ee.corridasContra && Match.counterAttackTeam === p.team) {
+            chance *= ee.corridasContra * (0.6 + 0.8 * Math.max(0, Math.min(1, (p.skillFor('SPEED') - 50) / 40)));
+        }
+        if (ee.afinidade && p.playingStyle && ee.afinidade[p.playingStyle] && !p.playingStyleDesligado) chance *= 1.5;
+    }
+
     if (Math.random() < chance) return true;
 
     return false;
@@ -2871,7 +2920,7 @@ function actHoldPosition(ctx) {
     if (typeof RepositionPace !== 'undefined') {
         p.speedMult = RepositionPace.cruzeiro(dist, ctx.skillSpeed);
         if (Match.counterAttackTeam === p.team) {
-            p.speedMult *= RepositionPace.bonusContraAtaque;
+            p.speedMult *= velContraAtaque(RepositionPace.bonusContraAtaque);
         }
 
         /*
@@ -2931,7 +2980,7 @@ function actHoldPosition(ctx) {
         }
     } else {
         p.speedMult = (dist > 2.0 ? 6.6 : 4.2) + ((ctx.skillSpeed - 50) / 50) * 1.2;
-        if (Match.counterAttackTeam === p.team) p.speedMult *= 1.25;
+        if (Match.counterAttackTeam === p.team) p.speedMult *= velContraAtaque(1.25);
     }
 
     /*

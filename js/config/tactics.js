@@ -1599,30 +1599,79 @@ sobre pesos já existentes:
                      Só no contra-ataque é que correr com a bola é o plano;
                      em Possession e Positional o plano é tocar.
 */
+/*
+O ESTILO DA EQUIPA DEPENDE DE QUEM JOGA — 5 de Outubro de 2026. Pedido: *"cada
+estilo com as suas caracteristicas, para o tecnico poder variar durante o jogo de
+acordo com os jogadores que tem em campo"*: contra-ataque com medios e avancados
+velozes (Dummy Runner, Goal Poacher), jogo de alas com pontas dribladores e
+velozes (Cross Specialist, Prolific Winger), posse com Classic No.10, Creative
+Playmaker, Target Man, Fox in the Box e Orchestrator, jogo directo com passes
+rapidos para o ataque.
+
+Medido antes disto (`scratchpad/estilos/papeis.js`, elenco do perfil contra um
+neutro, 6 jogos por celula): o elenco veloz dava +170 a +205 m de progressao com
+bola em QUALQUER estilo, e o Counter Attack so somava +2 remates ao Positional;
+as alas do Wing Play davam 5.7 cruzamentos por jogo, os mesmos dos outros estilos.
+O estilo mexia nos pesos, mas nao SABIA quem estava em campo.
+
+Cada estilo ganha agora, alem dos multiplicadores:
+
+    afinidade      PONTOS somados a nota de passe de quem recebe, pelo Playing
+                   Style dele (`{ dummy_runner: 220, ... }`). E o que faz a
+                   equipa jogar para o homem certo do seu estilo.
+    velocidade     pontos por ponto de SPEED acima de 50 no receptor, num passe
+                   para a frente (o contra-ataque procura o rapido).
+    contra         a janela do contra-ataque desta equipa (ver Match.update):
+                   `janela` em s, `zRecuperacao` (m, em avanço: recuperar abaixo
+                   disto abre a janela), `velocidade` (multiplicador do sprint,
+                   era 1.25), `bonusProgressao` (pontos por metro a frente num
+                   passe) e `penalRecuo` (pontos tirados a um passe atras ou de
+                   lado) — so durante a janela.
+    corridas       multiplica a chance de arrancar sem bola (`podeInfiltrar`),
+                   e `corridasContra` a multiplica de novo durante a janela.
+    alas           jogo de alas: `bonusReceptor` (pontos a quem recebe ja na ala,
+                   |x| >= `larguraAla`) e `conducaoAlas` (multiplica o orcamento
+                   de conducao de quem joga na ala); `cruzamentoZona` alarga a
+                   zona em que se pensa em cruzar (`alaX`, `zonaZ`).
+    lancamento     multiplica a chance de pensar num lancamento (bola nas costas
+                   da ultima linha), em findThroughBall.
+*/
 const TeamPlayStyles = {
     possession: {
         nome: 'Possession',
         circulacao: 1.9, verticalidade: 0.6, viradas: 1.3,
         corredores: 0.9, cruzamento: 0.9, pressaoPosPerda: 1.0,
-        conducao: 0.45
+        conducao: 0.45,
+        corridas: 0.6, lancamento: 0.6,
+        afinidade: { classic_no10: 160, creative_playmaker: 160, orchestrator: 170, target_man: 110, fox_in_the_box: 90 }
     },
     direct: {
         nome: 'Direct',
         circulacao: 0.65, verticalidade: 1.4, viradas: 0.7,
         corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 1.0,
-        conducao: 1.0
+        conducao: 1.0,
+        corridas: 1.5, lancamento: 2.2,
+        afinidade: { target_man: 200, goal_poacher: 150, dummy_runner: 150, extra_frontman: 80 }
     },
     counter_attack: {
         nome: 'Counter Attack',
         circulacao: 0.8, verticalidade: 1.25, viradas: 0.9,
         corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 0.8,
-        conducao: 1.75
+        conducao: 1.75,
+        corridas: 2.0, corridasContra: 2.5, lancamento: 1.8,
+        velocidade: 2.5,
+        afinidade: { dummy_runner: 220, goal_poacher: 160, hole_player: 100, prolific_winger: 80 },
+        contra: { janela: 8.0, zRecuperacao: 12.0, velocidade: 1.45, bonusProgressao: 3.0, penalRecuo: 150 }
     },
     wing_play: {
         nome: 'Wing Play',
         circulacao: 1.1, verticalidade: 0.9, viradas: 1.1,
-        corredores: 1.5, cruzamento: 1.4, pressaoPosPerda: 1.0,
-        conducao: 0.9
+        corredores: 1.5, cruzamento: 2.0, pressaoPosPerda: 1.0,
+        conducao: 0.9,
+        corridas: 1.8,
+        afinidade: { prolific_winger: 320, cross_specialist: 320, roaming_flank: 180, offensive_fullback: 160, fullback_finisher: 90 },
+        alas: { bonusReceptor: 170, larguraAla: 16.0, conducaoAlas: 2.2 },
+        cruzamentoZona: { alaX: 12.0, zonaZ: 12.0 }
     },
     positional: {
         nome: 'Positional',

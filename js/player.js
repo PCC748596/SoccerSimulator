@@ -3284,6 +3284,9 @@ class FootballPlayer {
                 }
             }
 
+            // O ESTILO DA EQUIPA e QUEM recebe (TeamPlayStyles.afinidade, contra, alas).
+            score += this.bonusPasseDoEstilo(opt, optPos, progression, fiab, teamStyle);
+
             // Bônus explícito para trocas de passes na defesa e passes laterais
             if (inDefensiveZone) {
                 if (this.role === 'def' && opt.role === 'def') {
@@ -5516,6 +5519,39 @@ class FootballPlayer {
         const d = Math.hypot(Match.ball.position.x - this.model.position.x,
             Match.ball.position.z - this.model.position.z);
         return d > D.distanciaMaxParaMergulhar;
+    }
+
+    /*
+    PONTOS DE PASSE DO ESTILO DA EQUIPA — 5 de Outubro de 2026. Ver o cabecalho do
+    `TeamPlayStyles` (config/tactics.js). Soma-se a nota do receptor `opt`:
+
+      afinidade    pelo Playing Style dele (so se nao for para tras);
+      velocidade   pontos por ponto de SPEED acima de 50, num passe para a frente;
+      contra       so na janela do contra-ataque desta equipa: premio por metro a
+                   frente e castigo ao passe atras ou de lado;
+      alas         a quem ja esta na ala.
+
+    O `fiab` (fiabilidade pela distancia) pesa o que depende de o passe chegar.
+    */
+    bonusPasseDoEstilo(opt, optPos, progression, fiab, teamStyle) {
+        if (!teamStyle) return 0;
+        let b = 0;
+        const dirZ = this.dirZ;
+        const afin = teamStyle.afinidade;
+        if (afin && opt.playingStyle && !opt.playingStyleDesligado && afin[opt.playingStyle] && progression > -3.0) {
+            b += afin[opt.playingStyle] * fiab;
+        }
+        if (teamStyle.velocidade && progression > 3.0) {
+            b += Math.max(0, opt.skillFor('SPEED') - 50) * teamStyle.velocidade * fiab;
+        }
+        const C = teamStyle.contra;
+        if (C && Match.counterAttackTeam === this.team) {
+            if (progression > 0) b += Math.min(25, progression) * C.bonusProgressao;
+            else if (progression < 2.0) b -= C.penalRecuo;
+        }
+        const A = teamStyle.alas;
+        if (A && Math.abs(optPos.x) >= A.larguraAla && optPos.z * dirZ > -10) b += A.bonusReceptor * fiab;
+        return b;
     }
 
     horaDeMergulhar(lateral, tempoAteChegar) {

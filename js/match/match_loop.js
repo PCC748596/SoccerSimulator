@@ -1100,9 +1100,15 @@ Object.assign(Match, {
                 this.possessionTimer = 0;
 
                 // Recuperar a bola no nosso meio-campo abre janela de contra-ataque.
-                if (oldPossessionTeam && this.ballCarrier.model.position.z * this.ballCarrier.dirZ < -10) {
+                // A janela e a zona vem do estilo da equipa (TeamPlayStyles.contra): o
+                // Counter Attack alarga-a e abre-a mais perto da baliza adversaria.
+                const _ec = (typeof TeamPlayStyles !== 'undefined' && typeof Tatics !== 'undefined')
+                    ? TeamPlayStyles[Tatics.teamPlayStyle] : null;
+                const _zRec = (_ec && _ec.contra && typeof _ec.contra.zRecuperacao === 'number') ? _ec.contra.zRecuperacao : -10;
+                const _janela = (_ec && _ec.contra && typeof _ec.contra.janela === 'number') ? _ec.contra.janela : 4.0;
+                if (oldPossessionTeam && this.ballCarrier.model.position.z * this.ballCarrier.dirZ < _zRec) {
                     this.counterAttackTeam = this.ballCarrier.team;
-                    this.counterAttackTimer = 4.0;
+                    this.counterAttackTimer = _janela;
                 } else {
                     this.counterAttackTeam = null;
                     this.counterAttackTimer = 0;
