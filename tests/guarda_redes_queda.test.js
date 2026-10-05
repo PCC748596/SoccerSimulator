@@ -290,7 +290,16 @@ console.log('7 — a bola baixa e PERTO: escorrega DEITADO DE LADO');
     if (!c) erro('deslize: nao chegou ao chao');
     else {
         console.log(`  deslize a 2.5 m: barriga ${picada(c).toFixed(0)} graus no chao, ${c.sob} frames com osso sob a relva`);
-        if (picada(c) > 30) erro(`deslize: virou de peito (${picada(c).toFixed(0)} graus, tinha de ficar de lado)`);
+        /*
+        60 e nao 30, a 4 de Outubro de 2026. Pedido, com captura de referencia:
+        *"o ultimo frame do salto, antes de levantar, tem que ser mais parecido
+        com esse. O goleiro ainda esta se apoiando em um braco so"*. A referencia
+        e de peito para o relvado com um braco esticado a frente, e nao de lado
+        a escorar-se num braco: a barriga do deslize passou de 8 para ~42 graus
+        (GoalkeeperDive.deslizeLado.anguloFrente 0.75). Ainda tem de ficar longe
+        dos 68 do mergulho a sério, que e o que distingue os dois gestos.
+        */
+        if (picada(c) > 60) erro(`deslize: virou de peito (${picada(c).toFixed(0)} graus, tinha de ficar de lado)`);
         else ok(`deslize: fica de lado (${picada(c).toFixed(0)} graus)`);
         if (c.sob > 0) erro(`deslize: ${c.sob} frames com algum osso sob a relva`);
         else ok('deslize: nao se enterra');

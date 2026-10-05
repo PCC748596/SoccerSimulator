@@ -153,8 +153,10 @@ Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a
   - o braço líder esticado à frente, a 0.26 m do pescoço e a 0.18 m do relvado (`liderX` −1.2 / `liderZ` 0.80, cotovelo −0.25 pelo novo `cotoveloLider`);
   - o outro dobrado sob o peito (`traseiroX` −0.9, cotovelo −0.90);
   - pernas com os joelhos a 0.95/1.15;
-  - `tempoChao` 0.35 → 0.70 s, e as poses convergem mais depressa (0.45 e 0.4 por frame, em vez de 0.2).
+  - `tempoChao` 0.35 → 0.70 s, para a pose se ler antes de ele levantar.
 - **Os valores** saíram de uma busca com o mergulho real (`scratchpad/gkd/busca_chao.js`).
+- **Teste `guarda_redes_queda`:** o do deslize exigia a barriga abaixo de 30° (o pedido anterior, "deitado de lado"); passou a 60°, porque a referência manda. Mede 42° (o mergulho a sério 68°).
+- **Tentei convergir mais depressa** (0.45 por frame nos braços) e dava 1 frame enterrado ao levantar. Revertido: o motivo era um artefacto das medições (abaixo), e com 0.7 s de chão o 0.2 original chega.
 - **Armadilha que me enganou nas primeiras medições:** o `lerpTo` usa `Match.delta`, e sem ele as poses ficam congeladas — medi, e desenhei, poses que não existem.
 - **O salto alto** não mudou: a queda dele é a do `QuedaClip` (a da falta, já aprovada).
 

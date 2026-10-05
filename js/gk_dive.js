@@ -1207,12 +1207,12 @@ const GkDive = {
             L.coxaC.rotation.x = lerpTo(L.coxaC.rotation.x, -0.15, 0.2);
             return;
         }
-        L.coxaB.rotation.x = lerpTo(L.coxaB.rotation.x, P.coxaBaixo, 0.4);
-        L.joelhoB.rotation.x = lerpTo(L.joelhoB.rotation.x, P.joelhoBaixo, 0.4);
-        L.coxaC.rotation.x = lerpTo(L.coxaC.rotation.x, P.coxaCima, 0.4);
-        L.joelhoC.rotation.x = lerpTo(L.joelhoC.rotation.x, P.joelhoCima, 0.4);
+        L.coxaB.rotation.x = lerpTo(L.coxaB.rotation.x, P.coxaBaixo, 0.2);
+        L.joelhoB.rotation.x = lerpTo(L.joelhoB.rotation.x, P.joelhoBaixo, 0.2);
+        L.coxaC.rotation.x = lerpTo(L.coxaC.rotation.x, P.coxaCima, 0.2);
+        L.joelhoC.rotation.x = lerpTo(L.joelhoC.rotation.x, P.joelhoCima, 0.2);
         if (P.chest !== undefined) {
-            rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, P.chest, 0.4);
+            rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, P.chest, 0.2);
         }
     },
 
@@ -1287,9 +1287,7 @@ const GkDive = {
         const P = S && S.chao;
         if (!P) return;
         const B = this.bracos(rig, d);
-        // 0.45 e nao 0.2: o chao do mergulho rasteiro dura 0.7 s e a pose tem de
-        // CHEGAR (a 0.2 acabava a meio, com o cotovelo a -0.64 em vez de -0.20).
-        const w = 0.45;
+        const w = 0.2;
         B.traseiro.rotation.x = lerpTo(B.traseiro.rotation.x, P.traseiroX, w);
         B.traseiro.rotation.z = lerpTo(B.traseiro.rotation.z, -B.sinal * P.traseiroZ, w);
         if (B.cotoveloTraseiro) B.cotoveloTraseiro.rotation.x = lerpTo(B.cotoveloTraseiro.rotation.x, P.cotovelo, w);

@@ -1121,8 +1121,8 @@ const GoalkeeperDive = {
 
     tempoLer: 0.05,        // reacção: transferência de peso antes de sair
     tempoImpulso: 0.12,    // agachar e estender as pernas
-    // 0.70 (era 0.35) a 4 de Outubro de 2026: com 0.35 a pose de pouso nem chegava
-    // a formar-se antes de ele levantar (ver deslizeLado e sequenciaBracos.chao).
+    // 0.70 (era 0.35) a 4 de Outubro de 2026: a pose de pouso (deslizeLado,
+    // sequenciaBracos.chao) precisa de tempo para se ler antes de ele levantar.
     tempoChao: 0.70,       // deslizar no relvado depois de aterrar
 
     /*
