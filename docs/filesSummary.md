@@ -144,6 +144,28 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### Falta na linha da área é pênalti, o braço a 45° e o espaço do goleiro nas faltas na área (js/officials.js `ehPenaltiNoLance`, js/config/physics.js `Area.contem`, js/config/animations.js `PedidoDeBola`, js/match/match_setpieces.js, js/config/player_behavior.js `OffsideRestartShape.areaPropria`)
+
+**A linha da área faz parte da área.** Relato, com captura: *"falta com a bola colocada dentro da área não foi considerado pênalti. A linha faz parte da área. Falta em cima da linha é pênalti."*
+- **Medido** em 9 jogos de 20 min: de 228 faltas, 4 tinham a bola do livre DENTRO da área da defesa com o ponto médio dos dois jogadores a 0.04 a 1.0 m fora (uma delas a 4 cm da linha).
+- **A causa:** a falta era julgada só no ponto médio dos dois jogadores, e o livre era batido onde a bola estava.
+- **A correcção:**
+  - `ehPenaltiNoLance`: é pênalti se o ponto da falta, a bola OU a vítima estiverem na área de quem defende;
+  - `Area.contem` ganhou o parâmetro `margem`, e o julgamento usa `margemDaLinhaDaArea` 0.17 m (meia-largura da linha mais o raio da bola).
+
+**O braço de quem pede a bola, a 45°.** Pedido: *"deve levantar a mão a 45 graus ao invés de apontar pra frente"*. Medido no rig (`scratchpad/mao45/m.js`, vector ombro→mão):
+- antes (`z` 1.75, `x` 0.35): 83° da vertical, mão ao nível da cabeça, 0.10 m para a frente;
+- agora (`z` 2.36, `x` 0.0, cotovelo −0.10): 45° da vertical, no plano lateral (0.03 m para a frente), mão 0.41 m acima da cabeça.
+
+**Faltas dentro da área de quem cobra** (captura 8198). Relato: *"a equipe em Defensive está voltando pouco e o time em Offensive está se adiantando pouco. Assim o goleiro fica com pouco espaço para a saída de bola."*
+- **A causa:** `formaDoLivreDeImpedimento` mede tudo a partir da BOLA, e com a bola a 4–8 m da baliza: quem cobra ficava com a defesa a 4 m dela, dentro da área, os médios a 10 m; quem faltou com a linha da frente a 9.15 m da bola, ou seja dentro da área de quem cobra. Sobrava ainda uma "barreira" de um homem (o gol adversário está a mais de 30 m).
+- **Agora**, com a bola na área de quem cobra (`OffsideRestartShape.areaPropria`, medido da linha de fundo de quem cobra):
+  - quem cobra: defesa a 18 m, médios a 32, avançados a 44;
+  - quem faltou: linha da frente a 24 m e bloco de 18 m para a frente (21–39 m da baliza);
+  - sem barreira.
+- **Medido** em 21 faltas assim: quem faltou fica a 12–43 m da linha de fundo (média 33; antes dentro da área), quem cobra a 14–44 (média 28). Sobra 0 jogadores de quem faltou dentro da área (eram 1 em 5 faltas).
+- Os números respeitam o teste de compacidade `impedimento_montagem` (ninguém a mais de 45 m da bola, média < 32), que guarda o pedido antigo de não haver metade dos jogadores de cada lado do campo.
+
 #### A animação do soco no ar (js/player.js `planearSocoNoSalto`, `animarSocoNoSalto`, `armarBracoDoSoco`, js/config/goalkeeper.js `GkSaidaCruzamento.socoAnim`)
 
 Pedido: *"o goleiro está dando o soco, mas a animação não aparece. Ele tem que pular e fazer o movimento do soco no ar. Braço para trás e para frente acertando a bola."*

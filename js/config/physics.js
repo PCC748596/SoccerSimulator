@@ -514,15 +514,22 @@ const Area = {
       avalia em relação à baliza específica indicada.
     - Se ladoZ for omitido/nulo: avalia se está em QUALQUER uma das duas grandes áreas.
     */
-    contem: function (x, z, ladoZ) {
-        if (Math.abs(x) > this.meiaLargura) return false;
+    /*
+    `margem` (m, por omissao 0) alarga a area em todos os lados: A LINHA FAZ
+    PARTE DA AREA. Quem julga uma falta passa a largura da linha mais o raio da
+    bola (ver Officials.margemDaLinhaDaArea), porque um contacto em cima da
+    linha — a poucos centimetros de cada lado — e penalti.
+    */
+    contem: function (x, z, ladoZ, margem) {
+        const m = margem || 0;
+        if (Math.abs(x) > this.meiaLargura + m) return false;
         if (ladoZ !== undefined && ladoZ !== null) {
             const sinal = Math.sign(ladoZ) || 1;
             const dz = (sinal * LINHA_FUNDO - z) * sinal;
-            return dz >= 0 && dz <= this.profundidade;
+            return dz >= -m && dz <= this.profundidade + m;
         }
         const dz = LINHA_FUNDO - Math.abs(z);
-        return dz >= 0 && dz <= this.profundidade;
+        return dz >= -m && dz <= this.profundidade + m;
     },
 
     /*

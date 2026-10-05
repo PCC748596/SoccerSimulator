@@ -1718,11 +1718,24 @@ cara a cara reavalia a cada decisão de passe do portador, e sem esta memória o
 braço piscava. Meio segundo cobre a folga entre duas decisões.
 =============================================================================
 */
+/*
+A 45 GRAUS DA VERTICAL (5 de Outubro de 2026). Pedido: *"quando o jogador levanta
+a mao pedindo bola, deve levantar a mao a 45 graus ao inves de apontar pra
+frente"*. Medido no rig (scratchpad/mao45/m.js), o vector ombro->mao:
+
+    antes  z 1.75, x 0.35   83 graus da vertical (horizontal para o lado),
+                            mao ao nivel da cabeca, 0.10 m para a frente
+    agora  z 2.36, x 0.00   45 graus da vertical, no plano lateral (0.03 m
+                            para a frente), mao 0.41 m ACIMA da cabeca
+
+`z` 2.36 rad sao 135 graus de abducao a contar do braco pendurado; `x` 0 tira-o
+do plano da frente. Dentro do limite do ombro (180 graus).
+*/
 const PedidoDeBola = {
     duracao: 0.6,
-    z: 1.75,
-    x: 0.35,
-    cotovelo: -0.25,
+    z: 2.36,
+    x: 0.0,
+    cotovelo: -0.10,
     // Suavização por frame, para o braço subir em vez de saltar.
     suavizacao: 0.35
 };

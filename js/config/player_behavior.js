@@ -1606,6 +1606,40 @@ const OffsideRestartShape = {
     atrasDaBolaNaArea: 0,
 
     /*
+    =========================================================================
+    A BOLA DENTRO DA AREA DE QUEM COBRA — o guarda-redes tem de ter espaco
+    =========================================================================
+    Relato de 5 de Outubro de 2026, com captura: *"quando tem uma falta dentro
+    da area a equipe em Defensive esta voltando pouco e o time em Offensive
+    esta se adiantando pouco. Assim o goleiro fica com pouco espaco para a
+    saida de bola"*.
+
+    A forma de cima mede tudo A PARTIR DA BOLA, e com a bola a 8 m da propria
+    baliza isso da: quem cobra com a defesa a 4 m dela (dentro da area), os
+    medios a 10 m, os avancados a 26 m; e quem cometeu a falta com a linha da
+    frente a 9.15 m da bola — ou seja DENTRO da area de quem cobra.
+
+    Aqui, para esse caso, as linhas medem-se a partir da LINHA DE FUNDO de quem
+    cobra (m para dentro do campo):
+      . quem cobra:   defesa a `defesa` (fora da area, que acaba a 16.5),
+                      medios a `medios`, avancados a `avancados`;
+      . quem faltou:  a linha da frente a `frenteAdversario` e o bloco a
+                      estender-se `blocoAdversario` m ate ao meio-campo.
+    O corte do fora-de-jogo corre depois e segura os avancados.
+    */
+    /*
+    Os numeros respeitam o teste de compacidade (impedimento_montagem: ninguem a
+    mais de 45 m da bola, e a media abaixo de 32), que guarda o pedido antigo de
+    nao ter *"metade dos jogadores de um lado do campo e a outra metade do
+    outro"*. Com a bola colada a baliza, quem faltou fica a 21-39 m dela e quem
+    cobra a 15-41 m.
+    */
+    areaPropria: {
+        defesa: 18.0, medios: 32.0, avancados: 44.0,
+        frenteAdversario: 24.0, blocoAdversario: 18.0
+    },
+
+    /*
     Quem e empurrado para a frente da bola por causa da regra acima nao fica em
     cima dela: sobe pelo menos isto. A frente dos medios (`mediosAFrenteDaBola`)
     ninguem passa por este caminho — e um minimo, nao uma linha.

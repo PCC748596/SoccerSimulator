@@ -2343,7 +2343,7 @@ const Officials = {
         if (typeof Area !== 'undefined' && typeof Area.contem === 'function') {
             const ladoZ = (teamInfractor === 'TeamA') ? -1 : (teamInfractor === 'TeamB') ? 1 : 0;
             if (!ladoZ) return false;
-            return Area.contem(x, z, ladoZ);
+            return Area.contem(x, z, ladoZ, this.margemDaLinhaDaArea);
         }
         const meiaLargArea = AREA_GRANDE_MEIA_LARG;
         if (Math.abs(x) > meiaLargArea) return false;
@@ -2376,6 +2376,32 @@ const Officials = {
 
     A falta é no sítio onde o INFRACTOR está, que é onde o contacto foi.
     */
+    /*
+    A LINHA DA AREA FAZ PARTE DA AREA. Relato de 5 de Outubro de 2026, com
+    captura: *"falta com a bola colocada dentro da area nao foi considerado
+    penalti. A linha faz parte da area. Falta em cima da linha e penalti"*.
+
+    A margem e a meia-largura da linha (0.06 m) mais o raio da bola (0.11 m).
+    Medido em 9 jogos de 20 min: das 228 faltas, 4 tinham a bola a ser reposta
+    DENTRO da area com o ponto medio dos dois jogadores a 0.04 a 1.0 m fora
+    (uma delas a 4 cm da linha). Ver `ehPenaltiNoLance`.
+    */
+    margemDaLinhaDaArea: 0.17,
+
+    /*
+    O LANCE, e nao so o ponto medio: e penalti se o ponto da falta (o meio dos
+    dois), a BOLA (que e onde o tiro livre ia ser batido) ou a VITIMA (onde o
+    contacto a apanhou) estiverem na area de quem defende, linha incluida.
+    */
+    ehPenaltiNoLance: function (infractor, vitima) {
+        const pi = infractor.model.position, pv = vitima.model.position;
+        const meio = { x: (pi.x + pv.x) / 2, z: (pi.z + pv.z) / 2 };
+        if (this.ehPenalti(meio.x, meio.z, infractor.team)) return true;
+        if (this.ehPenalti(pv.x, pv.z, infractor.team)) return true;
+        const b = (typeof Match !== 'undefined' && Match.ball) ? Match.ball.position : null;
+        return !!(b && this.ehPenalti(b.x, b.z, infractor.team));
+    },
+
     marcarFalta: function (infractor, vitima, dados) {
         if (!infractor || !vitima || infractor.expulso) return;
         if (typeof Match === 'undefined' || Match.state !== 'PLAY') return;
@@ -2431,7 +2457,7 @@ const Officials = {
         if (vitima.role !== 'gk' && typeof vitima.iniciarQueda === 'function') {
             vitima.iniciarQueda(infractor);
         }
-        const penalti = this.ehPenalti(pos.x, pos.z, infractor.team);
+        const penalti = this.ehPenaltiNoLance(infractor, vitima);
         if (penalti && typeof MatchStats !== 'undefined') MatchStats[vitima.team].penaltis++;
         const montar = penalti
             ? () => Match.triggerPenalty(vitima.team)

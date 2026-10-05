@@ -644,6 +644,14 @@ Object.assign(Match, {
             } else if (distGolFK > (F.barreira2MaxDist !== undefined ? F.barreira2MaxDist : 26.0)) {
                 nBarreira = 2;
             }
+            /*
+            E NA AREA DE QUEM COBRA TAMBEM NAO: a bola esta a poucos metros da
+            propria baliza e os adversarios tem de ficar FORA da area (e a 9.15
+            m). Uma "barreira" de um homem a 9 m da bola, dentro da area, era o
+            que sobrava (medido: 5 de 21 faltas na area do batedor, com a bola a
+            menos de 7 m da linha). Ver OffsideRestartShape.areaPropria.
+            */
+            if (typeof Area !== 'undefined' && Area.contem(bolaFK.x, bolaFK.z, -attDir * LINHA_FUNDO)) nBarreira = 0;
 
             // Determina de que lado a barreira protege (lado do poste correspondente ao lado da bola)
             // Se bolaFK.x > 0 (lado direito do ataque), barreira alinha cobrindo o poste direito (x > 0).
@@ -1841,9 +1849,16 @@ Object.assign(Match, {
         medição que obrigou a tirar isto das linhas absolutas do campo.
         */
         const bolaAtk = this.ball.position.z * attDir;
-        const zDefesa = bolaAtk - S.defesaAtrasDaBola;
-        const zMedios = bolaAtk + S.mediosAFrenteDaBola;
-        const zAvancados = bolaAtk + S.avancadosAFrenteDaBola;
+        let zDefesa = bolaAtk - S.defesaAtrasDaBola;
+        let zMedios = bolaAtk + S.mediosAFrenteDaBola;
+        let zAvancados = bolaAtk + S.avancadosAFrenteDaBola;
+        // Com a bola na area de quem cobra, as linhas medem-se da linha de fundo (OffsideRestartShape.areaPropria).
+        const AP = (S.areaPropria && (bolaAtk <= -LINHA_FUNDO + Area.profundidade)) ? S.areaPropria : null;
+        if (AP) {
+            zDefesa = -LINHA_FUNDO + AP.defesa;
+            zMedios = -LINHA_FUNDO + AP.medios;
+            zAvancados = -LINHA_FUNDO + AP.avancados;
+        }
         const porRole = { def: zDefesa, mid: zMedios, atk: zAvancados };
 
         /*
@@ -1915,11 +1930,17 @@ Object.assign(Match, {
 
         // A bola no referencial de ataque DELES, menos a distância da Lei 13.
         const dirM = campoM[0].dirZ;
-        const frenteDeles = (bola.z * dirM) - minDist;
+        let frenteDeles = (bola.z * dirM) - minDist;
+        let blocoDeles = S.blocoAdversario;
+        // Na area de quem cobra, no referencial DELES a baliza de quem cobra e +LINHA_FUNDO.
+        if (AP) {
+            frenteDeles = Math.min(frenteDeles, LINHA_FUNDO - AP.frenteAdversario);
+            blocoDeles = AP.blocoAdversario;
+        }
         for (const p of campoM) {
             // v = 0 no mais recuado da formação, 1 no mais adiantado.
             const v = ((p.baseTarget.z * p.dirZ) - zMin) / span;
-            const zAtkDeles = frenteDeles - S.blocoAdversario * (1 - v);
+            const zAtkDeles = frenteDeles - blocoDeles * (1 - v);
             colocar(p, p.baseTarget.x * S.largura, zAtkDeles, p.dirZ);
         }
 
