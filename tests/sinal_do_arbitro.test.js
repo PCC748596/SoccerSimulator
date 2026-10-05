@@ -313,22 +313,19 @@ console.log(LF + '5 — o braço volta a cair');
 
     const bracoT = (rigT.rArm.rotation.order === 'YXZ') ? rigT.rArm : rigT.lArm;
     const guinadaT = Math.abs(bracoT.rotation.y) * 180 / Math.PI;
-    if (Math.abs(guinadaT - 90) > 5) {
-        erro(`falta: o braço devia ficar a 90° do tronco, está a ${guinadaT.toFixed(0)}°`);
-    } else ok(`falta: braço a ${guinadaT.toFixed(0)}° do tronco — o T`);
-
-    // E continua a apontar o alvo em coordenadas do mundo.
-    const anguloMundo = corpoT.rotation.y + bracoT.rotation.y;
-    const alvoMundo = 0;   // o alvo está em +z, que é o ângulo zero
-    let erroMundo = Math.atan2(Math.sin(anguloMundo - alvoMundo), Math.cos(anguloMundo - alvoMundo));
-    erroMundo = Math.abs(erroMundo) * 180 / Math.PI;
-    if (erroMundo > 5) {
-        erro(`falta: o braço aponta ${erroMundo.toFixed(0)}° ao lado da baliza atacada`);
-    } else ok(`falta: braço a apontar a baliza (erro ${erroMundo.toFixed(1)}°)`);
-
-    if (Math.abs(corpoT.rotation.y) < 0.5) {
-        erro('falta: o corpo não rodou — sem isso o braço não pode estar a 90° e a apontar');
-    } else ok(`falta: o corpo ficou de perfil (${(corpoT.rotation.y * 180 / Math.PI).toFixed(0)}°)`);
+    /*
+    5 de Outubro de 2026: *"depois que o juiz apita a falta e sinaliza, estranhamente
+    ele vira para a camera ... por que nao continua acompanhando a jogada?"* O corpo
+    NAO roda para o T (`corpoDePerfilNoSinal` false): fica onde o `mover` o poe, e so
+    o braco aponta, a pelo menos `margemBracoSinal` do tronco.
+    */
+    if (Math.abs(corpoT.rotation.y) > 0.01) {
+        erro(`falta: o corpo rodou ${(corpoT.rotation.y * 180 / Math.PI).toFixed(0)}° — devia continuar a acompanhar a jogada`);
+    } else ok('falta: o corpo continua virado para a jogada');
+    const minGuinada = R.margemBracoSinal * 180 / Math.PI - 3;
+    if (guinadaT < minGuinada) {
+        erro(`falta: o braco esta a ${guinadaT.toFixed(0)}° do tronco, devia ser pelo menos ${minGuinada.toFixed(0)}°`);
+    } else ok(`falta: braco a ${guinadaT.toFixed(0)}° do tronco`);
 
     for (let n = 0; n < 60; n++) tick(self, 0.016);   // passa 1 s
     if (self.arbitro.sinal) erro('passou a duração e o gesto continua');

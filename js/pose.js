@@ -212,6 +212,14 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     um sitio por onde ela se podia perder.
     */
     const mangaComprida = !!(UNI && UNI.mangaComprida);
+    /*
+    LUVAS (so o guarda-redes, e so com `uniforme.luvas`, ver sortearLuvas): o
+    punho, a palma, os dedos e o polegar vestem a cor das COSTAS; a face da
+    palma leva uma placa fina da cor da PALMA. Sem `luvas`, a mao e de pele.
+    */
+    const LUVAS = (mangaComprida && UNI.luvas) ? UNI.luvas : null;
+    const luvaCostasMat = LUVAS ? new THREE.MeshStandardMaterial({ color: LUVAS.costas, roughness: 0.55 }) : null;
+    const luvaPalmaMat = LUVAS ? new THREE.MeshStandardMaterial({ color: LUVAS.palma, roughness: 0.55 }) : null;
     const pecaCamisa = UNI ? UNI.camisa : null;
     const pecaMeiao = UNI ? UNI.meiao : null;
     /*
@@ -628,11 +636,12 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
             handG.add(criarPeca(new THREE.SphereGeometry(u * MD.juntaRaio, 12, 12), jointMat));
         }
 
+        const maoMat = luvaCostasMat || blockMat;
         const maoG = new THREE.Group(); maoG.rotation.y = Math.PI / 2; handG.add(maoG);
 
         if (!MD || !MD.activo) {
             // A laje de sempre, para se poder desligar a mão nova num sítio só.
-            const mao = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.4, u * 0.2), blockMat);
+            const mao = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.4, u * 0.2), maoMat);
             mao.position.y = -0.2; maoG.add(mao);
         } else {
             /*
@@ -643,7 +652,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
             const punhoComp = MD.punhoComp || 0;
             if (punhoComp > 0) {
                 const punho = criarPeca(new THREE.BoxGeometry(
-                    u * MD.punhoLarg, u * punhoComp, u * MD.punhoEsp), blockMat);
+                    u * MD.punhoLarg, u * punhoComp, u * MD.punhoEsp), maoMat);
                 punho.position.y = -punhoComp / 2;
                 maoG.add(punho);
             }
@@ -659,7 +668,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
             maoG.add(palmaG);
 
             const palma = criarPeca(new THREE.BoxGeometry(
-                u * MD.palmaLarg, u * MD.palmaComp, u * MD.palmaEsp), blockMat);
+                u * MD.palmaLarg, u * MD.palmaComp, u * MD.palmaEsp), maoMat);
             palma.position.y = -MD.palmaComp / 2;
             palmaG.add(palma);
 
@@ -680,7 +689,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
                 */
                 const comp = Math.max(0.03, MD.dedoComp * (1 - decaim * i));
                 const dedo = criarPeca(caixaAfunilada(
-                    u * dedoLarg, u * comp, u * MD.dedoEsp, afunil), blockMat);
+                    u * dedoLarg, u * comp, u * MD.dedoEsp, afunil), maoMat);
                 /*
                 TODOS ARRANCAM DA PALMA. O centro de cada um depende do seu
                 comprimento, senao os mais curtos ficavam a flutuar com uma
@@ -712,6 +721,20 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
             palma (o grupo intermédio), senão rodar deslocava-o em vez de o
             abrir.
             */
+            /*
+            A PLACA DA PALMA: a face de dentro da luva, da base da palma a ponta
+            dos dedos. Com os bracos ao longo do corpo a palma olha para dentro:
+            local -z na mao esquerda (x > 0), +z na direita.
+            */
+            if (luvaPalmaMat) {
+                const alturaPlaca = MD.palmaComp + MD.dedoComp * 0.85;
+                const espMax = Math.max(MD.palmaEsp, MD.dedoEsp);
+                const placa = criarPeca(new THREE.BoxGeometry(
+                    u * (MD.palmaLarg - 0.02), u * alturaPlaca, u * 0.02), luvaPalmaMat);
+                placa.position.set(0, -alturaPlaca / 2, (x > 0 ? -1 : 1) * u * (espMax / 2 + 0.008));
+                palmaG.add(placa);
+            }
+
             const ladoPolegar = -1;
             const polegarG = new THREE.Group();
             polegarG.position.set(u * ladoPolegar * MD.palmaLarg / 2, -MD.palmaComp * 0.45, 0);
@@ -719,7 +742,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
             palmaG.add(polegarG);
             const polegar = criarPeca(caixaAfunilada(
                 u * MD.polegarLarg, u * MD.polegarComp, u * MD.polegarEsp,
-                (typeof MD.dedoAfunil === 'number') ? MD.dedoAfunil : 1), blockMat);
+                (typeof MD.dedoAfunil === 'number') ? MD.dedoAfunil : 1), maoMat);
             polegar.position.y = -MD.polegarComp / 2;
             polegarG.add(polegar);
         }

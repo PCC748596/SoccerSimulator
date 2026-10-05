@@ -228,6 +228,88 @@ const UniformeGuardaRedes = {
 };
 
 /*
+=============================================================================
+LUVAS DO GUARDA-REDES — cor sorteada, palma e costas
+=============================================================================
+Pedido: *"ajustar as maos dos goleiros e o punho para cores aleatorias como se
+fossem luvas: azul, preto, branco, verde fosforescente, vermelho, laranja...
+toda de uma cor so, ou uma cor na palma e outra nas costas da mao. Cria um
+sorteio. So coloca uma cor que seja diferente da cor da camisa dos times."*
+
+`sortearLuvas(evitar)` devolve `{ palma, costas }` (hex numericos): a mesma cor
+nas duas faces ou duas cores diferentes (`probBicolor`). O punho leva a cor das
+COSTAS.
+
+`evitar` e a lista de cores de camisa (strings CSS ou hex) que a luva nao pode
+lembrar — a dos dois guarda-redes e a das duas equipas. Uma cor da paleta fica
+de fora se estiver a menos de `distMin` (distancia RGB, 0..441) de alguma.
+
+O sorteio NAO usa o `Math.random` do jogo: gasta-lo aqui mudava a sequencia de
+todos os lances seguintes, e os testes com semente fixa deixavam de medir o
+mesmo jogo. Tem um gerador proprio.
+=============================================================================
+*/
+const LuvasModel = {
+    paleta: [
+        { nome: 'azul',       cor: 0x1f6feb },
+        { nome: 'preto',      cor: 0x141414 },
+        { nome: 'branco',     cor: 0xf4f4f4 },
+        { nome: 'verde neon', cor: 0x39ff14 },
+        { nome: 'vermelho',   cor: 0xe01b1b },
+        { nome: 'laranja',    cor: 0xff8c00 },
+        { nome: 'amarelo',    cor: 0xffe600 },
+        { nome: 'rosa',       cor: 0xff4fa3 },
+        { nome: 'roxo',       cor: 0x8a2be2 },
+        { nome: 'ciano',      cor: 0x00e5ff }
+    ],
+    // Probabilidade de a luva ter duas cores (palma e costas diferentes).
+    probBicolor: 0.5,
+    // Distancia RGB minima a uma cor de camisa para a cor da luva ser aceite.
+    distMin: 110,
+    // Distancia RGB minima entre a palma e as costas, quando sao duas cores.
+    distEntreFaces: 140
+};
+
+let _luvasSemente = (Date.now() ^ 0x9e3779b9) >>> 0;
+function _luvasAleatorio() {
+    _luvasSemente = (_luvasSemente + 0x6D2B79F5) | 0;
+    let t = Math.imul(_luvasSemente ^ (_luvasSemente >>> 15), 1 | _luvasSemente);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+function _luvasRGB(c) {
+    if (typeof c === 'number') return [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+    try {
+        const k = new THREE.Color(c);
+        return [Math.round(k.r * 255), Math.round(k.g * 255), Math.round(k.b * 255)];
+    } catch (e) { return null; }
+}
+
+function _luvasDist(a, b) {
+    return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+function sortearLuvas(evitar) {
+    const M = LuvasModel;
+    const proibidas = (evitar || []).map(_luvasRGB).filter(Boolean);
+    let ok = M.paleta.filter(c => {
+        const rgb = _luvasRGB(c.cor);
+        return proibidas.every(p => _luvasDist(rgb, p) >= M.distMin);
+    });
+    if (!ok.length) ok = M.paleta.slice();
+    const sorteia = (lista) => lista[Math.floor(_luvasAleatorio() * lista.length) % lista.length];
+    const costas = sorteia(ok);
+    let palma = costas;
+    if (_luvasAleatorio() < M.probBicolor) {
+        const rgbC = _luvasRGB(costas.cor);
+        const outras = ok.filter(c => c !== costas && _luvasDist(_luvasRGB(c.cor), rgbC) >= M.distEntreFaces);
+        if (outras.length) palma = sorteia(outras);
+    }
+    return { palma: palma.cor, costas: costas.cor, nomePalma: palma.nome, nomeCostas: costas.nome };
+}
+
+/*
 O uniforme de uma equipa, pelo NOME com que ela vem nos dados
 (`SquadsData.equipas[].nome`, que é o `teamName` do assets/teams.json).
 
@@ -261,6 +343,8 @@ function corDoUniforme(uniforme, porOmissao) {
 if (typeof window !== 'undefined') {
     window.Uniformes = Uniformes;
     window.UniformeGuardaRedes = UniformeGuardaRedes;
+    window.LuvasModel = LuvasModel;
+    window.sortearLuvas = sortearLuvas;
     window.uniformeDe = uniformeDe;
     window.corDoUniforme = corDoUniforme;
 }

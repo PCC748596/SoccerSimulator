@@ -841,6 +841,17 @@ const QuedaClip = {
         { t: 1.25, leanZ: 0.00, pitchX: 1.57, chest: -0.08, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.45, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
         // ...e assim fica 4 s (o pedido). Só a cabeça e o peito mexem um pouco.
         { t: 4.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
+        /*
+        OS DOIS BRACOS APOIAM ANTES DE O CORPO SUBIR — 5 de Outubro de 2026. Relato, com
+        captura: *"depois da defesa no alto o goleiro fica apoiado numa mao so,
+        flutuando; parece que esta dancando break dance"*. Do Foul1 (um braco aberto
+        no relvado, o outro por cima da cabeca) directo para as gatas, a meio do
+        caminho o corpo ja estava a 0.58 m com um braco ainda no ar e o outro
+        plantado. Este frame e a PRANCHA: os dois bracos verticais no relvado, pernas
+        esticadas com a ponta dos pes no chao, o tronco quase na horizontal; so no
+        seguinte (de gatas) os joelhos descem.
+        */
+        { t: 4.38, leanZ: 0.00, pitchX: 1.40, chest: 0.00, coxaChute: 0.00, joelhoChute: 0.05, coxaChuteZ: 0.00, coxaApoio: 0.00, joelhoApoio: 0.05, bracoLx: -1.40, bracoLz: 0.15, bracoRx: -1.40, bracoRz: -0.15, cotoveloL: -0.05, cotoveloR: -0.05, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.24 },
         // A levantar: de gatas.
         { t: 4.55, leanZ: 0.00, pitchX: 1.35, chest: 0.00, coxaChute: -1.35, joelhoChute: 1.57, coxaChuteZ: 0.00, coxaApoio: -1.35, joelhoApoio: 1.57, bracoLx: -1.35, bracoLz: 0.15, bracoRx: -1.35, bracoRz: -0.15, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.11 },
         // Um joelho no chão.

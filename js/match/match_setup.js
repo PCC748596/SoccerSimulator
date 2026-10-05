@@ -1901,11 +1901,23 @@ Object.assign(Match, {
         const uniB = (typeof uniformeDe === 'function' && this.equipaInfoB)
             ? uniformeDe(this.equipaInfoB.nome) : null;
 
+        /*
+        LUVAS SORTEADAS, uma vez por guarda-redes (ver LuvasModel): nunca com a
+        cor de uma camisa em campo — as duas de linha e as dos dois GR.
+        */
+        const camisasEmCampo = [
+            '#f1c40f', '#e67e22',
+            (typeof corDoUniforme === 'function') ? corDoUniforme(uniA, '#3498db') : '#3498db',
+            (typeof corDoUniforme === 'function') ? corDoUniforme(uniB, '#e74c3c') : '#e74c3c'
+        ];
+        const uniGKcomLuvas = () => (uniGK && typeof sortearLuvas === 'function')
+            ? Object.assign({}, uniGK, { luvas: sortearLuvas(camisasEmCampo) }) : uniGK;
+
         for (let i = 0; i < 11; i++) {
             let corCamisa = (i === 0) ? '#f1c40f' : '#3498db';
             let corCalcao = (i === 0) ? '#1e1b18' : '#34495e';
             let p = new FootballPlayer(i, corCamisa, corCalcao, 'TeamA',
-                (i === 0) ? uniGK : uniA);
+                (i === 0) ? uniGKcomLuvas() : uniA);
             p.skills = skillsA ? skillsA[i] : null;
             // O estilo que o jogador traz nos dados manda sobre o estilo por
             // omissão da posição — ver aplicarPlayingStyle.
@@ -1918,7 +1930,7 @@ Object.assign(Match, {
             let corCamisa = (i === 0) ? '#e67e22' : '#e74c3c';
             let corCalcao = (i === 0) ? '#111111' : '#ffffff';
             let p = new FootballPlayer(i + 20, corCamisa, corCalcao, 'TeamB',
-                (i === 0) ? uniGK : uniB);
+                (i === 0) ? uniGKcomLuvas() : uniB);
             p.skills = skillsB ? skillsB[i] : null;
             p.playingStyleFixo = (p.skills && p.skills.estilo) ? p.skills.estilo : null;
             this.opponents.push(p);

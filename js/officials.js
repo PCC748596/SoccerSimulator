@@ -652,7 +652,18 @@ const RefereeModel = {
     a volta de 90 graus leva pouco mais de meio segundo, dentro dos 2.5 s do
     gesto e sem o arbitro estalar de lado no frame do apito.
     */
-    suavizacaoCorpoSinal: 0.15
+    suavizacaoCorpoSinal: 0.15,
+    /*
+    O CORPO NO GESTO DA FALTA. Relato: *"depois que o juiz apita a falta e
+    sinaliza, estranhamente ele vira para a camera. Nao faz sentido. Por que nao
+    continua acompanhando a jogada?"* O T (corpo de perfil, braco a 90 graus)
+    punha-o de lado para o lance, a olhar para a camara. Com `false` o corpo
+    fica onde o `mover` o poe (virado para a bola) e so o braco aponta o ataque,
+    sempre a pelo menos `margemBracoSinal` rad do tronco para ler-se como gesto.
+    `true` volta ao T.
+    */
+    corpoDePerfilNoSinal: false,
+    margemBracoSinal: 1.2
 };
 
 const Officials = {
@@ -1765,7 +1776,7 @@ const Officials = {
         const k = RefereeModel.suavizacaoBraco;
         const ehFalta = Math.abs(arb.sinal.elev - RefereeModel.elevacaoSinal) < 0.01;
 
-        if (ehFalta && Math.hypot(dx, dz) > 0.05) {
+        if (ehFalta && RefereeModel.corpoDePerfilNoSinal && Math.hypot(dx, dz) > 0.05) {
             /*
             O CORPO DE PERFIL PARA O ALVO. As duas hipoteses sao o alvo a
             +90 ou a -90 graus do corpo; ganha a que fica mais perto de onde o
@@ -1887,7 +1898,7 @@ const Officials = {
             quase em frente, e de o atravessar por tras quando esta atras: e
             para isso que o lado do braco foi escolhido acima.
             */
-            const margem = 0.35;
+            const margem = (ehFalta && !RefereeModel.corpoDePerfilNoSinal) ? RefereeModel.margemBracoSinal : 0.35;
             signalArm.rotation.y = useRight
                 ? Math.max(Math.min(guinada, -margem), -Math.PI + margem)
                 : Math.min(Math.max(guinada, margem), Math.PI - margem);

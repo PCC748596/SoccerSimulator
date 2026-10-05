@@ -148,6 +148,14 @@ const GkDive = {
         */
         this._v.set(1, 0, 0).applyQuaternion(p.dive.qFacing);
         p.dive.ladoLocal = Math.sign(this._v.x * p.dive.dirX) || 1;
+        /*
+        O DESLIZE DE LADO COM OS PES PRIMEIRO — ver GoalkeeperDive.deslizeLado.pesPrimeiro.
+        Inverte o lado do tombo: a cabeca fica para tras e as pernas vao para a
+        bola. O `ladoLocal` passa a ser o lado em que ele DEITA, que e o
+        contrario do da bola, e e por ele que as pernas e os bracos escolhem
+        qual e o de baixo.
+        */
+        if (p.dive.deslizeLado && GoalkeeperDive.deslizeLado.pesPrimeiro) p.dive.ladoLocal = -p.dive.ladoLocal;
 
         /*
         O EIXO DA QUEDA — um eixo so, mas inclinado para ele cair de FRENTE.

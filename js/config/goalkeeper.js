@@ -1688,8 +1688,18 @@ const GoalkeeperDive = {
         ficava dobrado no ar. A barriga vira-se agora 0.75 rad (43 graus) e o
         peso passa para o peito e os dois bracos (ver `sequenciaBracos.chao`).
         */
-        anguloFrente: 0.75,
-        pernas: { coxaBaixo: -0.10, joelhoBaixo: 0.95, coxaCima: 0.05, joelhoCima: 1.15, chest: 0.05 }
+        /*
+        OS PES PRIMEIRO, DEITADO DE LADO — 5 de Outubro de 2026. Relato, com duas
+        imagens: *"o goleiro esta escorregando de bruços atras da bola para
+        defender. Deveria usar a animacao F3: o deslize de lado, deitado, com as
+        pernas para a bola."* O deslize de lado (bola baixa e perto) deita-o agora
+        sobre o flanco, com as pernas esticadas na direccao da bola e a cabeca
+        para tras (`pesPrimeiro`), em vez de cair de peito com os bracos a frente.
+        `anguloFrente` 0.15 (era 0.75) deixa-o de lado.
+        */
+        pesPrimeiro: true,
+        anguloFrente: 0.15,
+        pernas: { coxaBaixo: 0.00, joelhoBaixo: 0.12, coxaCima: 0.10, joelhoCima: 0.10, chest: 0.0 }
     },
 
     /*
