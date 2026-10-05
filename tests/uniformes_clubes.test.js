@@ -77,7 +77,7 @@ const barrasDoPadrao = (ctx, peca) => {
 
 /* --- A tabela diz o que o pedido diz ---------------------------------- */
 
-test('Flamengo: faixas vermelhas e negras, calção branco com barra vermelho e preto, número branco', () => {
+test('Flamengo: faixas vermelhas e negras, calção preto com barra vermelha, número branco', () => {
     const u = uniformeDe('Flamengo-RJ');
     assert.ok(u, 'o Flamengo não está na tabela');
 
@@ -98,15 +98,14 @@ test('Flamengo: faixas vermelhas e negras, calção branco com barra vermelho e 
     const preto = u.camisa.cores.find(c => lum(c) < 0.15);
     assert.ok(preto, `nenhuma das cores (${u.camisa.cores}) é preta`);
 
-    // Calção branco com barra vermelho e preto (pedido)
+    // Calção preto com barra vermelha (pedido de 5 de Outubro de 2026)
     const canal = (hex, i) => (parseInt(hex.slice(1), 16) >> (8 * (2 - i))) & 255;
     const kc = corDoCalcao(u);
-    assert.ok(canal(kc, 0) > 220 && canal(kc, 1) > 220, `calção ${kc} não é branco`);
+    assert.ok(lum(kc) < 0.15, `calção ${kc} não é preto`);
 
     assert.ok(u.calcao.barra, 'o calção do Flamengo ficou sem a barra');
     const coresBarra = u.calcao.barra.cores || [u.calcao.barra.cor];
-    assert.ok(coresBarra.includes(vermelho) && coresBarra.includes(preto),
-        `a barra do calção (${coresBarra}) deve ter vermelho e preto`);
+    assert.deepStrictEqual(coresBarra, [vermelho], `a barra do calção (${coresBarra}) deve ser só vermelha`);
     assert.ok(u.calcao.barra.altura > 0 && u.calcao.barra.altura < 0.3,
         `barra de ${u.calcao.barra.altura} da peça é fita ou é meia perna`);
 
@@ -121,7 +120,7 @@ test('Flamengo: faixas vermelhas e negras, calção branco com barra vermelho e 
     assert.ok(u.contorno, 'sem contorno o número desaparece na faixa da cor dele');
 });
 
-test('Fluminense: tricolor em listras, calção verde com barra branca, meião branco, número verde escuro', () => {
+test('Fluminense: tricolor em listras, calção branco com barra verde, meião branco, número verde escuro', () => {
     const u = uniformeDe('Fluminense-RJ');
     assert.ok(u, 'o Fluminense não está na tabela');
 
@@ -134,12 +133,12 @@ test('Fluminense: tricolor em listras, calção verde com barra branca, meião b
     const grena = u.camisa.cores.find(c => canal(c, 0) > canal(c, 1) && canal(c, 0) > canal(c, 2));
     assert.ok(branco && verde && grena, `o tricolor não tem as três cores: ${u.camisa.cores}`);
 
-    // Calção verde com barra branca (pedido)
+    // Calção branco com barra verde (pedido de 5 de Outubro de 2026)
     const kc = corDoCalcao(u);
-    assert.ok(canal(kc, 1) > canal(kc, 0) && canal(kc, 1) > canal(kc, 2), `calção ${kc} não é verde`);
-    assert.ok(u.calcao.barra, 'o calção ficou sem a barra branca');
-    assert.ok(canal(u.calcao.barra.cor, 0) > 220 && canal(u.calcao.barra.cor, 1) > 220,
-        `a barra do calção (${u.calcao.barra.cor}) não é branca`);
+    assert.ok(canal(kc, 0) > 220 && canal(kc, 1) > 220 && canal(kc, 2) > 220, `calção ${kc} não é branco`);
+    assert.ok(u.calcao.barra, 'o calção ficou sem a barra verde');
+    const bv = u.calcao.barra.cor;
+    assert.ok(canal(bv, 1) > canal(bv, 0) && canal(bv, 1) > canal(bv, 2), `a barra do calção (${bv}) não é verde`);
     assert.ok(canal(u.meiao.cores[0], 1) > 220, `meião ${u.meiao.cores[0]} não é branco`);
 
     // Verde escuro: verde dominante e escuro.
@@ -230,10 +229,10 @@ test('Grêmio: o desenho do tricolor, em preto, branco e azul claro', () => {
     assert.ok(largas.includes(preto) && largas.includes(azul),
         'as listras largas do Grêmio deviam ser o preto e o azul');
 
-    // Calção e meião pretos (pedido).
+    // Calção preto e meião BRANCO (pedido de 5 de Outubro de 2026; o meião era preto).
     const kc = (typeof g.calcao === 'string') ? g.calcao : g.calcao.cores[0];
     assert.ok(lum(kc) < 0.15, `calção ${kc} não é preto`);
-    assert.ok(lum(g.meiao.cores[0]) < 0.15, `meião ${g.meiao.cores[0]} não é preto`);
+    assert.ok(lum(g.meiao.cores[0]) > 0.85, `meião ${g.meiao.cores[0]} não é branco`);
 
     // E o azul é a cor que o representa no disco da vista táctica.
     assert.strictEqual(corDoUniforme(g, '#000000'), azul);
@@ -508,4 +507,69 @@ test('o corpo recebe o uniforme e o número sai da cor do clube', () => {
         'a cor do número já não sai do uniforme');
     assert.ok(/pintarPadraoDeEquipamento\(ctxBack, 512, 512, pecaCamisa/.test(srcPlayer),
         'as costas deixaram de levar o padrão por baixo do número');
+});
+
+
+/* --- Pedidos de 5 de Outubro de 2026 ---------------------------------- */
+
+const lumH = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+};
+
+test('Bahia: tricolor azul escuro, branco e vermelho, short e meião brancos', () => {
+    const u = uniformeDe('Bahia-BA');
+    assert.ok(u, 'o Bahia não está na tabela');
+    assert.strictEqual(u.camisa.padrao, 'listras');
+    const c = (hex, i) => (parseInt(hex.slice(1), 16) >> (8 * (2 - i))) & 255;
+    const azul = u.camisa.cores.find(h => c(h, 2) > c(h, 0) && c(h, 2) > c(h, 1) && lumH(h) < 0.2);
+    const vermelho = u.camisa.cores.find(h => c(h, 0) > 150 && c(h, 1) < 80 && c(h, 2) < 80);
+    const branco = u.camisa.cores.find(h => lumH(h) > 0.85);
+    assert.ok(azul && vermelho && branco, `faltam cores em ${u.camisa.cores}`);
+    assert.ok(lumH(u.calcao) > 0.85, 'o short do Bahia é branco');
+    assert.ok(lumH(u.meiao.cores[0]) > 0.85, 'o meião do Bahia é branco');
+});
+
+test('Botafogo (RJ, PB, PE, SP) e Ceará: 4 listras pretas e 3 brancas do mesmo tamanho, short preto com barra branca, meião preto', () => {
+    for (const nome of ['Botafogo-RJ', 'Botafogo-PB', 'Botafogo-PE', 'Botafogo-SP', 'Ceará-CE']) {
+        const u = uniformeDe(nome);
+        assert.ok(u, `${nome} não está na tabela`);
+        assert.strictEqual(u.camisa.padrao, 'listras', `${nome}: listras verticais`);
+        assert.strictEqual(u.camisa.divisoes, 7, `${nome}: 7 listras`);
+        assert.strictEqual(u.camisa.cores.length, 2);
+        assert.ok(!u.camisa.pesos, `${nome}: as listras são todas do mesmo tamanho`);
+        assert.ok(lumH(u.camisa.cores[0]) < 0.15 && lumH(u.camisa.cores[1]) > 0.85, `${nome}: preto primeiro, branco depois`);
+        assert.ok(lumH(u.calcao.cores[0]) < 0.15, `${nome}: short preto`);
+        assert.ok(u.calcao.barra && lumH(u.calcao.barra.cor) > 0.85, `${nome}: barra branca no short`);
+        assert.ok(lumH(u.meiao.cores[0]) < 0.15, `${nome}: meião preto`);
+        // Contagem real das barras pintadas: 5 pretas, 4 brancas, larguras iguais.
+        const ctx = ctxFalso();
+        pintar(ctx, 512, 512, u.camisa, '#ff0000');
+        const barras = ctx.rects.slice(1).filter(r => r.h >= 400);   // o 1.o e o fundo
+        const pretas = barras.filter(r => lumH(r.cor) < 0.15).length;
+        const brancas = barras.filter(r => lumH(r.cor) > 0.85).length;
+        assert.strictEqual(pretas, 4, `${nome}: ${pretas} pretas`);
+        assert.strictEqual(brancas, 3, `${nome}: ${brancas} brancas`);
+        const larg = barras.map(r => r.w);
+        assert.ok(Math.max(...larg) - Math.min(...larg) < 1.5, `${nome}: larguras diferentes ${larg}`);
+    }
+});
+
+test('Criciúma: faixas horizontais amarela, preta e branca; manga amarela; short preto com barra branca; meião preto', () => {
+    const u = uniformeDe('Criciúma-SC');
+    assert.ok(u, 'o Criciúma não está na tabela');
+    assert.strictEqual(u.camisa.padrao, 'faixas');
+    assert.strictEqual(u.camisa.divisoes, 3);
+    const [a, p, b] = u.camisa.cores;
+    assert.ok(a.toLowerCase() === u.camisa.manga.toLowerCase(), 'a manga tem a cor da primeira faixa (amarela)');
+    assert.ok(lumH(a) > 0.6 && lumH(p) < 0.15 && lumH(b) > 0.85, `ordem amarelo, preto, branco: ${u.camisa.cores}`);
+    assert.ok(lumH(u.calcao.cores[0]) < 0.15 && lumH(u.calcao.barra.cor) > 0.85, 'short preto com barra branca');
+    assert.ok(lumH(u.meiao.cores[0]) < 0.15, 'meião preto');
+    assert.ok(/mangaMat/.test(srcPose) && /pecaCamisa\.manga/.test(srcPose), 'o corpo já não pinta a manga a parte');
+    // Três faixas de cima para baixo.
+    const ctx = ctxFalso();
+    pintar(ctx, 512, 512, u.camisa, '#ff0000');
+    const faixas = ctx.rects.slice(1).filter(r => r.w >= 400).sort((x, y) => x.y - y.y);   // o 1.o e o fundo
+    assert.strictEqual(faixas.length, 3);
+    assert.deepStrictEqual(faixas.map(f => f.cor), u.camisa.cores);
 });

@@ -239,6 +239,8 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     const temPadraoCamisa = !!(pecaCamisa && pecaCamisa.padrao && pecaCamisa.padrao !== 'solido');
 
     let shirtMat;
+    // MANGA de uma cor so (uniforme.camisa.manga): ver criarBraco. Sem ela, a manga leva o padrao.
+    const corManga = (pecaCamisa && pecaCamisa.manga) ? pecaCamisa.manga : null;
     if (temPadraoCamisa) {
         const cvsC = document.createElement('canvas'); cvsC.width = 256; cvsC.height = 256;
         pintarPadraoDeEquipamento(cvsC.getContext('2d'), 256, 256, pecaCamisa, corCamisa);
@@ -248,6 +250,21 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     } else {
         shirtMat = new THREE.MeshStandardMaterial({ color: corCamisa, roughness: 0.9 });
     }
+    /*
+    A FRENTE DO CALCAO LEVA O NUMERO, na perna ESQUERDA do jogador (x > 0; a
+    direita de quem o olha de frente). Estava na outra: *"ajusta o numero do
+    calcao para a perna esquerda"*. Pedido: *"que apareca o numero do jogador na parte
+    da frente do short, na esquerda"*. Material proprio, so para essa face: o resto do
+    calcao fica com o `shortMat`. O desenho do numero e do `Player.pintarNumeroNoShort`,
+    que e quem o sabe; aqui pinta-se o fundo igual ao calcao.
+    */
+    const cvsKF = document.createElement('canvas'); cvsKF.width = 256; cvsKF.height = 256;
+    const ctxKF = cvsKF.getContext('2d');
+    if (pecaCalcao) pintarPadraoDeEquipamento(ctxKF, 256, 256, pecaCalcao, corCalcaoFinal);
+    else { ctxKF.fillStyle = (typeof corCalcaoFinal === 'number') ? '#' + corCalcaoFinal.toString(16).padStart(6, '0') : corCalcaoFinal; ctxKF.fillRect(0, 0, 256, 256); }
+    const shortFrenteMat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(cvsKF), roughness: 0.9 });
+    const shortFrente = { mat: shortFrenteMat, cvs: cvsKF, peca: pecaCalcao, cor: corCalcaoFinal };
+    const mangaMat = corManga ? new THREE.MeshStandardMaterial({ color: corManga, roughness: 0.9 }) : shirtMat;
     let shortMat;
     if (pecaCalcao) {
         const cvsK = document.createElement('canvas'); cvsK.width = 256; cvsK.height = 256;
@@ -595,7 +612,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         pano por cima do braco em vez de tinta nele.
         */
         const alturaManga = mangaComprida ? 1.0 : 0.5;
-        const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * alturaManga, u * 0.4), shirtMat);
+        const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * alturaManga, u * 0.4), mangaMat);
         manga.position.y = mangaComprida ? 0.0 : 0.25;
         up.add(manga); grp.add(up);
         const elb = new THREE.Group(); elb.position.y = -1.0; elb.rotation.x = -0.3; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));
@@ -606,7 +623,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         quando ele se dobra — e o cotovelo do guarda-redes dobra o tempo todo.
         */
         if (mangaComprida) {
-            const mangaBaixo = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.8, u * 0.35), shirtMat);
+            const mangaBaixo = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.8, u * 0.35), mangaMat);
             mangaBaixo.position.y = 0.0;
             low.add(mangaBaixo);
         }
@@ -805,7 +822,9 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         Cobre a coxa toda na mesma — ela vai até 0.625 — e continua muito mais
         larga que ela (0.68 contra 0.45), que é o que o faz ler como pano.
         */
-        const shortL = criarPeca(new THREE.BoxGeometry(u * 0.68, u * 1.10, u * 0.80), shortMat);
+        // Faces do Box: +x, -x, +y, -y, +z (frente), -z. O numero vai na frente da perna ESQUERDA do jogador (x > 0).
+        const shortL = criarPeca(new THREE.BoxGeometry(u * 0.68, u * 1.10, u * 0.80),
+            x > 0 ? [shortMat, shortMat, shortMat, shortMat, shortFrenteMat, shortMat] : shortMat);
         shortL.position.set(x > 0 ? -0.08 : 0.08, 0.55, 0);
         coxa.add(shortL); grp.add(coxa);
         const joelho = new THREE.Group(); joelho.position.y = -1.6; grp.add(joelho); joelho.add(criarPeca(smallJointGeo, jointMat));
@@ -837,7 +856,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     const pernaDir = criarPerna(-0.4); rig.rLeg = pernaDir.raiz; rig.rKnee = pernaDir.joelho; rig.rFoot = pernaDir.pe;
     rig.rBota = pernaDir.pe.userData.chuteira;
 
-    corpo.scale.set(ESCALA_CORPO, ESCALA_CORPO, ESCALA_CORPO); return { corpo, rig, backMat };
+    corpo.scale.set(ESCALA_CORPO, ESCALA_CORPO, ESCALA_CORPO); return { corpo, rig, backMat, shortFrente };
 }
 
 

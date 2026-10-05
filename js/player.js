@@ -37,6 +37,14 @@ class FootballPlayer {
         */
         this.corCamisa = (this.uniforme && typeof corDoUniforme === 'function')
             ? corDoUniforme(this.uniforme, color1) : color1;
+        /*
+        A COR DO CALCAO (minimapa): a do uniforme — texto ou a primeira cor do
+        desenho —, ou a que o `createTeams` deu. Pedido: *"ajusta as cores do
+        minimap para a cor do short dos jogadores"*.
+        */
+        const kU = this.uniforme ? this.uniforme.calcao : null;
+        this.corCalcao = (typeof kU === 'string') ? kU
+            : ((kU && kU.cores && kU.cores[0]) ? kU.cores[0] : color2);
         this.num = 1;
         this.pos = 'GK';
 
@@ -6228,9 +6236,10 @@ class FootballPlayer {
     }
 
     buildBody(corCamisa, corCalcao) {
-        const { corpo, rig, backMat } = construirCorpo(corCamisa, corCalcao,
+        const { corpo, rig, backMat, shortFrente } = construirCorpo(corCamisa, corCalcao,
             this.aparencia, this.uniforme);
         this.backMat = backMat;
+        this.shortFrente = shortFrente || null;
         return { corpo, rig };
     }
 
@@ -6501,11 +6510,48 @@ class FootballPlayer {
 
         escrever(this.num.toString(), 300, 260, 16, TIPO.pesoNumero, TIPO.fonteNumero);
 
+        this.pintarNumeroNoShort();
+
         if (this.backMat.map) this.backMat.map.dispose();
         this.backMat.map = new THREE.CanvasTexture(cvsBack);
         // Cor base tingia o mapa (branco em vermelho ficava avermelhado, ilegível). Canvas já tem as cores certas.
         this.backMat.color.set(0xffffff);
         this.backMat.needsUpdate = true;
+    }
+
+    /*
+    O NUMERO NA FRENTE DO CALCAO, na perna da esquerda de quem olha de frente.
+    Repinta o fundo (o desenho do calcao) e escreve o numero por cima, com a cor e o
+    contorno do uniforme — ou preto/branco pelo contraste com o calcao. A face e mais
+    alta do que larga (0.68 x 1.10) e a textura e quadrada: escala-se o x para o numero
+    nao sair esticado na vertical. Ver `ShortNumero` (config/uniformes.js).
+    */
+    pintarNumeroNoShort() {
+        const F = this.shortFrente;
+        if (!F || !F.cvs || this.num === undefined || this.num === null) return;
+        const SN = (typeof ShortNumero !== 'undefined') ? ShortNumero : { x: 0.30, y: 0.40, tamanho: 96, contorno: 6 };
+        const ctx = F.cvs.getContext('2d');
+        if (!ctx) return;
+        if (F.peca && typeof pintarPadraoDeEquipamento === 'function') {
+            pintarPadraoDeEquipamento(ctx, 256, 256, F.peca, F.cor);
+        } else {
+            const cor = (typeof F.cor === 'number') ? '#' + F.cor.toString(16).padStart(6, '0') : F.cor;
+            ctx.fillStyle = cor; ctx.fillRect(0, 0, 256, 256);
+        }
+        const base = new THREE.Color(F.cor);
+        const claro = (0.2126 * base.r + 0.7152 * base.g + 0.0722 * base.b) > 0.5;
+        const corTexto = (this.uniforme && this.uniforme.numero) ? this.uniforme.numero : (claro ? '#000000' : '#ffffff');
+        const corContorno = (this.uniforme && this.uniforme.contorno) ? this.uniforme.contorno : (claro ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)');
+        ctx.save();
+        ctx.scale(1.10 / 0.68, 1);
+        ctx.font = 'bold ' + SN.tamanho + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+        ctx.lineWidth = SN.contorno; ctx.strokeStyle = corContorno; ctx.fillStyle = corTexto;
+        const px = SN.x * 256 / (1.10 / 0.68), py = SN.y * 256;
+        ctx.strokeText(String(this.num), px, py);
+        ctx.fillText(String(this.num), px, py);
+        ctx.restore();
+        if (F.mat.map) F.mat.map.needsUpdate = true;
     }
 
     updateGK(dt) {

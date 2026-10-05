@@ -171,9 +171,9 @@ const Minimap = {
             const contorno = this.contornoEquipa[equipa];
             for (const p of lista) {
                 if (!p || !p.model) continue;
-                // A cor sai da camisola, como na câmara 6; o fallback só serve
-                // se o jogador ainda não tiver `corCamisa`.
-                const c = p.corCamisa || ((p.role === 'gk') ? this.cores.gk : corFallback);
+                // A cor sai do CALCAO (pedido: "a cor do short dos jogadores"); sem
+                // `corCalcao`, da camisola, e por fim do fallback.
+                const c = p.corCalcao || p.corCamisa || ((p.role === 'gk') ? this.cores.gk : corFallback);
                 this._ponto(ctx, p.model.position.x, p.model.position.z,
                     this.raioJogador, c,
                     (p === portador) ? this.cores.portador : contorno,

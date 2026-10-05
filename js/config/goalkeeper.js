@@ -1694,12 +1694,26 @@ const GoalkeeperDive = {
         defender. Deveria usar a animacao F3: o deslize de lado, deitado, com as
         pernas para a bola."* O deslize de lado (bola baixa e perto) deita-o agora
         sobre o flanco, com as pernas esticadas na direccao da bola e a cabeca
-        para tras (`pesPrimeiro`), em vez de cair de peito com os bracos a frente.
-        `anguloFrente` 0.15 (era 0.75) deixa-o de lado.
+        para tras.
+
+        MAS SO NA BOLA PERTO DO ADVERSARIO. Relato seguinte, com quatro capturas:
+        *"chute de um lado e o goleiro pulando para o outro e voltando no ar todo
+        estranho"* — era este gesto aplicado a QUALQUER deslize de lado, inclusive a
+        um remate: o tombo ia para o lado contrario ao da bola, de pernas para ela e
+        a cabeca (e os bracos) para longe. Os pes primeiro so fazem sentido quando ha
+        um adversario com a bola a seus pes (bola lenta, adversario a menos de
+        `raioAdversario` dela); num remate a cabeca e os bracos vao primeiro, como
+        sempre (anguloFrente 0.75 acima).
         */
-        pesPrimeiro: true,
-        anguloFrente: 0.15,
-        pernas: { coxaBaixo: 0.00, joelhoBaixo: 0.12, coxaCima: 0.10, joelhoCima: 0.10, chest: 0.0 }
+        pesPrimeiro: {
+            activo: true,
+            velMax: 10.0,
+            raioAdversario: 6.0,
+            anguloFrente: 0.15,
+            pernas: { coxaBaixo: 0.00, joelhoBaixo: 0.12, coxaCima: 0.10, joelhoCima: 0.10, chest: 0.0 }
+        },
+        anguloFrente: 0.75,
+        pernas: { coxaBaixo: -0.10, joelhoBaixo: 0.95, coxaCima: 0.05, joelhoCima: 1.15, chest: 0.05 }
     },
 
     /*
@@ -1766,6 +1780,15 @@ const GoalkeeperDive = {
 
     alturaDeitado: 0.42,   // y da origem do modelo com ele deitado de lado
     atritoChao: 3.5,       // desaceleração do deslize no relvado (m/s²)
+    /*
+    QUANTA DA VELOCIDADE DO VOO SOBRA NO DESLIZE. O deslize de aterragem partia
+    da velocidade lateral inteira do voo (~6.5 m/s) e com o atrito acima corria
+    6 m: medido, um mergulho para o poste a 3.2 m acabava a 7-8 m do centro,
+    4 m FORA do poste e a atravessar o campo (relato: *"goleiro pulando para o
+    outro lado e voltando no ar todo estranho"*, com as capturas). Um guarda-redes
+    escorrega meio metro. 0.30 deixa-lhe ~0.6 m.
+    */
+    fraccaoDeslize: 0.30,
 
     // Ângulo do tombo, por tipo de defesa. Uma bola rasteira não precisa de
     // deitar tanto como uma no ângulo.
@@ -2364,7 +2387,7 @@ const GkCatchModel = {
     (`extensao`, 0 no meio da luva, 1 no limite) so se toca nela: o `agarra` do
     sorteio passa a `espalma`. Agarrar e com a bola no meio das maos.
     */
-    extensaoSoDesvia: 0.70,
+    extensaoSoDesvia: 0.85,
 
     // Nunca é certo nem impossível.
     minAgarra: 0.05,

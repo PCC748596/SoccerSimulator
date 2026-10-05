@@ -155,7 +155,8 @@ const GkDive = {
         contrario do da bola, e e por ele que as pernas e os bracos escolhem
         qual e o de baixo.
         */
-        if (p.dive.deslizeLado && GoalkeeperDive.deslizeLado.pesPrimeiro) p.dive.ladoLocal = -p.dive.ladoLocal;
+        p.dive.pesPrimeiro = p.dive.deslizeLado && this.devePesPrimeiro(p);
+        if (p.dive.pesPrimeiro) p.dive.ladoLocal = -p.dive.ladoLocal;
 
         /*
         O EIXO DA QUEDA — um eixo so, mas inclinado para ele cair de FRENTE.
@@ -176,6 +177,24 @@ const GkDive = {
 
         // O deslize de lado deita de todo: ver GoalkeeperDive.deslizeLado.
         if (p.dive.deslizeLado) p.dive.angMax = GoalkeeperDive.deslizeLado.anguloTombo;
+    },
+
+    /*
+    PES PRIMEIRO so com um adversario com a bola a seus pes: bola lenta e um
+    adversario (de campo) perto dela. Num remate vai a cabeca primeiro. Ver
+    GoalkeeperDive.deslizeLado.pesPrimeiro.
+    */
+    devePesPrimeiro(p) {
+        const PP = GoalkeeperDive.deslizeLado && GoalkeeperDive.deslizeLado.pesPrimeiro;
+        if (!PP || !PP.activo || typeof Match === 'undefined' || !Match.ball) return false;
+        if (Match.ballVel.length() > PP.velMax) return false;
+        const adv = (p.team === 'TeamA') ? Match.opponents : Match.players;
+        for (const o of adv) {
+            if (!o || !o.model || o.role === 'gk') continue;
+            if (Math.hypot(o.model.position.x - Match.ball.position.x,
+                o.model.position.z - Match.ball.position.z) <= PP.raioAdversario) return true;
+        }
+        return false;
     },
 
     /*
@@ -464,7 +483,8 @@ const GkDive = {
                     corpo.position.y = D.alturaDeitado;
                     d.fase = 'chao';
                     d.t = 0;
-                    d.vSlide = d.v0x;
+                    // So uma fraccao da velocidade do voo vira deslize: ver GoalkeeperDive.fraccaoDeslize.
+                    d.vSlide = d.v0x * ((typeof D.fraccaoDeslize === 'number') ? D.fraccaoDeslize : 1.0);
                     d.assentar = true;
                     /*
                     O SALTO ALTO ACABA COMO A QUEDA DA FALTA — ver
@@ -619,7 +639,8 @@ const GkDive = {
         }
         if (fracFrente > 0) {
             // No deslize de lado a barriga quase não vira: ver GoalkeeperDive.deslizeLado.
-            const angFrenteMax = d.deslizeLado ? D.deslizeLado.anguloFrente
+            const angFrenteMax = d.deslizeLado
+                ? (d.pesPrimeiro ? D.deslizeLado.pesPrimeiro.anguloFrente : D.deslizeLado.anguloFrente)
                 : ((typeof D.anguloFrente === 'number') ? D.anguloFrente : 0.62);
             let angF = fracFrente * angFrenteMax;
             /*
@@ -1206,7 +1227,9 @@ const GkDive = {
     poseChao(rig, d) {
         const S = GoalkeeperDive.sequenciaPernas;
         // Deitado de lado a escorregar, as pernas vão esticadas atrás do corpo.
-        const P = (d && d.deslizeLado) ? GoalkeeperDive.deslizeLado.pernas : (S && S.chao);
+        const P = (d && d.deslizeLado)
+            ? (d.pesPrimeiro ? GoalkeeperDive.deslizeLado.pesPrimeiro.pernas : GoalkeeperDive.deslizeLado.pernas)
+            : (S && S.chao);
         const L = this.pernas(rig, d);
         if (!P) {
             L.joelhoB.rotation.x = lerpTo(L.joelhoB.rotation.x, 1.0, 0.2);

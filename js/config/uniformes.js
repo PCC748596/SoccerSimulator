@@ -101,14 +101,14 @@ const Uniformes = {
         */
         corPrincipal: '#c8102e',
         /*
-        CALÇÃO BRANCO COM BARRA VERMELHO E PRETO — pedido: *"Ajusta o calção do
-        Flamengo para branco com barra vermelho e preto"*.
-        O calção é branco (#f2f2f2) com barra na bainha com as cores vermelho e preto.
+        CALÇÃO PRETO COM BARRA VERMELHA — pedido de 5 de Outubro de 2026: *"Ajusta o
+        short do Flamengo-RJ para preto com barra vermelha"*. Era branco com barra
+        vermelha e preta.
         */
         calcao: {
             padrao: 'solido',
-            cores: ['#f2f2f2'],
-            barra: { cor: '#c8102e', cores: ['#c8102e', '#17171b'], altura: 0.16 }
+            cores: ['#17171b'],
+            barra: { cor: '#c8102e', altura: 0.16 }
         },
         meiao: { padrao: 'faixas', cores: ['#17171b', '#c8102e'], divisoes: 6 },
         numero: '#ffffff',
@@ -151,13 +151,14 @@ const Uniformes = {
             centrada: true
         },
         /*
-        O CALÇÃO É VERDE COM BARRA BRANCA — pedido: *"O calção do Fluminense pra
-        verde com barra branca"*. Fica na bainha, invertendo a barra e o fundo.
+        O CALÇÃO É BRANCO COM BARRA VERDE — pedido de 5 de Outubro de 2026: *"Ajusta o
+        short do Fluminense-RJ para branco com barra verde"*. Era verde com barra
+        branca (e antes disso o contrário).
         */
         calcao: {
             padrao: 'solido',
-            cores: ['#0f6b3a'],
-            barra: { cor: '#f2f2f2', altura: 0.16 }
+            cores: ['#f2f2f2'],
+            barra: { cor: '#0f6b3a', altura: 0.16 }
         },
         meiao: { padrao: 'solido', cores: ['#f2f2f2'] },
         // O grená é a dominante do tricolor — ver corPrincipal no Flamengo.
@@ -197,10 +198,71 @@ const Uniformes = {
         // corPrincipal no Flamengo, e a razão de não ser a primeira da lista.
         corPrincipal: '#4aa3e0',
         calcao: '#15151a',
-        meiao: { padrao: 'solido', cores: ['#15151a'] },
+        // Meião BRANCO — pedido de 5 de Outubro de 2026 (era preto).
+        meiao: { padrao: 'solido', cores: ['#f2f2f2'] },
         numero: '#ffffff',
         contorno: 'rgba(0,0,0,0.8)'
     }
+};
+
+/*
+BAHIA. Pedido: *"Camisa tricolor em azul escuro, branco e vermelho. Short branco,
+meião branco."* O mesmo desenho do Fluminense (listras verticais, doze, com a
+larga no meio e o branco como filete entre as duas cores largas).
+*/
+Uniformes['Bahia-BA'] = {
+    camisa: {
+        padrao: 'listras',
+        cores: ['#0b2a6b', '#f2f2f2', '#d71920', '#f2f2f2'],
+        pesos: [2.6, 0.5, 2.6, 0.5],
+        divisoes: 12,
+        centrada: true
+    },
+    corPrincipal: '#0b2a6b',
+    calcao: '#f2f2f2',
+    meiao: { padrao: 'solido', cores: ['#f2f2f2'] },
+    numero: '#0b2a6b',
+    contorno: 'rgba(255,255,255,0.85)'
+};
+
+/*
+BOTAFOGO-RJ, BOTAFOGO-PB (o `teamName` do Botafogo da Paraíba nos dados) E
+BOTAFOGO-SP, E O CEARÁ-CE. Pedido: *"Camisa listas verticais pretas e brancas do
+mesmo tamanho. 5 pretas e 4 brancas. Short preto com barra branca. Meião preto."*
+
+SETE barras iguais (sem `pesos`), o preto primeiro: com `divisoes: 7` e duas
+cores saem 0,1,0,1,0,1,0 — quatro pretas e tres brancas. Eram nove (cinco e
+quatro, o primeiro pedido) e o relato foi *"listras demais nas camisas dos
+Botafogos, um pouco mais grossas"*. Sem `centrada`, que nas barras todas iguais
+so trocava quem fica no eixo do peito.
+*/
+const _uniformeAlvinegro = () => ({
+    camisa: { padrao: 'listras', cores: ['#15151a', '#f2f2f2'], divisoes: 7 },
+    corPrincipal: '#15151a',
+    calcao: { padrao: 'solido', cores: ['#15151a'], barra: { cor: '#f2f2f2', altura: 0.16 } },
+    meiao: { padrao: 'solido', cores: ['#15151a'] },
+    numero: '#ffffff',
+    contorno: 'rgba(0,0,0,0.8)'
+});
+Uniformes['Botafogo-RJ'] = _uniformeAlvinegro();
+Uniformes['Botafogo-PB'] = _uniformeAlvinegro();
+Uniformes['Botafogo-PE'] = _uniformeAlvinegro();
+Uniformes['Botafogo-SP'] = _uniformeAlvinegro();
+Uniformes['Ceará-CE'] = _uniformeAlvinegro();
+
+/*
+CRICIÚMA. Pedido: *"Camisa listas horizontais: 1 amarela em cima, preto no meio,
+branco em baixo. Manga da camisa amarela. Short preto com barra branca. Meião
+preto."* Três faixas horizontais iguais (a ordem da lista é de cima para baixo) e
+`manga` (ver `construirCorpo`, pose.js) pinta as mangas de uma cor só.
+*/
+Uniformes['Criciúma-SC'] = {
+    camisa: { padrao: 'faixas', cores: ['#f6c400', '#15151a', '#f2f2f2'], divisoes: 3, manga: '#f6c400' },
+    corPrincipal: '#f6c400',
+    calcao: { padrao: 'solido', cores: ['#15151a'], barra: { cor: '#f2f2f2', altura: 0.16 } },
+    meiao: { padrao: 'solido', cores: ['#15151a'] },
+    numero: '#ffffff',
+    contorno: 'rgba(0,0,0,0.8)'
 };
 
 /*
@@ -226,6 +288,14 @@ feito.
 const UniformeGuardaRedes = {
     mangaComprida: true
 };
+
+/*
+O NUMERO NA FRENTE DO CALCAO — posicao na face (fraccoes 0..1 da textura: x da
+esquerda de quem olha, y de cima), tamanho da letra e espessura do contorno, em
+pixeis da textura de 256. Ver Player.pintarNumeroNoShort.
+*/
+const ShortNumero = { x: 0.70, y: 0.38, tamanho: 96, contorno: 6 };
+if (typeof window !== 'undefined') window.ShortNumero = ShortNumero;
 
 /*
 =============================================================================

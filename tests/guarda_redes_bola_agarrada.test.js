@@ -161,7 +161,12 @@ console.log('3 — E A MEDIDA, com o jogo a correr');
     0 agarradas nas cinco. O guarda-redes chega aos mergulhos no mesmo estado
     (anca a 0, mesma altura), por isso é a amostra que encolheu, e não a medida.
     */
-    const SEMENTES = [99, 7, 1234, 555, 20260911, 31, 77];
+    // Mais sementes (5 de Outubro de 2026): o guarda-redes passou a so desviar a bola na ponta dos dedos
+    // (GkCatchModel.extensaoSoDesvia) e o alcance do salto desceu, e as dez primeiras ja davam 0 agarradas.
+    // Corre-se ate haver amostra (`AMOSTRA_MIN`), e para-se logo: nao ha razao para gastar as 25.
+    const SEMENTES = [99, 7, 1234, 555, 20260911, 31, 77, 2026, 4242, 9001,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+    const AMOSTRA_MIN = 3;
     const dt = 1 / 60;
     const cena = new THREE.Scene();
     if (typeof Sim === 'undefined') global.Sim = {};
@@ -176,6 +181,7 @@ console.log('3 — E A MEDIDA, com o jogo a correr');
     const ant = new Map();
 
     for (const semente of SEMENTES) {
+    if (agarradas >= AMOSTRA_MIN) break;
     Math.random = mulberry32(semente);
     Match.init(cena);
     if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
