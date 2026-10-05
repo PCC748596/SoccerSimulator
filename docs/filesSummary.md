@@ -144,6 +144,39 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### A infiltração procura o espaço entre os adversários, e a barreira repõe-se (js/utils.js `espacoEntreAdversarios`, js/bt/player_bt.js `actInfiltrar`, js/config/passing.js `RunIntoSpaceModel.espaco`, js/player.js `barreiraSlot`, js/config/shooting.js `BarreiraRepoe`)
+
+**A infiltração.** Relato: *"quando um jogador se infiltra, muitas vezes ele corre pra frente mas não está correndo no espaço vazio. Está só correndo pra frente. O ideal seria se movimentar para espaços vazios nos meios dos jogadores adversários."*
+- **O que havia:** a infiltração só decidia a PROFUNDIDADE (20 m à frente, cortados pelo impedimento) e fechava o `x` para o centro (centrais ×0.5, extremos do lado contrário ×0.4). Não olhava onde estavam os adversários.
+- **Agora**, uma função pura (`espacoEntreAdversarios`) procura o melhor ponto numa grelha à frente dele (passo de 2 m em x e 4 m em profundidade), pontuando:
+  - a folga ao adversário mais perto (até 10 m), com mínimo de 3.5 m;
+  - a linha de passe do portador ao ponto (adversário mais perto dela, até 6 m, peso 0.8);
+  - menos 4 por cada adversário em cima do trajecto dele até lá;
+  - mais 0.15 por metro ganho e menos 0.10 por metro de desvio lateral.
+
+  O corte de impedimento continua a valer (`avancoMax`). Se não houver nenhum ponto com folga, fica o recurso antigo.
+- **Durante a corrida** o ponto revê-se de 0.5 em 0.5 s (os defesas mexem-se) e só troca se o novo pontuar 25% mais, ou se o actual perdeu a folga.
+- **Medido A/B** (6 jogos de 20 min por variante, ~1400 infiltrações cada, `scratchpad/infiltra/ab.js`):
+
+| | sem a busca | com a busca |
+|---|---|---|
+| folga do alvo ao adversário mais perto (mediana) | 4.5 m | **10.2 m** |
+| alvos a menos de 4 m de um adversário | 43% | **0%** |
+| passe do portador ao alvo bloqueado (a menos de 1.5 m de um adversário) | 64% | **38%** |
+| deslocamento lateral do alvo (mediana) | 0.4 m | **8.5 m** |
+| folga do próprio corredor 1 s depois | 3.6 m | 4.4 m |
+
+- **A vigiar no painel:** o número de remates desceu (média de 29 por jogo contra 38 com o `x` fechado; amostra pequena e muita variância entre sementes). Se se confirmar, o `pesoAvanco` (0.15) é o botão.
+- **Teste novo:** `infiltracao_entre_adversarios` (7 casos da função pura).
+
+**A barreira.** Relato: *"depois da barreira ajustada, se um jogador passa no meio dela, o jogador afastado para a passagem não volta para a formação da barreira. Outra coisa, às vezes no alinhamento da barreira fica um jogador mais pra trás."*
+- **A causa:** quem chega ao lugar na montagem andada "fica onde parou" (a menos de `BolaParadaAndada.chegada`, 0.3 m), e depois nada o reposiciona: qualquer desvio fica para sempre. Medido em 15 barreiras de 4 homens, um chegava a 2.2 m mais atrás que os outros (a 11.1 m da bola, com os outros a 8.9–9.4).
+- **A correcção:**
+  - cada homem da barreira guarda o seu lugar (`barreiraSlot`);
+  - no fim da montagem, quem alguma passagem tenha movido é reposto;
+  - até a falta ser batida, quem estiver a mais de 0.12 m do lugar volta a pé a 3 m/s (`BarreiraRepoe`) e encaixa a 6 cm.
+- **Depois:** o desalinhamento final entre os homens da barreira passou de até 2.2 m para ≤ 0.4 m (parte desse resto é o ângulo da minha medição).
+
 #### Falta na linha da área é pênalti, o braço a 45° e o espaço do goleiro nas faltas na área (js/officials.js `ehPenaltiNoLance`, js/config/physics.js `Area.contem`, js/config/animations.js `PedidoDeBola`, js/match/match_setpieces.js, js/config/player_behavior.js `OffsideRestartShape.areaPropria`)
 
 **A linha da área faz parte da área.** Relato, com captura: *"falta com a bola colocada dentro da área não foi considerado pênalti. A linha faz parte da área. Falta em cima da linha é pênalti."*

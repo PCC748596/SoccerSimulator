@@ -4507,6 +4507,42 @@ class FootballPlayer {
         }
 
         /*
+        A BARREIRA REPOE-SE. Relato de 5 de Outubro de 2026: *"depois da
+        barreira ajustada, se um jogador passa no meio dela, o jogador afastado
+        para a passagem nao volta para a formacao da barreira. As vezes no
+        alinhamento da barreira fica um jogador mais pra tras"*.
+
+        Quem chega ao lugar (`lugarBolaParada`) fica onde parou, a menos de
+        `BolaParadaAndada.chegada` do ponto, e depois nada o reposiciona: um
+        desvio — para dar passagem a alguem, ou o que for — fica para sempre.
+        Aqui, ate a falta ser batida, quem esta na barreira e esta parado
+        mais de `barreiraRepoe.limiar` metros do seu `barreiraSlot` volta a
+        pe para ele (`barreiraRepoe.velocidade` m/s) e encaixa quando chega.
+        */
+        if (this.barreiraSlot && this.naBarreiraFalta && !this.lugarBolaParada && !this.voltaDaQueda &&
+            Match.state === 'FREE_KICK' && !Match.faltaDirectaPlano) {
+            const R = (typeof BarreiraRepoe !== 'undefined') ? BarreiraRepoe : { limiar: 0.12, velocidade: 3.0, encaixe: 0.06 };
+            const pos = this.model.position;
+            const d = Math.hypot(this.barreiraSlot.x - pos.x, this.barreiraSlot.z - pos.z);
+            if (d > R.limiar || this._barreiraARepor) {
+                this._barreiraARepor = true;
+                if (d <= R.encaixe) {
+                    pos.x = this.barreiraSlot.x; pos.z = this.barreiraSlot.z;
+                    this.velocity.set(0, 0, 0);
+                    this._barreiraARepor = false;
+                    if (Match.ball) lookAtBola(this.model, Match.ball.position);
+                } else {
+                    this.steerArrive(_p_v2.set(this.barreiraSlot.x, ALTURA_BASE_Y, this.barreiraSlot.z), R.velocidade, 0.5);
+                    pos.addScaledVector(this.velocity, dt);
+                    if (Match.ball) lookAtBola(this.model, Match.ball.position);
+                    if (!headless) this.animateBones(dt);
+                    else pos.y = ALTURA_BASE_Y;
+                    return;
+                }
+            }
+        }
+
+        /*
         E DEPOIS DE SE LEVANTAR, VAI A PÉ PARA O LUGAR que a montagem do lance
         lhe deu. A falta e o penálti ficam à espera dele. Se o jogo recomeçou
         entretanto, a árvore volta a mandar.

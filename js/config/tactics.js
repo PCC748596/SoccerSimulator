@@ -116,8 +116,35 @@ linha do guarda-redes enquanto ele segura a bola. Não é o bloco inteiro a subi
 — é só o chão de quem tinha caído atrás dele.
 =============================================================================
 */
+/*
+O BLOCO ACOMPANHA O DO ADVERSARIO — relato de 5 de Outubro de 2026: *"na
+T.Offensive, quando o goleiro defende a bola, o time com a bola tem que sair
+mais da defesa para o ataque. Esta ficando muito proximo do goleiro. O time em
+T.Defensive volta muito bem. O T.Offensive tem que quase acompanhar a
+movimentacao do time defendendo. Assim vai abrir mais opcoes de passe para o
+goleiro e para a defesa."*
+
+O piso da `margemAFrente` so impedia alguem de ficar ATRAS do guarda-redes.
+Medido em 39 leituras, 2 s depois de ele agarrar (m da linha de fundo de quem
+segura): defesas a 10 (dentro da area), medios a 21, avancados a 37 — com o
+adversario ja recuado, a media dele a 32 m e o homem mais avancado a 19.
+
+`acompanha`: o piso de cada linha passa a ser a MEDIA do bloco adversario
+(m da linha de fundo de quem segura) mais um desvio por funcao, e sobe com ele:
+adversario a recuar = a minha linha sobe. Defesas 14 m atras dessa media (a
+saida da area), medios 2 m atras, avancados 8 m a frente — este ultimo cortado
+pela linha de fora-de-jogo e por `teto`. `activo` false volta ao piso antigo.
+*/
 const SaidaDeBolaShape = {
-    margemAFrente: 4.0
+    margemAFrente: 4.0,
+    acompanha: {
+        activo: true,
+        def: -14.0, mid: -2.0, atk: 8.0,
+        // Nenhum piso passa daqui (m da linha de fundo de quem segura): mais longe e fora de jogo.
+        teto: 46.0,
+        // Ninguem fica a menos disto da propria linha de fundo: a area acaba a 16.5.
+        minimo: 4.0
+    }
 };
 
 if (typeof window !== 'undefined') window.SaidaDeBolaShape = SaidaDeBolaShape;

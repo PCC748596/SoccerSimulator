@@ -2658,6 +2658,22 @@ function linhaLidaPor(p, risco) {
     return bb.offsideLimitDir + (p.offsideBias || 0) + extra;
 }
 
+/*
+OS ADVERSARIOS DE CAMPO e o portador, no formato de `espacoEntreAdversarios`.
+*/
+function entradaDoEspaco(p, avancoMax, avancoMin) {
+    const adversarios = ((p.team === 'TeamA') ? Match.opponents : Match.players)
+        .filter(o => o && o.model && o.role !== 'gk' && !o.expulso)
+        .map(o => ({ x: o.model.position.x, z: o.model.position.z }));
+    const c = Match.ballCarrier;
+    return {
+        px: p.model.position.x, pz: p.model.position.z, dirZ: p.dirZ,
+        adversarios: adversarios,
+        portador: (c && c !== p && c.model) ? { x: c.model.position.x, z: c.model.position.z } : null,
+        avancoMax: avancoMax, avancoMin: avancoMin, larguraCampo: CAMPO_LARG
+    };
+}
+
 function actInfiltrar(ctx) {
     const p = ctx.p;
 
@@ -2705,6 +2721,33 @@ function actInfiltrar(ctx) {
             const meu = p.model.position.z * p.dirZ;
             if (meu <= linhaPedido && meu >= linhaPedido - Cc.janelaAtrasDaLinha) {
                 p.pedindoBola = PedidoDeBola.duracao;
+            }
+        }
+
+        /*
+        E O PONTO REVE-SE de `reavaliacao` em `reavaliacao` segundos: os
+        defesas mexem-se, e o espaco entre eles tambem. So troca se o novo
+        pontua `trocaMin` mais do que o actual, ou se o actual ja nao tem
+        folga — senao andava a trocar de buraco a cada meio segundo.
+        */
+        const ES = (typeof RunIntoSpaceModel !== 'undefined') ? RunIntoSpaceModel.espaco : null;
+        if (ES && p.runEspaco && typeof espacoEntreAdversarios === 'function') {
+            p.runReavalia = (p.runReavalia || 0) - (Match.delta || 1 / 60);
+            if (p.runReavalia <= 0) {
+                p.runReavalia = ES.reavaliacao;
+                const avActual = p.model.position.z * p.dirZ;
+                const avMax = (typeof avancoLegalDeCorrida === 'function')
+                    ? avancoLegalDeCorrida(Math.min(avActual + 20.0, CAMPO_COMP / 2 - 2.0), linhaLidaPor(p, true))
+                    : avActual + 20.0;
+                const ent = entradaDoEspaco(p, avMax, avActual + 4.0);
+                const novo = espacoEntreAdversarios(ent);
+                const velho = (typeof pontuarEspacoDeCorrida === 'function')
+                    ? pontuarEspacoDeCorrida(ent, p.runAlvo.x, p.runAlvo.z * p.dirZ, ES) : null;
+                if (novo && (!velho || velho.folga < ES.folgaMin ||
+                    novo.score > velho.score + Math.abs(velho.score) * ES.trocaMin)) {
+                    p.runAlvo.x = novo.x;
+                    p.runAlvo.z = novo.avanco * p.dirZ;
+                }
             }
         }
 
@@ -2768,11 +2811,31 @@ function actInfiltrar(ctx) {
             return;
         }
 
+        /*
+        PARA ONDE: O ESPACO ENTRE OS ADVERSARIOS, e nao so "a frente". Ver
+        `espacoEntreAdversarios` (utils.js). O `targetX` e a profundidade acima
+        ficam como recurso (sem adversarios ou sem nenhum ponto com folga).
+        */
+        let avancoFinal = avancoDestino;
+        p.runEspaco = false;
+        p.runReavalia = 0;
+        if (typeof espacoEntreAdversarios === 'function' && typeof RunIntoSpaceModel !== 'undefined' &&
+            RunIntoSpaceModel.espaco) {
+            const esp = espacoEntreAdversarios(entradaDoEspaco(p, avancoDestino, meuAvanco +
+                ((typeof RunIntoSpaceModel.ganhoMinimo === 'number') ? RunIntoSpaceModel.ganhoMinimo : 4.0)));
+            if (esp) {
+                targetX = esp.x;
+                avancoFinal = esp.avanco;
+                p.runEspaco = true;
+                p.runReavalia = RunIntoSpaceModel.espaco.reavaliacao;
+            }
+        }
+
         p.runTimer = 3.5; // corre durante uns segundos
         p.runCarrier = Match.ballCarrier;
         // Guardado para ser REESCRITO em cada frame da corrida (ver o topo).
-        p.runAlvo = { x: targetX, z: avancoDestino * p.dirZ };
-        p.dynamicTarget.set(targetX, ALTURA_BASE_Y, avancoDestino * p.dirZ);
+        p.runAlvo = { x: targetX, z: avancoFinal * p.dirZ };
+        p.dynamicTarget.set(targetX, ALTURA_BASE_Y, avancoFinal * p.dirZ);
         p.speedMult = p.sprintSpeed || (6.5 * 1.3);
         p.fsm.changeState('RUN_INTO_SPACE');
     }

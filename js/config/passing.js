@@ -1436,7 +1436,24 @@ const RunIntoSpaceModel = {
     jogador fica no posicionamento normal, que é o que ele deve fazer quando
     não há espaço à frente para atacar.
     */
-    ganhoMinimo: 4.0
+    ganhoMinimo: 4.0,
+
+    /*
+    O ESPACO ENTRE OS ADVERSARIOS (utils.js `espacoEntreAdversarios`): a grelha
+    e os pesos com que a infiltracao escolhe PARA ONDE corre, em vez de so
+    correr 20 m para a frente. `folgaMin`: nenhum ponto a menos disto de um
+    adversario serve; `reavaliacao`: de quanto em quanto tempo ele revê o ponto
+    durante a corrida; `trocaMin`: o ponto novo tem de pontuar mais isto (fraccao)
+    do que o actual, para ele nao andar a trocar.
+    */
+    espaco: {
+        passoX: 2.0, passoAvanco: 4.0, maxLateral: 30.0,
+        folgaMin: 3.5, folgaMax: 10.0,
+        passeMax: 6.0, pesoPasse: 0.8,
+        raioCaminho: 1.6, penalCaminho: 4.0,
+        pesoAvanco: 0.15, pesoLateral: 0.10,
+        reavaliacao: 0.5, trocaMin: 0.25
+    }
 };
 
 /*

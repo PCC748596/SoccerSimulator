@@ -893,6 +893,41 @@ function escolherProfundidade(bb) {
     return B.profundidade[pedido] !== undefined ? pedido : 'median';
 }
 
+/*
+O PISO DE UM JOGADOR NA SAIDA DE BOLA — em avanco (z * dirZ), no referencial do
+mundo. O antigo (linha do guarda-redes + `margemAFrente`) e o minimo; por cima
+dele, com `SaidaDeBolaShape.acompanha`, cada linha sobe com o bloco adversario:
+a MEDIA dele (m da linha de fundo de quem segura) mais um desvio por funcao.
+O avanço de um ponto (m da linha de fundo de quem segura) e `z * dirZ + LINHA_FUNDO`.
+*/
+function pisoDaSaidaDeBola(p, meuGK, bb) {
+    const S = SaidaDeBolaShape;
+    let piso = meuGK.model.position.z * p.dirZ + S.margemAFrente;
+    const A = S.acompanha;
+    if (!A || !A.activo) return piso;
+    const adv = (p.team === 'TeamA') ? Match.opponents : Match.players;
+    let soma = 0, n = 0;
+    for (let i = 0; i < adv.length; i++) {
+        const o = adv[i];
+        if (!o || !o.model || o.role === 'gk' || o.expulso) continue;
+        soma += o.model.position.z * p.dirZ;
+        n++;
+    }
+    if (!n) return piso;
+    // Media do bloco adversario, em avanco (z * dirZ) — do referencial de quem segura.
+    const mediaOpp = soma / n;
+    const desvio = (p.role === 'def') ? A.def : ((p.role === 'mid') ? A.mid : A.atk);
+    let alvo = mediaOpp + desvio;
+    // O tecto: m da linha de fundo de quem segura -> avanço (z * dirZ).
+    const teto = -LINHA_FUNDO + A.teto;
+    const minimo = -LINHA_FUNDO + A.minimo;
+    if (alvo > teto) alvo = teto;
+    // E nunca para la da linha de fora-de-jogo publicada, se houver.
+    if (bb && typeof bb.offsideLimitDir === 'number' && alvo > bb.offsideLimitDir - 1.0) alvo = bb.offsideLimitDir - 1.0;
+    if (alvo < minimo) alvo = minimo;
+    return Math.max(piso, alvo);
+}
+
 function computeBlock(bb) {
     const B = BlockShape;
     const modo = bb.isAttacking ? 'comBola' : 'semBola';
@@ -2979,7 +3014,7 @@ const PosicionamentoAI = {
             const seguraABola = meuGK && meuGK.model &&
                 ((Match.gkHoldingBall && Match.gkHoldingBall[p.team]) || Match.ballCarrier === meuGK);
             if (seguraABola) {
-                const piso = meuGK.model.position.z * p.dirZ + S_GK.margemAFrente;
+                const piso = pisoDaSaidaDeBola(p, meuGK, bb);
                 if (sepZ * p.dirZ < piso) sepZ = piso * p.dirZ;
                 /*
                 E VÃO DEPRESSA: os oito segundos que ele pode segurar a bola são
@@ -3152,7 +3187,7 @@ const PosicionamentoAI = {
         if (p.saidaDeBolaPressa && typeof SaidaDeBolaShape !== 'undefined' && p.model) {
             const meuGK = (p.team === 'TeamA') ? Match.players[0] : Match.opponents[0];
             if (meuGK && meuGK.model) {
-                const piso = meuGK.model.position.z * p.dirZ + SaidaDeBolaShape.margemAFrente;
+                const piso = pisoDaSaidaDeBola(p, meuGK, bb);
                 if (p.dynamicTarget.z * p.dirZ < piso) p.dynamicTarget.z = piso * p.dirZ;
             }
         }

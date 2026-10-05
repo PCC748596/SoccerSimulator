@@ -680,6 +680,8 @@ Object.assign(Match, {
                         bolaFK.x + dirFK.x * F.distanciaBarreira + perpFK.x * off, ALTURA_BASE_Y,
                         bolaFK.z + dirFK.z * F.distanciaBarreira + perpFK.z * off);
                     p.naBarreiraFalta = true;
+                    // O LUGAR dele na linha, para o repor se alguem o tirar de la (ver Player.update, `barreiraSlot`).
+                    p.barreiraSlot = { x: p.model.position.x, z: p.model.position.z };
                     this.faltaDirectaBarreira.push(p);
                 }
                 /*
@@ -1035,6 +1037,22 @@ Object.assign(Match, {
             */
             const bolaNaMetadeDele = (bolaFK.z * attDir) < 0;
             if (indirecta || bolaNaMetadeDele) this.formaDoLivreDeImpedimento(team, takerFK);
+
+            /*
+            A BARREIRA FICA NA LINHA. As passagens acima (os 9.15 m, o corte
+            do fora-de-jogo, a forma do livre) mexem em posicoes, e uma delas
+            pode tirar um homem do lugar: medido em 15 barreiras de 4 homens,
+            um deles chegava a 2.2 m mais atras do que os outros. Repoe-se
+            cada um no seu `barreiraSlot` — a montagem andada (montarBolaParada
+            Andada) lê as posicoes DEPOIS disto.
+            */
+            (this.faltaDirectaBarreira || []).forEach(p => {
+                if (!p.barreiraSlot) return;
+                p.model.position.x = p.barreiraSlot.x;
+                p.model.position.z = p.barreiraSlot.z;
+                if (p.dynamicTarget) p.dynamicTarget.set(p.barreiraSlot.x, ALTURA_BASE_Y, p.barreiraSlot.z);
+                if (p.setPieceTarget) p.setPieceTarget.set(p.barreiraSlot.x, ALTURA_BASE_Y, p.barreiraSlot.z);
+            });
 
             this.faltaPendente = true;
             this.faltaAtraso = ESPERA_APOS_REPOSICAO;

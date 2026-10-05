@@ -3263,6 +3263,112 @@ function avancoDeInfiltracao(o) {
 }
 
 /*
+=============================================================================
+O ESPACO ENTRE OS ADVERSARIOS — para onde se infiltra
+=============================================================================
+Relato de 5 de Outubro de 2026: *"quando um jogador se infiltra, muitas vezes
+ele corre pra frente mas nao esta correndo no espaco vazio. Esta so correndo
+pra frente. O ideal seria se movimentar para espacos vazios nos meios dos
+jogadores adversarios."*
+
+A infiltracao so decidia a PROFUNDIDADE (20 m a frente, cortados pelo
+impedimento) e fechava o X para o centro — sem olhar para onde estavam os
+adversarios. Esta funcao procura o melhor PONTO numa grelha a frente dele e
+devolve-o. Pura: sem Match, sem THREE.
+
+Entrada (tudo no referencial do MUNDO, menos `avanco*`, que e z * dirZ):
+
+    px, pz, dirZ        o jogador e o sentido de ataque dele
+    adversarios         [{x, z}] — os jogadores de campo adversarios
+    portador            {x, z} ou null: quem tem a bola (para a linha de passe)
+    avancoMax           ate onde pode ir (ja cortado por campo e impedimento)
+    avancoMin           o minimo que a corrida tem de ganhar
+    larguraCampo        a largura util (para a grelha em X)
+
+Cada ponto pontua:
+    folga            distancia ao adversario mais perto (ate `folgaMax`): e o
+                     "espaco vazio", e o ponto no meio de dois defesas ganha a
+                     quem esta encostado a um deles
+    passe            a linha de passe do portador ao ponto: a distancia do
+                     adversario mais perto a ELA (ate `passeMax`), a pesar
+                     `pesoPasse` — um espaco que ninguem lhe pode dar bola
+                     nao serve
+    caminho          menos `penalCaminho` por cada adversario a menos de
+                     `raioCaminho` do trajecto dele ate la
+    avanco           mais `pesoAvanco` por metro ganho — acima do resto
+    lateral          menos `pesoLateral` por metro de desvio em X
+
+Devolve { x, avanco, score, folga } ou null se nenhum ponto tiver `folgaMin`.
+=============================================================================
+*/
+function pontuarEspacoDeCorrida(o, x, avanco, E) {
+    const dirZ = o.dirZ;
+    const z = avanco * dirZ;
+    let folga = Infinity;
+    for (let i = 0; i < o.adversarios.length; i++) {
+        const a = o.adversarios[i];
+        const d = Math.hypot(a.x - x, a.z - z);
+        if (d < folga) folga = d;
+    }
+    if (!isFinite(folga)) folga = E.folgaMax;
+    const folgaC = Math.min(folga, E.folgaMax);
+
+    // A linha de passe do portador ao ponto.
+    let passe = E.passeMax;
+    if (o.portador) {
+        const cx = o.portador.x, cz = o.portador.z;
+        const sx = x - cx, sz = z - cz;
+        const len2 = sx * sx + sz * sz || 1;
+        let melhor = Infinity;
+        for (let i = 0; i < o.adversarios.length; i++) {
+            const a = o.adversarios[i];
+            const t = Math.max(0, Math.min(1, ((a.x - cx) * sx + (a.z - cz) * sz) / len2));
+            const d = Math.hypot(a.x - (cx + sx * t), a.z - (cz + sz * t));
+            if (d < melhor) melhor = d;
+        }
+        if (isFinite(melhor)) passe = Math.min(melhor, E.passeMax);
+    }
+
+    // O trajecto dele ate la: adversarios em cima do caminho.
+    let bloqueios = 0;
+    {
+        const cx = o.px, cz = o.pz;
+        const sx = x - cx, sz = z - cz;
+        const len2 = sx * sx + sz * sz || 1;
+        for (let i = 0; i < o.adversarios.length; i++) {
+            const a = o.adversarios[i];
+            const t = Math.max(0, Math.min(1, ((a.x - cx) * sx + (a.z - cz) * sz) / len2));
+            const d = Math.hypot(a.x - (cx + sx * t), a.z - (cz + sz * t));
+            if (d < E.raioCaminho) bloqueios++;
+        }
+    }
+
+    const ganho = avanco - (o.pz * dirZ);
+    const score = folgaC + E.pesoPasse * passe - E.penalCaminho * bloqueios +
+        E.pesoAvanco * ganho - E.pesoLateral * Math.abs(x - o.px);
+    return { x: x, avanco: avanco, score: score, folga: folga, passe: passe, bloqueios: bloqueios };
+}
+
+function espacoEntreAdversarios(o) {
+    const E = (typeof RunIntoSpaceModel !== 'undefined' && RunIntoSpaceModel.espaco) ? RunIntoSpaceModel.espaco : null;
+    if (!E || !o || !o.adversarios || !o.adversarios.length) return null;
+    const a0 = o.pz * o.dirZ;
+    const aMin = Math.max(o.avancoMin !== undefined ? o.avancoMin : a0 + 4.0, a0 + 4.0);
+    if (!(o.avancoMax >= aMin)) return null;
+    const meia = (o.larguraCampo || 68) / 2 - 2.0;
+    let melhor = null;
+    for (let a = o.avancoMax; a >= aMin - 1e-6; a -= E.passoAvanco) {
+        for (let x = -meia; x <= meia + 1e-6; x += E.passoX) {
+            if (Math.abs(x - o.px) > E.maxLateral) continue;
+            const r = pontuarEspacoDeCorrida(o, x, a, E);
+            if (r.folga < E.folgaMin) continue;
+            if (!melhor || r.score > melhor.score) melhor = r;
+        }
+    }
+    return melhor;
+}
+
+/*
 DESTINO DE UMA CORRIDA AO ESPACO.
 
 O candidato bruto vem do SpatialGrid (a celula mais vazia num raio a frente

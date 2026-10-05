@@ -763,6 +763,14 @@ const BlockModel = {
 };
 
 /*
+A BARREIRA REPOE-SE — ver Player.update (`barreiraSlot`). `limiar`: a que
+distancia do lugar um homem da barreira deixa de se considerar la; `velocidade`:
+o passo com que volta; `encaixe`: a que distancia fica exactamente no ponto.
+*/
+const BarreiraRepoe = { limiar: 0.12, velocidade: 3.0, encaixe: 0.06 };
+if (typeof window !== 'undefined') window.BarreiraRepoe = BarreiraRepoe;
+
+/*
 =============================================================================
 O LANCE PARADO DEPOIS DE UMA FALTA MONTA-SE A ANDAR — ver
 Match.montarBolaParadaAndada (match_setpieces.js).
