@@ -966,6 +966,9 @@ const FreeKickModel = {
     cobrança a proteger.
     */
     corredorLivre: 5.0,        // meia-largura do corredor bola->baliza, em metros
+    // Passe e cruzamento: corredor mais estreito (meia-largura) e so ate `corredorPasseAlcance` m da bola.
+    corredorLivrePasse: 2.0,
+    corredorPasseAlcance: 9.0,
 
     /*
     E NINGUEM FICA EM CIMA DA BOLA.
@@ -984,7 +987,8 @@ const FreeKickModel = {
     2.5 m: o batedor recua `recuoBatedor` para bater e precisa do arco do gesto
     livre; mais do que isto comecava a desarrumar a montagem toda.
     */
-    folgaDaBola: 2.5,
+    // 2.5 -> 4.0 a 5 de Outubro de 2026 ("jogador entrando na frente do batedor das faltas"): a 2.2-2.7 m ainda estava no trajecto dele.
+    folgaDaBola: 4.0,
 
     /*
     =========================================================================

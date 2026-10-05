@@ -3980,7 +3980,10 @@ function resolverDefesaGK(o) {
 
     const r = (o.rnd === undefined) ? Math.random() : o.rnd;
     let resultado;
-    if (r < pAgarra) resultado = 'agarra';
+    if (r < pAgarra && typeof M.extensaoSoDesvia === 'number' && ext > M.extensaoSoDesvia) {
+        // Na ponta dos dedos so se desvia a bola (ver GkCatchModel.extensaoSoDesvia).
+        resultado = 'espalma';
+    } else if (r < pAgarra) resultado = 'agarra';
     else if (r < pAgarra + (1 - pAgarra - pRoca)) resultado = 'espalma';
     else resultado = 'roca';
 

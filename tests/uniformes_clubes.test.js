@@ -462,8 +462,8 @@ test('o createTeams vai buscar o uniforme pelo nome da equipa, e poupa o guarda-
     e dos outros onze. Leva o uniforme DELE (manga comprida, sem cores), e não
     o do clube.
     */
-    assert.ok(/\(i === 0\) \? uniGK : uniA/.test(srcSetup) &&
-        /\(i === 0\) \? uniGK : uniB/.test(srcSetup),
+    assert.ok(/\(i === 0\) \? (?:uniGK|uniGKcomLuvas\(\)) : uniA/.test(srcSetup) &&
+        /\(i === 0\) \? (?:uniGK|uniGKcomLuvas\(\)) : uniB/.test(srcSetup),
         'o guarda-redes passou a vestir o equipamento de campo');
 });
 

@@ -1751,6 +1751,53 @@ class FootballPlayer {
     (ver o SET_PIECE_KICK na FSM). `onContact` é quem joga a bola.
     =========================================================================
     */
+    /*
+    NINGUEM ATRAVESSA A FRENTE DO BATEDOR. Relato: *"tem jogador do mesmo time
+    entrando na frente do batedor das faltas"*. Depois de uma falta com queda os
+    companheiros caminham em linha recta ate ao lugar (`lugarBolaParada`), e quem
+    estava perto da bola cruzava o corredor bola->baliza (ate `corredorPasseAlcance`
+    m a frente, `corredorLivrePasse` de meia-largura) mesmo com o batedor a chegar.
+    Se a recta ate ao lugar passa por la — ou ele ja la esta — devolve um ponto de
+    desvio no seu lado, para la do corredor; senao null. So para a equipa do
+    batedor e fora do remate (o corredor do remate ja o resolve a montagem).
+    */
+    desvioDoCorredorDaFalta(L) {
+        const T = Match.setPieceTaker;
+        const F = (typeof FreeKickModel !== 'undefined') ? FreeKickModel : null;
+        if (!F || Match.state !== 'FREE_KICK' || !T || T === this || this.role === 'gk' ||
+            T.team !== this.team || !Match.ball) return null;
+        const meia = ((typeof F.corredorLivrePasse === 'number') ? F.corredorLivrePasse : 2.0) + 0.6;
+        const alcance = (typeof F.corredorPasseAlcance === 'number') ? F.corredorPasseAlcance : 9.0;
+        const b = Match.ball.position;
+        const gz = this.dirZ * (CAMPO_COMP / 2);
+        let ux = -b.x, uz = gz - b.z;
+        const n = Math.hypot(ux, uz) || 1; ux /= n; uz /= n;
+        const px = this.model.position.x - b.x, pz = this.model.position.z - b.z;
+        const tx = L.x - b.x, tz = L.z - b.z;
+        let cruza = false;
+        for (let i = 0; i <= 10; i++) {
+            const k = i / 10;
+            const rx = px + (tx - px) * k, rz = pz + (tz - pz) * k;
+            const ao = rx * ux + rz * uz, lat = rx * uz - rz * ux;
+            if (ao > -1.0 && ao < alcance && Math.abs(lat) < meia) { cruza = true; break; }
+        }
+        if (!cruza) return null;
+        let lado = Math.sign(px * uz - pz * ux);
+        if (Math.abs(px * uz - pz * ux) < 0.3) lado = Math.sign(tx * uz - tz * ux) || (b.x > 0 ? -1 : 1);
+        if (!lado) lado = 1;
+        /*
+        JA DENTRO DO CORREDOR (o caido que levanta junto a bola): sai de lado, ali
+        mesmo, em vez de ir 10 m a frente. So se a recta nao o tirar de la ja.
+        */
+        const ao0 = px * ux + pz * uz;
+        const aoVia = (Math.abs(px * uz - pz * ux) < meia && ao0 > -1.0 && ao0 < alcance)
+            ? Math.max(ao0, 0) + 0.5 : alcance + 1.5;
+        return {
+            x: b.x + ux * aoVia + uz * lado * meia,
+            z: b.z + uz * aoVia - ux * lado * meia
+        };
+    }
+
     iniciarLancamentoBolaParada(dirX, dirZ, onContact) {
         const L = LancamentoBolaParada;
         const b = Match.ball.position;
@@ -4494,8 +4541,17 @@ class FootballPlayer {
                     ia abrandando sem nunca chegar — medido, a cobranca saia
                     aos 15-19 s.
                     */
-                    if (L.vel === undefined) L.vel = THREE.MathUtils.clamp(d / B.tempoAlvo, B.velMin, B.velMax);
-                    this.steerArrive(_p_v2.set(L.x, ALTURA_BASE_Y, L.z), L.vel, 1.5);
+                    if (L.vel === undefined) {
+                        L.vel = THREE.MathUtils.clamp(d / B.tempoAlvo, B.velMin, B.velMax);
+                        L.via = this.desvioDoCorredorDaFalta(L);
+                    }
+                    /*
+                    O CAMINHO CONTORNA O CORREDOR DO BATEDOR: ver desvioDoCorredorDaFalta.
+                    Vai primeiro ao ponto de desvio e so depois ao lugar.
+                    */
+                    if (L.via && !L.viaFeito && Math.hypot(L.via.x - pos.x, L.via.z - pos.z) < 1.2) L.viaFeito = true;
+                    const paraOnde = (L.via && !L.viaFeito) ? L.via : L;
+                    this.steerArrive(_p_v2.set(paraOnde.x, ALTURA_BASE_Y, paraOnde.z), L.vel, 1.5);
                     pos.addScaledVector(this.velocity, dt);
                 }
                 if (this.lugarBolaParada) {
@@ -9394,7 +9450,16 @@ class FootballPlayer {
             return true;
         }
 
-        // SOCO. A bola volta por onde veio, com o desvio do pedido.
+        this.socarABola();
+        return true;
+    }
+
+    /*
+    SOCO. A bola volta por onde veio, com o desvio do pedido. Partilhado pela
+    saida ao cruzamento e pelo salto com o gesto do soco planeado.
+    */
+    socarABola() {
+        const S = GkSaidaCruzamento;
         const vx = Match.ballVel.x, vz = Match.ballVel.z;
         const v = Math.hypot(vx, vz);
         let dirX, dirZ;
@@ -9410,7 +9475,6 @@ class FootballPlayer {
         Match.ballVel.set(rx * vel, vel * S.elevacaoSoco, rz * vel);
         this.hasBall = false;
         Match.ballCarrier = null;
-        return true;
     }
 
     resolverDefesaComMaos(tipo, extensao, semAgarrar) {
@@ -9456,6 +9520,18 @@ class FootballPlayer {
 
         // Um toque que não pode agarrar (a perna da barreira) vira espalmada.
         if (decisao.resultado === 'agarra' && semAgarrar) decisao.resultado = 'espalma';
+        /*
+        SOCO NAO AGARRA. Relato: *"tem horas que o goleiro pula e faz a animacao do
+        soco, mas segura a bola. No soco ele da um soco na bola para longe. Para
+        agarrar a animacao tem que ser de bola no meio das maos."* Se o gesto
+        planeado no salto e o do soco (`gkSoco.marcado`), a bola nao fica com ele:
+        e um soco, para longe, pela mesma via da saida ao cruzamento.
+        */
+        if (decisao.resultado === 'agarra' && this.gkSoco && this.gkSoco.marcado) {
+            this.gkSoco.golpeado = true;
+            this.socarABola();
+            return;
+        }
         if (decisao.resultado === 'agarra') {
             /*
             Na saída aos pés ele agarra DEITADO: a pose continua a ser a do

@@ -173,7 +173,7 @@ const RefereeModel = {
     Só vale para quem tem um ponto para vigiar (o árbitro, com a bola). Os
     assistentes correm na linha e não recebem `olharPara`.
     */
-    anguloMaxDaBola: 110 * Math.PI / 180,
+    anguloMaxDaBola: 100 * Math.PI / 180,
     /*
     ANDAR NO SÍTIO, e a zona morta era a causa. Relato: *"o juiz está com
     animação de andar sem sair da posição"*. O alvo dele quase nunca está
@@ -2027,8 +2027,15 @@ const Officials = {
             S.alvoSuave.x += (alvoArb.x - S.alvoSuave.x) * k;
             S.alvoSuave.z += (alvoArb.z - S.alvoSuave.z) * k;
         }
+        /*
+        NA FUGA TAMBEM VIGIA A BOLA. Relato, com captura: *"o juiz esta correndo de
+        costas para a bola"*. Sem `olharPara` o `mover` virava-o para onde ele ia,
+        que na fuga e para longe da bola — de costas (7.5% dos frames em
+        movimento acima de 135 graus, medido). Com ela, o limite
+        `anguloMaxDaBola` mantem-no de lado.
+        */
         this.mover(this.arbitro, S.alvoSuave.x, S.alvoSuave.z, R.velocidade, dt,
-            emFuga ? null : Match.ball.position);
+            Match.ball.position);
 
         // Depois do mover: e ele que escreve a pose dos bracos, e o gesto
         // tem de ficar por cima dela (ver tickSinal).

@@ -2356,7 +2356,15 @@ const GkCatchModel = {
     está de pé. 0.85 m é um braço estendido, e fica abaixo dos 0.90 m a partir
     dos quais o teste conta a bola como agarrada de longe.
     */
-    alcanceSalto: 0.85,
+    // 0.85 -> 0.65 a 5 de Outubro de 2026: *"a bola esta a mais de 1 metro da mao do goleiro e mesmo
+    // assim ele defendeu. O ideal e a bola tocar na mao e depois desviar"*. Medido: ate 0.97 m.
+    alcanceSalto: 0.65,
+    /*
+    PONTA DOS DEDOS = DESVIA, NAO AGARRA. Com a bola a mais desta fraccao do alcance
+    (`extensao`, 0 no meio da luva, 1 no limite) so se toca nela: o `agarra` do
+    sorteio passa a `espalma`. Agarrar e com a bola no meio das maos.
+    */
+    extensaoSoDesvia: 0.70,
 
     // Nunca é certo nem impossível.
     minAgarra: 0.05,

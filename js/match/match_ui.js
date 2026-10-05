@@ -276,8 +276,25 @@ Object.assign(Match, {
         } else if (window.cameraMode === 'sideline') {
             // Câmara Lateral bem mais próxima, acompanhando a bola no eixo Z
             let bz = THREE.MathUtils.clamp(this.ball.position.z, -45, 45);
-            targetPos.set(35 * zoom, 14 * zoom, bz);
+            /*
+            ENTRE 10 E 30 M DA BOLA — pedidos: *"fica sempre a 30 metros da bola"*
+            e depois *"ajusta o zoom da Camera (5) para 10-30 metros da bola"*.
+            Era 35 x 14 vezes o `cameraZoom` (37.7 m a zoom 1). Agora so a
+            DIRECCAO vem daqui; a distancia e a de zoom 1 vezes o zoom, cortada
+            a `CameraZoom.movelMin`/`movelMax`.
+            */
+            targetPos.set(35, 14, bz);
             lookTarget.copy(this.ball.position);
+            // Pedido seguinte: o zoom volta a contar, mas SO ENTRE 10 E 30 M da bola.
+            const ZC = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
+            const dMin = (ZC && typeof ZC.movelMin === 'number') ? ZC.movelMin : 10.0;
+            const dMax = (ZC && typeof ZC.movelMax === 'number') ? ZC.movelMax : 30.0;
+            const dMovel = THREE.MathUtils.clamp(Math.hypot(35, 14) * zoom, dMin, dMax);
+            this._cFwd.subVectors(targetPos, this.ball.position);
+            if (this._cFwd.lengthSq() > 1e-6) {
+                this._cFwd.normalize().multiplyScalar(dMovel);
+                targetPos.copy(this.ball.position).add(this._cFwd);
+            }
         } else if (window.cameraMode === 'lateraltv') {
             // Mistura de TV Centro e Lateral Móvel
             // Acompanha até metade do meio-campo, depois fica parada e só roda
