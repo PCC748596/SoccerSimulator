@@ -2167,6 +2167,30 @@ function ritmoParaChegarATempo(p, alvo, base) {
     return Math.max(base, Math.min(pedido, tecto));
 }
 
+/*
+ESPERAR DEBAIXO DA BOLA, COM HISTERESE. Relato de 4 de Outubro de 2026:
+*"as vezes um jogador fica parado aguardando a bola chegar nele e fica
+tremendo parado"*. Medido com um traco frame a frame: o jogador ficava a
+0.30 m do ponto de cabeceio — exactamente a `HeaderModel.toleranciaPonto` — e
+cruzava a fronteira a cada 3-6 frames: dentro, `IDLE` com a velocidade a zero;
+fora, `MOVE_TO_POS` e um passo de 9 cm. 22 janelas de meio segundo assim em 3
+jogos de 15 min.
+
+Agora quem se encaixa no ponto fica la ate a distancia passar de
+`HeaderModel.toleranciaSaida` (o dobro da tolerancia, 0.60 m): so a bola a
+mudar de ideias o tira dali, e o tremor do alvo (a leitura da bola refaz-se de
+meio em meio segundo) deixa de o mexer.
+*/
+function jaEstaSobAPonto(p, d) {
+    const tol = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaPonto === 'number')
+        ? HeaderModel.toleranciaPonto : 0.30;
+    const saida = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaSaida === 'number')
+        ? HeaderModel.toleranciaSaida : tol * 2;
+    if (p._sobAPonto) { if (d > saida) p._sobAPonto = false; }
+    else if (d < tol) p._sobAPonto = true;
+    return p._sobAPonto;
+}
+
 function actChaseBall(ctx) {
     const p = ctx.p;
 
@@ -2359,9 +2383,7 @@ function actReceivePass(ctx) {
             p.dynamicTarget.set(cabeca.x, ALTURA_BASE_Y, cabeca.z);
             p.speedMult = ritmoParaChegarATempo(p, cabeca, p.speedMult);
             const dCab = Math.hypot(p.model.position.x - cabeca.x, p.model.position.z - cabeca.z);
-            const tolCab = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaPonto === 'number')
-                ? HeaderModel.toleranciaPonto : 0.30;
-            if (dCab < tolCab) {
+            if (jaEstaSobAPonto(p, dCab)) {
                 // Já está debaixo dela: pára e espera de frente, sem oscilar.
                 p.velocity.set(0, 0, 0);
                 p.fsm.changeState('IDLE');
@@ -2383,9 +2405,7 @@ function actReceivePass(ctx) {
         const distQueda = Math.hypot(p.model.position.x - queda.x, p.model.position.z - queda.z);
         // A tolerância vive no HeaderModel e vale o raio de contacto da testa:
         // parar a um metro da bola era cabecear de longe. Ver `toleranciaPonto`.
-        const tolPonto = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaPonto === 'number')
-            ? HeaderModel.toleranciaPonto : 1.0;
-        if (distQueda < tolPonto) {
+        if (jaEstaSobAPonto(p, distQueda)) {
             p.velocity.set(0, 0, 0);
             p.fsm.changeState('IDLE');
             lookAtBola(p.model, bola);
@@ -4657,9 +4677,7 @@ function tratarDisputaAerea(p) {
     if (!alvo) return false;
     p.dynamicTarget.set(alvo.x, ALTURA_BASE_Y, alvo.z);
     p.speedMult = ritmoParaChegarATempo(p, alvo, p.speedMult);
-    const tolCab = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.toleranciaPonto === 'number')
-        ? HeaderModel.toleranciaPonto : 0.30;
-    if (Math.hypot(p.model.position.x - alvo.x, p.model.position.z - alvo.z) < tolCab) {
+    if (jaEstaSobAPonto(p, Math.hypot(p.model.position.x - alvo.x, p.model.position.z - alvo.z))) {
         // Ja esta debaixo dela: espera de frente, como no actReceivePass.
         p.velocity.set(0, 0, 0);
         p.fsm.changeState('IDLE');

@@ -1534,6 +1534,8 @@ Object.assign(Match, {
 
                     const vn = v.x * nx + v.z * nz;
                     if (vn < 0) {
+                        // Bateu no poste: quase golo (ver Match.talvezLamentar).
+                        if (this.ultimoRemate) this.ultimoRemate.bateuNaTrave = true;
                         v.x -= (1 + GoalFrame.restituicao) * vn * nx;
                         v.z -= (1 + GoalFrame.restituicao) * vn * nz;
                         v.x *= GoalFrame.atrito;
@@ -1554,6 +1556,8 @@ Object.assign(Match, {
 
                     const vn = v.y * ny + v.z * nz;
                     if (vn < 0) {
+                        // Bateu no travessao: quase golo (ver Match.talvezLamentar).
+                        if (this.ultimoRemate) this.ultimoRemate.bateuNaTrave = true;
                         v.y -= (1 + GoalFrame.restituicao) * vn * ny;
                         v.z -= (1 + GoalFrame.restituicao) * vn * nz;
                         v.y *= GoalFrame.atrito;

@@ -979,7 +979,8 @@ Object.assign(Match, {
         const rente = Math.abs(b.x) < LARGURA_BALIZA / 2 + Q.margemPoste && b.y < ALTURA_BALIZA + Q.margemTrave;
         const ultimo = this.lastTouchedPlayer;
         const defesa = !!(ultimo && ultimo.role === 'gk' && ultimo.team !== r.p.team);
-        if (rente || defesa) r.p.lamento = { t: 0 };
+        // O remate que bateu no poste ou no travessao e quase golo, passe ou nao perto.
+        if (rente || defesa || r.bateuNaTrave) r.p.lamento = { t: 0 };
     },
 
     algumACaminhoDoLugar: function (comVitima) {

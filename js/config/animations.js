@@ -783,8 +783,15 @@ const QuaseGoloModel = {
     duracao: 2.5,
     transicao: 0.35,
     janelaRemate: 4.0,
-    margemPoste: 2.5,
-    margemTrave: 1.5,
+    /*
+    5.0 e 3.0 desde 4 de Outubro de 2026 (eram 2.5 e 1.5). Relato: *"nao vi o
+    jogador se lamentando pelo gol perdido"*. Medido em 6 jogos de 20 min: 76
+    saidas pela linha de fundo, 12 com reaccao (2 por jogo) e 14 remates que
+    passaram a menos de 5 m do poste sem ela. Alem disso, o remate que bate no
+    poste ou no travessao (`bateuNaTrave`, posto no colidirComBaliza) conta.
+    */
+    margemPoste: 5.0,
+    margemTrave: 3.0,
     /*
     Os braços (x negativo = para cima/à frente; z para fora; y a rodar o braço
     para dentro), os cotovelos e a cabeça. Encontrados por busca no rig: as

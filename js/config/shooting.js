@@ -2046,6 +2046,15 @@ const HeaderModel = {
     toleranciaPonto: 0.30,
 
     /*
+    E A DE SAIDA, a histerese da anterior: quem ja esta parado debaixo da bola
+    so volta a mexer-se se ela o puser a mais de 0.60 m do ponto. Com uma so
+    fronteira, a 0.30, ele ficava exactamente nela e alternava IDLE e
+    MOVE_TO_POS a cada poucos frames — o jogador a tremer enquanto espera.
+    Ver `jaEstaSobAPonto` (bt/player_bt.js).
+    */
+    toleranciaSaida: 0.60,
+
+    /*
     Anti Ping-Pong Aéreo:
     - Limite estrito de no máximo 2 cabeceios seguidos na mesma disputa aérea
     - Após o limite, obriga domínio de peito ou queda no pé para continuar jogando no chão

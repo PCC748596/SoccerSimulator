@@ -1121,7 +1121,9 @@ const GoalkeeperDive = {
 
     tempoLer: 0.05,        // reacção: transferência de peso antes de sair
     tempoImpulso: 0.12,    // agachar e estender as pernas
-    tempoChao: 0.35,       // deslizar no relvado depois de aterrar
+    // 0.70 (era 0.35) a 4 de Outubro de 2026: com 0.35 a pose de pouso nem chegava
+    // a formar-se antes de ele levantar (ver deslizeLado e sequenciaBracos.chao).
+    tempoChao: 0.70,       // deslizar no relvado depois de aterrar
 
     /*
     E NO MERGULHO ALTO FICA LÁ uns segundos.
@@ -1647,8 +1649,19 @@ const GoalkeeperDive = {
     deslizeLado: {
         lateralMax: 4.0,
         anguloTombo: 1.40,
-        anguloFrente: 0.15,
-        pernas: { coxaBaixo: -0.10, joelhoBaixo: 0.25, coxaCima: 0.05, joelhoCima: 0.35, chest: 0.10 }
+        /*
+        O POUSO DE 4 DE OUTUBRO DE 2026, pela captura de referencia: o goleiro
+        de peito para o relvado, os DOIS bracos esticados a frente no chao, as
+        pernas arrastadas atras com os joelhos dobrados, a cabeca levantada.
+        Relato: *"o ultimo frame do salto, antes de levantar, tem que ser mais
+        parecido com esse. O goleiro ainda esta se apoiando em um braco so apos
+        a queda"*. Medido (pela vista de cima): deitado de lado a quase 90 graus
+        (`anguloFrente` 0.15), o braco de baixo escorava o corpo e o de cima
+        ficava dobrado no ar. A barriga vira-se agora 0.75 rad (43 graus) e o
+        peso passa para o peito e os dois bracos (ver `sequenciaBracos.chao`).
+        */
+        anguloFrente: 0.75,
+        pernas: { coxaBaixo: -0.10, joelhoBaixo: 0.95, coxaCima: 0.05, joelhoCima: 1.15, chest: 0.05 }
     },
 
     /*
@@ -1953,9 +1966,25 @@ const GoalkeeperDive = {
 
             As magnitudes ficam como estavam; muda o sinal.
             */
-            liderX: -0.55, liderZ: 0.85,
-            traseiroX: -0.45, traseiroZ: 0.55,
-            cotovelo: -0.70
+            /*
+            O POUSO DA CAPTURA DE REFERENCIA (4 de Outubro de 2026): o braco
+            do lado do mergulho ESTICADO a frente, rente ao relvado, e o outro
+            dobrado sob o peito — o corpo todo deitado, sem nenhum braco a
+            escora-lo. Eram liderX -0.55 / traseiroX -0.45 com o cotovelo a
+            -0.70: um braco dobrado no ar e o de baixo a escorar o corpo.
+
+            Os numeros sairam de uma busca com o mergulho real
+            (scratchpad/gkd/busca_chao.js, com o `Match.delta` posto — sem ele o
+            `lerpTo` congela e mede-se uma pose que nao existe), a pedir: a mao
+            do lider 0.3 m a frente do pescoco e a menos de 0.25 m do relvado,
+            a outra mao rente ao chao, a cabeca baixa e a barriga a 55 graus.
+            Resultado: lider a 0.26 m a frente, a 0.18 m do chao; a outra a
+            0.10 m; barriga a 54 graus.
+            */
+            liderX: -1.2, liderZ: 0.80,
+            traseiroX: -0.9, traseiroZ: 0.30,
+            cotoveloLider: -0.25,
+            cotovelo: -0.90
         }
     },
 
@@ -1964,7 +1993,9 @@ const GoalkeeperDive = {
     mergulho. O corpo torce-se antes de sair do chão — é isso que faz o gesto
     ler como um mergulho e não como um tombo lateral.
     */
-    torcaoTronco: { impulso: 0.30, voo: 0.18, chao: 0.45 },
+    // chao 0.20 (era 0.45) a 4 de Outubro de 2026: a torcao fazia a barriga virar
+    // 68 graus e levava as maos para tras (ver sequenciaBracos.chao).
+    torcaoTronco: { impulso: 0.30, voo: 0.18, chao: 0.20 },
 
     /*
     =========================================================================

@@ -144,6 +144,39 @@ Os braços do frame são escritos antes do contacto (esticados à bola). No fram
 
 Fechá-los dentro do `defender` não serve: as mãos saltavam para o peito com a bola ainda no ponto do contacto, e o `gk_agarra_com_a_mao` e o `guarda_redes_espalmada` mediam isso. Depois da correcção: assimetria máxima 0.12 m (era 0.62) e nenhum salto de braço acima de 0.5 rad.
 
+#### O pouso do mergulho rasteiro, e a verificação dos cartões e do lamento (js/config/goalkeeper.js `deslizeLado`, `sequenciaBracos.chao`, `tempoChao`, js/gk_dive.js `poseBracosChao`, js/match/match_physics.js, js/config/animations.js `QuaseGoloModel`)
+
+**O pouso do goleiro.** Pedido, com captura de referência: *"o último frame do salto, antes de levantar, tem que ser mais parecido com esse. O goleiro ainda está se apoiando em um braço só após a queda."* A referência: de peito para o relvado, um braço esticado à frente no chão, o outro dobrado sob o peito, as pernas arrastadas com os joelhos dobrados, o corpo todo deitado.
+- **Antes**, medido no mergulho real: deitado de lado a quase 90° (`anguloFrente` 0.15), um braço a escorar o corpo e o outro dobrado no ar. A fase de chão do rasteiro durava só 0.35 s e a pose nem chegava a formar-se (cotovelos a −0.64, não ao −0.20 do alvo).
+- **Agora:**
+  - barriga a 54° (`deslizeLado.anguloFrente` 0.75, `torcaoTronco.chao` 0.20);
+  - o braço líder esticado à frente, a 0.26 m do pescoço e a 0.18 m do relvado (`liderX` −1.2 / `liderZ` 0.80, cotovelo −0.25 pelo novo `cotoveloLider`);
+  - o outro dobrado sob o peito (`traseiroX` −0.9, cotovelo −0.90);
+  - pernas com os joelhos a 0.95/1.15;
+  - `tempoChao` 0.35 → 0.70 s, e as poses convergem mais depressa (0.45 e 0.4 por frame, em vez de 0.2).
+- **Os valores** saíram de uma busca com o mergulho real (`scratchpad/gkd/busca_chao.js`).
+- **Armadilha que me enganou nas primeiras medições:** o `lerpTo` usa `Match.delta`, e sem ele as poses ficam congeladas — medi, e desenhei, poses que não existem.
+- **O salto alto** não mudou: a queda dele é a do `QuedaClip` (a da falta, já aprovada).
+
+**Os cartões (Card1, 2 e 3).** Verificado no caminho do navegador (`Sim.running = false`): cada cartão tem a sua cerimónia (18 cartões, 18 cerimónias em 9 jogos de 20 min, ~2 por jogo). O juiz vai a 4.3 m do jogador, ergue o cartão com o braço direito e aponta com o esquerdo (2.0 s para chegar, 1.5 s erguido, 0.5 s a guardá-lo), 4.5 s no total. Se o botão Arbitragem estiver OFF, ou a câmara em vista de cima (onde ele é um disco), não se vê.
+
+**O lamento pelo golo perdido (LooseGol).** Funciona (braços em −2.0, mãos na cabeça), mas disparava pouco: ~1 por jogo, em 76 saídas pela linha de fundo só 12 com reacção. Passou a:
+- `margemPoste` 2.5 → 5.0 m e `margemTrave` 1.5 → 3.0 m;
+- contar também o remate que **bate no poste ou no travessão** (`bateuNaTrave`, posto no `colidirComBaliza`) e sai.
+
+Medido: ~2.5 por jogo.
+
+#### O jogador a tremer à espera da bola, e o botão PlayerNames (js/bt/player_bt.js `jaEstaSobAPonto`, js/config/shooting.js `HeaderModel.toleranciaSaida`, index.html, js/main.js, js/player.js)
+
+**O tremor.** Relato: *"às vezes um jogador fica parado aguardando a bola chegar nele e fica tremendo parado"*.
+- **Medido** com um traço frame a frame (`scratchpad/treme/traco.js`): o jogador ficava a 0.30 m do ponto de cabeceio, exactamente a `HeaderModel.toleranciaPonto`, e cruzava essa fronteira a cada 3 a 6 frames.
+  - Dentro: `IDLE` e velocidade a zero.
+  - Fora: `MOVE_TO_POS` e um passo de 9 cm.
+- **A correcção:** histerese. Quem se encaixa no ponto fica lá até a distância passar de `toleranciaSaida` (0.60 m, o dobro). Vale para o destinatário (`actReceivePass`, nos dois ramos aéreos) e para o defensor da disputa aérea (`tratarDisputaAerea`). O ramo da bola rasteira já tinha histerese (0.8/1.5 m).
+- **Depois:** nos mesmos 3 jogos de 15 min, as janelas de meio segundo com `IDLE`↔`MOVE_TO_POS` parado, com a bola no ar ou o jogador a ser o destinatário, caíram de 75 para 9.
+
+**PlayerNames: ON/OFF** no painel Teams States, na Visibilidade, a seguir a PlayerNumber. Mostra sobre a cabeça o nome da camisola (`nomeCamisola`; sem skills, a posição). Combina com os outros rótulos.
+
 #### O árbitro a 6–12 m, a bola na mão que lança, e 3 s no chão depois da falta (js/officials.js, js/player.js, js/config/animations.js `QuedaClip`)
 
 **O árbitro.**
