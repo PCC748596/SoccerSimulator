@@ -102,9 +102,19 @@ function executePassGameplay(p) {
         if (o.role === 'gk' || !o.model) continue;
         // Distancia no PLANO (ver comentario acima) — nao 3D, senao a
         // altura do adversario entra na conta do aperto sem fazer sentido.
-        const d = Math.hypot(
+        let d = Math.hypot(
             p.model.position.x - o.model.position.x,
             p.model.position.z - o.model.position.z);
+        /*
+        Quem esta ATRAS de quem passa (contra a direccao do passe) nao lhe fecha
+        o gesto: a distancia dele conta `adversarioAtrasFator` vezes mais.
+        Mesmo relato do remate (ver `ShotModel.erro.adversarioAtrasFator`).
+        */
+        if (typeof PassErrorModel.adversarioAtrasFator === 'number' &&
+            (o.model.position.x - p.model.position.x) * dxAlvo +
+            (o.model.position.z - p.model.position.z) * dzAlvo < 0) {
+            d *= PassErrorModel.adversarioAtrasFator;
+        }
         if (d < distAdversario) distAdversario = d;
     }
 
@@ -678,11 +688,35 @@ function executeShotGameplay(p) {
     }
 
     const opponentsShoot = (p.team === 'TeamA') ? Match.opponents : Match.players;
-    let bloqueador = null, distBloqueio = 999;
+    /*
+    SO BLOQUEIA QUEM ESTA ENTRE ELE E A BALIZA. Relato: *"na grande maioria das
+    vezes que um jogador vai chutar e tem outro atras ele erra o chute. Porque
+    isso?"* Qualquer adversario a menos de 2.2 m era `bloqueador` e abria a mira
+    (`pressaoMult`), estivesse onde estivesse — um defesa as COSTAS do
+    rematador, que nao pode cortar nada, decidia o bloqueio e o erro.
+
+    Agora, no eixo do remate (para a baliza): quem esta atras so conta se estiver
+    MUITO colado (a distancia vale `atrasFator` vezes mais), e para bloquear tem
+    de estar a frente e dentro de `bloqueioLateralMax` do eixo.
+    */
+    const SE = ShotModel.erro;
+    const ux0 = -p.model.position.x, uz0 = p.targetGoalZ - p.model.position.z;
+    const ul = Math.max(0.0001, Math.hypot(ux0, uz0));
+    const ux = ux0 / ul, uz = uz0 / ul;
+    let bloqueador = null, distBloqueio = 999, distPressaoRemate = 999;
     for (const opp of opponentsShoot) {
         if (opp.role === 'gk') continue;
-        const d = opp.model.position.distanceTo(p.model.position);
-        if (d < 2.2 && d < distBloqueio) { distBloqueio = d; bloqueador = opp; }
+        const rx = opp.model.position.x - p.model.position.x;
+        const rz = opp.model.position.z - p.model.position.z;
+        const dReal = Math.hypot(rx, rz);
+        const ao = rx * ux + rz * uz;
+        const lat = Math.abs(rx * uz - rz * ux);
+        const dEf = (ao < 0) ? dReal * SE.adversarioAtrasFator : dReal;
+        // Aperta (pressao): conta para o erro da mira, esteja onde estiver.
+        if (dEf < 2.2 && dEf < distPressaoRemate) distPressaoRemate = dEf;
+        if (dEf < 2.2 && dEf < distBloqueio && ao > 0 && lat <= SE.bloqueioLateralMax) {
+            distBloqueio = dEf; bloqueador = opp;
+        }
     }
     // Bloqueado: Técnica (chutador) x Marcação (quem está em cima
     // dele) — base 0.6, favorece o chutador (defensor tem de
@@ -740,7 +774,7 @@ function executeShotGameplay(p) {
         const tipoRemate = tipoDeRemate({
             dist: distBaliza,
             tec: p.skillFor('TEC'),
-            distAdversario: distBloqueio,
+            distAdversario: Math.min(distBloqueio, distPressaoRemate),
             gkAdiantado: gkAdiantado,
             // Posto pelo `podeRematar` no frame da decisão: chegou ao ponto do
             // frente-a-frente, portanto toca ao canto em vez de bater.
@@ -755,7 +789,7 @@ function executeShotGameplay(p) {
         const sigma = sigmaDeRemate({
             dist: distBaliza,
             tec: p.skillFor('TEC'),
-            distAdversario: distBloqueio,
+            distAdversario: Math.min(distBloqueio, distPressaoRemate),
             angulo: anguloBaliza,
             tipo: tipoRemate
         });

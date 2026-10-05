@@ -3357,7 +3357,10 @@ function espacoEntreAdversarios(o) {
     if (!(o.avancoMax >= aMin)) return null;
     const meia = (o.larguraCampo || 68) / 2 - 2.0;
     let melhor = null;
-    for (let a = o.avancoMax; a >= aMin - 1e-6; a -= E.passoAvanco) {
+    // So perto do maximo: `faixaAvanco` m abaixo dele (a infiltracao e para ROMPER, e os
+    // pontos mais vazios eram os rasos — medido: ganho de 13 m contra 17, toques na area -29%).
+    const aFundo = Math.max(aMin, o.avancoMax - (E.faixaAvanco !== undefined ? E.faixaAvanco : 8.0));
+    for (let a = o.avancoMax; a >= aFundo - 1e-6; a -= E.passoAvanco) {
         for (let x = -meia; x <= meia + 1e-6; x += E.passoX) {
             if (Math.abs(x - o.px) > E.maxLateral) continue;
             const r = pontuarEspacoDeCorrida(o, x, a, E);

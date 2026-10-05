@@ -14,8 +14,8 @@ const amb = { THREE, console, document: doc, window: {} };
 const mod = new Function(...Object.keys(amb),
     `${ler('js/utils.js')}\n${ler('js/config/physics.js')}\n${ler('js/config/animations.js')}\n${ler('js/config/gait.js')}\n${ler('js/config/player_behavior.js')}
      ${ler('js/pose.js')}
-     return { construirCorpo, escolherAparencia, aplicarPoseGoalKick, aplicarPosePlayerKick,
-              GoalKickClip, PlayerKickClip, ALTURA_BASE_Y };`)(...Object.values(amb));
+     return { construirCorpo, escolherAparencia, aplicarPoseGoalKick, aplicarPosePlayerKick, aplicarPoseLateral,
+              GoalKickClip, PlayerKickClip, ThrowInClip, ALTURA_BASE_Y };`)(...Object.values(amb));
 
 const W = 340, H = 460;
 
@@ -102,7 +102,7 @@ const S = process.argv[2];
 const nome = process.argv[3] || 'GoalKickClip';
 const frames = nome.endsWith('.json') ? JSON.parse(fs.readFileSync(nome, 'utf8')) : mod[nome].frames;
 const etiqueta = process.argv[4] || 'pose';
-const aplicar = mod.aplicarPoseGoalKick;
+const aplicar = (nome === 'ThrowInClip') ? ((rig, K) => mod.aplicarPoseLateral(rig, K, 0)) : mod.aplicarPoseGoalKick;
 const VISTAS = { lado: [[3.6, 1.0, 0.2], [0, 0.9, 0]], tras: [[0.3, 1.1, -3.4], [0, 0.9, 0]] };
 for (const [vn, [cp, al]] of Object.entries(VISTAS))
     frames.forEach((K, i) => desenhar(K, aplicar, `${S}/${etiqueta}_${vn}_${i}.png`, cp, al));

@@ -1213,10 +1213,10 @@ a camara — e a camara deste jogo anda a toda a volta.
 */
 
 const LateralPose = {
-    chest: -0.22,        // tronco em arco para trás, a armar o lançamento
-    pelvisX: -0.06,
+    chest: -0.12,        // tronco em arco para trás, a armar o lançamento
+    pelvisX: -0.04,
 
-    bracoX: -2.75,       // os dois braços por cima, ligeiramente atrás
+    bracoX: -2.60,       // os dois braços por cima, ligeiramente atrás
     /*
     `bracoZ` é ABDUÇÃO — abre o braço para FORA do corpo, e é aplicado antes da
     subida (ordem de Euler XYZ: o z roda primeiro, o x levanta depois). Esteve
@@ -1228,7 +1228,13 @@ const LateralPose = {
     distância entre as mãos e ajusta até elas encostarem mesmo na bola.
     */
     bracoZ: -0.16,
-    cotovelo: -0.72,     // mais flectido: traz as mãos para trás da cabeça, não para cima dela
+    /*
+    -1.10 (era -0.72) a 5 de Outubro de 2026: com o cotovelo quase esticado o gesto lia-se
+    como um mergulho de bracos (bracos e tronco na mesma linha) e a bola ficava em cima
+    da cabeca. Dobrado, o antebraco cai para tras da cabeca — e com ele a bola, que e
+    como se arma um lateral. Os keyframes 2 a 5 do ThrowInClip dobram-no ate -2.10.
+    */
+    cotovelo: -1.10,
 
     /*
     FECHO DAS MÃOS NA BOLA. O `bracoZ` dos keyframes é um palpite: a distância
@@ -1244,6 +1250,15 @@ const LateralPose = {
     fechoIteracoes: 4,
     fechoLimite: 0.55,
     fechoTolerancia: 0.01,   // metros
+    /*
+    O PUNHO FICA FORA DA BOLA. Relato, com captura (5 de Outubro de 2026): *"depois
+    da defesa, as maos nao aparecem segurando a bola; ficam dentro da bola"*. O fecho
+    pedia punhos a UM DIAMETRO um do outro, ou seja, cada punho a um raio do centro
+    da bola — na superficie —, e a mao (um bloco com o punho no meio) ficava metade
+    dentro dela. Medido: punhos a 0.105 m do centro, raio 0.11. `folgaMao` e a
+    espessura da mao que se soma ao raio: punhos a `raio + folgaMao` do centro.
+    */
+    folgaMao: 0.05,
 
     /*
     GIRO DA CINTURA para o lado do arremesso, em radianos.
@@ -1317,18 +1332,18 @@ sem isso o arremesso lê-se como um empurrão só de braços.
 const ThrowInClip = {
     contactFrame: 6,   // índice 5, t = 5/9
     frames: [
-        // 1: pose de espera
-        { chest: -0.22, pelvisX: -0.06, bracoX: -2.75, bracoZ: -0.16, cotovelo: -0.72, giro: 0.00, coxaFrente: -0.18, joelhoFrente: 0.20, coxaTras: 0.22, joelhoTras: 0.35, altura: 0.00 },
-        // 2: carrega o peso na perna de trás
-        { chest: -0.30, pelvisX: -0.09, bracoX: -2.85, bracoZ: -0.17, cotovelo: -0.78, giro: -0.20, coxaFrente: -0.22, joelhoFrente: 0.24, coxaTras: 0.30, joelhoTras: 0.42, altura: -0.02 },
+        // 1: pose de espera — a bola por cima da cabeca, ligeiramente atras, cotovelos dobrados
+        { chest: -0.12, pelvisX: -0.04, bracoX: -2.60, bracoZ: -0.16, cotovelo: -1.10, giro: 0.00, coxaFrente: -0.18, joelhoFrente: 0.20, coxaTras: 0.22, joelhoTras: 0.35, altura: 0.00 },
+        // 2: carrega o peso na perna de trás; a bola desce para tras da cabeca
+        { chest: -0.20, pelvisX: -0.06, bracoX: -2.80, bracoZ: -0.17, cotovelo: -1.50, giro: -0.20, coxaFrente: -0.22, joelhoFrente: 0.24, coxaTras: 0.30, joelhoTras: 0.42, altura: -0.02 },
         // 3: arco para trás
-        { chest: -0.42, pelvisX: -0.14, bracoX: -3.00, bracoZ: -0.18, cotovelo: -0.92, giro: -0.45, coxaFrente: -0.26, joelhoFrente: 0.26, coxaTras: 0.38, joelhoTras: 0.50, altura: -0.03 },
+        { chest: -0.28, pelvisX: -0.08, bracoX: -2.90, bracoZ: -0.18, cotovelo: -1.80, giro: -0.45, coxaFrente: -0.26, joelhoFrente: 0.26, coxaTras: 0.38, joelhoTras: 0.50, altura: -0.03 },
         // 4: quase no limite do arco
-        { chest: -0.50, pelvisX: -0.17, bracoX: -3.12, bracoZ: -0.19, cotovelo: -1.00, giro: -0.60, coxaFrente: -0.28, joelhoFrente: 0.28, coxaTras: 0.42, joelhoTras: 0.55, altura: -0.04 },
-        // 5: armação máxima, tudo carregado para trás
-        { chest: -0.52, pelvisX: -0.18, bracoX: -3.18, bracoZ: -0.19, cotovelo: -1.02, giro: -0.65, coxaFrente: -0.26, joelhoFrente: 0.26, coxaTras: 0.40, joelhoTras: 0.52, altura: -0.04 },
-        // 6: LARGA A BOLA — braços a passar a vertical, tronco já a fechar
-        { chest: -0.05, pelvisX: -0.02, bracoX: -2.80, bracoZ: -0.16, cotovelo: -0.45, giro: 0.25, coxaFrente: -0.20, joelhoFrente: 0.20, coxaTras: 0.26, joelhoTras: 0.34, altura: 0.02 },
+        { chest: -0.34, pelvisX: -0.10, bracoX: -2.95, bracoZ: -0.19, cotovelo: -2.00, giro: -0.60, coxaFrente: -0.28, joelhoFrente: 0.28, coxaTras: 0.42, joelhoTras: 0.55, altura: -0.04 },
+        // 5: armação máxima: a bola atras da nuca, antebracos para tras
+        { chest: -0.38, pelvisX: -0.11, bracoX: -3.00, bracoZ: -0.19, cotovelo: -2.10, giro: -0.65, coxaFrente: -0.26, joelhoFrente: 0.26, coxaTras: 0.40, joelhoTras: 0.52, altura: -0.04 },
+        // 6: LARGA A BOLA — os bracos passam a vertical e esticam, tronco a fechar
+        { chest: -0.02, pelvisX: -0.02, bracoX: -2.80, bracoZ: -0.16, cotovelo: -0.60, giro: 0.25, coxaFrente: -0.20, joelhoFrente: 0.20, coxaTras: 0.26, joelhoTras: 0.34, altura: 0.02 },
         // 7: chicote para a frente
         { chest: 0.26, pelvisX: 0.06, bracoX: -2.10, bracoZ: -0.10, cotovelo: -0.24, giro: 0.75, coxaFrente: -0.12, joelhoFrente: 0.16, coxaTras: 0.16, joelhoTras: 0.24, altura: 0.05 },
         // 8: braços à frente, corpo projectado

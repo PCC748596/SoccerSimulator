@@ -643,6 +643,13 @@ const ShotModel = {
         // Pressão: adversário colado abre a mira.
         pressaoDist: 3.0,
         pressaoMult: 1.45,
+        /*
+        Adversario ATRAS do rematador (no eixo do remate): a distancia dele conta
+        `adversarioAtrasFator` vezes mais, e nunca bloqueia. E um adversario que
+        bloqueia tem de estar a frente e a menos de `bloqueioLateralMax` m do eixo.
+        */
+        adversarioAtrasFator: 2.5,
+        bloqueioLateralMax: 1.4,
         // Ângulo fechado (junto à linha de fundo) também.
         anguloMult: 1.30,
         anguloFechado: 35 * Math.PI / 180,

@@ -443,6 +443,12 @@ const Weather = {
             });
 
             const cloudCluster = new THREE.Group();
+            // Caixas da nuvem, por geometria: viram UM InstancedMesh cada (ver o fim do ciclo).
+            const caixas = new Map();
+            const juntaCaixa = (geom, x, y, z) => {
+                if (!caixas.has(geom)) caixas.set(geom, []);
+                caixas.get(geom).push(x, y, z);
+            };
 
             const tipo = Math.random();
             let widthBlocks, lengthBlocks, heightBlocks;
@@ -477,12 +483,10 @@ const Weather = {
                                 geom = boxSmallGeom;
                             }
 
-                            const mesh = new THREE.Mesh(geom, mat);
-                            mesh.position.set(
+                            juntaCaixa(geom,
                                 bx * 6 + (Math.random() - 0.5) * 1.2,
                                 by * 6 + (Math.random() - 0.5) * 1.2,
-                                bz * 6 + (Math.random() - 0.5) * 1.2
-                            );
+                                bz * 6 + (Math.random() - 0.5) * 1.2);
 
                             /*
                             A NUVEM NÃO ENTRA NO MAPA DE SOMBRAS.
@@ -509,10 +513,6 @@ const Weather = {
                             `receiveShadow` cai pela mesma razão — não há nada
                             por cima das nuvens que lhes faça sombra.
                             */
-                            mesh.castShadow = false;
-                            mesh.receiveShadow = false;
-
-                            cloudCluster.add(mesh);
                         }
                     }
                 }
@@ -521,24 +521,45 @@ const Weather = {
             const numDebris = 14 + Math.floor(Math.random() * 14);
             for (let d = 0; d < numDebris; d++) {
                 const geom = (Math.random() < 0.6) ? boxSmallGeom : boxMicroGeom;
-                const mesh = new THREE.Mesh(geom, mat);
 
                 const angle = Math.random() * Math.PI * 2;
                 const radiusX = (halfW * 6) + 3 + Math.random() * 15;
                 const radiusZ = (halfL * 6) + 3 + Math.random() * 15;
                 const posY = Math.random() * (heightBlocks * 6 + 9);
 
-                mesh.position.set(
-                    Math.cos(angle) * radiusX,
-                    posY,
-                    Math.sin(angle) * radiusZ
-                );
-
-                // Mesma razão do corpo da nuvem, acima.
-                mesh.castShadow = false;
-                mesh.receiveShadow = false;
-                cloudCluster.add(mesh);
+                juntaCaixa(geom, Math.cos(angle) * radiusX, posY, Math.sin(angle) * radiusZ);
             }
+
+            /*
+            UM InstancedMesh POR GEOMETRIA, e nao uma Mesh por caixa.
+
+            Relato: *"verifica se a nuvem tem InstancedMesh. Alguma coisa esta
+            reduzindo a performance"*. Nao tinha: cada nuvem eram centenas de
+            Meshes (cinco nuvens, mais de mil draw calls por frame, todos com o
+            mesmo material). Sao quatro geometrias, portanto quatro draw calls
+            por nuvem. A nuvem fora do mapa de sombras (ver acima): castShadow
+            e receiveShadow ficam a false.
+
+            `blocos` guarda a pegada vista de cima (x, z, meia-aresta) para a
+            sombra no relvado (`_criarSombraDaNuvem`), que antes lia os filhos.
+            */
+            const blocos = [];
+            const _m4 = new THREE.Matrix4();
+            caixas.forEach((pos, geom) => {
+                const n = pos.length / 3;
+                const inst = new THREE.InstancedMesh(geom, mat, n);
+                const r = geom.parameters.width * 0.5;
+                for (let k = 0; k < n; k++) {
+                    _m4.makeTranslation(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]);
+                    inst.setMatrixAt(k, _m4);
+                    blocos.push({ x: pos[k * 3], z: pos[k * 3 + 2], r: r });
+                }
+                inst.instanceMatrix.needsUpdate = true;
+                inst.castShadow = false;
+                inst.receiveShadow = false;
+                inst.frustumCulled = false;
+                cloudCluster.add(inst);
+            });
 
             // Alturas das nuvens no céu (entre 45m e 85m)
             const alturaY = 45 + Math.random() * 40;
@@ -561,6 +582,7 @@ const Weather = {
                 speedZ: (Math.random() - 0.5) * 0.25 * this.fatorVelocidadeNuvens,
                 larguraX: widthBlocks * 6,
                 larguraZ: lengthBlocks * 6,
+                blocos: blocos,
                 material: mat
             };
 
@@ -600,12 +622,10 @@ const Weather = {
         // A pegada da nuvem vista de cima: cada caixa, com o seu tamanho.
         const blocos = [];
         let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-        for (const m of cluster.children) {
-            const g = m.geometry && m.geometry.parameters;
-            const r = g ? g.width * 0.5 : 3;
-            blocos.push({ x: m.position.x, z: m.position.z, r });
-            minX = Math.min(minX, m.position.x - r); maxX = Math.max(maxX, m.position.x + r);
-            minZ = Math.min(minZ, m.position.z - r); maxZ = Math.max(maxZ, m.position.z + r);
+        for (const b of ((cluster.userData && cluster.userData.blocos) || [])) {
+            blocos.push(b);
+            minX = Math.min(minX, b.x - b.r); maxX = Math.max(maxX, b.x + b.r);
+            minZ = Math.min(minZ, b.z - b.r); maxZ = Math.max(maxZ, b.z + b.r);
         }
         if (!blocos.length) return;
         const margem = 8;   // o desfoque das bordas precisa de espaço

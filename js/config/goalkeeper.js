@@ -415,7 +415,9 @@ const GoalkeeperPose = {
     */
     segurarAvanco: 10.0,
     segurarVel: 2.2,
-    segurarMinimo: 1.5,
+    // 1.5 -> 3.0 a 5 de Outubro de 2026: a equipa que ataca (T.Offensive) tem de ter tempo de SUBIR
+    // com o bloco adversario a recuar antes de o GR relancar (ver SaidaDeBolaShape.acompanha).
+    segurarMinimo: 3.0,
 
     /*
     ELE ESPERA POR UMA BOA OPÇÃO, ATÉ AOS 8 SEGUNDOS.

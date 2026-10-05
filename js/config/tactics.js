@@ -139,7 +139,7 @@ const SaidaDeBolaShape = {
     margemAFrente: 4.0,
     acompanha: {
         activo: true,
-        def: -14.0, mid: -2.0, atk: 8.0,
+        def: -10.0, mid: 0.0, atk: 8.0,
         // Nenhum piso passa daqui (m da linha de fundo de quem segura): mais longe e fora de jogo.
         teto: 46.0,
         // Ninguem fica a menos disto da propria linha de fundo: a area acaba a 16.5.

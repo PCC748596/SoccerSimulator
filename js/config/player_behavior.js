@@ -2042,7 +2042,7 @@ const RepositionPace = {
     Quem lê a marca é o `actReposition` (player_bt.js); quem a escreve é o
     `tickFinal` (team_bt.js), no mesmo sítio onde põe o piso à frente dele.
     */
-    bonusSaidaDeBola: 1.25,
+    bonusSaidaDeBola: 1.40,
 
     /*
     E UM PISO, porque a pressa multiplicativa nao chega ao fim do percurso.

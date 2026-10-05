@@ -751,6 +751,8 @@ const PassErrorModel = {
     pesoTecnica: 0.35,
     raioPressao: 3.5,
     pressaoMult: 1.55,
+    // Adversario atras de quem passa: a distancia dele conta isto vezes mais (ver fsm.js, contacto do passe).
+    adversarioAtrasFator: 2.5,
     costasMult: 2.0,
     forcaMinPressao: 0.85,
     sigmaTecto: 0.1755     // reduzido 10% e depois 25%
@@ -1451,7 +1453,7 @@ const RunIntoSpaceModel = {
         folgaMin: 3.5, folgaMax: 10.0,
         passeMax: 6.0, pesoPasse: 0.8,
         raioCaminho: 1.6, penalCaminho: 4.0,
-        pesoAvanco: 0.15, pesoLateral: 0.10,
+        pesoAvanco: 0.40, pesoLateral: 0.10, faixaAvanco: 8.0,
         reavaliacao: 0.5, trocaMin: 0.25
     }
 };

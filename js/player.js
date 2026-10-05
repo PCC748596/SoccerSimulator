@@ -622,7 +622,7 @@ class FootballPlayer {
         const rig = this.rig;
         const L = LateralPose;
         if (!rig || !rig.lHand || !rig.rHand || !L) return 0;
-        const alvo = 2 * BallPhysics.raio;
+        const alvo = 2 * (BallPhysics.raio + ((typeof L.folgaMao === 'number') ? L.folgaMao : 0));
         rig.lArm.rotation.z = bracoZ;
         rig.rArm.rotation.z = -bracoZ;
         const aplicar = (y) => { rig.lArm.rotation.y = y; rig.rArm.rotation.y = -y; };
@@ -650,7 +650,7 @@ class FootballPlayer {
         const L = LateralPose;
         if (!rig || !rig.lHand || !rig.rHand || !L) return bracoZBase;
 
-        const alvo = 2 * BallPhysics.raio;
+        const alvo = 2 * (BallPhysics.raio + ((typeof L.folgaMao === 'number') ? L.folgaMao : 0));
         const aplicar = (z) => {
             rig.lArm.rotation.z = z;
             rig.rArm.rotation.z = -z;
