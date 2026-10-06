@@ -838,9 +838,9 @@ const QuedaClip = {
         // a -1.5 e -2.70: de bruços, rodar o braço para a frente é rodá-lo PARA O
         // CHÃO, e os dois braços escoravam o corpo — a anca ficava a 0.49 m do
         // relvado (relato: "depois do rolamento o jogador está parando no ar").
-        { t: 1.25, leanZ: 0.00, pitchX: 1.57, chest: -0.08, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -2.4, bracoLz: 0.3, bracoRx: -2.4, bracoRz: -0.3, cotoveloL: -0.1, cotoveloR: -0.1, cabecaX: -0.45, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
+        { t: 1.25, leanZ: 0.00, pitchX: 1.57, chest: -0.08, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.45, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
         // ...e assim fica 4 s (o pedido). Só a cabeça e o peito mexem um pouco.
-        { t: 4.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -2.4, bracoLz: 0.3, bracoRx: -2.4, bracoRz: -0.3, cotoveloL: -0.1, cotoveloR: -0.1, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
+        { t: 4.25, leanZ: 0.00, pitchX: 1.57, chest: -0.04, coxaChute: 0.05, joelhoChute: 0.15, coxaChuteZ: 0.00, coxaApoio: 0.12, joelhoApoio: 0.45, bracoLx: -0.15, bracoLz: 1.25, bracoRx: -3.05, bracoRz: -0.30, cotoveloL: -0.10, cotoveloR: -0.15, cabecaX: -0.30, peLy: 0.00, peRy: 0.00, avanco: 2.25, rolarY: 6.28, altura: -0.71 },
         /*
         OS DOIS BRACOS APOIAM ANTES DE O CORPO SUBIR — 5 de Outubro de 2026. Relato, com
         captura: *"depois da defesa no alto o goleiro fica apoiado numa mao so,

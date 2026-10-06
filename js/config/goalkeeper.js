@@ -458,6 +458,8 @@ const GoalkeeperPose = {
     // pernas afastadas e mãos prontas. À espera do remate.
     // Segundos que a bola leva a ir da posicao da agarrada ate as maos (em vez de saltar).
     catchBlend: 0.18,
+    // Levantar-se com a bola nas maos depois do encaixe ajoelhado: espera (s) com as maos na bola e duracao total (s).
+    levantaComBola: { espera: 0.30, dur: 1.20 },
 
     espera: {
         chest: 0.16,
@@ -640,7 +642,7 @@ const GoalkeeperPose = {
         0.29 (eram 0.54).
         */
         fecharPunhos: true,
-        bolaAcima: 0.32,
+        bolaAcima: 0.02,
         altura: 0.0
     }
 };

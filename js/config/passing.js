@@ -720,6 +720,12 @@ const GkThrowModel = {
 
 if (typeof window !== 'undefined') window.GkThrowModel = GkThrowModel;
 
+/*
+O PONTA LIVRE COM A BOLA NO MEIO-CAMPO — pedido de 6 de Outubro de 2026. Pontos somados a nota de
+passe de um LW/RW/LM/RM livre na ala quando a bola (quem passa) esta no meio-campo.
+*/
+const PontaLivre = { pontos: 100, larguraX: 16.0, folgaMin: 3.5, zMin: -15.0, zMax: 15.0 };
+
 const PassErrorModel = {
     /*
     O CORTE DE 15% NO ERRO DE PASSE FOI TENTADO E REVERTIDO.

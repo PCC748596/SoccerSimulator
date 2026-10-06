@@ -44,8 +44,9 @@ function exigir(cond, msg) {
 }
 
 // O corpo do executeHeader, para se olhar só para ele.
-const iH = player.indexOf('    executeHeader()');
-if (iH < 0) throw new Error('executeHeader não existe em js/player.js');
+// O `executeHeader` e um invólucro (a força da cabeçada) e o corpo vive no `executeHeaderNucleo`.
+const iH = player.indexOf('    executeHeaderNucleo()');
+if (iH < 0) throw new Error('executeHeaderNucleo não existe em js/player.js');
 let nivel = 0, comecou = false, fimH = -1;
 for (let k = iH; k < player.length; k++) {
     if (player[k] === '{') { nivel++; comecou = true; }

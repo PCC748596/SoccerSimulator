@@ -76,7 +76,18 @@ tecto que não tinha (ver alcanceDoMergulho). Os que desapareceram eram
 mergulhos a bolas que passavam a 6-12 m dele — 45 min passaram a dar 7. Com 75
 min: 10 mergulhos, média 0.33 s por chegar, pior 0.39 s.
 */
-for (let i = 0; i < Math.round(4500 / dt); i++) Match.update(dt);
+/*
+SOBE DE NOVO (6 de Outubro de 2026): o alcance do salto desceu (0.85 -> 0.65 m) e a ponta dos dedos so
+desvia (GkCatchModel.extensaoSoDesvia), e a mesma semente ja so dava 3 mergulhos em 180 min. Em vez
+de fixar mais minutos corre-se semente a semente (75 min cada, jogo novo) ate haver amostra (10).
+*/
+for (const semente of [20260911, 7, 99, 1234, 555, 31, 77]) {
+    if (saltos.length >= 10) break;
+    Math.random = mulberry32(semente);
+    Match.init(scene);
+    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(scene);
+    for (let i = 0; i < Math.round(4500 / dt); i++) Match.update(dt);
+}
 
 const mediana = a => { const o = a.slice().sort((x, y) => x - y); return o.length ? o[Math.floor(o.length / 2)] : NaN; };
 const med = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN;

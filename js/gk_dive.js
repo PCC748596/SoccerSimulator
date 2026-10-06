@@ -1329,6 +1329,20 @@ const GkDive = {
             const cotL = (typeof P.cotoveloLider === 'number') ? P.cotoveloLider : P.cotovelo;
             if (B.cotoveloLider) B.cotoveloLider.rotation.x = lerpTo(B.cotoveloLider.rotation.x, cotL, w);
         }
+        /*
+        O V DE AMORTECIMENTO (flexao), nos primeiros `amorteceDur` s: ver `updateComoQueda`. Os dois
+        bracos, simetricos, partem do V de apoio e abrem para a pose acima — que tinha um braco
+        esticado e o outro dobrado sob o peito (era o "bracos cruzados em baixo do corpo").
+        */
+        const D = GoalkeeperDive;
+        if (d.t < D.amorteceDur && !d.agarrou) {
+            const u = d.t / D.amorteceDur, ww = u * u * (3 - 2 * u);
+            for (const [ombro, cot, sg] of [[rig.lArm, rig.lElbow, 1], [rig.rArm, rig.rElbow, -1]]) {
+                ombro.rotation.x = D.amorteceX + (ombro.rotation.x - D.amorteceX) * ww;
+                ombro.rotation.z = sg * D.amorteceZ + (ombro.rotation.z - sg * D.amorteceZ) * ww;
+                if (cot) cot.rotation.x = D.amorteceCotovelo + (cot.rotation.x - D.amorteceCotovelo) * ww;
+            }
+        }
     },
 
     /*

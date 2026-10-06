@@ -50,6 +50,8 @@ const CR = String.fromCharCode(13), LF = String.fromCharCode(10);
 const ler = (f) => fs.readFileSync(path.join(raiz, f), 'utf8').split(CR + LF).join(LF);
 
 require('../tools/headless/harness.js');
+// Estes testes medem a MECANICA do assento (sola em 0); o afundamento de 3 cm (AssentoNoChao.afundamento) tem teste proprio em assento_no_chao.test.js.
+AssentoNoChao.afundamento = 0;
 
 const scene = new THREE.Scene();
 Match.init(scene);

@@ -292,6 +292,21 @@ class FootballPlayer {
         this.model.add(this.actionSprite);
         this.actionSprite.visible = false;
         this.actionBannerTimer = 0;
+
+        // O NOME (PlayerNames): mesmo tamanho do rotulo, no estilo das tags (rectangulo arredondado
+        // amarelo, letras pretas). So os 3 de cada equipa mais perto da bola o mostram.
+        this.nomeCanvas = document.createElement('canvas');
+        this.nomeCanvas.width = 1024;
+        this.nomeCanvas.height = 128;
+        this.nomeCtx = this.nomeCanvas.getContext('2d');
+        this.nomeTex = new THREE.CanvasTexture(this.nomeCanvas);
+        this.nomeMat = new THREE.SpriteMaterial({ map: this.nomeTex, transparent: true, depthWrite: false });
+        this.nomeSprite = new THREE.Sprite(this.nomeMat);
+        this.nomeSprite.scale.set(20, 2.5, 1);
+        this.nomeSprite.position.set(0, 8.5, 0);
+        this.model.add(this.nomeSprite);
+        this.nomeSprite.visible = false;
+        this.ultimoNome = '';
     }
 
     /*
@@ -3206,6 +3221,19 @@ class FootballPlayer {
             }
 
             /*
+            PONTA LIVRE COM A BOLA NO MEIO-CAMPO: +100. Pedido: *"jogador livre nas pontas com bola
+            no meio campo vai receber mais 100 pontos de passe"*. Ponta = LW/RW/LM/RM a `larguraX` m
+            ou mais do eixo, livre (marcador efectivo a `folgaMin` ou mais), com a BOLA (quem passa) a
+            `zMin`..`zMax` m de avanço. Ver PontaLivre (config/passing.js).
+            */
+            const PLv = (typeof PontaLivre !== 'undefined') ? PontaLivre : null;
+            if (PLv && ['LW', 'RW', 'LM', 'RM'].indexOf(opt.pos) >= 0 &&
+                Math.abs(optPos.x) >= PLv.larguraX && distMarcEf >= PLv.folgaMin) {
+                const avBola = Match.ball.position.z * dirZ;
+                if (avBola >= PLv.zMin && avBola <= PLv.zMax) score += PLv.pontos;
+            }
+
+            /*
             O HOMEM LIVRE A FRENTE DA BOLA — ver PasseParaOLivre
             (config/passing.js) para o pedido, para a medicao e para a lista do
             que este bonus NAO pisa.
@@ -4043,6 +4071,8 @@ class FootballPlayer {
     }
 
     showActionBanner(text) {
+        // As tags (INFILTRA, CARRY, BLOCK, HEADER...) so aparecem com o botao Tags ON (omissao OFF).
+        if (!window.showActionTags) { this.actionSprite.visible = false; return; }
         this.actionBannerTimer = 1.2; 
         this.actionSprite.visible = true;
         
@@ -5081,12 +5111,10 @@ class FootballPlayer {
         }
 
         // Atualização da UI flutuante (PlayerNumber, PlayerBT, PlayerPOS e PlayerPlayingStyle)
-        if (this.inViewport && !headless && (window.showPlayerNumber || window.showPlayerNames || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints || window.speedMultiplier === "frame")) {
+        if (this.inViewport && !headless && (window.showPlayerNumber || window.showPlayerBT || window.showPlayerPOS || window.showPlayerPlayingStyle || window.showPlayerPoints || window.speedMultiplier === "frame")) {
             this.labelSprite.visible = true;
             let parts = [];
             if (window.showPlayerNumber) parts.push(this.num);
-            // O nome da camisola; sem skills (jogador de teste) o rotulo cai na posicao.
-            if (window.showPlayerNames) parts.push(this.nomeCamisola || this.pos);
             if (window.showPlayerPOS) parts.push(this.pos);
             if (window.showPlayerBT) parts.push(this.fsm.currentState);
             if (window.showPlayerPlayingStyle && this.playingStyle && !this.playingStyleDesligado) parts.push(this.playingStyle);
@@ -5136,6 +5164,38 @@ class FootballPlayer {
         } else {
             this.labelSprite.visible = false;
             this.lastLabelText = '';
+        }
+
+        /*
+        PLAYERNAMES: so os 3 jogadores de cada equipa mais perto da bola, no estilo das
+        tags (rectangulo arredondado amarelo com contorno preto, letras pretas) e do tamanho do
+        rotulo de antes. Sobe o rotulo normal para nao ficarem em cima um do outro.
+        */
+        {
+            const mostra = !!(window.showPlayerNames && this.inViewport && !headless && this.nomeSprite &&
+                typeof nomesProximosDaBola === 'function' && nomesProximosDaBola().has(this));
+            this.nomeSprite.visible = mostra;
+            this.labelSprite.position.y = (mostra && this.labelSprite.visible) ? 11.0 : 8.5;
+            if (mostra) {
+                const nome = this.nomeCamisola || this.pos;
+                if (nome !== this.ultimoNome) {
+                    this.ultimoNome = nome;
+                    const c = this.nomeCtx;
+                    c.clearRect(0, 0, 1024, 128);
+                    c.font = 'bold 36px "Segoe UI"';
+                    c.textAlign = 'center'; c.textBaseline = 'middle';
+                    const w = c.measureText(nome).width + 30, h = 46;
+                    const x0 = 512 - w / 2, y0 = 64 - h / 2;
+                    c.fillStyle = '#FFD700';
+                    c.beginPath();
+                    if (c.roundRect) c.roundRect(x0, y0, w, h, 10); else c.rect(x0, y0, w, h);
+                    c.fill();
+                    c.lineWidth = 3; c.strokeStyle = '#000000'; c.stroke();
+                    c.fillStyle = '#000000';
+                    c.fillText(nome, 512, 64 + 1);
+                    this.nomeTex.needsUpdate = true;
+                }
+            }
         }
 
         /*
@@ -9074,21 +9134,38 @@ class FootballPlayer {
             z) ficava por corrigir e só o snap inicial a tapava.
             */
             const P = GoalkeeperPose.segurar;
+            /*
+            LEVANTA-SE COM A BOLA NAS MAOS. Relato, com quatro capturas (99C9B, E5A04, 94B32): depois
+            do encaixe ajoelhado *"o goleiro se levanta antes de segurar a bola; a bola vai subindo
+            ate as maos; fica em frente ao rosto e ele sai caminhando"*. Agora, vindo do encaixe ou da
+            barreira (`gkLevanta`, posto no `grabBall`), as maos ficam na bola, no relvado, os primeiros
+            `esperaLevantar` s; so depois o corpo sobe (smoothstep ate `durLevantar`) com a bola nas
+            maos, os bracos passam a pose de segurar a meio do caminho e so entao ele anda.
+            */
+            let fLev = 1;
+            if (this.gkLevanta) {
+                const GL = GoalkeeperPose.levantaComBola;
+                this.gkLevanta.t += dt;
+                const u = THREE.MathUtils.clamp((this.gkLevanta.t - GL.espera) / Math.max(0.01, GL.dur - GL.espera), 0, 1);
+                fLev = u * u * (3 - 2 * u);
+                if (this.gkLevanta.t >= GL.dur) this.gkLevanta = null;
+            }
+            const cLev = 0.25 * fLev;
 
-            gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, P.coxa, 0.25);
-            gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, P.coxa, 0.25);
-            gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, P.joelho, 0.25);
-            gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, P.joelho, 0.25);
-            gkRig.lLeg.rotation.z = lerpTo(gkRig.lLeg.rotation.z, P.abertura, 0.25);
-            gkRig.rLeg.rotation.z = lerpTo(gkRig.rLeg.rotation.z, -P.abertura, 0.25);
-            gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, P.bracoX, 0.25);
-            gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, P.bracoX, 0.25);
-            gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, P.bracoZ, 0.25);
-            gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -P.bracoZ, 0.25);
-            gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, P.cotovelo, 0.25);
-            gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, P.cotovelo, 0.25);
-            gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, P.chest, 0.25);
-            gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + P.altura, 0.25);
+            gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, P.coxa, cLev);
+            gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, P.coxa, cLev);
+            gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, P.joelho, cLev);
+            gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, P.joelho, cLev);
+            gkRig.lLeg.rotation.z = lerpTo(gkRig.lLeg.rotation.z, P.abertura, cLev);
+            gkRig.rLeg.rotation.z = lerpTo(gkRig.rLeg.rotation.z, -P.abertura, cLev);
+            gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, P.bracoX, cLev);
+            gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, P.bracoX, cLev);
+            gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, P.bracoZ, cLev);
+            gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -P.bracoZ, cLev);
+            gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, P.cotovelo, cLev);
+            gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, P.cotovelo, cLev);
+            gkRig.chest.rotation.x = lerpTo(gkRig.chest.rotation.x, P.chest, cLev);
+            gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y + P.altura, cLev);
 
             /*
             E A BOLA VAI ÀS MÃOS.
@@ -9133,7 +9210,7 @@ class FootballPlayer {
             const passoSeg = GoalkeeperPose.segurarVel * dt;
 
             let andouSeg = 0;
-            if (distSeg > 0.15) {
+            if (distSeg > 0.15 && !this.gkLevanta) {
                 const k = Math.min(1, passoSeg / distSeg);
                 gkCorpo.position.x += dxSeg * k;
                 gkCorpo.position.z += dzSeg * k;
@@ -9168,7 +9245,7 @@ class FootballPlayer {
                 const peDoPasso = (hip) => THREE.MathUtils.clamp(hip * 0.9, 0, 0.55);
                 if (gkRig.lFoot) gkRig.lFoot.rotation.x = lerpTo(gkRig.lFoot.rotation.x, peDoPasso(poseSeg.lHip), 0.4);
                 if (gkRig.rFoot) gkRig.rFoot.rotation.x = lerpTo(gkRig.rFoot.rotation.x, peDoPasso(poseSeg.rHip), 0.4);
-            } else {
+            } else if (!this.gkLevanta) {
                 // Parado com a bola: pes direitos (o encaixe deixa-os na ponta).
                 if (gkRig.lFoot) gkRig.lFoot.rotation.x = lerpTo(gkRig.lFoot.rotation.x, 0, 0.3);
                 if (gkRig.rFoot) gkRig.rFoot.rotation.x = lerpTo(gkRig.rFoot.rotation.x, 0, 0.3);
@@ -9279,7 +9356,7 @@ class FootballPlayer {
             apesar do `bolaAcima` positivo — era o corpo a andar por baixo
             dela.
             */
-            if (P.fecharPunhos) {
+            if (P.fecharPunhos && fLev >= 0.5) {
                 if (typeof P.fechoPeloOmbro === 'number') this.fecharMaosNaBolaPeloOmbro(P.bracoZ, P.fechoPeloOmbro);
                 else this.fecharMaosNaBola(P.bracoZ);
             }
@@ -9834,8 +9911,11 @@ class FootballPlayer {
             maosProibidasNoRecuo(Match.recuoParaGR, this.team)) return false;
 
         // De onde vem a agarrada: de pe (os bracos ja estao a frente, nao se estalam) ou nao.
-        const vinhaDeMaos = (this.gkEstado === 'maos' && !this.gkEncaixe && !this.gkBarreira);
-        if (Match.ball && !manterPose) {
+        const vinhaDeEncaixe = !!(this.gkEstado === 'maos' && (this.gkEncaixe || this.gkBarreira));
+        const vinhaDeMaos = (this.gkEstado === 'maos' && !this.gkEncaixe && !this.gkBarreira) || vinhaDeEncaixe;
+        // Do encaixe ajoelhado levanta-se COM a bola nas maos (ver o ramo 'segurando').
+        this.gkLevanta = (vinhaDeEncaixe && !manterPose) ? { t: 0 } : null;
+        if (Match.ball && !manterPose && !vinhaDeEncaixe) {
             this.gkCatchBlend = { from: Match.ball.position.clone(), t: 0,
                 dur: (typeof GoalkeeperPose.catchBlend === 'number') ? GoalkeeperPose.catchBlend : 0.14 };
         }
@@ -10087,3 +10167,26 @@ class FootballPlayer {
     }
 }
 
+
+
+/*
+Os 3 jogadores de cada equipa mais perto da bola (guarda-redes incluido: e jogador como os outros) —
+quem mostra o nome com o botao PlayerNames. Recalculado a cada 100 ms: e UI, nao jogo.
+*/
+const _nomesCache = { t: -1, set: new Set() };
+function nomesProximosDaBola() {
+    const agora = (typeof performance !== 'undefined') ? performance.now() : 0;
+    if (agora - _nomesCache.t < 100 && _nomesCache.t >= 0) return _nomesCache.set;
+    _nomesCache.t = agora;
+    const set = new Set();
+    if (typeof Match !== 'undefined' && Match.ball) {
+        const b = Match.ball.position;
+        for (const lista of [Match.players, Match.opponents]) {
+            (lista || []).filter(p => p && p.model && !p.expulso)
+                .map(p => ({ p, d: Math.hypot(p.model.position.x - b.x, p.model.position.z - b.z) }))
+                .sort((a, c) => a.d - c.d).slice(0, 3).forEach(o => set.add(o.p));
+        }
+    }
+    _nomesCache.set = set;
+    return set;
+}

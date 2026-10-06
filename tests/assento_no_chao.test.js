@@ -48,6 +48,9 @@ const mod = new Function(...Object.keys(amb),
     ler('js/pose.js') + LF +
     'return { construirCorpo, escolherAparencia, AssentoNoChao };')(...Object.values(amb));
 const { construirCorpo, escolherAparencia, AssentoNoChao } = mod;
+// A mecanica mede-se com a sola em 0; o afundamento (3 cm) e verificado no fim do ficheiro.
+const AFUNDAMENTO_CONFIG = AssentoNoChao.afundamento;
+AssentoNoChao.afundamento = 0;
 
 // O método de produção, tirado do player.js: o teste não corre uma cópia.
 const srcPlayer = ler('js/player.js');
@@ -261,3 +264,11 @@ console.log(LF + '6 — o animateBones chama-o depois de escrever a pose, nos DO
 
 if (falhas) { console.log(LF + falhas + ' problema(s).'); process.exit(1); }
 console.log(LF + 'Assento no chão: todos os cenários passaram.');
+
+// O afundamento: a sola desce `AssentoNoChao.afundamento` abaixo do relvado, e so isso.
+{
+    if (!(AFUNDAMENTO_CONFIG > 0 && AFUNDAMENTO_CONFIG <= 0.06)) {
+        console.error('  X afundamento de ' + AFUNDAMENTO_CONFIG + ' m: pedido e 3 cm, nao mais do que 6');
+        process.exitCode = 1;
+    } else console.log('  . afundamento da sola configurado: ' + AFUNDAMENTO_CONFIG + ' m');
+}

@@ -289,7 +289,13 @@ function togglePlayerNumber() {
     document.getElementById('btn-playernumber').innerText = 'PlayerNumber: ' + (window.showPlayerNumber ? 'ON' : 'OFF');
     document.getElementById('btn-playernumber').classList.toggle('active', window.showPlayerNumber);
 }
-// O nome do jogador (o da camisola, de data/player_skills.js) sobre a cabeça.
+// As tags de accao (INFILTRA, CARRY, BLOCK, HEADER...) sobre a cabeça. Omissao OFF.
+function toggleActionTags() {
+    window.showActionTags = !window.showActionTags;
+    document.getElementById('btn-actiontags').innerText = 'Tags: ' + (window.showActionTags ? 'ON' : 'OFF');
+    document.getElementById('btn-actiontags').classList.toggle('active', window.showActionTags);
+}
+// O nome do jogador (o da camisola, de data/player_skills.js) sobre a cabeça — so dos 3 de cada equipa mais perto da bola.
 function togglePlayerNames() {
     window.showPlayerNames = !window.showPlayerNames;
     document.getElementById('btn-playernames').innerText = 'PlayerNames: ' + (window.showPlayerNames ? 'ON' : 'OFF');
