@@ -678,6 +678,91 @@ const Weather = {
     },
 
     /*
+    A SOMBRA DOS JOGADORES ENFRAQUECE DENTRO DA SOMBRA DA NUVEM (relato: "a sombra do jogador esta com a
+    mesma intensidade na sombra da nuvem e no sol").
+
+    Debaixo da nuvem nao ha Sol directo, logo nao ha sombra projectada nitida: o mapa de sombras (a luz
+    unica do jogo) continua a desenhar a do jogador a 100%. O Three r128 nao tem `shadow.intensity` por
+    zona, por isso a cobertura das nuvens (as mesmas manchas, ver `_criarSombraDaNuvem`) e rasterizada
+    para uma mascara pequena do relvado e o shader do relvado mistura o factor de sombra com 1.0 onde
+    a mascara e escura. `intensidadeSombraNaNuvem` e quanto da sombra do jogador SOBRA no centro da
+    mancha (0 = nada, 1 = igual ao Sol).
+    */
+    intensidadeSombraNaNuvem: 0.15,
+
+    _prepararSombraNaNuvem() {
+        const relva = window.relva;
+        if (!relva || !relva.geometry || !relva.geometry.parameters || typeof document === 'undefined') return;
+        if (this._mascaraRelva === relva) return;
+        const par = relva.geometry.parameters;
+        relva.updateMatrixWorld(true);
+        const c = new THREE.Vector3().setFromMatrixPosition(relva.matrixWorld);
+        const N = 192;
+        const cvs = document.createElement('canvas');
+        cvs.width = N; cvs.height = Math.max(16, Math.round(N * par.height / par.width));
+        const ctx = cvs.getContext('2d');
+        if (!ctx) return;
+        this._mascara = {
+            cvs, ctx,
+            tex: new THREE.CanvasTexture(cvs),
+            x0: c.x - par.width * 0.5, z0: c.z - par.height * 0.5, w: par.width, l: par.height,
+            u: new THREE.Vector4(c.x - par.width * 0.5, c.z - par.height * 0.5, par.width, par.height)
+        };
+        this._mascara.tex.flipY = false;
+        this._mascara.tex.wrapS = this._mascara.tex.wrapT = THREE.ClampToEdgeWrapping;
+        const M = this._mascara;
+        const mat = relva.material;
+        const self = this;
+        mat.onBeforeCompile = (shader) => {
+            shader.uniforms.uMascaraNuvem = { value: M.tex };
+            shader.uniforms.uMascaraBox = { value: M.u };
+            shader.uniforms.uSombraNaNuvem = { value: self.intensidadeSombraNaNuvem };
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', '#include <common>\nvarying vec3 vNuvemW;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvNuvemW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+            let luzes = THREE.ShaderChunk.lights_fragment_begin;
+            const re = /(directLight\.color \*= (?:all\( bvec2\( directLight\.visible, receiveShadow \) \)|\( directLight\.visible && receiveShadow \)) \? )(getShadow\([^;]*?\))( : 1\.0;)/g;
+            if (luzes.search(re) >= 0) {
+                luzes = luzes.replace(re, '$1mix($2, 1.0, nuvemSombra * (1.0 - uSombraNaNuvem))$3');
+            } else if (typeof console !== 'undefined') {
+                console.warn('Weather: o shader das luzes mudou — a sombra do jogador nao enfraquece na nuvem.');
+            }
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', '#include <common>\nvarying vec3 vNuvemW;\nuniform sampler2D uMascaraNuvem;\nuniform vec4 uMascaraBox;\nuniform float uSombraNaNuvem;')
+                .replace('#include <lights_fragment_begin>',
+                    'float nuvemSombra = texture2D(uMascaraNuvem, (vNuvemW.xz - uMascaraBox.xy) / uMascaraBox.zw).a;\n' +
+                    'nuvemSombra = clamp(nuvemSombra / 0.5, 0.0, 1.0);\n' + luzes);
+        };
+        mat.customProgramCacheKey = () => 'relva-sombra-nuvem';
+        mat.needsUpdate = true;
+        this._mascaraRelva = relva;
+    },
+
+    // Rasteriza as manchas visiveis das nuvens na mascara do relvado (alfa = cobertura).
+    _actualizarSombraNaNuvem() {
+        this._prepararSombraNaNuvem();
+        const M = this._mascara;
+        if (!M) return;
+        const { ctx, cvs } = M;
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        let algum = false;
+        const sx = cvs.width / M.w, sz = cvs.height / M.l;
+        for (const c of this.clouds) {
+            const sombra = c.userData && c.userData.sombra;
+            if (!sombra || !sombra.visible) continue;
+            const img = sombra.material.map && sombra.material.map.image;
+            const par = sombra.geometry.parameters;
+            if (!img || !par) continue;
+            const px = (sombra.position.x - par.width * 0.5 - M.x0) * sx;
+            const pz = (sombra.position.z - par.height * 0.5 - M.z0) * sz;
+            ctx.drawImage(img, px, pz, par.width * sx, par.height * sz);
+            algum = true;
+        }
+        if (algum || M.tinhaNuvem) M.tex.needsUpdate = true;
+        M.tinhaNuvem = algum;
+    },
+
+    /*
     Os quatro planos que recortam as manchas das nuvens ao relvado. O relvado
     pode nascer depois do Weather (e é recriado ao montar o campo), por isso
     os planos são escritos no próprio array partilhado pelas matérias, no
@@ -1040,6 +1125,10 @@ const Weather = {
                 sombra.material.opacity = opSombra;
             });
         }
+        // A mascara das manchas no relvado, para a sombra dos jogadores enfraquecer nelas (a cada 3 frames).
+        this._fMascara = ((this._fMascara || 0) + 1) % 3;
+        if (this._fMascara === 0 && this.clouds && this.clouds.length) this._actualizarSombraNaNuvem();
+
         if (this.sombrasGroup && !(this.cloudGroup && this.cloudGroup.visible)) {
             this.sombrasGroup.children.forEach(m => { m.visible = false; });
         }

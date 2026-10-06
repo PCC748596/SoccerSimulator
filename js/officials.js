@@ -173,7 +173,7 @@ const RefereeModel = {
     Só vale para quem tem um ponto para vigiar (o árbitro, com a bola). Os
     assistentes correm na linha e não recebem `olharPara`.
     */
-    anguloMaxDaBola: 100 * Math.PI / 180,
+    anguloMaxDaBola: 75 * Math.PI / 180,
     /*
     ANDAR NO SÍTIO, e a zona morta era a causa. Relato: *"o juiz está com
     animação de andar sem sair da posição"*. O alvo dele quase nunca está

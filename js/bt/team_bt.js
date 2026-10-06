@@ -1046,7 +1046,7 @@ function computeBlock(bb) {
     }
 
     // T.Offensive de estilo posicional: o rectangulo sobe um pouco mais (BlockShape.transicaoOfensiva).
-    const transOf = transicaoOfensivaDoEstilo(bb);
+    const transOf = (typeof transicaoOfensivaDoEstilo === 'function') ? transicaoOfensivaDoEstilo(bb) : null;
     if (transOf) avancoMeio += transOf.avancoExtra;
 
     targetOffsetZ += avancoMeio;
@@ -1054,7 +1054,7 @@ function computeBlock(bb) {
     if (bb.blocoZSuave === undefined) {
         bb.blocoZSuave = targetOffsetZ;
     } else {
-        bb.blocoZSuave = seguirBola(bb.blocoZSuave, targetOffsetZ, seguimentoDoBloco(bb), dtMatch, reposta);
+        bb.blocoZSuave = seguirBola(bb.blocoZSuave, targetOffsetZ, (typeof seguimentoDoBloco === 'function') ? seguimentoDoBloco(bb) : BlockShape.seguimentoBola, dtMatch, reposta);
     }
 
     const mentalBloco = (typeof MentalidadeModel !== 'undefined' &&
