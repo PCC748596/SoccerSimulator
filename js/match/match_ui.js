@@ -378,11 +378,13 @@ Object.assign(Match, {
         e, nas vistas laterais, a camara anda ao longo da linha com ele — a bola
         e a baliza cabem no mesmo plano. Ver CameraZoom.faltaDirectaDist.
         */
-        if (window.cameraMode !== 'topdown' && this.state === 'FREE_KICK' && this.setPieceTaker) {
+        if (window.cameraMode !== 'topdown' && (this.state === 'FREE_KICK' || this.state === 'CORNER_KICK') && this.setPieceTaker) {
             const ZF = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
             const dMax = (ZF && ZF.faltaDirectaDist) || 35.0;
             const golZ = this.setPieceTaker.targetGoalZ;
-            if (typeof golZ === 'number' && Math.hypot(this.ball.position.x, golZ - this.ball.position.z) <= dMax) {
+            // No canto vale sempre (a bola esta na bandeirola, ~34 m do centro da baliza).
+            if (typeof golZ === 'number' && (this.state === 'CORNER_KICK' ||
+                Math.hypot(this.ball.position.x, golZ - this.ball.position.z) <= dMax)) {
                 const mx = this.ball.position.x * 0.5;
                 const mz = (this.ball.position.z + golZ) * 0.5;
                 if (window.cameraMode === 'grua') {

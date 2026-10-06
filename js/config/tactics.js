@@ -892,14 +892,6 @@ const BlockShape = {
     seguimentoBola: 3.0,
 
     /*
-    T.OFFENSIVE MAIS RAPIDO NO POSICIONAL E NA POSSESSAO (pedido): nos 3 s a seguir a ganhar a bola, o
-    bloco segue a bola `seguimentoMult` vezes mais depressa e o rectangulo ganha `avancoExtra` m a
-    frente, para a equipa sair para o ataque mais cedo. So para os estilos de `estilos` (nome em
-    TeamPlayStyles). Ver `seguimentoDoBloco` e o `computeBlock` em team_bt.js.
-    */
-    transicaoOfensiva: { estilos: ['Positional', 'Possession'], seguimentoMult: 2.0, avancoExtra: 3.0 },
-
-    /*
     LIMITES DO RECTÂNGULO — as linhas do campo, e mais nada.
 
     O bloco desloca-se inteiro para dentro do campo quando bate numa linha;
