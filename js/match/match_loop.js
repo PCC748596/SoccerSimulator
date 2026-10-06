@@ -948,7 +948,7 @@ Object.assign(Match, {
         if (typeof MatchStats !== 'undefined' && MatchStats.seguirBolaNoAtaque &&
             this.possessionTeam && this.ball) {
             const dirPosse = Lados.dirDe(this.possessionTeam);
-            MatchStats.seguirBolaNoAtaque(this.possessionTeam, this.ball.position.z * dirPosse);
+            MatchStats.seguirBolaNoAtaque(this.possessionTeam, this.ball.position.z * dirPosse, this.ball.position);
         }
 
         if (typeof Perception !== 'undefined') Perception.tick(this, dt);

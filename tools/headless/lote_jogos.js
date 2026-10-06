@@ -250,8 +250,11 @@ const ALVOS = [
     { campo: 'vermelhos', rotulo: 'vermelhos', alvo: 0.08, casas: 2, provisorio: true },
     { campo: 'faltas', rotulo: 'faltas', alvo: 27.63, casas: 2 },
     { campo: 'impedimentos', rotulo: 'impedimentos', alvo: 3.20, casas: 2 },
-    { campo: 'ataquesPerigosos', rotulo: 'ataques perigosos', alvo: 77.84, casas: 1 },
-    { campo: 'ataquesTotais', rotulo: 'ataques totais', alvo: 176.63, casas: 1 },
+    // Sem alvo: os 176.63 / 77.84 de antes eram de uma definicao de "ataque" que nao se conseguiu
+    // confirmar numa fonte (ver js/stats.js). Passam a chamar-se pelo que medem.
+    { campo: 'ataquesTotais', rotulo: 'sequências de posse', alvo: null, casas: 1 },
+    { campo: 'ataquesPerigosos', rotulo: 'entradas no último terço', alvo: null, casas: 1 },
+    { campo: 'ataquesNaArea', rotulo: 'entradas na grande área', alvo: null, casas: 1 },
     { campo: 'xg', rotulo: 'xG total', alvo: 2.84, casas: 2 },
     { campo: 'xgPorRemate', rotulo: 'xG por remate', alvo: 0.109, casas: 3 }
 ];

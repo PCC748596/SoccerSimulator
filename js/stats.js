@@ -45,7 +45,13 @@ function novoContadorEquipa() {
         importante, é a única que se consegue medir com o que o jogo já regista
         por frame (ver registarZona).
         */
-        ataques: { totais: 0, perigosos: 0 },
+        /*
+        `totais` = sequencias de posse; `perigosos` = as que chegam ao ultimo terco ou acabam em remate;
+        `naArea` = as que ENTRAM NA GRANDE AREA adversaria. Os nomes ficam por compatibilidade: nos
+        relatorios chamam-se "sequencias de posse", "entradas no ultimo terco" e "entradas na grande area"
+        (ver tools/headless/lote_jogos.js) — "ataque" era uma palavra enganadora para uma posse qualquer.
+        */
+        ataques: { totais: 0, perigosos: 0, naArea: 0 },
 
         /*
         IMPEDIMENTOS — fica sempre a ZERO, e de propósito.
@@ -634,6 +640,7 @@ const MatchStats = {
 
         s.ataques.totais++;
         if (a.chegouAoTerco || a.rematou) s.ataques.perigosos++;
+        if (a.entrouNaArea) s.ataques.naArea++;
     },
 
     /*
@@ -671,8 +678,13 @@ const MatchStats = {
     Chamado uma vez por frame pelo match_loop, com o avanco da BOLA no
     referencial de ataque de quem tem a posse.
     */
-    seguirBolaNoAtaque: function (team, avancoDaBola) {
+    seguirBolaNoAtaque: function (team, avancoDaBola, posicaoDaBola) {
         if (!team || !this._ataque || this._ataque.team !== team) return;
+        // A bola dentro da grande area que a equipa ataca: uma entrada por sequencia.
+        if (posicaoDaBola && !this._ataque.entrouNaArea && typeof Area !== 'undefined' && typeof Lados !== 'undefined' &&
+            Area.contem(posicaoDaBola.x, posicaoDaBola.z, Lados.dirDe(team) * LINHA_FUNDO)) {
+            this._ataque.entrouNaArea = true;
+        }
         if (avancoDaBola > CAMPO_COMP / 6) {
             if (!this._ataque.chegouAoTerco) {
                 const s = this[team];
@@ -925,7 +937,7 @@ const MatchStats = {
                 segundosJogados: segundosJogados || 0, escalado: false,
                 golos: null, remates: null, cantos: null, amarelos: null,
                 vermelhos: null, faltas: null, impedimentos: null,
-                ataquesPerigosos: null, ataquesTotais: null, xg: null
+                ataquesPerigosos: null, ataquesTotais: null, ataquesNaArea: null, xg: null
             }, razoes);
         }
 
@@ -941,6 +953,7 @@ const MatchStats = {
             impedimentos: soma(s => s.impedimentos) * k,
             ataquesPerigosos: soma(s => s.ataques.perigosos) * k,
             ataquesTotais: soma(s => s.ataques.totais) * k,
+            ataquesNaArea: soma(s => s.ataques.naArea) * k,
             xg: soma(s => s.xg) * k
         }, razoes);
     },
@@ -997,6 +1010,7 @@ const MatchStats = {
                 // --- ATAQUE
                 ataques: s.ataques.totais,
                 ataquesPerigosos: s.ataques.perigosos,
+                ataquesNaArea: s.ataques.naArea,
                 entradasUltimoTerco: s.entradasUltimoTerco,
                 toquesNaArea: s.toquesNaArea,
                 cruzamentos: s.cruzamentos.tentados + '/' + s.cruzamentos.certos,

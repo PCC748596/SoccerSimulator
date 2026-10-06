@@ -11904,3 +11904,7 @@ nada sobre a causa. Passou a `atributoOuMedia`.
   - Teste reescrito: `tests/falta_rotinas.test.js`. Os diagramas foram lidos à vista (escala 5.9 px/m); afinar os números em `FaltaRotinas.rotinas`.
 - **Câmeras 4 e 7**: o zoom aproxima da BOLA (posição = bola + (base − bola) × zoom) e não do centro do campo.
 - **Deslizar sem passos** (`ColisaoJogadores.deslizeMin/Max`): quem se desloca entre dois frames a mais de 1 m/s (até 7) com velocidade zero e sem gesto passa a dar passos (`empurrao`), seja qual for a causa (colisão, volta da queda, montagem do lance parado).
+
+### Métricas de "ataque" do lote renomeadas e sem alvo
+
+- Os relatórios (`tools/headless/lote_jogos.js`, `painel.js`) passam a chamar-se pelo que medem: **sequências de posse** (antes "ataques totais"), **entradas no último terço** (antes "ataques perigosos") e **entradas na grande área** (nova: `MatchStats.ataques.naArea`, `ataquesNaArea` na ficha e em `porJogo`; `seguirBolaNoAtaque` recebe a posição da bola). Os alvos 176.63 / 77.84 saíram: eram de uma definição de "ataque" (qualquer posse) que não se confirmou numa fonte. Os três ficam sem alvo até haver um dado real comparável. Primeira medição (8 jogos de 8 min): ~123 posses, ~56 entradas no último terço e ~25 entradas na área por 90 min, as duas equipas somadas.
