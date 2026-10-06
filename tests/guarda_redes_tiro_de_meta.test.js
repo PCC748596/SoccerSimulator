@@ -177,19 +177,21 @@ console.log('7 — E A MEDIDA: nenhum salto de frame para frame, com o jogo a co
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
-    Math.random = mulberry32(7);
-
     require('../tools/headless/harness.js');
 
     const dt = 1 / 60;
-    const cena = new THREE.Scene();
-    Match.init(cena);
-    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
     if (typeof Sim === 'undefined') global.Sim = {};
     Sim.running = true;
 
+    let maiorSalto = 0, ondeSaltou = '', tiros = 0;
+    // Varias sementes: uma so pode nao ter nenhum tiro de meta em 8 minutos.
+    for (const semente of [7, 8, 9]) {
+    Math.random = mulberry32(semente);
+    const cena = new THREE.Scene();
+    Match.init(cena);
+    if (typeof Officials !== 'undefined' && Officials.init) Officials.init(cena);
     const anterior = new Map();
-    let maiorSalto = 0, ondeSaltou = '', tiros = 0, estadoAnt = '';
+    let estadoAnt = '';
 
     for (let f = 0; f < 60 * 60 * 8; f++) {
         for (const p of [...Match.players, ...Match.opponents]) {
@@ -205,11 +207,12 @@ console.log('7 — E A MEDIDA: nenhum salto de frame para frame, com o jogo a co
         estadoAnt = Match.state;
         Match.update(dt);
     }
+    }
 
     console.log(`  ${tiros} tiros de meta | maior salto num frame: ` +
         `${maiorSalto.toFixed(3)} m (${ondeSaltou || 'sem saltos'})`);
 
-    if (tiros < 2) erro(`amostra curta: so ${tiros} tiros de meta em 8 minutos`);
+    if (tiros < 2) erro(`amostra curta: so ${tiros} tiros de meta em 3 x 8 minutos`);
     else ok(`${tiros} tiros de meta medidos`);
 
     if (maiorSalto > 0.5) {

@@ -71,7 +71,8 @@ repeticao esta a repor.
 =============================================================================
 */
 const REPLAY_GOLO = {
-    SEGUNDOS_ANTES: 11.0,
+    // 11 -> 9 (6 de Outubro de 2026, *"ajusta o Replay para 10s somente"*): 9 antes + 1 depois = 10 s.
+    SEGUNDOS_ANTES: 9.0,
     SEGUNDOS_DEPOIS: 1.0,
     CAMARA: 'lateraltv'
 };

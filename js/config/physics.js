@@ -636,7 +636,7 @@ const ChuvaNoJogo = {
     bolaPatina: 0.20,      // fraccao retirada a perda horizontal do quique
     bolaRessalta: 0.15,    // fraccao retirada ao ressalto vertical
     cansaco: 0.30,         // fraccao ACRESCENTADA ao gasto de deposito
-    agarrarGK: 0.22        // fraccao retirada a probabilidade de agarrar
+    agarrarGK: 0.45        // fraccao retirada a probabilidade de agarrar
 };
 
 /*

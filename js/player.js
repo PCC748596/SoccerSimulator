@@ -6775,6 +6775,7 @@ class FootballPlayer {
 
     updateGK(dt) {
         let gkCorpo = this.model; let gkRig = this.rig;
+        if (this.gkFalhaTimer > 0) this.gkFalhaTimer -= dt;   // mao de alface: nao volta a tocar na bola
         // A torcao dos bracos da pose de espera ('maos') nao sobrevive a ela.
         if (this.gkEstado !== 'maos' && gkRig && gkRig.lArm && (gkRig.lArm.rotation.y !== 0 || gkRig.rArm.rotation.y !== 0)) {
             gkRig.lArm.rotation.y = lerpTo(gkRig.lArm.rotation.y, 0, 0.4);
@@ -9802,6 +9803,7 @@ class FootballPlayer {
     }
 
     resolverDefesaComMaos(tipo, extensao, semAgarrar) {
+        if (this.gkFalhaTimer > 0) return;
         /*
         NUMA FALTA COM DESFECHO DE DEFESA, quem resolve e o PLANO.
 
@@ -9826,12 +9828,19 @@ class FootballPlayer {
             vChegada: Match.ballVel.length(),
             extensao: extensao,
             altura: Math.max(0, Match.ball.position.y - GkCatchModel.alturaPeito),
+            bolaY: Match.ball.position.y,
             // De onde saiu o remate -- ver `semAgarrar` no GkCatchModel.
             dist: this.gkDistRemate
         });
 
         Match.lastTouchedPlayer = this;
         Match.lastTouchedTeam = this.team;
+
+        // A mao de alface: ver GkCatchModel.falhas e GkDive.falhaDoGuardaRedes.
+        if (decisao.falha && typeof GkDive !== 'undefined' && GkDive.falhaDoGuardaRedes) {
+            GkDive.falhaDoGuardaRedes(this, decisao.falha);
+            return;
+        }
 
         /*
         E A DEFESA CONTA-SE. O `registarDefesa` era chamado noutros sitios e
@@ -9910,6 +9919,7 @@ class FootballPlayer {
         if (typeof maosProibidasNoRecuo === 'function' &&
             maosProibidasNoRecuo(Match.recuoParaGR, this.team)) return false;
 
+        if (this.gkFalhaTimer > 0) return false;
         // De onde vem a agarrada: de pe (os bracos ja estao a frente, nao se estalam) ou nao.
         const vinhaDeEncaixe = !!(this.gkEstado === 'maos' && (this.gkEncaixe || this.gkBarreira));
         const vinhaDeMaos = (this.gkEstado === 'maos' && !this.gkEncaixe && !this.gkBarreira) || vinhaDeEncaixe;

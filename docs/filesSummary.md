@@ -11841,3 +11841,11 @@ O `skill_map.js` declarava `function n(v)` — no espaço global, que em `js/` �
 partilhado por todos os ficheiros. Colidiu com o primeiro `let n` de um script
 de medição e o erro saiu como "falhou a carregar skill_map.js", que não diz
 nada sobre a causa. Passou a `atributoOuMedia`.
+
+### Falhas do goleiro, chuva, seguimento do passe, braços do árbitro, replay
+
+- **Chuva e falhas do guarda-redes**: `ChuvaNoJogo.agarrarGK` 0.22 → 0.45 (agarra menos, rebate mais). `GkCatchModel.falhas` (`config/goalkeeper.js`): `prob` 1%, `probBaixa` 2% se a técnica < `tecnicaMin` 70, `chuvaMult` 2 (escala com a chuva). `resolverDefesaGK` (`utils.js`) devolve `falha` quando o resultado é 'agarra' (`escapa`; ou `passaPorBaixo` se a bola vem abaixo de `alturaBaixa`) ou 'espalma' (`caiNoGol`, "mão de alface"). Só sorteia com `o.rnd` indefinido, por isso os testes que injectam `rnd` não mudam. `GkDive.falhaDoGuardaRedes` (`gk_dive.js`) aplica a bola resultante e `gkFalhaTimer` (0.6 s) impede nova agarra/desvio imediatos.
+- **Seguimento do passe**: o `case 'PASS'` (`fsm.js`) saía no frame em que a bola deixava o pé (`!p.hasBall`), cortando os keyframes 6–8 do `PassClip` e a perna parava. Agora, com `passeComClip` (como no lançamento), corre até `actionState.isDone()`.
+- **Braços do árbitro**: o `mover` (`officials.js`) assenta `rotation.z` dos braços em ±PI/12 quando nenhum gesto (sinal/cartão) os controla; antes ficavam colados ao corpo (o `acabarCartao` zerava-os).
+- **Replay do golo**: `REPLAY_GOLO.SEGUNDOS_ANTES` 11 → 9 (9 + 1 depois = 10 s).
+- Testes: `guarda_redes_bola_agarrada` com mais sementes (`AMOSTRA_MIN` 3), `gk_salta_no_momento` em ciclo de sementes, `assento_*` com `afundamento` a 0 e verificação de config.

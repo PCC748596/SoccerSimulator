@@ -943,7 +943,7 @@ const GkDive = {
                 : this._v.distanceTo(Match.ball.position);
             if (dist < melhorDist) { melhorDist = dist; melhorMao = nome; }
         }
-        if (melhorMao === null || melhorDist > D.raioMao + BallPhysics.raio) return;
+        if (melhorMao === null || melhorDist > D.raioMao + BallPhysics.raio || p.gkFalhaTimer > 0) return;
 
         d.tocou = true;
 
@@ -988,12 +988,15 @@ const GkDive = {
             vChegada: Match.ballVel.length(),
             extensao: extensao,
             altura: Math.max(0, Match.ball.position.y - GkCatchModel.alturaPeito),
+            bolaY: Match.ball.position.y,
             // De onde saiu o remate -- ver `semAgarrar` no GkCatchModel.
             dist: p.gkDistRemate
         });
 
         Match.lastTouchedPlayer = p;
         Match.lastTouchedTeam = p.team;
+
+        if (decisao.falha) { this.falhaDoGuardaRedes(p, decisao.falha); return; }
 
         if (decisao.resultado === 'agarra') {
             d.agarrou = true;
@@ -1018,6 +1021,30 @@ const GkDive = {
         }
 
         this.espalmar(p, d, decisao.qualidade, decisao.semAgarrar);
+    },
+
+    /*
+    A MAO DE ALFACE (GkCatchModel.falhas): o toque que da errado. A bola nunca fica com ele.
+    `escapa` cai-lhe a frente a baixa velocidade; `passaPorBaixo` segue para a baliza por baixo das
+    pernas (pelo menos 4 m/s, rasteira); `caiNoGol` rola para dentro da baliza.
+    */
+    falhaDoGuardaRedes(p, falha) {
+        const b = Match.ball.position, v = Match.ballVel;
+        const paraGol = -p.dirZ;   // sentido da propria baliza (z)
+        if (falha === 'escapa') {
+            // A frente dele, para o campo, com um ressalto curto e um desvio de lado.
+            v.set((Math.random() - 0.5) * 3.0, 1.4, -paraGol * (1.0 + Math.random() * 1.5));
+        } else if (falha === 'passaPorBaixo') {
+            const vel = Math.max(4.0, v.length() * 0.4);
+            v.set(v.x * 0.3, 0, paraGol * vel);
+            b.y = BallPhysics.raio;
+        } else if (falha === 'caiNoGol') {
+            v.set((Math.random() - 0.5) * 1.0, 0.8, paraGol * 3.8);
+        }
+        if (Match.ballCarrier === p) Match.ballCarrier = null;
+        p.hasBall = false;
+        // Para a bola poder entrar: ninguem a segura nem a mao lhe volta a tocar de imediato.
+        p.gkFalhaTimer = 0.6;
     },
 
     /*

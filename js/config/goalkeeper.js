@@ -2266,6 +2266,17 @@ const GkCatchModel = {
     */
     semAgarrar: { distMax: 6.0, velMin: 22.0 },
     /*
+    A MAO DE ALFACE — pedido de 6 de Outubro de 2026. Tres falhas do guarda-redes, cada uma `prob` das
+    vezes que a situacao acontece, e `probBaixa` se a tecnica de GK dele (skill) for abaixo de
+    `tecnicaMin`:
+      escapa          depois de segurar a bola, ela escapa-lhe das maos (cai a frente dele);
+      passaPorBaixo   bola rasteira (abaixo de `alturaBaixa`): tenta encaixar por baixo, amortece e a
+                      bola passa por baixo das pernas;
+      caiNoGol        defende (espalma) mas a bola cai dentro da baliza.
+    Com chuva (a bola escorrega) multiplicam-se por `chuvaMult` ao molhado maximo.
+    */
+    falhas: { prob: 0.01, probBaixa: 0.02, tecnicaMin: 70, alturaBaixa: 0.6, chuvaMult: 2.0 },
+    /*
     Probabilidade base por TIPO de defesa, a v = vRef e extensão 0. É a mesma
     estrutura que as quatro fórmulas antigas tinham, agora explícita e com o
     mesmo declive para todas.

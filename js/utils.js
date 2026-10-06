@@ -3987,8 +3987,25 @@ function resolverDefesaGK(o) {
     else if (r < pAgarra + (1 - pAgarra - pRoca)) resultado = 'espalma';
     else resultado = 'roca';
 
+    /*
+    AS FALHAS (GkCatchModel.falhas): so no jogo, nao nos testes puros (que passam `rnd`).
+    */
+    let falha = null;
+    const FA = M.falhas;
+    if (FA && o.rnd === undefined) {
+        let pf = (gk < FA.tecnicaMin) ? FA.probBaixa : FA.prob;
+        if (typeof chuvaNoRelvado === 'function') pf *= 1 + (FA.chuvaMult - 1) * chuvaNoRelvado();
+        if (resultado === 'agarra') {
+            if (Math.random() < pf) falha = 'escapa';
+            else if ((typeof o.bolaY === 'number') && o.bolaY < FA.alturaBaixa && Math.random() < pf) falha = 'passaPorBaixo';
+        } else if (resultado === 'espalma' && Math.random() < pf) {
+            falha = 'caiNoGol';
+        }
+    }
+
     return {
         resultado: resultado,
+        falha: falha,
         pAgarra: pAgarra,
         pRoca: pRoca,
         semAgarrar: semAgarrar,

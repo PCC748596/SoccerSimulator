@@ -1580,6 +1580,20 @@ const Officials = {
             rig.rLeg.rotation.z = lerpTo(rig.rLeg.rotation.z, 0, 0.2);
             o.model.position.y = lerpTo(o.model.position.y, 0, 0.2);
         }
+
+        /*
+        BRAÇOS ABERTOS DE REPOUSO (relato A761F: "braços muito fechados"). Nada
+        no mover tocava no rotation.z dos braços: ficavam onde o último gesto
+        (cartão, sinal) os deixou, e o acabarCartao zera-os, colados ao corpo. O
+        jogador de campo repousa a PI/12; o árbitro assenta aí quando nenhum gesto
+        é dono dos braços.
+        */
+        const gestoNosBracos = o.sinal || (typeof Officials !== 'undefined' && Officials.cartaoEmCurso);
+        if (!gestoNosBracos) {
+            const zRepouso = Math.PI / 12;
+            rig.lArm.rotation.z = lerpTo(rig.lArm.rotation.z, zRepouso, 0.2);
+            rig.rArm.rotation.z = lerpTo(rig.rArm.rotation.z, -zRepouso, 0.2);
+        }
     },
 
     /*
