@@ -2959,7 +2959,7 @@ class FootballPlayer {
         */
         const teamBB = (typeof TeamAI !== 'undefined') ? TeamAI.get(this.team) : null;
         const teamStyle = (typeof TeamPlayStyles !== 'undefined')
-            ? (TeamPlayStyles[Tatics.teamPlayStyle] || TeamPlayStyles.positional)
+            ? estiloDaEquipaDe(this.team)
             : null;
         const secToCongestionKey = { esq: 'esq', dir: 'dir', cen: 'centro' };
         const ladoBola = getSectorOfX(ownX);
@@ -3102,10 +3102,16 @@ class FootballPlayer {
                 (minOppDist - bloqueio) / Math.max(0.001, corredor - bloqueio), 0, 1);
             let penalLinha = PL.pesoLinha * (1 - qualidadeLinha)
                 + PL.pesoCorpo * corposNoCorredor * fatorIntercept;
+            if (teamStyle && typeof teamStyle.riscoLinha === 'number') penalLinha *= teamStyle.riscoLinha;
             if (isOrchestrator) penalLinha *= PL.factorOrquestrador;
             // Passe PARA o último terço: o risco vale a pena (ver PassLineModel).
             if (optPos.z * dirZ > PL.ultimoTercoZ) penalLinha *= PL.factorUltimoTerco;
             score -= penalLinha;
+            // Possession: paga pela linha limpa (TeamPlayStyles.seguranca / riscoLinha).
+            if (teamStyle && teamStyle.seguranca) {
+                const fiabS = (typeof FiabilidadePasse !== 'undefined') ? FiabilidadePasse.fiabilidade(dist) : 1.0;
+                score += teamStyle.seguranca * qualidadeLinha * fiabS;
+            }
 
             // Bónus/Penalidade ABSOLUTA pela marcação do RECEBEDOR
             // Um jogador livre tem que SEMPRE ganhar de um marcado
@@ -5548,6 +5554,13 @@ class FootballPlayer {
         if (C && Match.counterAttackTeam === this.team) {
             if (progression > 0) b += Math.min(25, progression) * C.bonusProgressao;
             else if (progression < 2.0) b -= C.penalRecuo;
+        }
+        if (teamStyle.bonusAtaque && opt.role === 'atk' && progression > 8.0) b += teamStyle.bonusAtaque * fiab;
+        const V = teamStyle.vertical;
+        if (V) {
+            if (progression > 3.0) b += Math.min(V.ganhoMax, progression) * V.porMetro * fiab;
+            else if (progression < -3.0) b -= V.penalAtras;
+            else b -= V.penalLado;
         }
         const A = teamStyle.alas;
         if (A && Math.abs(optPos.x) >= A.larguraAla && optPos.z * dirZ > -10) b += A.bonusReceptor * fiab;

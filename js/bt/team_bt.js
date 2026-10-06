@@ -2742,6 +2742,12 @@ const PosicionamentoAI = {
             }
         }
 
+        // Wing Play: com a bola na ala, os atacantes ocupam a area (ver playing_styles.js).
+        if (typeof ocuparAreaComBolaNaAla === 'function' && !temTarefaDeBola) {
+            const ocupa = ocuparAreaComBolaNaAla(p, bb, molaX, finalZ);
+            molaX = ocupa.x; finalZ = ocupa.z;
+        }
+
         /*
         LANCE DE LATERAL: quem se aproxima, e quanto.
 

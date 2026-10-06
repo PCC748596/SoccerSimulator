@@ -1633,6 +1633,19 @@ Cada estilo ganha agora, alem dos multiplicadores:
                    |x| >= `larguraAla`) e `conducaoAlas` (multiplica o orcamento
                    de conducao de quem joga na ala); `cruzamentoZona` alarga a
                    zona em que se pensa em cruzar (`alaX`, `zonaZ`).
+    areaComBolaNaAla  com a bola na ala (|x| >= `larguraBola`, avanco >= `zBola`) os
+                   atacantes (CF/SS/AM, um medio e o ponta do outro lado) ocupam
+                   a area: primeiro poste, marca e segundo poste, a `zArea`.
+    cadenciaPosse  multiplica o tempo que o portador leva a decidir depois de dominar
+                   (CadenceModel.posseBase, ~3 s): o Direct decide a 1/3, a Possession
+                   espera mais. `passeRapido` multiplica a velocidade de chegada do
+                   passe rasteiro (PassModel.vChegadaRasteira).
+    riscoLinha / seguranca   Possession: multiplica a penalizacao de uma linha de passe
+                   apertada e paga `seguranca` pontos pela qualidade da linha (0..1).
+    vertical       Direct: `porMetro` pontos por metro ganho num passe (ate `ganhoMax`) e
+                   `penalLado`/`penalAtras` ao passe de lado (< 3 m) ou para tras (< -3 m).
+    bonusAtaque    Direct: pontos a quem e atacante (role atk) num passe que progride
+                   mais de 8 m.
     lancamento     multiplica a chance de pensar num lancamento (bola nas costas
                    da ultima linha), em findThroughBall.
 */
@@ -1640,18 +1653,24 @@ const TeamPlayStyles = {
     possession: {
         nome: 'Possession',
         circulacao: 1.9, verticalidade: 0.6, viradas: 1.3,
-        corredores: 0.9, cruzamento: 0.9, pressaoPosPerda: 1.0,
+        corredores: 0.9, cruzamento: 0.9, pressaoPosPerda: 0.6,
         conducao: 0.45,
         corridas: 0.6, lancamento: 0.6,
+        cadenciaPosse: 0.75, passeRapido: 1.1,
+        riscoLinha: 1.7, seguranca: 140,
         afinidade: { classic_no10: 160, creative_playmaker: 160, orchestrator: 170, target_man: 110, fox_in_the_box: 90 }
     },
     direct: {
         nome: 'Direct',
-        circulacao: 0.65, verticalidade: 1.4, viradas: 0.7,
+        circulacao: 0.4, verticalidade: 2.2, viradas: 0.7,
         corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 1.0,
         conducao: 1.0,
-        corridas: 1.5, lancamento: 2.2,
-        afinidade: { target_man: 200, goal_poacher: 150, dummy_runner: 150, extra_frontman: 80 }
+        corridas: 3.0, lancamento: 2.2,
+        cadenciaPosse: 0.35, passeRapido: 1.35,
+        bonusAtaque: 350,
+        // Passe vertical: premio por metro ganho (ate `ganhoMax` m) e castigo ao passe de lado ou atras.
+        vertical: { porMetro: 6.0, ganhoMax: 25.0, penalLado: 250, penalAtras: 330 },
+        afinidade: { target_man: 400, goal_poacher: 300, dummy_runner: 300, extra_frontman: 150 }
     },
     counter_attack: {
         nome: 'Counter Attack',
@@ -1659,6 +1678,7 @@ const TeamPlayStyles = {
         corredores: 1.0, cruzamento: 1.0, pressaoPosPerda: 0.8,
         conducao: 1.75,
         corridas: 2.0, corridasContra: 2.5, lancamento: 1.8,
+        cadenciaPosse: 0.55, passeRapido: 1.2,
         velocidade: 2.5,
         afinidade: { dummy_runner: 220, goal_poacher: 160, hole_player: 100, prolific_winger: 80 },
         contra: { janela: 8.0, zRecuperacao: 12.0, velocidade: 1.45, bonusProgressao: 3.0, penalRecuo: 150 }
@@ -1669,9 +1689,12 @@ const TeamPlayStyles = {
         corredores: 1.5, cruzamento: 2.0, pressaoPosPerda: 1.0,
         conducao: 0.9,
         corridas: 1.8,
+        cadenciaPosse: 0.9,
         afinidade: { prolific_winger: 320, cross_specialist: 320, roaming_flank: 180, offensive_fullback: 160, fullback_finisher: 90 },
         alas: { bonusReceptor: 170, larguraAla: 16.0, conducaoAlas: 2.2 },
-        cruzamentoZona: { alaX: 12.0, zonaZ: 12.0 }
+        cruzamentoZona: { alaX: 12.0, zonaZ: 12.0 },
+        // Com a bola na ala, os atacantes ocupam a area (ver aplicarEstiloPosicional).
+        areaComBolaNaAla: { larguraBola: 16.0, zBola: 12.0, zArea: 38.0, xPrimeiroPoste: 5.5, xSegundoPoste: 8.0 }
     },
     positional: {
         nome: 'Positional',
@@ -1681,11 +1704,25 @@ const TeamPlayStyles = {
     },
 };
 
+/*
+O ESTILO DE UMA EQUIPA: o do painel, ou o proprio da B se `Tatics.teamPlayStyleB` o define.
+*/
+function estiloDaEquipaDe(team) {
+    const chave = (team === 'TeamB' && Tatics.teamPlayStyleB) ? Tatics.teamPlayStyleB : Tatics.teamPlayStyle;
+    return TeamPlayStyles[chave] || TeamPlayStyles.positional;
+}
+
 const Tatics = {
     formacaoA: '442',
     formacaoB: '442',
     estilo: 'balanceado',
     teamPlayStyle: 'positional',
+    /*
+    O ESTILO DA EQUIPA B, quando difere do do painel. `null` (omissao): a B segue o
+    painel, como sempre. Com um valor, cada equipa joga o seu — e e o que permite
+    medir um estilo contra um adversario neutro. Ver `estiloDaEquipaDe`.
+    */
+    teamPlayStyleB: null,
     linhaDefensiva: 'medium',
     compactness: 'median',
     lengthCompactness: 'median',

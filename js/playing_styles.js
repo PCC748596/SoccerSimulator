@@ -1097,3 +1097,41 @@ function aplicarTectoDoEstilo(p, targetZ, bb) {
 
     return targetZ;
 }
+
+
+/*
+COM A BOLA NA ALA, A AREA ENCHE-SE — TeamPlayStyles.areaComBolaNaAla (Wing Play).
+
+Medido: um ponta tinha um colega na area em 35% das vezes que estava em zona de
+cruzar, e so em 43% dessas o cruzamento era possivel; os avancados esperavam a
+31 m da linha de fundo, fora da grande area (34 m), e com a bola na ala havia em
+media 1.3 colegas na area.
+
+Os atacantes (CF/SS/AM, um medio e o ponta do lado contrario ao da bola) ocupam o
+primeiro poste, a marca e o segundo poste, sem passar a linha de fora-de-jogo.
+
+Corre no FIM do `tickFinal` (team_bt.js), depois da mola de coesao, do desvio
+maximo ao slot e do pendulo — todos puxavam o avancado de volta para a bola, e
+posto antes disto o alvo nao sobrevivia. Devolve {x, z} (mundo); nao recua ninguem.
+*/
+function ocuparAreaComBolaNaAla(p, bb, x, z) {
+    const ee = (typeof estiloDaEquipa === 'function') ? estiloDaEquipa(p.team) : null;
+    const AA = ee ? ee.areaComBolaNaAla : null;
+    if (!AA || !bb || !bb.isAttacking || typeof Match === 'undefined' || !Match.ball ||
+        p === Match.ballCarrier || p.role === 'gk') return { x: x, z: z };
+    const bola = Match.ball.position;
+    const lado = Math.sign(bola.x) || 1;
+    if (!(Math.abs(bola.x) >= AA.larguraBola && bola.z * p.dirZ >= AA.zBola)) return { x: x, z: z };
+    const baseX = p.baseTarget ? p.baseTarget.x : x;
+    const oposto = Math.sign(baseX) === -lado;
+    const candidato = ['CF', 'SS', 'AM'].indexOf(p.pos) >= 0 ||
+        (p.pos === 'CM' && ((p.id || 0) % 2 === 0)) ||
+        (['LW', 'RW', 'LM', 'RM'].indexOf(p.pos) >= 0 && oposto);
+    if (!candidato) return { x: x, z: z };
+    const k = oposto ? 0 : (1 + ((p.id || 0) % 2));
+    const xs = [-lado * AA.xSegundoPoste, lado * AA.xPrimeiroPoste * 0.3, lado * AA.xPrimeiroPoste];
+    let zA = AA.zArea;
+    if (typeof bb.offsideLimitDir === 'number') zA = Math.min(zA, bb.offsideLimitDir - 0.5 + (p.offsideBias || 0));
+    const novoZ = ((zA - z * p.dirZ) > 0) ? zA * p.dirZ : z;   // nunca recua
+    return { x: xs[k], z: novoZ };
+}

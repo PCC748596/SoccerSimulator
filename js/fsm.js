@@ -388,7 +388,7 @@ function executePassGameplay(p) {
             */
             forcaPasse = encontro
                 ? encontro.v0
-                : velocidadeRasteiraPara(distToTarget, PassModel.vChegadaRasteira);
+                : velocidadeRasteiraPara(distToTarget, PassModel.vChegadaRasteira * ((typeof estiloDaEquipa === 'function' && estiloDaEquipa(p.team) && typeof estiloDaEquipa(p.team).passeRapido === 'number') ? estiloDaEquipa(p.team).passeRapido : 1));
             Match.ballVel.y = 0;
         } else {
             /*
