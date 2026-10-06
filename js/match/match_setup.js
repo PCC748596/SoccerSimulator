@@ -1707,8 +1707,8 @@ Object.assign(Match, {
     para nenhuma, sem ninguém dar por isso. O nome resolve-se no arranque
     (ver `equipasPorOmissao`), e se não existir fica-se com as genéricas.
     */
-    equipaNomeOmissaoA: 'Grêmio-RS',
-    equipaNomeOmissaoB: 'Internacional-RS',
+    equipaNomeOmissaoA: 'Fluminense-RJ',
+    equipaNomeOmissaoB: 'Flamengo-RJ',
 
     equipaIdA: null,
     equipaIdB: null,

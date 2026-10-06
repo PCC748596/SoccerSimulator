@@ -80,6 +80,18 @@ const CrowdModel = {
     */
     fracaoPura: 0.35,
 
+    /*
+    COMO SE VESTE O ADEPTO (pedido): metade com a camisa do clube, um quarto com a cor 1 e outro
+    quarto com a cor 2; metade de calcas compridas (jeans, escuras, caqui) e os outros de calcao
+    do clube; 20% de bone. As fraccoes sao sorteadas por adepto, na construcao.
+    */
+    torcida: {
+        camisaPrincipal: 0.50, camisaCor1: 0.25,      // o resto (0.25) e a cor 2
+        calcaComprida: 0.50,
+        bone: 0.20,
+        calcas: ['#2c3e66', '#1f1f24', '#3a3f4a', '#8a7a5a', '#4a5568']
+    },
+
     // Tons de pele e de cabelo, sorteados por adepto.
     peles: ['#f5cba7', '#e8b98a', '#c68642', '#8d5524', '#5c3317', '#ffdbac'],
     cabelos: ['#2f2f2f', '#1a1a1a', '#5b3a1e', '#8b5a2b', '#c9a227', '#eeeeee', '#7a4a2b'],
@@ -361,9 +373,12 @@ const Crowd = {
     _pecas(pose, mapa) {
         const u = 1.0;
         const P = pose || CrowdModel.poses.sentado;
-        const canalPerna = (mapa && mapa.perna) || 'pele';
+        // Sem `mapa` e o ADEPTO: as pernas tem canal proprio (calcas compridas ou pele) e leva bone.
+        const adepto = !mapa;
+        const canalPerna = (mapa && mapa.perna) || (adepto ? 'perna' : 'pele');
         const canalPe = (mapa && mapa.pe) || 'pele';
         const canais = { pele: [], camisa: [], calcao: [], cabelo: [] };
+        if (adepto) canais.bone = [];
         canais[canalPerna] = canais[canalPerna] || [];
         canais[canalPe] = canais[canalPe] || [];
 
@@ -404,6 +419,11 @@ const Crowd = {
         caixa(head, 'cabelo', u * 0.15, u * 0.6, u * 0.65, -u * 0.4, u * 0.2, -u * 0.1);
         caixa(head, 'cabelo', u * 0.15, u * 0.6, u * 0.65, u * 0.4, u * 0.2, -u * 0.1);
         caixa(head, 'cabelo', u * 0.88, u * 0.15, u * 0.2, 0, u * 0.45, u * 0.38);
+        if (adepto) {
+            // Bone: calota e pala. Instancia a zero para quem nao o usa (ver build).
+            caixa(head, 'bone', u * 0.92, u * 0.24, u * 0.95, 0, u * 0.62, 0);
+            caixa(head, 'bone', u * 0.9, u * 0.07, u * 0.38, 0, u * 0.52, u * 0.62);
+        }
 
         /* --- braços ---------------------------------------------------- */
         for (const lado of [-1, 1]) {
@@ -698,6 +718,53 @@ void crowdPesos(out float dePe, out float w1, out float w2,
     },
 
     /*
+    AS CORES DOS ADEPTOS A PARTIR DAS EQUIPAS EM CAMPO. `cores` = { A: {principal, cor1, cor2, calcao},
+    B: {...} } (ver `coresDaEquipa`). Cada adepto veste a camisa do clube (50%), a cor 1 (25%) ou a
+    cor 2 (25%); calcas compridas ou o calcao do clube; bone na cor 1 ou 2. Chama-se depois de
+    a equipa mudar (TEAMS_CHANGED).
+    */
+    recolorir(cores) {
+        if (!this._grupos || !cores) return;
+        const c = new THREE.Color();
+        const tom = (hex, k) => { c.set(hex); c.multiplyScalar(k); return c; };
+        for (let gi = 0; gi < this._grupos.length; gi++) {
+            const g = this._grupos[gi];
+            for (const f of (this._fansPorGrupo[gi] || [])) {
+                const eq = cores[f.claque];
+                if (!eq) continue;
+                const camHex = f.cam === 0 ? eq.principal : (f.cam === 1 ? eq.cor1 : eq.cor2);
+                if (g.camisa) g.camisa.setColorAt(f.i, tom(camHex, f.k));
+                if (g.calcao) g.calcao.setColorAt(f.i, tom(f.longa ? f.calcaHex : eq.calcao, f.k));
+                if (g.perna) g.perna.setColorAt(f.i, tom(f.longa ? f.calcaHex : f.pele, f.k));
+                if (g.bone) g.bone.setColorAt(f.i, tom(f.boneCor === 0 ? eq.cor1 : eq.cor2, f.k));
+            }
+            for (const n of ['camisa', 'calcao', 'perna', 'bone']) {
+                if (g[n] && g[n].instanceColor) g[n].instanceColor.needsUpdate = true;
+            }
+        }
+    },
+
+    /*
+    As cores de uma equipa em campo: do uniforme do clube se ele existir, senao das cores do boneco.
+    */
+    coresDaEquipa(lista) {
+        const p = lista && (lista[1] || lista[0]);
+        if (!p) return null;
+        const u = p.uniforme;
+        if (u && u.camisa) {
+            const cs = u.camisa.cores || [];
+            const calc = (u.calcao && u.calcao.cores && u.calcao.cores[0]) || p.corCalcao;
+            return {
+                principal: (typeof corDoUniforme === 'function') ? corDoUniforme(u, cs[0]) : cs[0],
+                cor1: cs[0] || p.corCamisa,
+                cor2: cs[1] || calc || p.corCamisa,
+                calcao: calc || '#ffffff'
+            };
+        }
+        return { principal: p.corCamisa, cor1: p.corCamisa, cor2: p.corCalcao || p.corCamisa, calcao: p.corCalcao || '#ffffff' };
+    },
+
+    /*
     Constrói a multidão nos `lugares` dados — `{ x, y, z, rotY }`, recolhidos
     de quem constrói as bancadas.
 
@@ -767,6 +834,7 @@ void crowdPesos(out float dePe, out float w1, out float w2,
         const TAMANHO_CHUNK = nTotal;
         const numChunks = Math.ceil(nTotal / TAMANHO_CHUNK);
         this._grupos = [];
+        this._fansPorGrupo = [];
 
         for (let c = 0; c < numChunks; c++) {
             const inicio = c * TAMANHO_CHUNK;
@@ -785,6 +853,7 @@ void crowdPesos(out float dePe, out float w1, out float w2,
 
             const aAdepto = new Float32Array(nChunk * 4);
             const meshes = {};
+            const fans = [];
 
             for (const canal of canais) {
                 // CLONAR A GEOMETRIA POR CHUNK!
@@ -818,7 +887,29 @@ void crowdPesos(out float dePe, out float w1, out float w2,
                 dummy.scale.set(escala, escala, escala);
                 dummy.updateMatrix();
 
-                for (const canal of canais) meshes[canal].setMatrixAt(i, dummy.matrix);
+                // Escolhas do adepto (sorteadas SEMPRE, para a sequencia nao depender da equipa).
+                const TC = CrowdModel.torcida;
+                const rCam = rnd(), rCalca = rnd(), rBone = rnd(), rCorBone = rnd(), rCalcaCor = rnd();
+                const fan = {
+                    i, claque,
+                    cam: rCam < TC.camisaPrincipal ? 0 : (rCam < TC.camisaPrincipal + TC.camisaCor1 ? 1 : 2),
+                    longa: rCalca < TC.calcaComprida,
+                    bone: rBone < TC.bone,
+                    boneCor: rCorBone < 0.5 ? 0 : 1,
+                    calcaHex: TC.calcas[Math.floor(rCalcaCor * TC.calcas.length)],
+                    pele: CrowdModel.peles[Math.floor(rnd() * CrowdModel.peles.length)],
+                    k: 1 + (rnd() - 0.5) * 2 * CrowdModel.variacaoCor
+                };
+                fans.push(fan);
+
+                for (const canal of canais) {
+                    if (canal === 'bone' && !fan.bone) {
+                        // Zero de escala: o chapeu so existe para 20%.
+                        dummy.scale.set(0, 0, 0); dummy.updateMatrix();
+                        meshes[canal].setMatrixAt(i, dummy.matrix);
+                        dummy.scale.set(escala, escala, escala); dummy.updateMatrix();
+                    } else meshes[canal].setMatrixAt(i, dummy.matrix);
+                }
 
                 aAdepto[i * 4 + 0] = rnd();
                 aAdepto[i * 4 + 1] = rnd() * Math.PI * 2;
@@ -827,7 +918,9 @@ void crowdPesos(out float dePe, out float w1, out float w2,
 
                 meshes.camisa && meshes.camisa.setColorAt(i, variar(eq.camisa));
                 meshes.calcao && meshes.calcao.setColorAt(i, variar(eq.calcao));
-                meshes.pele && meshes.pele.setColorAt(i, variar(CrowdModel.peles[Math.floor(rnd() * CrowdModel.peles.length)]));
+                meshes.pele && meshes.pele.setColorAt(i, variar(fan.pele));
+                meshes.perna && meshes.perna.setColorAt(i, variar(fan.pele));
+                meshes.bone && meshes.bone.setColorAt(i, variar(eq.camisa));
                 meshes.cabelo && meshes.cabelo.setColorAt(i, variar(CrowdModel.cabelos[Math.floor(rnd() * CrowdModel.cabelos.length)]));
             }
 
@@ -839,6 +932,7 @@ void crowdPesos(out float dePe, out float w1, out float w2,
                 scene.add(meshes[canal]);
             }
             
+            this._fansPorGrupo.push(fans);
             this._grupos.push(meshes);
         }
 

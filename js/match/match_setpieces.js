@@ -477,6 +477,9 @@ Object.assign(Match, {
                 taker.hasBall = false;
                 taker.lateralAction = null;
                 taker.lateralLargou = false;
+                taker.lateralPreparado = false;
+                taker.lateralFinta = null;
+                this.lateralEsperaExtra = 0;
                 taker.fsm.changeState('LATERAL');
             }
 

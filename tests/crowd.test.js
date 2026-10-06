@@ -135,7 +135,7 @@ let meshes;
     for (let i = 0; i < meshes.pele.count; i += 97) {
         meshes.pele.getMatrixAt(i, a);
         for (const c of canais) {
-            if (c === 'pele') continue;
+            if (c === 'pele' || c === 'bone') continue;   // o bone tem matriz zero para quem nao o usa
             meshes[c].getMatrixAt(i, b);
             for (let k = 0; k < 16; k++) {
                 if (Math.abs(a.elements[k] - b.elements[k]) > 1e-9) { divergentes++; k = 16; }

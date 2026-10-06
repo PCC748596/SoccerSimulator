@@ -276,11 +276,11 @@ const ShotClip = {
         // 8  pós-impacto imediato: a perna varre para a frente
         { leanZ: -0.16, pelvisY: -0.16, chest: 0.12, chestY: 0.14, coxaChute: -0.72, joelhoChute: 0.10, coxaApoio: 0.06, joelhoApoio: 0.24, bracoLx: 0.05, bracoLz: 1.10, bracoRx: -0.28, bracoRz: -0.66, cotoveloL: -0.26, cotoveloR: -0.42, altura: 0.02 },
         // 9  a perna continua pela inércia e o tronco começa a abrir
-        { leanZ: -0.15, pelvisY: -0.24, chest: 0.00, chestY: 0.22, coxaChute: -1.30, joelhoChute: 0.08, coxaApoio: 0.07, joelhoApoio: 0.18, bracoLx: 0.24, bracoLz: 1.00, bracoRx: 0.06, bracoRz: -0.70, cotoveloL: -0.24, cotoveloR: -0.34, altura: 0.08 },
+        { leanZ: -0.15, pelvisY: -0.24, chest: 0.00, chestY: 0.22, coxaChute: -1.30, joelhoChute: 0.08, coxaApoio: 0.07, joelhoApoio: 0.26, bracoLx: -0.10, bracoLz: 1.00, bracoRx: 0.25, bracoRz: -0.70, cotoveloL: -0.24, cotoveloR: -0.34, altura: 0.08 },
         // 10 FASE FINAL: perna alta e TRONCO PARA TRÁS (chest < 0), ainda inclinado
-        { leanZ: -0.14, pelvisY: -0.30, chest: -0.12, chestY: 0.28, coxaChute: -1.85, joelhoChute: 0.05, coxaApoio: 0.09, joelhoApoio: 0.14, bracoLx: 0.40, bracoLz: 0.95, bracoRx: 0.36, bracoRz: -0.74, cotoveloL: -0.20, cotoveloR: -0.26, altura: 0.15 },
+        { leanZ: -0.14, pelvisY: -0.30, chest: -0.12, chestY: 0.28, coxaChute: -1.85, joelhoChute: 0.05, coxaApoio: 0.09, joelhoApoio: 0.30, bracoLx: -0.35, bracoLz: 0.95, bracoRx: 0.45, bracoRz: -0.74, cotoveloL: -0.20, cotoveloR: -0.26, altura: 0.15 },
         // 11 desaceleração, o pé desce e o tronco volta ao prumo
-        { leanZ: -0.08, pelvisY: -0.18, chest: -0.04, chestY: 0.16, coxaChute: -0.95, joelhoChute: 0.22, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.22, bracoLz: 0.60, bracoRx: 0.18, bracoRz: -0.48, cotoveloL: -0.15, cotoveloR: -0.18, altura: 0.06 },
+        { leanZ: -0.08, pelvisY: -0.18, chest: -0.04, chestY: 0.16, coxaChute: -0.95, joelhoChute: 0.22, coxaApoio: 0.05, joelhoApoio: 0.26, bracoLx: -0.15, bracoLz: 0.60, bracoRx: 0.20, bracoRz: -0.48, cotoveloL: -0.15, cotoveloR: -0.18, altura: 0.06 },
         // 12 recuperação, de novo em postura de jogo
         { leanZ: 0.00, pelvisY: 0.00, chest: 0.00, chestY: 0.00, coxaChute: 0.00, joelhoChute: 0.10, coxaApoio: 0.00, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: Math.PI / 16, bracoRx: 0.00, bracoRz: -Math.PI / 16, cotoveloL: 0.00, cotoveloR: 0.00, altura: 0.00 }
     ]
@@ -419,9 +419,9 @@ const PassClip = {
         // 5  CONTACTO — o pé fecha na bola, o corpo por cima dela
         { leanZ: -0.10, pelvisY: -0.08, chest: 0.10, chestY: 0.08, coxaChute: -0.30, joelhoChute: 0.12, coxaApoio: 0.04, joelhoApoio: 0.24, bracoLx: 0.02, bracoLz: 0.80, bracoRx: -0.14, bracoRz: -0.44, cotoveloL: -0.22, cotoveloR: -0.34, coxaChuteY: 0.80, peChuteY: 1.00, peLx: -0.27, peLy: 0.17, peRx: 0.22, peRy: 0.08, altura: 0.01 },
         // 6  pós-impacto, a perna continua pela inércia
-        { leanZ: -0.08, pelvisY: -0.14, chest: 0.02, chestY: 0.14, coxaChute: -0.82, joelhoChute: 0.08, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.16, bracoLz: 0.70, bracoRx: 0.04, bracoRz: -0.46, cotoveloL: -0.18, cotoveloR: -0.26, coxaChuteY: 0.72, peChuteY: 0.90, peLx: -0.10, peLy: 0.19, peRx: 0.54, peRy: -0.07, altura: 0.03 },
+        { leanZ: -0.08, pelvisY: -0.14, chest: 0.02, chestY: 0.14, coxaChute: -0.82, joelhoChute: 0.08, coxaApoio: 0.05, joelhoApoio: 0.30, bracoLx: -0.35, bracoLz: 0.70, bracoRx: 0.30, bracoRz: -0.46, cotoveloL: -0.18, cotoveloR: -0.26, coxaChuteY: 0.72, peChuteY: 0.90, peLx: -0.10, peLy: 0.19, peRx: 0.54, peRy: -0.07, altura: 0.03 },
         // 7  acompanhamento CURTO, o pé desce
-        { leanZ: -0.04, pelvisY: -0.08, chest: -0.02, chestY: 0.08, coxaChute: -0.54, joelhoChute: 0.16, coxaApoio: 0.03, joelhoApoio: 0.14, bracoLx: 0.10, bracoLz: 0.45, bracoRx: 0.08, bracoRz: -0.30, cotoveloL: -0.12, cotoveloR: -0.14, coxaChuteY: 0.40, peChuteY: 0.52, peLx: -0.14, peLy: 0.19, peRx: 0.07, peRy: 0.19, altura: 0.01 },
+        { leanZ: -0.04, pelvisY: -0.08, chest: -0.02, chestY: 0.08, coxaChute: -0.54, joelhoChute: 0.16, coxaApoio: 0.03, joelhoApoio: 0.24, bracoLx: -0.20, bracoLz: 0.45, bracoRx: 0.15, bracoRz: -0.30, cotoveloL: -0.12, cotoveloR: -0.14, coxaChuteY: 0.40, peChuteY: 0.52, peLx: -0.14, peLy: 0.19, peRx: 0.07, peRy: 0.19, altura: 0.01 },
         // 8  recuperação, de novo em postura de jogo
         { leanZ: 0.00, pelvisY: 0.00, chest: 0.00, chestY: 0.00, coxaChute: 0.00, joelhoChute: 0.10, coxaApoio: 0.00, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: Math.PI / 16, bracoRx: 0.00, bracoRz: -Math.PI / 16, cotoveloL: 0.00, cotoveloR: 0.00, coxaChuteY: 0.00, peChuteY: 0.00, altura: 0.00 }
     ]
@@ -687,16 +687,16 @@ const LancamentoClip = {
         // para o pe passar rente a relva, como no tiro de meta.
         { avanco: 1.00, leanZ: -0.16, pitchX: -0.11, chest: -0.04, coxaChute: -0.03, joelhoChute: 0.10, coxaChuteZ: -0.15, coxaApoio: 0.04, joelhoApoio: 0.05, bracoLx: 0.40, bracoLz: 0.35, bracoRx: -0.67, bracoRz: -0.35, cotoveloL: -0.40, cotoveloR: -0.49, peRx: -0.35, peLx: 0.00, cabecaX: -0.10, altura: 0.02, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // 10 — interpolado entre os principais 9 e 13.
-        { avanco: 1.00, leanZ: -0.15, pitchX: -0.11, chest: -0.04, coxaChute: -0.35, joelhoChute: 0.09, coxaChuteZ: -0.10, coxaApoio: 0.28, joelhoApoio: 0.05, bracoLx: 0.11, bracoLz: 0.40, bracoRx: -0.43, bracoRz: -0.40, cotoveloL: -0.34, cotoveloR: -0.41, peRx: -0.30, peLx: -0.05, cabecaX: -0.10, altura: 0.04, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.15, pitchX: -0.11, chest: -0.04, coxaChute: -0.35, joelhoChute: 0.09, coxaChuteZ: -0.10, coxaApoio: 0.28, joelhoApoio: 0.12, bracoLx: 0.11, bracoLz: 0.40, bracoRx: -0.30, bracoRz: -0.40, cotoveloL: -0.34, cotoveloR: -0.41, peRx: -0.30, peLx: -0.05, cabecaX: -0.10, altura: 0.04, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // 11 — interpolado entre os principais 9 e 13.
-        { avanco: 1.00, leanZ: -0.13, pitchX: -0.11, chest: -0.04, coxaChute: -0.66, joelhoChute: 0.08, coxaChuteZ: -0.05, coxaApoio: 0.52, joelhoApoio: 0.06, bracoLx: -0.19, bracoLz: 0.45, bracoRx: -0.19, bracoRz: -0.45, cotoveloL: -0.28, cotoveloR: -0.32, peRx: -0.25, peLx: -0.10, cabecaX: -0.10, altura: 0.02, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.13, pitchX: -0.11, chest: -0.04, coxaChute: -0.66, joelhoChute: 0.08, coxaChuteZ: -0.05, coxaApoio: 0.52, joelhoApoio: 0.18, bracoLx: -0.19, bracoLz: 0.45, bracoRx: -0.05, bracoRz: -0.45, cotoveloL: -0.28, cotoveloR: -0.32, peRx: -0.25, peLx: -0.10, cabecaX: -0.10, altura: 0.02, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // 12 — interpolado entre os principais 9 e 13.
-        { avanco: 1.00, leanZ: -0.11, pitchX: -0.12, chest: -0.04, coxaChute: -0.98, joelhoChute: 0.06, coxaChuteZ: 0.00, coxaApoio: 0.76, joelhoApoio: 0.06, bracoLx: -0.49, bracoLz: 0.50, bracoRx: 0.06, bracoRz: -0.50, cotoveloL: -0.21, cotoveloR: -0.24, peRx: -0.20, peLx: -0.15, cabecaX: -0.10, altura: -0.06, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.11, pitchX: -0.12, chest: -0.04, coxaChute: -0.98, joelhoChute: 0.06, coxaChuteZ: 0.00, coxaApoio: 0.76, joelhoApoio: 0.24, bracoLx: -0.49, bracoLz: 0.50, bracoRx: 0.20, bracoRz: -0.50, cotoveloL: -0.21, cotoveloR: -0.24, peRx: -0.20, peLx: -0.15, cabecaX: -0.10, altura: -0.06, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // ===== PRINCIPAL 13 — L3 — O SEGUIMENTO =====
         // Perna de chute esticada 81 graus A FRENTE, a de apoio a ficar 51 graus
         // atras: as pernas abertas 132 graus, como na imagem. Na L3 o jogador
         // esta virado para a DIREITA (confirmado pelo autor).
-        { avanco: 1.00, leanZ: -0.10, pitchX: -0.12, chest: -0.04, coxaChute: -1.30, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 1.00, joelhoApoio: 0.07, bracoLx: -0.79, bracoLz: 0.55, bracoRx: 0.30, bracoRz: -0.55, cotoveloL: -0.15, cotoveloR: -0.15, peRx: -0.15, peLx: -0.20, cabecaX: -0.10, altura: -0.18, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.10, pitchX: -0.12, chest: -0.04, coxaChute: -1.30, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: 1.00, joelhoApoio: 0.28, bracoLx: -0.90, bracoLz: 0.55, bracoRx: 0.45, bracoRz: -0.55, cotoveloL: -0.15, cotoveloR: -0.15, peRx: -0.15, peLx: -0.20, cabecaX: -0.10, altura: -0.18, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // 14 — interpolado: a perna de chute começa a descer, o joelho a dobrar.
         { avanco: 1.00, leanZ: -0.08, pitchX: -0.07, chest: -0.02, coxaChute: -1.02, joelhoChute: 0.30, coxaChuteZ: 0.04, coxaApoio: 0.83, joelhoApoio: 0.21, bracoLx: -0.57, bracoLz: 0.45, bracoRx: 0.22, bracoRz: -0.45, cotoveloL: -0.22, cotoveloR: -0.22, peRx: -0.12, peLx: -0.15, cabecaX: -0.08, altura: -0.13, maoRx: 0.15, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // ===== PRINCIPAL 15 — A RECUPERAÇÃO =====
@@ -1033,17 +1033,17 @@ const GoalKickClip = {
         // (-46 graus) punha o pe meio metro ACIMA da bola.
         { avanco: 1.00, leanZ: -0.16, pitchX: -0.23, chest: -0.08, coxaChute: -0.07, joelhoChute: 0.10, coxaChuteZ: -0.15, coxaApoio: 0.02, joelhoApoio: 0.05, bracoLx: 0.38, bracoLz: 0.35, bracoRx: 0.43, bracoRz: -0.35, cotoveloL: -0.74, cotoveloR: -0.15, peRx: -0.35, peLx: 0.00, cabecaX: -0.10, altura: 0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // 10 — interpolado entre os principais 9 e 13 (a perna sobe a frente).
-        { avanco: 1.00, leanZ: -0.15, pitchX: -0.21, chest: -0.07, coxaChute: -0.34, joelhoChute: 0.09, coxaChuteZ: -0.10, coxaApoio: -0.03, joelhoApoio: 0.07, bracoLx: 0.53, bracoLz: 0.40, bracoRx: 0.06, bracoRz: -0.40, cotoveloL: -0.60, cotoveloR: -0.20, peRx: -0.30, peLx: -0.05, cabecaX: -0.10, altura: 0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.15, pitchX: -0.21, chest: -0.07, coxaChute: -0.34, joelhoChute: 0.09, coxaChuteZ: -0.10, coxaApoio: -0.03, joelhoApoio: 0.12, bracoLx: 0.15, bracoLz: 0.40, bracoRx: 0.25, bracoRz: -0.40, cotoveloL: -0.60, cotoveloR: -0.20, peRx: -0.30, peLx: -0.05, cabecaX: -0.10, altura: 0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // 11 — interpolado entre os principais 9 e 13.
-        { avanco: 1.00, leanZ: -0.13, pitchX: -0.19, chest: -0.06, coxaChute: -0.62, joelhoChute: 0.08, coxaChuteZ: -0.05, coxaApoio: -0.07, joelhoApoio: 0.10, bracoLx: 0.67, bracoLz: 0.45, bracoRx: -0.30, bracoRz: -0.45, cotoveloL: -0.46, cotoveloR: -0.26, peRx: -0.25, peLx: -0.10, cabecaX: -0.10, altura: 0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.13, pitchX: -0.19, chest: -0.06, coxaChute: -0.62, joelhoChute: 0.08, coxaChuteZ: -0.05, coxaApoio: -0.07, joelhoApoio: 0.18, bracoLx: -0.25, bracoLz: 0.45, bracoRx: 0.50, bracoRz: -0.45, cotoveloL: -0.46, cotoveloR: -0.26, peRx: -0.25, peLx: -0.10, cabecaX: -0.10, altura: 0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // 12 — interpolado entre os principais 9 e 13.
-        { avanco: 1.00, leanZ: -0.11, pitchX: -0.16, chest: -0.05, coxaChute: -0.89, joelhoChute: 0.06, coxaChuteZ: 0.00, coxaApoio: -0.12, joelhoApoio: 0.12, bracoLx: 0.82, bracoLz: 0.50, bracoRx: -0.67, bracoRz: -0.50, cotoveloL: -0.31, cotoveloR: -0.31, peRx: -0.20, peLx: -0.15, cabecaX: -0.10, altura: 0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.11, pitchX: -0.16, chest: -0.05, coxaChute: -0.89, joelhoChute: 0.06, coxaChuteZ: 0.00, coxaApoio: -0.12, joelhoApoio: 0.24, bracoLx: -0.60, bracoLz: 0.50, bracoRx: 0.75, bracoRz: -0.50, cotoveloL: -0.31, cotoveloR: -0.31, peRx: -0.20, peLx: -0.15, cabecaX: -0.10, altura: 0.01, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
         // ===== PRINCIPAL 13 — fotografia 25 — O SEGUIMENTO =====
         // A bola ja saiu. Perna de chute ESTICADA 75 graus A FRENTE, quase na
         // horizontal; apoio a prumo; um braco a frente e outro atras. Em
         // Setembro foi lida com o jogador virado para a direita, e a mesma
         // perna dava "77 graus atras" — confirmado pelo autor: e a frente.
-        { avanco: 1.00, leanZ: -0.10, pitchX: -0.14, chest: -0.05, coxaChute: -1.17, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: -0.17, joelhoApoio: 0.15, bracoLx: 0.97, bracoLz: 0.55, bracoRx: -1.03, bracoRz: -0.55, cotoveloL: -0.17, cotoveloR: -0.37, peRx: -0.15, peLx: -0.20, cabecaX: -0.10, altura: 0.00, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
+        { avanco: 1.00, leanZ: -0.10, pitchX: -0.14, chest: -0.05, coxaChute: -1.17, joelhoChute: 0.05, coxaChuteZ: 0.05, coxaApoio: -0.17, joelhoApoio: 0.28, bracoLx: -0.95, bracoLz: 0.55, bracoRx: 0.95, bracoRz: -0.55, cotoveloL: -0.17, cotoveloR: -0.37, peRx: -0.15, peLx: -0.20, cabecaX: -0.10, altura: 0.00, maoRx: 0.19, maoRy: 0.00, maoRz: 0.00, peLy: 0.17 },
     ]
 };
 
@@ -1224,6 +1224,27 @@ bandeirinha e obrigatoria em campo oficial.
 A bandeira e um plano com `DoubleSide`: de um lado so, desaparecia consoante
 a camara — e a camara deste jogo anda a toda a volta.
 */
+
+/*
+A FINTA DO LATERAL (pedido): antes do arremesso o batedor pode girar o corpo para um lado e para o
+outro para enganar o adversario, mas tem de estar virado para onde vai atirar ANTES do gesto. O alvo
+escolhe-se `antecedencia` s antes do arremesso (o tempo de espera do lateral e longo); com
+`prob` faz uma finta de `angMin`..`angMax` rad para um lado (e, com `probDupla`, outra para o outro),
+parando `pausa` s em cada. `corpoTodo`: o corpo gira ate ao alvo inteiro (e nao so o excesso da
+cintura), para sair virado para ele. `esperaMax` e o tecto da espera pelo corpo (s).
+*/
+const LateralFinta = {
+    activo: true,
+    antecedencia: 3.2,
+    prob: 0.5,
+    probDupla: 0.35,
+    angMin: 0.5,
+    angMax: 1.1,
+    pausa: 0.25,
+    corpoTodo: true,
+    esperaMax: 2.5
+};
+if (typeof window !== 'undefined') window.LateralFinta = LateralFinta;
 
 const LateralPose = {
     chest: -0.12,        // tronco em arco para trás, a armar o lançamento
@@ -1771,6 +1792,14 @@ do plano da frente. Dentro do limite do ombro (180 graus).
 */
 const PedidoDeBola = {
     duracao: 0.6,
+    /*
+    SO PEDE QUEM SE MEXE (pedido: o infiltrado pedia a bola parado). Abaixo de `velMin` m/s o
+    pedido cai, excepto sozinho a jeito de finalizar de primeira: a menos de `finalizaDist` m da
+    baliza que ataca e sem adversario a menos de `finalizaLivre` m.
+    */
+    velMin: 1.0,
+    finalizaDist: 22,
+    finalizaLivre: 5,
     z: 2.36,
     x: 0.0,
     cotovelo: -0.10,

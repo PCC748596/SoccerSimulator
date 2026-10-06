@@ -83,6 +83,8 @@ Object.assign(Match, {
             bb.ownGoalZ = ownGoalZCenter(t);
             bb.atkGoalZ = -bb.ownGoalZ;
         });
+        // Expulsos voltam ao plantel (como no resetPlay): a formacao assume onze por equipa.
+        this.reporExpulsos();
         this.assignFormations();
 
         const abriu = this.saidaInicial || 'TeamA';
@@ -694,8 +696,26 @@ Object.assign(Match, {
             */
             if (this.lateralPendente) {
                 this.lateralAtraso -= dt;
-                if (this.lateralAtraso <= 0) {
+                const LF = (typeof LateralFinta !== 'undefined') ? LateralFinta : null;
+                const tp = this.setPieceTaker;
+                const emLateral = !!(tp && tp.fsm.currentState === 'LATERAL');
+                // Escolhe o alvo CEDO, para o corpo e a finta acontecerem antes do arremesso.
+                if (LF && LF.activo && emLateral && !tp.lateralPreparado &&
+                    this.lateralAtraso <= LF.antecedencia) {
+                    tp.lateralPreparado = true;
+                    tp.escolherAlvoDoLateral();
+                    tp.planearFintaDoLateral();
+                }
+                // Chegou a hora, mas so se lanca com o corpo virado para o alvo.
+                let esperaCorpo = false;
+                if (this.lateralAtraso <= 0 && LF && LF.activo && emLateral) {
+                    this.lateralEsperaExtra = (this.lateralEsperaExtra || 0) + dt;
+                    const virado = Math.abs((tp.lateralGiroCorpo || 0) - (tp.lateralGiroCorpoActual || 0)) < 0.06;
+                    esperaCorpo = (!virado || tp.lateralFinta) && this.lateralEsperaExtra < LF.esperaMax;
+                }
+                if (this.lateralAtraso <= 0 && !esperaCorpo) {
                     this.lateralPendente = false;
+                    this.lateralEsperaExtra = 0;
                     const t = this.setPieceTaker;
                     if (t && t.fsm.currentState === 'LATERAL') {
                         /*
@@ -704,7 +724,9 @@ Object.assign(Match, {
                         carregar para o lado contrário desde o início do gesto,
                         e para isso é preciso saber para onde se vai atirar.
                         */
-                        t.escolherAlvoDoLateral();
+                        if (!t.lateralPreparado) t.escolherAlvoDoLateral();
+                        t.lateralPreparado = false;
+                        t.lateralFinta = null;
                         t.lateralAction = new ActionState('throwIn', {
                             onContact: () => {
                                 t.lateralLargou = true;
@@ -1019,6 +1041,18 @@ Object.assign(Match, {
                     const overlap = colDiameter - dist;
                     const nx = dx / dist; const nz = dz / dist;
                     const push = overlap * 0.5;
+                    /*
+                    QUEM E EMPURRADO ANDA, NAO DESLIZA: a colisao move-o sem lhe dar velocidade, e
+                    parado (bola parada, a espera de reposicao) arrastava-se com as pernas
+                    imoveis — relato "deslizando sem animacao de andar, depois de uma falta".
+                    Guarda-se a velocidade do empurrao (so acima de `ColisaoJogadores.empurraoMin`
+                    m/s, para a micro-folga nao fazer marcha) e o animateBones usa-a para o passo.
+                    */
+                    const vEmp = Math.min(ColisaoJogadores.empurraoMax, push / Math.max(dt, 1e-4));
+                    if (vEmp >= ColisaoJogadores.empurraoMin) {
+                        if (vEmp > (a.empurrao || 0)) a.empurrao = vEmp;
+                        if (vEmp > (b.empurrao || 0)) b.empurrao = vEmp;
+                    }
                     a.model.position.x += nx * push;
                     a.model.position.z += nz * push;
                     b.model.position.x -= nx * push;

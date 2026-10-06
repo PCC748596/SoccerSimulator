@@ -978,7 +978,30 @@ class FootballPlayer {
         */
         this.lateralGiroCorpo = (typeof giroDoCorpoNoLateral === 'function')
             ? giroDoCorpoNoLateral(ang, L.giroMax) : 0;
+        // Ver LateralFinta.corpoTodo: o corpo sai virado para o alvo, sem torcer a cintura.
+        const LF = (typeof LateralFinta !== 'undefined') ? LateralFinta : null;
+        if (LF && LF.activo && LF.corpoTodo) {
+            this.lateralGiroCorpo = ang;
+            this.lateralGiroAlvo = 0;
+        }
         return this.lateralGiroAlvo;
+    }
+
+    /*
+    A FINTA: uma ou duas viragens falsas do corpo (ver LateralFinta), ANTES do arremesso. Cada passo
+    e um desvio somado ao giro verdadeiro; o case LATERAL da fsm percorre-os e o Match so lanca
+    depois de a lista acabar e de o corpo estar virado para o alvo.
+    */
+    planearFintaDoLateral() {
+        const LF = (typeof LateralFinta !== 'undefined') ? LateralFinta : null;
+        this.lateralFinta = null;
+        if (!LF || !LF.activo || Math.random() >= LF.prob) return;
+        const real = this.lateralGiroCorpo || 0;
+        const lado = (Math.abs(real) > 0.3) ? -Math.sign(real) : (Math.random() < 0.5 ? -1 : 1);
+        const mag = () => LF.angMin + Math.random() * (LF.angMax - LF.angMin);
+        const passos = [{ off: lado * mag() }];
+        if (Math.random() < LF.probDupla) passos.push({ off: -lado * mag() });
+        this.lateralFinta = { passos, i: 0, espera: 0 };
     }
 
     /*
@@ -4538,10 +4561,35 @@ class FootballPlayer {
         }
     }
 
+    /*
+    SOZINHO A JEITO DE FINALIZAR DE PRIMEIRA: perto da baliza que ataca (`PedidoDeBola.finalizaDist`)
+    e sem nenhum adversario a menos de `PedidoDeBola.finalizaLivre`. So nesse caso um jogador
+    parado continua a pedir a bola.
+    */
+    sozinhoParaFinalizar() {
+        const PB = (typeof PedidoDeBola !== 'undefined') ? PedidoDeBola : null;
+        if (!PB) return false;
+        const pos = this.model.position;
+        if (Math.hypot(pos.x, pos.z - this.targetGoalZ) > PB.finalizaDist) return false;
+        const advs = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        for (const o of advs) {
+            if (o.role === 'gk' || !o.model) continue;
+            if (Math.hypot(o.model.position.x - pos.x, o.model.position.z - pos.z) < PB.finalizaLivre) return false;
+        }
+        return true;
+    }
+
     update(dt) {
         if (this.touchLock > 0) this.touchLock = Math.max(0, this.touchLock - dt);
         if (this.overlapTimer > 0) this.overlapTimer = Math.max(0, this.overlapTimer - dt);
-        if (this.pedindoBola > 0) this.pedindoBola = Math.max(0, this.pedindoBola - dt);
+        if (this.pedindoBola > 0) {
+            this.pedindoBola = Math.max(0, this.pedindoBola - dt);
+            // O pedido de bola e de quem SE MEXE: parado ja nao ha o que chamar —
+            // a menos que esteja sozinho a jeito de finalizar de primeira.
+            const PB = (typeof PedidoDeBola !== 'undefined') ? PedidoDeBola : null;
+            const vPedido = this.velocity ? Math.hypot(this.velocity.x, this.velocity.z) : 0;
+            if (PB && vPedido < PB.velMin && !this.sozinhoParaFinalizar()) this.pedindoBola = 0;
+        }
         // O quase golo (ver QuaseGoloModel): o relógio da camada das mãos na cabeça.
         if (this.lamento) {
             this.lamento.t += dt;
@@ -5929,6 +5977,11 @@ class FootballPlayer {
 
     animateBones(dt) {
         let speed = this.velocity.length(); let rig = this.rig;
+        // Empurrado por outro jogador: da passos em vez de deslizar (ver a colisao no Match.update).
+        if (this.empurrao > 0) {
+            if (this.empurrao > speed) speed = this.empurrao;
+            this.empurrao = this.empurrao * 0.6 < 0.3 ? 0 : this.empurrao * 0.6;
+        }
 
         // CHEST_CONTROL NÃO entra na lista: a matada no peito não mexe na
         // pelvis (ver aplicarCamadaPeito), o jogador continua de pé e a

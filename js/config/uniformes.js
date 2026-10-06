@@ -163,8 +163,9 @@ const Uniformes = {
         meiao: { padrao: 'solido', cores: ['#f2f2f2'] },
         // O grená é a dominante do tricolor — ver corPrincipal no Flamengo.
         corPrincipal: '#7a1b2b',
-        numero: '#0b4728',
-        contorno: 'rgba(255,255,255,0.85)'
+        // Numero BRANCO (pedido), com contorno escuro para se ler sobre o branco das listras.
+        numero: '#ffffff',
+        contorno: 'rgba(0,0,0,0.85)'
     },
 
     /*

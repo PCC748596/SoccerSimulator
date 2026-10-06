@@ -1268,6 +1268,9 @@ a partir das listas vivas (ver updateHudJogadores).
 function ligarActualizacaoDoElenco() {
     if (typeof EventBus === 'undefined') return;
     EventBus.on('TEAMS_CHANGED', () => {
+        if (typeof Crowd !== 'undefined' && Crowd.recolorir) {
+            Crowd.recolorir({ A: Crowd.coresDaEquipa(Match.players), B: Crowd.coresDaEquipa(Match.opponents) });
+        }
         if (jogadorNoModal) {
             const emCampo = Match.players.includes(jogadorNoModal) ||
                 Match.opponents.includes(jogadorNoModal);
@@ -1385,6 +1388,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Match.equipasPorOmissao): sem isto diziam "genérica" com o Grêmio
         // e o Internacional a jogar.
         sincronizarSelectoresDeEquipa();
+        if (typeof Crowd !== 'undefined' && Crowd.recolorir) Crowd.recolorir({ A: Crowd.coresDaEquipa(Match.players), B: Crowd.coresDaEquipa(Match.opponents) });
         popularPainelJogadores();
         actualizarNomesNoPlacar();
         requestAnimationFrame(animate);

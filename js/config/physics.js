@@ -629,6 +629,13 @@ conta-se metade, porque a intensidade entra na conta (ver `chuvaNoRelvado`).
 DESLIGAR: `activo: false` devolve o jogo seco, com chuva no ecra e nada mais.
 =============================================================================
 */
+/*
+Colisao entre jogadores: velocidade do empurrao (m/s) a partir da qual o empurrado dá passos
+(`empurraoMin`) e o tecto dela (`empurraoMax`). Ver Match.update, onde a colisao e resolvida.
+*/
+const ColisaoJogadores = { empurraoMin: 0.6, empurraoMax: 2.0 };
+if (typeof window !== 'undefined') window.ColisaoJogadores = ColisaoJogadores;
+
 const ChuvaNoJogo = {
     activo: true,
 

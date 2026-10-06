@@ -1245,7 +1245,22 @@ class PlayerFSM {
                 contacto, e uma rotação instantânea lê-se como um salto.
                 */
                 {
-                    const alvoGiro = p.lateralGiroCorpo || 0;
+                    let alvoGiro = p.lateralGiroCorpo || 0;
+                    // A finta (ver planearFintaDoLateral): so antes do gesto.
+                    const fi = p.lateralFinta;
+                    if (fi && !p.lateralAction) {
+                        const passo = fi.passos[fi.i];
+                        const LFz = (typeof LateralFinta !== 'undefined') ? LateralFinta : { pausa: 0.25 };
+                        alvoGiro = alvoGiro + passo.off;
+                        if (Math.abs(alvoGiro - (p.lateralGiroCorpoActual || 0)) < 0.05) {
+                            fi.espera += dt;
+                            if (fi.espera >= LFz.pausa) {
+                                fi.espera = 0;
+                                fi.i++;
+                                if (fi.i >= fi.passos.length) p.lateralFinta = null;
+                            }
+                        }
+                    }
 
                     // Persegue o ângulo alvo em vez de saltar para ele. A
                     // direcção "para dentro" é (-x, 0): aponta da linha para o
@@ -1283,6 +1298,7 @@ class PlayerFSM {
                         // arrancava já com o corpo torcido do anterior.
                         p.lateralGiroCorpo = 0;
                         p.lateralGiroCorpoActual = 0;
+                        p.lateralFinta = null;
                         p.resetBonesToDefault();
                         this.changeState('IDLE');
                     }

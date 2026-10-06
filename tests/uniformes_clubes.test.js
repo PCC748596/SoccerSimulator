@@ -120,7 +120,7 @@ test('Flamengo: faixas vermelhas e negras, calção preto com barra vermelha, n�
     assert.ok(u.contorno, 'sem contorno o número desaparece na faixa da cor dele');
 });
 
-test('Fluminense: tricolor em listras, calção branco com barra verde, meião branco, número verde escuro', () => {
+test('Fluminense: tricolor em listras, calção branco com barra verde, meião branco, número branco', () => {
     const u = uniformeDe('Fluminense-RJ');
     assert.ok(u, 'o Fluminense não está na tabela');
 
@@ -141,11 +141,8 @@ test('Fluminense: tricolor em listras, calção branco com barra verde, meião b
     assert.ok(canal(bv, 1) > canal(bv, 0) && canal(bv, 1) > canal(bv, 2), `a barra do calção (${bv}) não é verde`);
     assert.ok(canal(u.meiao.cores[0], 1) > 220, `meião ${u.meiao.cores[0]} não é branco`);
 
-    // Verde escuro: verde dominante e escuro.
-    const nv = u.numero;
-    assert.ok(canal(nv, 1) > canal(nv, 0) && canal(nv, 1) > canal(nv, 2),
-        `o número ${nv} não é verde`);
-    assert.ok(canal(nv, 1) < 130, `o número ${nv} é verde, mas não escuro`);
+    // Numero branco (pedido), o contorno e escuro para se ler.
+    assert.strictEqual(u.numero.toLowerCase(), '#ffffff', `o número ${u.numero} não é branco`);
 });
 
 test('quem não tem desenho continua como estava', () => {
