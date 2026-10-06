@@ -799,6 +799,9 @@ class FootballPlayer {
     aplicarFrameLateral(K, segurarBola) {
         if (!this.rig) return;
         aplicarPoseLateral(this.rig, K, this.lateralGiroAlvo);
+        // A cabeca fica direita sobre o tronco: quem vira para o arremesso e a CINTURA. O pescoco
+        // guardava o angulo com que a cabeca seguia a bola antes do gesto (+-0.9 rad).
+        if (this.rig.neck && typeof K.cabecaY !== 'number') this.rig.neck.rotation.y = 0;
         this.model.position.y = ALTURA_BASE_Y + (K.altura || 0);
 
         /*
@@ -5958,7 +5961,18 @@ class FootballPlayer {
         sempre a olhar em frente. Antes só o corpo inteiro virava (via
         model.lookAt), sem pescoço independente.
         */
-        if (rig.neck && Match.ball && this.fsm.currentState !== 'TACKLE' && this.fsm.currentState !== 'SLIDE_TACKLE') {
+        /*
+        NO LATERAL A CABECA NAO PERSEGUE A BOLA. Relato: *"o jogador esta virando a
+        cabeca na direcao da cobranca do lateral, mas deveria girar a cintura para
+        ficar na direcao do arremesso"*. A bola esta nas maos, por cima e atras da
+        cabeca, e o ramo de baixo mandava o pescoco para ela (medido: +-0.7 a 0.9 rad)
+        enquanto a cintura mal rodava. Aqui a cabeca fica direita sobre o tronco e
+        vai para onde o tronco (o giro da cintura, ver prepararGiroLateral) a leva.
+        */
+        if (rig.neck && this.fsm.currentState === 'LATERAL') {
+            rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.35);
+            this.cinturaAlvoY = 0;
+        } else if (rig.neck && Match.ball && this.fsm.currentState !== 'TACKLE' && this.fsm.currentState !== 'SLIDE_TACKLE') {
             _v1.subVectors(Match.ball.position, this.model.position);
             _v1.y = 0;
             if (_v1.lengthSq() > 0.01) {

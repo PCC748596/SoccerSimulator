@@ -1282,7 +1282,9 @@ const LateralPose = {
     disto. O sinal e a fracção por keyframe vêm do `giro` do ThrowInClip —
     negativo na armação (roda ao contrário, a carregar) e positivo no chicote.
     */
-    giroMax: 0.55,
+    // 0.55 -> 0.78 (45 graus, o limite do tronco: JointLimits.chest.y) a 6 de Outubro de 2026: a cintura
+    // passa a fazer o que a cabeca fazia (ver o ramo LATERAL do animateBones, player.js).
+    giroMax: 0.78,
 
     /*
     O QUE A CINTURA NÃO ALCANÇA, O CORPO DÁ (ver giroDoCorpoNoLateral em
