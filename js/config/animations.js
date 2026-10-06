@@ -419,9 +419,9 @@ const PassClip = {
         // 5  CONTACTO — o pé fecha na bola, o corpo por cima dela
         { leanZ: -0.10, pelvisY: -0.08, chest: 0.10, chestY: 0.08, coxaChute: -0.30, joelhoChute: 0.12, coxaApoio: 0.04, joelhoApoio: 0.24, bracoLx: 0.02, bracoLz: 0.80, bracoRx: -0.14, bracoRz: -0.44, cotoveloL: -0.22, cotoveloR: -0.34, coxaChuteY: 0.80, peChuteY: 1.00, peLx: -0.27, peLy: 0.17, peRx: 0.22, peRy: 0.08, altura: 0.01 },
         // 6  pós-impacto, a perna continua pela inércia
-        { leanZ: -0.08, pelvisY: -0.14, chest: 0.02, chestY: 0.14, coxaChute: -0.62, joelhoChute: 0.08, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.16, bracoLz: 0.70, bracoRx: 0.04, bracoRz: -0.46, cotoveloL: -0.18, cotoveloR: -0.26, coxaChuteY: 0.72, peChuteY: 0.90, peLx: -0.10, peLy: 0.19, peRx: 0.54, peRy: -0.07, altura: 0.03 },
+        { leanZ: -0.08, pelvisY: -0.14, chest: 0.02, chestY: 0.14, coxaChute: -0.82, joelhoChute: 0.08, coxaApoio: 0.05, joelhoApoio: 0.18, bracoLx: 0.16, bracoLz: 0.70, bracoRx: 0.04, bracoRz: -0.46, cotoveloL: -0.18, cotoveloR: -0.26, coxaChuteY: 0.72, peChuteY: 0.90, peLx: -0.10, peLy: 0.19, peRx: 0.54, peRy: -0.07, altura: 0.03 },
         // 7  acompanhamento CURTO, o pé desce
-        { leanZ: -0.04, pelvisY: -0.08, chest: -0.02, chestY: 0.08, coxaChute: -0.32, joelhoChute: 0.16, coxaApoio: 0.03, joelhoApoio: 0.14, bracoLx: 0.10, bracoLz: 0.45, bracoRx: 0.08, bracoRz: -0.30, cotoveloL: -0.12, cotoveloR: -0.14, coxaChuteY: 0.40, peChuteY: 0.52, peLx: -0.14, peLy: 0.19, peRx: 0.07, peRy: 0.19, altura: 0.01 },
+        { leanZ: -0.04, pelvisY: -0.08, chest: -0.02, chestY: 0.08, coxaChute: -0.54, joelhoChute: 0.16, coxaApoio: 0.03, joelhoApoio: 0.14, bracoLx: 0.10, bracoLz: 0.45, bracoRx: 0.08, bracoRz: -0.30, cotoveloL: -0.12, cotoveloR: -0.14, coxaChuteY: 0.40, peChuteY: 0.52, peLx: -0.14, peLy: 0.19, peRx: 0.07, peRy: 0.19, altura: 0.01 },
         // 8  recuperação, de novo em postura de jogo
         { leanZ: 0.00, pelvisY: 0.00, chest: 0.00, chestY: 0.00, coxaChute: 0.00, joelhoChute: 0.10, coxaApoio: 0.00, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: Math.PI / 16, bracoRx: 0.00, bracoRz: -Math.PI / 16, cotoveloL: 0.00, cotoveloR: 0.00, coxaChuteY: 0.00, peChuteY: 0.00, altura: 0.00 }
     ]

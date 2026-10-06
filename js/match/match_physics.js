@@ -219,7 +219,7 @@ Object.assign(Match, {
                     if (typeof EfeitosSonoros !== 'undefined') EfeitosSonoros.apito(1.0);
                     
                     // zSinal < 0 é a baliza do TeamA, então quem levou o golo (e sai com a bola) é o TeamA
-                    this.nextKickoffTeam = (zSinal < 0) ? 'TeamA' : 'TeamB';
+                    this.nextKickoffTeam = Lados.donoDaBaliza(zSinal);
 
                     this.creditarGolo(zSinal);
 
@@ -239,7 +239,7 @@ Object.assign(Match, {
                     // Logo após o golo, os jogadores não ficam parados: dirigem-se imediatamente
                     // para o meio-campo/posições de recomeço enquanto a câmara foca a bola na baliza
                     const margem = 1.5;
-                    [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+                    [{ list: this.players, dir: Lados.dirDe('TeamA') }, { list: this.opponents, dir: Lados.dirDe('TeamB') }].forEach(({ list, dir }) => {
                         list.forEach(p => {
                             p.hasBall = false;
                             p.isCross = false;
@@ -284,7 +284,7 @@ Object.assign(Match, {
                     z < 0 é a baliza do TeamA (dirZ +1 ataca +Z), z > 0 a do
                     TeamB.
                     */
-                    const donoDaBaliza = (zSinal < 0) ? 'TeamA' : 'TeamB';
+                    const donoDaBaliza = Lados.donoDaBaliza(zSinal);
                     if (lastTeam === donoDaBaliza) {
                         // Defensor tocou por último: canto para quem ataca.
                         this.setupSetPiece('CORNER_KICK',
@@ -388,7 +388,7 @@ Object.assign(Match, {
                 // setupKickoff usa (Match.posicaoDeSaida) — com duas contas
                 // diferentes o teste de chegada nunca fechava.
                 let allInPosition = true;
-                [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+                [{ list: this.players, dir: Lados.dirDe('TeamA') }, { list: this.opponents, dir: Lados.dirDe('TeamB') }].forEach(({ list, dir }) => {
                     list.forEach(p => {
                         const alvo = this.posicaoDeSaida(p, dir);
                         const distSq = p.model.position.distanceToSquared(_v1.set(alvo.x, ALTURA_BASE_Y, alvo.z));
@@ -468,7 +468,7 @@ Object.assign(Match, {
     */
     creditarGolo: function (zSinal) {
         // zSinal < 0 é a baliza do TeamA: quem lá sofre é o TeamA.
-        const sofreu = (zSinal < 0) ? 'TeamA' : 'TeamB';
+        const sofreu = Lados.donoDaBaliza(zSinal);
         const marcou = (sofreu === 'TeamA') ? 'TeamB' : 'TeamA';
         const proprioGolo = (this.lastTouchedTeam === sofreu);
 
@@ -1231,7 +1231,7 @@ Object.assign(Match, {
         }
 
         let limiteZ;
-        if (teamPlayers[0].team === 'TeamA') {
+        if (teamPlayers[0].dirZ > 0) {
             let maxOppZ = -999;
             Match.opponents.forEach(o => { if (o.role !== 'gk' && o.model.position.z > maxOppZ) maxOppZ = o.model.position.z; });
             limiteZ = Math.max(0, maxOppZ, Match.ball.position.z) - 0.2;

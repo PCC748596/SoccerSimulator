@@ -48,7 +48,7 @@ class FootballPlayer {
         this.num = 1;
         this.pos = 'GK';
 
-        this.dirZ = (this.team === 'TeamA') ? 1 : -1;
+        this.dirZ = Lados.dirDe(this.team);
         this.targetGoalZ = (CAMPO_COMP / 2) * this.dirZ;
         this.ownGoalZ = -(CAMPO_COMP / 2) * this.dirZ;
 
@@ -6872,8 +6872,8 @@ class FootballPlayer {
         gkCorpo.position.x = Math.max(-limX, Math.min(limX, gkCorpo.position.x));
         let meioComp = LINHA_FUNDO;
         const prof = Area.profundidade + folgaFora;
-        let areaMinZ = (this.team === 'TeamA') ? -meioComp : meioComp - prof;
-        let areaMaxZ = (this.team === 'TeamA') ? -meioComp + prof : meioComp;
+        let areaMinZ = (this.dirZ > 0) ? -meioComp : meioComp - prof;
+        let areaMaxZ = (this.dirZ > 0) ? -meioComp + prof : meioComp;
         gkCorpo.position.z = Math.max(areaMinZ, Math.min(areaMaxZ, gkCorpo.position.z));
 
         /*
@@ -7041,7 +7041,7 @@ class FootballPlayer {
 
             let gkSkill = this.skillFor('GK');
 
-            let bolaVindoPraMim = (this.team === 'TeamA') ? (Match.ballVel.z < -5) : (Match.ballVel.z > 5);
+            let bolaVindoPraMim = (this.dirZ > 0) ? (Match.ballVel.z < -5) : (Match.ballVel.z > 5);
 
             if (bolaVindoPraMim && this.gkReagiu) {
                 let tempoAteGolo = Math.abs(gkCorpo.position.z - Match.ball.position.z) / Math.abs(Match.ballVel.z);

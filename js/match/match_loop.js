@@ -1,4 +1,103 @@
 Object.assign(Match, {
+    /*
+    DOIS TEMPOS DE `MatchDuration.halfGameMinutes`. A 45:00 o jogo entra em
+    INTERVALO: pausa, recuperacao de parte do deposito (StaminaModel.
+    recuperaNoIntervalo), troca de lados e saida do 2o tempo para a equipa que
+    NAO abriu o jogo. A 90:00 o jogo acaba (FIM_DE_JOGO) — fora dos lotes do
+    `Sim`, que decidem eles proprios quando param. Devolve true se mudou de estado.
+    */
+    verificarFimDeTempo: function () {
+        if (this.state !== 'PLAY') return false;
+        const meio = MatchDuration.halfGameMinutes * 60;
+        if (!this.primeiroTempoAcabou && this.tempoDeJogo >= meio) {
+            this.primeiroTempoAcabou = true;
+            this.iniciarIntervalo();
+            return true;
+        }
+        const emLote = (typeof Sim !== 'undefined' && Sim.running);
+        if (this.primeiroTempoAcabou && !emLote && this.tempoDeJogo >= 2 * meio) {
+            this.mudarEstado('FIM_DE_JOGO', 'apito_final');
+            this.pararTodos();
+            if (typeof EfeitosSonoros !== 'undefined') EfeitosSonoros.apito(1.0);
+            return true;
+        }
+        return false;
+    },
+
+    pararTodos: function () {
+        this.ballVel.set(0, 0, 0);
+        this.ballCarrier = null;
+        this.intendedReceiver = null;
+        this.passTargetPos = null;
+        this.kickoffActive = false;
+        [...this.players, ...this.opponents].forEach(p => {
+            p.hasBall = false;
+            p.speedMult = 1;
+            if (p.velocity) p.velocity.set(0, 0, 0);
+            p.dynamicTarget = p.model.position.clone();
+            p.fsm.changeState('IDLE');
+        });
+    },
+
+    iniciarIntervalo: function () {
+        this.mudarEstado('INTERVALO', 'intervalo');
+        this.pararTodos();
+        this.intervaloTimer = MatchDuration.intervaloSegundos;
+        if (typeof EfeitosSonoros !== 'undefined') EfeitosSonoros.apito(1.0);
+        // Recupera parte do deposito, escalado pela fitness como em jogo.
+        const S = (typeof StaminaModel !== 'undefined') ? StaminaModel : null;
+        if (S && S.recuperaNoIntervalo) {
+            [...this.players, ...this.opponents].forEach(p => {
+                const forma = 1 + ((p.skillFor('FITNESS') - 50) / 50) * S.sensibilidadeFitness;
+                p.energia = Math.min(1, (p.energia || 1) + S.recuperaNoIntervalo * Math.max(0.1, forma));
+            });
+        }
+    },
+
+    correrPausaDeJogo: function (dt) {
+        this.players.forEach(p => p.update(dt));
+        this.opponents.forEach(p => p.update(dt));
+        if (this.state !== 'INTERVALO') return;
+        this.intervaloTimer -= dt;
+        if (this.intervaloTimer <= 0) this.iniciarSegundoTempo();
+    },
+
+    /*
+    TROCA DE LADOS: um unico bit (`Lados.trocados`) e tudo o que cacheia o sentido
+    de ataque e refeito aqui — dirZ e balizas de cada jogador, o quadro da
+    equipa (TeamAI) e as formacoes (baseTarget gira 180 graus). Depois reaproveita
+    a sequencia do golo: os 22 caminham para o posto e a saida e da equipa que
+    nao abriu o jogo.
+    */
+    iniciarSegundoTempo: function () {
+        Lados.trocados = !Lados.trocados;
+        [...this.players, ...this.opponents].forEach(p => {
+            p.dirZ = Lados.dirDe(p.team);
+            p.targetGoalZ = (CAMPO_COMP / 2) * p.dirZ;
+            p.ownGoalZ = -(CAMPO_COMP / 2) * p.dirZ;
+        });
+        ['TeamA', 'TeamB'].forEach(t => {
+            const bb = TeamAI.blackboards[t];
+            if (!bb) return;
+            bb.dir = Lados.dirDe(t);
+            bb.ownGoalZ = ownGoalZCenter(t);
+            bb.atkGoalZ = -bb.ownGoalZ;
+        });
+        this.assignFormations();
+
+        const abriu = this.saidaInicial || 'TeamA';
+        this.nextKickoffTeam = (abriu === 'TeamA') ? 'TeamB' : 'TeamA';
+        this.saidaPlano = null;
+        this.ball.position.set(0, BallPhysics.raio, 0);
+        this.mudarEstado('GOAL', 'segundo_tempo');
+        this.goalSequenceStage = 1;
+        this.tempoParada = 0;
+        [...this.players, ...this.opponents].forEach(p => {
+            p.fsm.changeState('MOVE_TO_POS');
+            p.speedMult = 3.0;
+        });
+    },
+
     update: function (dt) {
         if (!this._pf_stats) this._pf_stats = { count: 0, time: 0 };
         // A idade do último remate (ver talvezLamentar, o quase golo).
@@ -8,6 +107,12 @@ Object.assign(Match, {
         for (let p of this.players) { p.debugPoints = null; }
         for (let p of this.opponents) { p.debugPoints = null; }
         this.delta = dt;
+
+        // Intervalo e apito final: o relogio para, a bola fica no sitio.
+        if (this.state === 'INTERVALO' || this.state === 'FIM_DE_JOGO') {
+            this.correrPausaDeJogo(dt);
+            return;
+        }
 
         if (this.kickoffActive) {
             this.kickoffTimer -= dt;
@@ -39,6 +144,7 @@ Object.assign(Match, {
 
         const clockScale = MatchDuration.timeScale;
         this.tempoDeJogo += dt * clockScale;
+        if (this.verificarFimDeTempo()) return;
         // Relógio em segundos simulados, para a telemetria do passe (o
         // tempoDeJogo acima vem multiplicado pelo timeScale).
         if (typeof MatchStats !== 'undefined') MatchStats.tick(dt);
@@ -811,7 +917,7 @@ Object.assign(Match, {
         // um passe longo que lá cai também tornam a sequência perigosa.
         if (typeof MatchStats !== 'undefined' && MatchStats.seguirBolaNoAtaque &&
             this.possessionTeam && this.ball) {
-            const dirPosse = (this.possessionTeam === 'TeamA') ? 1 : -1;
+            const dirPosse = Lados.dirDe(this.possessionTeam);
             MatchStats.seguirBolaNoAtaque(this.possessionTeam, this.ball.position.z * dirPosse);
         }
 

@@ -2373,7 +2373,7 @@ const Officials = {
     */
     ehPenalti: function (x, z, teamInfractor) {
         if (typeof Area !== 'undefined' && typeof Area.contem === 'function') {
-            const ladoZ = (teamInfractor === 'TeamA') ? -1 : (teamInfractor === 'TeamB') ? 1 : 0;
+            const ladoZ = (teamInfractor === 'TeamA' || teamInfractor === 'TeamB') ? -Lados.dirDe(teamInfractor) : 0;
             if (!ladoZ) return false;
             return Area.contem(x, z, ladoZ, this.margemDaLinhaDaArea);
         }
@@ -2384,8 +2384,9 @@ const Officials = {
         const dentroEmZNegativo = z < -zLimite;
         const dentroEmZPositivo = z > zLimite;
 
-        if (teamInfractor === 'TeamA') return dentroEmZNegativo;
-        if (teamInfractor === 'TeamB') return dentroEmZPositivo;
+        if (teamInfractor === 'TeamA' || teamInfractor === 'TeamB') {
+            return (Lados.dirDe(teamInfractor) > 0) ? dentroEmZNegativo : dentroEmZPositivo;
+        }
         return false;
     },
 

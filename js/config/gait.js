@@ -88,7 +88,7 @@ const GaitModel = {
         braco: 0.52,
         cotovelo: -0.95,
         tronco: 0.15,
-        descida: 0.040,
+        descida: 0.065,
         ressalto: 0.028
     },
     correr: {
@@ -130,7 +130,7 @@ const GaitModel = {
         braco: 1.00,
         cotovelo: -1.55,      // braços bem dobrados a bombear
         tronco: 0.30,         // inclinado para a frente
-        descida: 0.075,        // centra a corrida na mesma altura do parado (medido)
+        descida: 0.095,        // centra a corrida na mesma altura do parado (medido)
         ressalto: 0.045       // ~9 cm de oscilação total, como numa corrida a sério
     }
 };

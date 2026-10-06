@@ -264,7 +264,7 @@ const CrowdTrigger = {
     detecção de golo em match.js), portanto o TeamA ataca para z positivo.
     */
     noTercoOfensivo(team, bolaZ) {
-        return team === 'TeamA'
+        return (Lados.dirDe(team) > 0)
             ? bolaZ > CrowdModel.tercoZ
             : bolaZ < -CrowdModel.tercoZ;
     },

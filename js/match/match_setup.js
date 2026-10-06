@@ -1987,7 +1987,7 @@ Object.assign(Match, {
         const plano = this.planoDeSaida(this.nextKickoffTeam);
         const raioCirculo = 9.15 + 0.5;
 
-        [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+        [{ list: this.players, dir: Lados.dirDe('TeamA') }, { list: this.opponents, dir: Lados.dirDe('TeamB') }].forEach(({ list, dir }) => {
             list.forEach(p => {
                 if (!p || p.role === 'gk') return;   // o GK volta pela lerp do updateGK
 
@@ -2041,7 +2041,7 @@ Object.assign(Match, {
 
         const startA = (equipa === 'TeamA');
         const takerList = startA ? this.players : this.opponents;
-        const attDir = startA ? 1 : -1;
+        const attDir = Lados.dirDe(equipa);
 
         const atacantes = takerList.filter(p => p.role === 'atk');
         const taker = atacantes[0] || takerList.find(p => p.role !== 'gk');
@@ -2078,6 +2078,8 @@ Object.assign(Match, {
         const fDataB = FormationsData[Tatics.formacaoB || '442'];
 
         const processTeam = (teamList, fData, isTeamA) => {
+            // isTeamA = identidade (estilo do GR); `sentidoA` = lado do campo, que troca ao intervalo.
+            const sentidoA = Lados.dirDe(isTeamA ? 'TeamA' : 'TeamB') > 0;
             /*
             O NÚMERO DA CAMISOLA é o do jogador, quando os dados o trazem. Só
             vale se for único DENTRO deste onze: o plantel tem 60 jogadores e
@@ -2098,14 +2100,14 @@ Object.assign(Match, {
             const contagemPos = {};
 
             for (let i = 0; i < 11; i++) {
-                const uVal = isTeamA ? (fData[i].x + 1) / 2 : (-fData[i].x + 1) / 2;
+                const uVal = sentidoA ? (fData[i].x + 1) / 2 : (-fData[i].x + 1) / 2;
                 const slot = (fData[i].role === 'gk') ? null : {
                     u: uVal,
                     v: (fData[i].z - zMin) / zSpan
                 };
 
-                const x = isTeamA ? fData[i].x : -fData[i].x;
-                const z = isTeamA ? fData[i].z : -fData[i].z;
+                const x = sentidoA ? fData[i].x : -fData[i].x;
+                const z = sentidoA ? fData[i].z : -fData[i].z;
 
                 teamList[i].baseTarget.set(x * (CAMPO_LARG / 2) * compMult, ALTURA_BASE_Y, z * (CAMPO_COMP / 2));
                 teamList[i].role = fData[i].role;
@@ -2198,7 +2200,7 @@ Object.assign(Match, {
         (ver alvoGkX/alvoGkZ em player.js), por isso valem-lhes as mesmas
         contas dos outros: quem já lá está fica, quem ficou longe é colocado.
         */
-        [{ gk: this.players[0], z: -48 }, { gk: this.opponents[0], z: 48 }].forEach(({ gk, z }) => {
+        [{ gk: this.players[0], z: -48 * Lados.dirDe('TeamA') }, { gk: this.opponents[0], z: -48 * Lados.dirDe('TeamB') }].forEach(({ gk, z }) => {
             if (!gk) return;
             if (Math.hypot(gk.model.position.x, gk.model.position.z - z) > TOLERANCIA_SAIDA) {
                 gk.model.position.set(0, ALTURA_BASE_Y, z);
@@ -2254,7 +2256,7 @@ Object.assign(Match, {
 
         // dirA/dirB: sentido de ataque de cada equipa. O campo de defesa é o
         // lado oposto — por isso o clamp abaixo usa z*dir <= -margem.
-        [{ list: this.players, dir: 1 }, { list: this.opponents, dir: -1 }].forEach(({ list, dir }) => {
+        [{ list: this.players, dir: Lados.dirDe('TeamA') }, { list: this.opponents, dir: Lados.dirDe('TeamB') }].forEach(({ list, dir }) => {
             list.forEach(p => {
                 p.isCross = false;
                 if (p.role !== 'gk') {
@@ -2298,6 +2300,8 @@ Object.assign(Match, {
         teletransportados para o sítio para onde acabaram de andar.
         */
         const equipaDaSaida = forcingKickoffTeam || ((Math.random() < 0.5) ? 'TeamA' : 'TeamB');
+        // A saida do 2o tempo e da equipa que NAO abriu o jogo (ver iniciarSegundoTempo).
+        if (!this.saidaInicial) this.saidaInicial = equipaDaSaida;
         const plano = this.planoDeSaida(equipaDaSaida);
         const startA = plano.startA;
         const attDir = plano.attDir;

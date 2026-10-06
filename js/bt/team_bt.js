@@ -72,7 +72,7 @@ class TeamBlackboard {
         this.opp = [];
         this.outfield = [];
 
-        this.dir = (team === 'TeamA') ? 1 : -1;
+        this.dir = Lados.dirDe(team);
         this.ownGoalZ = ownGoalZCenter(team);
         this.atkGoalZ = -this.ownGoalZ;
 

@@ -374,6 +374,27 @@ Object.assign(Match, {
         }
 
         /*
+        FALTA DIRECTA: o foco passa a ser o ponto medio entre a bola e a baliza
+        e, nas vistas laterais, a camara anda ao longo da linha com ele — a bola
+        e a baliza cabem no mesmo plano. Ver CameraZoom.faltaDirectaDist.
+        */
+        if (window.cameraMode !== 'topdown' && this.state === 'FREE_KICK' && this.setPieceTaker) {
+            const ZF = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
+            const dMax = (ZF && ZF.faltaDirectaDist) || 35.0;
+            const golZ = this.setPieceTaker.targetGoalZ;
+            if (typeof golZ === 'number' && Math.hypot(this.ball.position.x, golZ - this.ball.position.z) <= dMax) {
+                const mx = this.ball.position.x * 0.5;
+                const mz = (this.ball.position.z + golZ) * 0.5;
+                if (window.cameraMode === 'grua') {
+                    lookTarget.set(mx, this.ball.position.y, mz);
+                } else {
+                    targetPos.z += mz - lookTarget.z;
+                    lookTarget.set(mx, this.ball.position.y, mz);
+                }
+            }
+        }
+
+        /*
         E NÃO SE CHEGA A MENOS DE `distanciaMinima` DO QUE SE ESTÁ A VER.
 
         Pedido: *"ajusta o zoom in máximo para uma distância de 5 metros dos

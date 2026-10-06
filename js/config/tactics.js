@@ -214,12 +214,32 @@ const MatchDuration = {
     halfGameMinutes: 45,
     halfRealMinutes: 10,
     gameSecondsPerRealSecond: 4.5,
+    intervaloSegundos: 8,       // duracao REAL do intervalo, em segundos
     get timeScale() {
         return (typeof GAME_SPEED !== 'undefined' && GAME_SPEED > 0)
             ? (this.gameSecondsPerRealSecond / GAME_SPEED)
             : this.gameSecondsPerRealSecond;
     }
 };
+
+/*
+OS LADOS DO CAMPO. No primeiro tempo o TeamA ataca +Z e o TeamB -Z; no segundo
+trocam. Tudo o que decidia o lado pelo NOME da equipa passa por aqui, para a
+troca ser um unico bit (`trocados`) e nao 40 `team === 'TeamA'` a reescrever.
+`dirDe` e o sentido de ataque; `donoDaBaliza` diz de quem e a baliza do lado
+`zSinal` (-1 = z negativo).
+*/
+const Lados = {
+    trocados: false,
+    dirDe(team) {
+        const d = (team === 'TeamA') ? 1 : -1;
+        return this.trocados ? -d : d;
+    },
+    donoDaBaliza(zSinal) {
+        return (this.dirDe('TeamA') === -Math.sign(zSinal || 1)) ? 'TeamA' : 'TeamB';
+    }
+};
+if (typeof window !== 'undefined') window.Lados = Lados;
 
 window.cameraMode = 'lateraltv';
 window.cameraZoom = 1.0;
@@ -258,6 +278,13 @@ const CameraZoom = {
     distanciaMinima: 5.0,   // metros, o mais perto que a câmara chega do alvo
     movelMin: 10.0,         // Câmara Móvel (5): distância à bola, mínima (m)
     movelMax: 30.0,         // ... e máxima: o zoom só anda entre as duas
+    /*
+    FALTA DIRECTA: a camara enquadra o PONTO MEDIO entre a bola e a baliza que
+    se ataca (pedido: "o enquadramento fica bem melhor"). So conta quando a
+    baliza esta a menos de `faltaDirectaDist` metros — mais longe a falta e um
+    passe, nao um remate.
+    */
+    faltaDirectaDist: 35.0,
     passoRoda: 0.001        // por unidade de `deltaY` da roda do rato
 };
 if (typeof window !== 'undefined') window.CameraZoom = CameraZoom;

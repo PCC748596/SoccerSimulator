@@ -179,7 +179,7 @@ const SpatialGrid = {
     layerValueAt: function (layerName, x, z, team) {
         const fn = this.LAYERS[layerName];
         if (!fn) return 0;
-        const dir = (team === 'TeamA') ? 1 : -1;
+        const dir = Lados.dirDe(team);
         return fn(z * dir, x);
     },
 

@@ -28,7 +28,7 @@ function extrair(nome) {
 }
 
 const corpo = extrair('creditarGolo');
-const creditarGolo = new Function('MatchStats', 'zSinal', `return (function (zSinal) {${corpo}}).call(this, zSinal);`);
+const creditarGolo = new Function('MatchStats', 'Lados', 'zSinal', `return (function (zSinal) {${corpo}}).call(this, zSinal);`);
 
 function cenario(lastTouchedTeam, zSinal) {
     const stats = {
@@ -39,7 +39,7 @@ function cenario(lastTouchedTeam, zSinal) {
         confirmarGrandeChance: function (t) { this[t].chances++; }
     };
     const M = { lastTouchedTeam, placarA: 0, placarB: 0, updatePlacar: function () {} };
-    creditarGolo.call(M, stats, zSinal);
+    creditarGolo.call(M, stats, { donoDaBaliza: z => (z < 0 ? 'TeamA' : 'TeamB') }, zSinal);
     return { M, stats };
 }
 

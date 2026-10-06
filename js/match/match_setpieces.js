@@ -170,7 +170,7 @@ Object.assign(Match, {
         let attackingPlayers = (team === 'TeamA') ? this.players : this.opponents;
         let defendingPlayers = (team === 'TeamA') ? this.opponents : this.players;
 
-        let attDir = (team === 'TeamA') ? 1 : -1;
+        let attDir = Lados.dirDe(team);
         let defDir = -attDir;
 
         if (type === 'CORNER_KICK') {
@@ -1531,7 +1531,7 @@ Object.assign(Match, {
         const team = forceTeam ||
             (this.ballCarrier ? this.ballCarrier.team : null) ||
             this.possessionTeam || this.lastTouchedTeam || 'TeamA';
-        const attDir = (team === 'TeamA') ? 1 : -1;
+        const attDir = Lados.dirDe(team);
         const golZ = attDir * (CAMPO_COMP / 2);
 
         // Distância de 17 a 23 metros da baliza
@@ -2002,7 +2002,7 @@ Object.assign(Match, {
         };
         const bate = (team === 'TeamA') ? this.players : this.opponents;
         const recebe = (team === 'TeamA') ? this.opponents : this.players;
-        const attDir = (team === 'TeamA') ? 1 : -1;
+        const attDir = Lados.dirDe(team);
         const linhaZ = -attDir * LINHA_FUNDO;      // linha de fundo de quem bate
 
         const escrever = (p, zAtkDeQuemBate) => {

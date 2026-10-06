@@ -1776,6 +1776,15 @@ const GoalkeeperDive = {
     folgaDeitado: 0.10,
 
     /*
+    A CABECA NAO ENTRA NA RELVA E A PALMA APOIA NELA (pedido, referencia BF80). Deitado, com o corpo
+    ja assente, mede-se a caixa da cabeca (`cabecaMin` = o minimo que fica acima do relvado) e a da
+    mao; o pescoco levanta a cara se for preciso e o ombro leva a palma ate `maoAlvo` do relvado,
+    quando o braco la chega (`maxDelta` rad de ombro). `passo` e a resolucao da procura e
+    `suavizacao` o lerp por frame, para nao se ver o braco saltar.
+    */
+    apoioNoChao: { activo: true, cabecaMin: 0.07, maoAlvo: 0.01, maxDelta: 1.6, passo: 0.03, suavizacao: 1.0 },
+
+    /*
     A CORRECCAO QUE TIRA AS MAOS DE DENTRO DA RELVA — ver
     `GkDive.maosForaDoRelvado` para o relato e para a medicao.
 

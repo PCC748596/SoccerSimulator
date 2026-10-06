@@ -757,6 +757,9 @@ const GkDive = {
             for (let i = 0; i < 4; i++) this.maosForaDoRelvado(rig);
         }
 
+        // Deitado no chao: cara fora da relva e palma a apoiar (apoioNoChao).
+        if (d.fase === 'chao' && !(typeof Sim !== 'undefined' && Sim.running)) this.apoiarNoChao(rig, !d.agarrou);
+
         /*
         A BOLA AGARRADA VAI AO PEITO — ver GoalkeeperDive.bolaNoPeito.
 
@@ -1394,6 +1397,67 @@ const GkDive = {
     So sobe: uma mao que esteja ACIMA da relva nao e tocada — quem manda nela
     e a pose, ou o IK quando ele ainda vai a bola.
     */
+    /*
+    A CAIXA MAIS BAIXA de um ramo do rig, no mundo (as 8 pontas de cada malha).
+    */
+    _minYDe(raiz) {
+        let m = Infinity;
+        const v = this._vApoio || (this._vApoio = new THREE.Vector3());
+        raiz.updateWorldMatrix(true, false);
+        raiz.traverse(o => {
+            if (!o.isMesh || !o.visible || !o.geometry || !o.geometry.attributes.position) return;
+            const g = o.geometry;
+            if (!g.boundingBox) g.computeBoundingBox();
+            const b = g.boundingBox;
+            o.updateWorldMatrix(true, false);
+            for (let c = 0; c < 8; c++) {
+                v.set((c & 1) ? b.max.x : b.min.x, (c & 2) ? b.max.y : b.min.y, (c & 4) ? b.max.z : b.min.z).applyMatrix4(o.matrixWorld);
+                if (v.y < m) m = v.y;
+            }
+        });
+        return m;
+    },
+
+    /*
+    DEITADO: A CABECA FORA DA RELVA E A PALMA NELA. Ver GoalkeeperDive.apoioNoChao. Corre depois de o
+    corpo estar assente. Procura, a passo fixo, o desvio de `eixo.rotation.x` mais PEQUENO que
+    cumpre a condicao: o pescoco, para a cara ficar `cabecaMin` acima do relvado, e cada ombro,
+    para a mao pousar a `maoAlvo`. Sem solucao (o braco nao chega) deixa a pose como esta.
+    */
+    apoiarNoChao(rig, comMaos) {
+        const A = GoalkeeperDive.apoioNoChao;
+        if (!A || !A.activo || !rig) return;
+        const procurar = (osso, medir, aceita) => {
+            const x0 = osso.rotation.x;
+            let melhor = null;
+            for (let k = 0; k * A.passo <= A.maxDelta; k++) {
+                for (const sinal of (k === 0 ? [1] : [1, -1])) {
+                    osso.rotation.x = x0 + sinal * k * A.passo;
+                    if (aceita(medir())) { melhor = osso.rotation.x; k = 1e9; break; }
+                }
+            }
+            osso.rotation.x = x0;
+            return melhor;
+        };
+        if (rig.neck && rig.head !== null) {
+            const medirCabeca = () => { rig.chest.updateWorldMatrix(true, true); return this._minYDe(rig.neck); };
+            if (medirCabeca() < A.cabecaMin) {
+                const alvo = procurar(rig.neck, medirCabeca, m => m >= A.cabecaMin);
+                if (alvo !== null) rig.neck.rotation.x = lerpTo(rig.neck.rotation.x, alvo, A.suavizacao);
+            }
+        }
+        if (!comMaos) return;
+        for (const par of [['lHand', 'lArm'], ['rHand', 'rArm']]) {
+            const mao = rig[par[0]], ombro = rig[par[1]];
+            if (!mao || !ombro) continue;
+            const medir = () => { ombro.updateWorldMatrix(true, true); return this._minYDe(mao); };
+            const m0 = medir();
+            if (m0 >= -0.01 && m0 <= A.maoAlvo + 0.025) continue;
+            const alvo = procurar(ombro, medir, m => m >= -0.01 && m <= A.maoAlvo + 0.025);
+            if (alvo !== null) ombro.rotation.x = lerpTo(ombro.rotation.x, alvo, A.suavizacao);
+        }
+    },
+
     maosForaDoRelvado(rig) {
         const D = GoalkeeperDive;
         if (!rig) return;
@@ -1533,7 +1597,10 @@ const GkDive = {
             escreverPoseBolaParada(rig, K, corpo, 'r');
             // Sem desenho fica o `altura` do próprio keyframe (resolvido com o
             // corpo no relvado quando o QuedaClip foi construído).
-            if (!headless && typeof p.assentarCorpoInteiro === 'function') p.assentarCorpoInteiro();
+            if (!headless && typeof p.assentarCorpoInteiro === 'function') {
+                p.assentarCorpoInteiro();
+                if (c.fase === 'chao') this.apoiarNoChao(rig, !(c.t < D.amorteceDur));
+            }
         }
 
         if (c.fase === 'levantar' && c.t >= tLevantar) {

@@ -11849,3 +11849,18 @@ nada sobre a causa. Passou a `atributoOuMedia`.
 - **Braços do árbitro**: o `mover` (`officials.js`) assenta `rotation.z` dos braços em ±PI/12 quando nenhum gesto (sinal/cartão) os controla; antes ficavam colados ao corpo (o `acabarCartao` zerava-os).
 - **Replay do golo**: `REPLAY_GOLO.SEGUNDOS_ANTES` 11 → 9 (9 + 1 depois = 10 s).
 - Testes: `guarda_redes_bola_agarrada` com mais sementes (`AMOSTRA_MIN` 3), `gk_salta_no_momento` em ciclo de sementes, `assento_*` com `afundamento` a 0 e verificação de config.
+
+- **Corpo mais baixo no trote e na corrida**: `GaitModel.trote.descida` 0.040 → 0.065 e `correr.descida` 0.075 → 0.095. Subi primeiro para 0.18/0.150 (−8.9/−10.7 cm), mas o assento no chão (acima da `velMax` só sobe o corpo) levanta-o de volta a cada apoio e a altura ganhava quiques (a rugosidade da curva `|d2|` subia de 10-11 mm para 13-18 mm); por isso ficou num valor moderado: média −4.4 → −5.1 cm no trote e −3.7 → −5.5 cm na corrida, rugosidade 11.8/13.5 mm. Dobrar mais o joelho (`joelhoBase`) não baixa o corpo e não suaviza — testado e descartado.
+
+- **Seguimento do passe mais à frente**: `PassClip` keyframes 6 e 7 — `coxaChute` -0.62 → -0.82 e -0.32 → -0.54.
+
+### Dois tempos, intervalo e troca de lados
+
+- `Lados` (`config/tactics.js`): `trocados`, `dirDe(team)` e `donoDaBaliza(zSinal)`. Tudo o que decidia o lado pelo nome da equipa (`dirZ`, `ownGoalZCenter`, golos/cantos/tiros de meta, penálti, fora-de-jogo, área do GR, saída de bola, formações, spatial grid, claque) passou por aqui.
+- `Match.verificarFimDeTempo` (`match_loop.js`): a 45:00 (`MatchDuration.halfGameMinutes`) entra em `INTERVALO` (`MatchDuration.intervaloSegundos` = 8 s reais; relógio parado, jogadores parados, `StaminaModel.recuperaNoIntervalo` 0.20 do depósito, escalado pela fitness). Depois `iniciarSegundoTempo` troca os lados (dirZ/balizas dos jogadores, `TeamAI`, `assignFormations` gira 180°) e reutiliza a sequência do golo (caminhada → saída) com saída para a equipa que NÃO abriu o jogo (`Match.saidaInicial`). A 90:00 acaba (`FIM_DE_JOGO`), excepto nos lotes do `Sim`.
+- Por fazer: a claque (`Crowd`) não troca de ponta ao intervalo.
+- Teste novo: `tests/segundo_tempo.test.js`. `guarda_redes_tiro_de_meta` passou a 3 sementes.
+
+- **Camera na falta directa**: com `FREE_KICK` e a baliza atacada a menos de `CameraZoom.faltaDirectaDist` (35 m), o `updateCamera` (`match_ui.js`) foca o ponto médio entre a bola e a baliza e, nas vistas laterais, desloca a câmara em z com ele (grua só muda o foco; tática de cima não muda).
+
+- **Goleiro deitado: cara fora da relva e palma a apoiar**: `GoalkeeperDive.apoioNoChao` (`config/goalkeeper.js`) + `GkDive.apoiarNoChao` (`gk_dive.js`). Com o corpo assente (fase de chão do mergulho e `chaoQ` da queda), mede-se a caixa da cabeça e das mãos no mundo; o pescoço levanta a cara até `cabecaMin` (0.07 m) e cada ombro leva a palma até ~`maoAlvo` do relvado (procura do menor desvio de `rotation.x`, até `maxDelta`). Só no browser (`Sim.running` falso) e não com a bola agarrada. Medido na queda do salto alto: mãos 41/24 cm no ar → 3 cm; cabeça 5-6 cm (antes tocava no relvado no frame de aterragem).

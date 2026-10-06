@@ -24,7 +24,7 @@ function forcaDoRemate(v) {
 }
 
 function ownGoalZCenter(team) {
-    return (team === 'TeamA') ? -48 : 48;
+    return -48 * Lados.dirDe(team);
 }
 
 /*

@@ -39,7 +39,8 @@ const corpoRepor = ['js/match/match_state.js', 'js/match/match_setup.js', 'js/ma
     .replace(/,$/, '');
 
 const mod = new Function(...Object.keys(amb),
-    `${ler('js/config/physics.js')}\n${ler('js/config/defense.js')}
+    `${"const Lados = { trocados: false, dirDe(t) { return t === 'TeamA' ? 1 : -1; }, donoDaBaliza(z) { return z < 0 ? 'TeamA' : 'TeamB'; } };"}
+     ${ler('js/config/physics.js')}\n${ler('js/config/defense.js')}
      let Match = null;
      ${ler('js/officials.js')}
      ${corpoRepor}

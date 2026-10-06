@@ -2187,5 +2187,13 @@ const StaminaModel = {
 
     minimo: 0.50,               // chao do deposito: ninguem anda a metade do passo
     quedaVelocidade: 0.15,      // -15% de velocidade maxima com o deposito vazio
-    quedaSkill: 8               // pontos de atributo perdidos com o deposito vazio
+    quedaSkill: 8,              // pontos de atributo perdidos com o deposito vazio
+
+    /*
+    O INTERVALO REPOE UM POUCO DO DEPOSITO. `recuperaNoIntervalo` e a fraccao do
+    deposito (0..1) devolvida a um jogador de fitness media; a fitness escala-a
+    como escala a recuperacao em jogo. Nao enche: 15 minutos de pausa nao
+    apagam 45 de jogo.
+    */
+    recuperaNoIntervalo: 0.20
 };
