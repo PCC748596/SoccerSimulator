@@ -186,6 +186,7 @@ if (process.env.LOTE_WORKER) {
             faltas: (A.faltas ? A.faltas.cometidas : 0) + (B.faltas ? B.faltas.cometidas : 0),
             impedimentos: (A.impedimentos || 0) + (B.impedimentos || 0)
         };
+        jogo.placar = { A: Match.placarA, B: Match.placarB };
         jogo.larguraMedia = jogo.largura.n ? jogo.largura.soma / jogo.largura.n : 0;
         delete jogo.largura;
 
@@ -241,22 +242,28 @@ OS ALVOS DO FUTEBOL A SÉRIO — os mesmos do painel do ecrã
 contarem para nada.
 */
 const ALVOS = [
-    { campo: 'pctPassesCertos', rotulo: '% passes certos', alvo: null, casas: 1 },
+    // BENCHMARK BR 2025 (as duas equipas somadas, por 90 min, salvo indicacao):
     { campo: 'golos', rotulo: 'golos', alvo: 2.52, casas: 2 },
-    { campo: 'remates', rotulo: 'finalizações', alvo: 26.11, casas: 2 },
-    { campo: 'pctRematesNoAlvo', rotulo: '% no alvo', alvo: null, casas: 1 },
-    { campo: 'cantos', rotulo: 'cantos', alvo: 9.92, casas: 2 },
-    { campo: 'amarelos', rotulo: 'amarelos', alvo: 5.22, casas: 2, provisorio: true },
-    { campo: 'vermelhos', rotulo: 'vermelhos', alvo: 0.08, casas: 2, provisorio: true },
-    { campo: 'faltas', rotulo: 'faltas', alvo: 27.63, casas: 2 },
-    { campo: 'impedimentos', rotulo: 'impedimentos', alvo: 3.20, casas: 2 },
-    // Sem alvo: os 176.63 / 77.84 de antes eram de uma definicao de "ataque" que nao se conseguiu
-    // confirmar numa fonte (ver js/stats.js). Passam a chamar-se pelo que medem.
-    { campo: 'ataquesTotais', rotulo: 'sequências de posse', alvo: null, casas: 1 },
-    { campo: 'ataquesPerigosos', rotulo: 'entradas no último terço', alvo: null, casas: 1 },
-    { campo: 'ataquesNaArea', rotulo: 'entradas na grande área', alvo: null, casas: 1 },
+    { campo: 'remates', rotulo: 'finalizações', alvo: 26.1, casas: 2 },
+    { campo: 'rematesNoAlvo', rotulo: 'finalizações no alvo', alvo: 8.8, casas: 2 },
+    { campo: 'pctRematesNoAlvo', rotulo: '% no alvo', alvo: 33.7, casas: 1 },
     { campo: 'xg', rotulo: 'xG total', alvo: 2.84, casas: 2 },
-    { campo: 'xgPorRemate', rotulo: 'xG por remate', alvo: 0.109, casas: 3 }
+    { campo: 'xgPorRemate', rotulo: 'xG por remate', alvo: 0.109, casas: 3 },
+    { campo: 'cantos', rotulo: 'escanteios', alvo: 9.92, casas: 2 },
+    { campo: 'faltas', rotulo: 'faltas', alvo: 27.63, casas: 2 },
+    { campo: 'amarelos', rotulo: 'amarelos', alvo: 5.22, casas: 2 },
+    { campo: 'vermelhos', rotulo: 'vermelhos', alvo: 0.20, casas: 2 },
+    { campo: 'impedimentos', rotulo: 'impedimentos', alvo: 3.20, casas: 2 },
+    { campo: 'ataquesTotais', rotulo: 'ataques', alvo: 176.6, casas: 1 },
+    { campo: 'ataquesPerigosos', rotulo: 'ataques perigosos', alvo: 77.8, casas: 1 },
+    { campo: 'passesPorTime', rotulo: 'passes tentados/time', alvo: 375, casas: 0 },
+    { campo: 'pctPassesCertos', rotulo: '% passes certos', alvo: 80, casas: 1 },
+    { campo: 'pctPosseCasa', rotulo: 'posse da casa (A) %', alvo: 51, casas: 1 },
+    { campo: 'defesas', rotulo: 'defesas (GR)', alvo: 6.2, casas: 2 },
+    { campo: 'rematesBloqueados', rotulo: 'finalizações bloqueadas', alvo: 7.0, casas: 2 },
+    { campo: 'penaltis', rotulo: 'penaltis', alvo: 0.28, casas: 2 },
+    // Sem alvo, so informativo:
+    { campo: 'ataquesNaArea', rotulo: 'entradas na grande área', alvo: null, casas: 1 }
 ];
 
 /*
@@ -347,6 +354,18 @@ function relatorio() {
         const nota = l.m.provisorio ? '   (sem alvo acordado)'
             : (l.sinal === 'ok' ? '   ok' : (l.sinal === '~' ? '   ~' : (l.sinal === 'X' ? '   <-- fora' : '')));
         console.log('  ' + rot + medido + alvo + pct + nota);
+    }
+    // Resultados: A joga "em casa". So tem sentido em jogos de ~90 min.
+    {
+        let v = 0, e = 0, d = 0;
+        for (const j of resultados) {
+            if (!j.placar) continue;
+            if (j.placar.A > j.placar.B) v++; else if (j.placar.A === j.placar.B) e++; else d++;
+        }
+        const t = v + e + d || 1;
+        console.log('');
+        console.log(`resultados (casa/empate/fora): ${(100 * v / t).toFixed(0)}% / ${(100 * e / t).toFixed(0)}% / ${(100 * d / t).toFixed(0)}%` +
+            `   alvo 50 / 26 / 24` + (MINUTOS < 90 ? `   (jogos de ${MINUTOS} min: so indicativo)` : ''));
     }
     console.log('');
     console.log('fora da ficha (não há alvo de futebol real para comparar):');

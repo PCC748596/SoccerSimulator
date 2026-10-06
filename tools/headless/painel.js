@@ -23,5 +23,5 @@ const pct = (a, b) => b ? (100 * a / b).toFixed(0) + '%' : '-';
 const golos = soma(s => s.remates.golos), rem = soma(s => s.remates.tentados);
 const tot = soma(s => s.ataques.totais), per = soma(s => s.ataques.perigosos), area = soma(s => s.ataques.naArea);
 console.log(`semente ${semente}: golos ${golos.toFixed(2)} (${pct(golos, 2.52)}) | ` +
-    `remates ${rem.toFixed(1)} (${pct(rem, 26.11)}) | posses ${tot.toFixed(0)} | ` +
-    `ultimo terco ${per.toFixed(0)} | grande area ${area.toFixed(0)} | passes certos ${pct(soma(s => s.passes.certos), soma(s => s.passes.tentados))}`);
+    `remates ${rem.toFixed(1)} (${pct(rem, 26.1)}) | ataques ${tot.toFixed(0)} (${pct(tot, 176.6)}) | ` +
+    `perigosos ${per.toFixed(0)} (${pct(per, 77.8)}) | grande area ${area.toFixed(0)} | passes certos ${pct(soma(s => s.passes.certos), soma(s => s.passes.tentados))}`);

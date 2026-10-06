@@ -920,8 +920,13 @@ const MatchStats = {
         const soma = (f) => f(A) + f(B);
 
         const remates = soma(s => s.remates.tentados);
-        const passesT = soma(s => s.passes.tentados);
-        const passesC = soma(s => s.passes.certos);
+        /*
+        PASSES NO FORMATO DO BENCHMARK: todos os passes — curtos, lancamentos e cruzamentos —, e nao so
+        os curtos. O `passes.tentados` do MatchStats e so o passe curto (os outros dois tem contador
+        proprio); com ele a "precisao" e o volume por equipa saiam de uma definicao mais estreita.
+        */
+        const passesT = soma(s => s.passes.tentados + s.lancamentos.tentados + s.cruzamentos.tentados);
+        const passesC = soma(s => s.passes.certos + s.lancamentos.certos + s.cruzamentos.certos);
         const noAlvo = soma(s => s.remates.noAlvo);
 
         // As razões valem sempre — não dependem do tempo decorrido.
@@ -929,6 +934,7 @@ const MatchStats = {
         const razoes = {
             pctPassesCertos: pct(passesC, passesT),
             pctRematesNoAlvo: pct(noAlvo, remates),
+            pctPosseCasa: pct(A.posseSegundos, A.posseSegundos + B.posseSegundos),
             xgPorRemate: (remates > 0) ? soma(s => s.xg) / remates : null
         };
 
@@ -937,7 +943,8 @@ const MatchStats = {
                 segundosJogados: segundosJogados || 0, escalado: false,
                 golos: null, remates: null, cantos: null, amarelos: null,
                 vermelhos: null, faltas: null, impedimentos: null,
-                ataquesPerigosos: null, ataquesTotais: null, ataquesNaArea: null, xg: null
+                ataquesPerigosos: null, ataquesTotais: null, ataquesNaArea: null, xg: null,
+                rematesNoAlvo: null, defesas: null, rematesBloqueados: null, penaltis: null, passesPorTime: null
             }, razoes);
         }
 
@@ -952,6 +959,12 @@ const MatchStats = {
             faltas: soma(s => s.faltas.cometidas) * k,
             impedimentos: soma(s => s.impedimentos) * k,
             ataquesPerigosos: soma(s => s.ataques.perigosos) * k,
+            rematesNoAlvo: noAlvo * k,
+            defesas: soma(s => s.defesas) * k,
+            rematesBloqueados: soma(s => s.remateBloqueados) * k,
+            penaltis: soma(s => s.penaltis) * k,
+            // Passes tentados POR EQUIPA (a media das duas), por jogo.
+            passesPorTime: passesT * k / 2,
             ataquesTotais: soma(s => s.ataques.totais) * k,
             ataquesNaArea: soma(s => s.ataques.naArea) * k,
             xg: soma(s => s.xg) * k

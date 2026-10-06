@@ -69,18 +69,19 @@ Os alvos são de JOGO e não de equipa: 2,52 golos são os dois lados somados.
 =============================================================================
 */
 const ALVOS_ESTATISTICA = [
-    { campo: 'pctPassesCertos', rotulo: '% passes certos', alvo: null, casas: 1, sufixo: '%' },
+    { campo: 'pctPassesCertos', rotulo: '% passes certos', alvo: 80, casas: 1, sufixo: '%' },
     { campo: 'golos', rotulo: '⚽ Golos', alvo: 2.52, casas: 2 },
-    { campo: 'remates', rotulo: '🎯 Finalizações', alvo: 26.11, casas: 2 },
-    { campo: 'pctRematesNoAlvo', rotulo: '% no alvo', alvo: null, casas: 1, sufixo: '%' },
+    { campo: 'remates', rotulo: '🎯 Finalizações', alvo: 26.1, casas: 2 },
+    { campo: 'rematesNoAlvo', rotulo: '🎯 Finalizações no alvo', alvo: 8.8, casas: 2 },
+    { campo: 'pctRematesNoAlvo', rotulo: '% no alvo', alvo: 33.7, casas: 1, sufixo: '%' },
     { campo: 'cantos', rotulo: '🚩 Escanteios', alvo: 9.92, casas: 2 },
     /*
     Os cartões ainda não têm alvo acordado (pedido explícito: "os cartões ainda
     não definimos"). Os números ficam à vista como referência, mas marcados
     como provisórios para não se calibrar contra eles por engano.
     */
-    { campo: 'amarelos', rotulo: '🟨 Amarelos', alvo: 5.22, casas: 2, provisorio: true },
-    { campo: 'vermelhos', rotulo: '🟥 Vermelhos', alvo: 0.08, casas: 2, provisorio: true },
+    { campo: 'amarelos', rotulo: '🟨 Amarelos', alvo: 5.22, casas: 2 },
+    { campo: 'vermelhos', rotulo: '🟥 Vermelhos', alvo: 0.20, casas: 2 },
     { campo: 'faltas', rotulo: '🦶 Faltas', alvo: 27.63, casas: 2 },
     /*
     A regra existe desde a Lei 11 implementada em Officials
@@ -90,8 +91,13 @@ const ALVOS_ESTATISTICA = [
     "não é medido", agora um zero é mesmo "não houve nenhum".
     */
     { campo: 'impedimentos', rotulo: '🚫 Impedimentos', alvo: 3.20, casas: 2 },
-    { campo: 'ataquesPerigosos', rotulo: '🔥 Ataques perigosos', alvo: 77.84, casas: 1 },
-    { campo: 'ataquesTotais', rotulo: '⚔️ Ataques totais', alvo: 176.63, casas: 1 },
+    { campo: 'ataquesPerigosos', rotulo: '🔥 Ataques perigosos', alvo: 77.8, casas: 1 },
+    { campo: 'ataquesTotais', rotulo: '⚔️ Ataques totais', alvo: 176.6, casas: 1 },
+    { campo: 'passesPorTime', rotulo: '🔁 Passes tentados/time', alvo: 375, casas: 0 },
+    { campo: 'pctPosseCasa', rotulo: '⏱ Posse da casa', alvo: 51, casas: 1, sufixo: '%' },
+    { campo: 'defesas', rotulo: '🧤 Defesas', alvo: 6.2, casas: 2 },
+    { campo: 'rematesBloqueados', rotulo: '🧱 Finalizações bloqueadas', alvo: 7.0, casas: 2 },
+    { campo: 'penaltis', rotulo: '⚖️ Pênaltis', alvo: 0.28, casas: 2 },
     { campo: 'xg', rotulo: '📈 xG total', alvo: 2.84, casas: 2 },
     { campo: 'xgPorRemate', rotulo: '📈 xG por remate', alvo: 0.109, casas: 3 }
 ];
