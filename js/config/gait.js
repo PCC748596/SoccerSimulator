@@ -144,6 +144,8 @@ Para converter para o mundo, multiplicar por p.dirZ.
 
 const SaltoCabeceio = {
     duracao: 0.62,        // salto completo (s); o pico fica a meio
+    // So se cabeceia (salto ou inclinacao) uma bola que vem a menos disto da direccao dele: 60 graus para cada lado.
+    anguloFrontalMax: 60 * Math.PI / 180,
     alturaMax: 0.80,      // subida máxima que as pernas dão (m)
     // Tem de ficar <= BallControl.reach (0.9): esse é o raio que REGISTA o
     // contacto de verdade (match.js/distanciaAoCorpo). Estava em 1.4 —
@@ -336,7 +338,14 @@ const AssentoNoChao = {
     agora é o `correccaoMax` acima, que é o tecto por frame. Não confundir com
     o offset persistente, que foi tentado a 8 de Setembro e MEDIU PIOR.
     */
-    suavizacao: 1.0
+    suavizacao: 1.0,
+    /*
+    A SOLA, NAO AS TRAVAS, E O QUE ASSENTA — e um pouco abaixo do relvado. Pedido: *"os jogadores
+    podem ficar ligeiramente mais para baixo no gramado; alinha-os pela sola da chuteira e nao pelas
+    travas, que podem ficar debaixo do relvado"*. O assento mede a caixa da chuteira (sem as travas,
+    que sao filhas dela), portanto a sola esta em 0; `afundamento` desce-a mais isto, em metros.
+    */
+    afundamento: 0.03
 };
 if (typeof window !== 'undefined') window.AssentoNoChao = AssentoNoChao;
 /*

@@ -444,6 +444,8 @@ const GoalkeeperPose = {
 
     // A andar ao longo da baliza a acompanhar o lance: de pé, passada curta.
     andar: {
+        // O joelho levanta isto vezes mais a andar com a bola (o passo era um arrastar de pes: 3 cm de elevacao).
+        levantaPe: 1.8,
         chest: 0.10,
         kneeBase: 0.18,     // dobra mínima, somada ao ciclo da passada
         passada: 0.55,      // fracção da amplitude de corrida de um jogador
@@ -454,6 +456,9 @@ const GoalkeeperPose = {
 
     // Adversário com bola perto da área: de pé, joelhos ligeiramente dobrados,
     // pernas afastadas e mãos prontas. À espera do remate.
+    // Segundos que a bola leva a ir da posicao da agarrada ate as maos (em vez de saltar).
+    catchBlend: 0.18,
+
     espera: {
         chest: 0.16,
         joelho: 0.32,
@@ -462,7 +467,9 @@ const GoalkeeperPose = {
         bracoZ: 0.75,
         bracoX: -0.35,
         cotovelo: -0.35,
-        altura: -0.05
+        altura: -0.05,
+        // Torcao do ombro (rotation.y) que vira a palma para a frente quando o braco esta a frente.
+        torcaoBraco: 0.4
     },
 
     /*
@@ -1779,6 +1786,8 @@ const GoalkeeperDive = {
     subidaMaxPorFrame: 0.35,
 
     alturaDeitado: 0.42,   // y da origem do modelo com ele deitado de lado
+    // O V DE AMORTECIMENTO (flexao) ao aterrar de peito: ombro x/z, cotovelo, e quanto dura (s).
+    amorteceX: -1.50, amorteceZ: 0.80, amorteceCotovelo: -2.20, amorteceDur: 0.45,
     atritoChao: 3.5,       // desaceleração do deslize no relvado (m/s²)
     /*
     QUANTA DA VELOCIDADE DO VOO SOBRA NO DESLIZE. O deslize de aterragem partia

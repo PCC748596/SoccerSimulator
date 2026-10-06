@@ -1471,6 +1471,21 @@ const GkDive = {
         }
 
         const K = amostrarClipQueda(tq);
+        /*
+        AO TOCAR O RELVADO OS BRACOS AMORTECEM, EM V, COMO NUMA FLEXAO — referencia 6C22. Relato:
+        *"depois da defesa do penalti os bracos do goleiro estao caindo cruzados em baixo do corpo;
+        quando a mao toca o gramado os bracos fazem um V tipo flexao para amortecer a queda"*. Nos
+        primeiros `GoalkeeperDive.amorteceDur` s no chao os dois bracos estao em V de apoio (ombro
+        `amorteceX`/`amorteceZ`, cotovelo dobrado) e abrem depois para a pose deitada do clip (os
+        dois bracos a frente, em V rente ao relvado) — que nao escora o corpo.
+        */
+        if (c.fase === 'chao' && typeof D.amorteceDur === 'number' && c.t < D.amorteceDur) {
+            const u = c.t / D.amorteceDur, w = u * u * (3 - 2 * u);
+            const mixA = (v0, v1) => v0 + (v1 - v0) * w;
+            K.bracoLx = mixA(D.amorteceX, K.bracoLx); K.bracoRx = mixA(D.amorteceX, K.bracoRx);
+            K.bracoLz = mixA(D.amorteceZ, K.bracoLz); K.bracoRz = mixA(-D.amorteceZ, K.bracoRz);
+            K.cotoveloL = mixA(D.amorteceCotovelo, K.cotoveloL); K.cotoveloR = mixA(D.amorteceCotovelo, K.cotoveloR);
+        }
         this._qFrente.setFromAxisAngle(this._eixoY, c.yaw);
         corpo.quaternion.copy(this._qFrente);
         if (rig && typeof escreverPoseBolaParada === 'function') {

@@ -1767,6 +1767,8 @@ tratadas em FootballPlayer.updateGK().
 */
 
 const HeaderModel = {
+    // Cabecada que segue no mesmo sentido (< 90 graus da chegada): a bola sai com no maximo isto da velocidade que trazia.
+    retencaoNoMesmoSentido: 0.85,
     /*
     =========================================================================
     O CABECEÍO À BALIZA: MIRA MAIS ERRO, e não uma tabela de desfechos

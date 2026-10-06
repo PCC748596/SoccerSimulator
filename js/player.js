@@ -608,7 +608,8 @@ class FootballPlayer {
         const chao = Math.min(solaY(this.rig.lBota), solaY(this.rig.rBota));
         if (!isFinite(chao)) return;
         if (soASubir && chao >= 0) return;
-        const correccao = THREE.MathUtils.clamp(-chao, -A.correccaoMax, A.correccaoMax);
+        // A SOLA fica `afundamento` abaixo do relvado: as travas (mais abaixo) ficam enterradas.
+        const correccao = THREE.MathUtils.clamp(-(chao + (A.afundamento || 0)), -A.correccaoMax, A.correccaoMax);
         this.model.position.y += correccao * A.suavizacao;
     }
 
@@ -754,7 +755,24 @@ class FootballPlayer {
         sitio certo e provavelmente a POSE (os punhos nao deviam ficar atras
         do tronco de todo), nao a posicao da bola depois de colada.
         */
-        Match.ball.position.copy(_v1);
+        /*
+        A BOLA NAO SALTA PARA AS MAOS — ela vai com elas. Relato: *"quando a bola chega
+        bem perto do goleiro, proxima ao rosto, ela e teletransportada no frame
+        seguinte para o peito; devia acompanhar o movimento do braco"*. Na agarrada
+        guarda-se onde a bola estava (`gkCatchBlend`) e ela percorre o caminho ate as
+        maos em `GoalkeeperPose.catchBlend` s, com suavizacao.
+        */
+        const CB = this.gkCatchBlend;
+        if (CB) {
+            // O relogio e o da posse (zerado na agarrada, +delta por frame): esta funcao corre mais do que uma vez por frame.
+            CB.t = Match.possessionTimer || 0;
+            const kb = Math.min(1, CB.t / Math.max(0.001, CB.dur));
+            const sb = kb * kb * (3 - 2 * kb);
+            Match.ball.position.lerpVectors(CB.from, _v1, sb);
+            if (kb >= 1) this.gkCatchBlend = null;
+        } else {
+            Match.ball.position.copy(_v1);
+        }
         Match.ballVel.set(0, 0, 0);
     }
 
@@ -770,9 +788,29 @@ class FootballPlayer {
         if (!hand) return;
 
         hand.updateWorldMatrix(true, false);
-        _v1.setFromMatrixPosition(hand.matrixWorld);
-        // O centro da bola fica ligeiramente acima do punho (a mão segura por baixo).
-        _v1.y += 0.06;
+        /*
+        A BOLA ASSENTA NA PALMA, não no punho: o centro dela fica na face da palma, a `raio` + meia
+        espessura da palma de distância na direcção da normal (a palma da luva). Era o ponto do punho
+        mais 6 cm acima — a bola ficava a meio do antebraço (relato com as capturas DA69 e 2C005).
+        */
+        const maoG = hand.children[hand.children.length - 1];
+        const palmaG = maoG && maoG.children[maoG.children.length - 1];
+        const palma = palmaG && palmaG.children[0];
+        if (palma && palma.geometry && palma.geometry.parameters && palma.geometry.parameters.depth) {
+            palma.updateWorldMatrix(true, false);
+            _v1.setFromMatrixPosition(palma.matrixWorld);
+            if (!this._qPalma) this._qPalma = new THREE.Quaternion();
+            palmaG.getWorldQuaternion(this._qPalma);
+            // A normal da palma: +z local na mão direita, -z na esquerda (ver construirCorpo).
+            _v2.set(0, 0, (lado === 'r') ? 1 : -1).applyQuaternion(this._qPalma);
+            const esc = new THREE.Vector3().setFromMatrixScale(palma.matrixWorld);
+            const meia = 0.5 * palma.geometry.parameters.depth * esc.z;
+            _v1.addScaledVector(_v2, BallPhysics.raio + meia);
+        } else {
+            _v1.setFromMatrixPosition(hand.matrixWorld);
+            // O centro da bola fica ligeiramente acima do punho (a mão segura por baixo).
+            _v1.y += 0.06;
+        }
 
         Match.ball.position.copy(_v1);
         Match.ballVel.set(0, 0, 0);
@@ -4087,7 +4125,34 @@ class FootballPlayer {
         return PassModel.bonusTocaECorre;
     }
 
+    /*
+    A CABECADA NAO DA FORCA A UMA BOLA QUE SEGUE NO MESMO SENTIDO. Pedido: *"ao cabecear a bola
+    pode ir em qualquer direccao: 360 graus. Mas so depois de cabecear. Caso a bola siga na direccao
+    do movimento que trazia (continue sem reverter), ela nao pode ganhar forca: desacelera
+    normalmente conforme a energia que tem. Se a cabecada reverter o movimento ou o desviar em 90
+    graus ou mais, ai a bola pode ganhar forca"*.
+
+    Mede-se a velocidade de CHEGADA, deixa-se o `executeHeaderNucleo` decidir a saida (qualquer
+    direccao) e, se a saida fica a menos de 90 graus da chegada, a velocidade nao passa de
+    `HeaderModel.retencaoNoMesmoSentido` da de chegada. Horizontal e vertical juntas: e a energia.
+    */
     executeHeader() {
+        const vIn = (typeof Match !== 'undefined' && Match.ballVel) ? Match.ballVel.clone() : null;
+        this.executeHeaderNucleo();
+        if (!vIn || typeof Match === 'undefined' || !Match.ballVel) return;
+        const nIn = vIn.length();
+        const nOut = Match.ballVel.length();
+        if (nIn < 1.0 || nOut < 0.001) return;
+        const cos = vIn.dot(Match.ballVel) / (nIn * nOut);
+        if (cos > 0) {   // a menos de 90 graus: segue no mesmo sentido
+            const ret = (typeof HeaderModel !== 'undefined' && typeof HeaderModel.retencaoNoMesmoSentido === 'number')
+                ? HeaderModel.retencaoNoMesmoSentido : 0.85;
+            const teto = nIn * ret;
+            if (nOut > teto) Match.ballVel.multiplyScalar(teto / nOut);
+        }
+    }
+
+    executeHeaderNucleo() {
         this.showActionBanner('HEADER');
         /*
         CABEÇA DEVOLVE AS MÃOS AO GUARDA-REDES (Lei 12) — é a excepção que o
@@ -4827,7 +4892,16 @@ class FootballPlayer {
                 No headless o rig não é animado (a mão não se mexe) e o ramo
                 de baixo continua a valer, como antes.
                 */
-            } else if (this.role === 'gk' && (this.gkEstado === 'segurando' || this.gkEstado === 'apanhar' || this.gkEstado === 'chutando' || this.gkEstado === 'lancando')) {
+            } else if (this.role === 'gk' && this.gkEstado === 'segurando') {
+                /*
+                COM A BOLA AGARRADA QUEM A POE E O `colarBolaAsMaos` (updateGK, fim do ramo
+                'segurando'), que a leva com as maos e, nos primeiros `catchBlend` s, a traz do
+                sitio da agarrada. Este ramo puxava-a a 50% por frame para um ponto fixo a
+                1.15 m do chao (o 'peito' de antes): a bola era disputada pelos dois e saltava
+                0.5 m por frame para la — era o teletransporte do relato (*"quando a bola chega
+                bem perto do rosto ela e teletransportada para o frame seguinte"*).
+                */
+            } else if (this.role === 'gk' && (this.gkEstado === 'apanhar' || this.gkEstado === 'chutando' || this.gkEstado === 'lancando')) {
                 // GR segura a bola nas mãos, junto ao PEITO (não à cintura) —
                 // não ao nível do pé como no dribble de um jogador de campo
                 // (senão fica só pousada no chão à frente dele).
@@ -5233,7 +5307,29 @@ class FootballPlayer {
                 const meuZNoPico = this.model.position.z + (this.velocity ? this.velocity.z * halfT : 0);
                 const dXZ = Math.hypot(meuXNoPico - prev.x, meuZNoPico - prev.z);
                 const alcanceEfetivo = S.alcanceXZ * 1.35;
-                if (dXZ < alcanceEfetivo && subida > S.alturaSemPulo && subida < S.alturaMax) {
+                /*
+                SO SE CABECEIA UMA BOLA QUE VEM DE FRENTE. Relato (captura 05674): *"jogador pulando
+                para cabecear uma bola vindo por tras do seu movimento. Os jogadores so vao pular
+                pra cabecear em bolas vindo de um angulo frontal de 60 graus para cada lado da
+                direcao deles"*. A direccao dele e a do movimento (a do corpo se quase parado); a
+                bola conta onde vai estar no pico. Fora do cone, nem salta nem se inclina.
+                */
+                let frontal = true;
+                if (typeof S.anguloFrontalMax === 'number') {
+                    let fx, fz;
+                    const vv = this.velocity ? Math.hypot(this.velocity.x, this.velocity.z) : 0;
+                    if (vv > 1.0) { fx = this.velocity.x / vv; fz = this.velocity.z / vv; }
+                    else { _v2.set(0, 0, 1).applyQuaternion(this.model.quaternion); fx = _v2.x; fz = _v2.z; }
+                    const bx = prev.x - this.model.position.x, bz = prev.z - this.model.position.z;
+                    const bn = Math.hypot(bx, bz);
+                    if (bn > 0.3) {
+                        const cosA = (fx * bx + fz * bz) / (Math.hypot(fx, fz) * bn || 1);
+                        frontal = cosA >= Math.cos(S.anguloFrontalMax);
+                    }
+                }
+                if (!frontal) {
+                    // bola por tras ou de lado: nao e dele.
+                } else if (dXZ < alcanceEfetivo && subida > S.alturaSemPulo && subida < S.alturaMax) {
                     this.jumpTimer = S.duracao;
                     this.jumpApex = subida;
                     this.jumpCooldown = S.duracao + S.cooldown;
@@ -6619,6 +6715,11 @@ class FootballPlayer {
 
     updateGK(dt) {
         let gkCorpo = this.model; let gkRig = this.rig;
+        // A torcao dos bracos da pose de espera ('maos') nao sobrevive a ela.
+        if (this.gkEstado !== 'maos' && gkRig && gkRig.lArm && (gkRig.lArm.rotation.y !== 0 || gkRig.rArm.rotation.y !== 0)) {
+            gkRig.lArm.rotation.y = lerpTo(gkRig.lArm.rotation.y, 0, 0.4);
+            gkRig.rArm.rotation.y = lerpTo(gkRig.rArm.rotation.y, 0, 0.4);
+        }
         let limitGKX = (LARGURA_BALIZA / 2) - 0.5;
 
         /*
@@ -8293,7 +8394,16 @@ class FootballPlayer {
             gkRig.rLeg.rotation.z = lerpTo(gkRig.rLeg.rotation.z, -Pm.abertura, 0.25);
             }
 
-            const ombroYm = gkCorpo.position.y + 0.35;
+            /*
+            A ALTURA DO OMBRO E A REAL (no mundo, lida do rig). Era `y + 0.35`: o ombro de um
+            guarda-redes esta a ~1.4 m, e com 0.35 qualquer bola acima do joelho parecia
+            estar MUITO acima do ombro — os bracos subiam acima da cabeca (-2.6) em vez
+            de acompanharem a altura da bola. Relato: *"os bracos NAO podem se deslocar
+            para cima; tem que acompanhar a altura da bola"*.
+            */
+            gkCorpo.updateMatrixWorld(true);
+            gkRig.lArm.getWorldPosition(_p_v3);
+            const ombroYm = _p_v3.y;
             const dyM = Match.ball.position.y - ombroYm;
             const dxM = Match.ball.position.x - gkCorpo.position.x;
             const alcanceM = 0.9;
@@ -8330,9 +8440,11 @@ class FootballPlayer {
             */
             const eM = Math.atan2(dyM, 0.8);
             let elevM = -Math.PI / 2 - eM;
-            // -2.6 é o braço bem acima da cabeça; -0.2 é quase a prumo.
-            elevM = Math.max(-2.6, Math.min(-0.2, elevM));
-            let abreM = 0.20 + Math.min(1.3, Math.abs(dxM) * 0.65);
+            // Os bracos acompanham a altura da bola, mas ficam a FRENTE: da altura da cintura
+            // (-0.9) ate um pouco acima da cabeca (-2.0); nunca para o ar.
+            elevM = Math.max(-2.0, Math.min(-0.9, elevM));
+            // Em V curto: os dois bracos a frente, ligeiramente abertos (e a bola decide so o resto).
+            let abreM = 0.22 + Math.min(0.35, Math.abs(dxM) * 0.2);
             const clM = { x: elevM, z: abreM };
 
             if (this.gkBarreira) {
@@ -8368,8 +8480,17 @@ class FootballPlayer {
             gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, clM.x, 0.4);
             gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, clM.z, 0.4);
             gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -clM.z, 0.4);
+            // Palmas voltadas para a bola (a frente): torcao do ombro medida no rig (palma = +Z a 0.4 rad).
+            const twM = (typeof GoalkeeperPose.espera.torcaoBraco === 'number') ? GoalkeeperPose.espera.torcaoBraco : 0.4;
+            gkRig.lArm.rotation.y = lerpTo(gkRig.lArm.rotation.y, twM, 0.4);
+            gkRig.rArm.rotation.y = lerpTo(gkRig.rArm.rotation.y, -twM, 0.4);
             gkRig.lElbow.rotation.x = lerpTo(gkRig.lElbow.rotation.x, -0.25, 0.4);
             gkRig.rElbow.rotation.x = lerpTo(gkRig.rElbow.rotation.x, -0.25, 0.4);
+            }
+            // Pe todo apoiado no relvado, nunca na ponta (relato com a captura C553).
+            if (!this.gkEncaixe) {
+                if (gkRig.lFoot) gkRig.lFoot.rotation.x = lerpTo(gkRig.lFoot.rotation.x, 0, 0.4);
+                if (gkRig.rFoot) gkRig.rFoot.rotation.x = lerpTo(gkRig.rFoot.rotation.x, 0, 0.4);
             }
 
             /*
@@ -9032,8 +9153,25 @@ class FootballPlayer {
                 const poseSeg = getGaitPose(tt, velSeg);
                 gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, poseSeg.lHip, 0.4);
                 gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, poseSeg.rHip, 0.4);
-                gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, Pa.kneeBase + poseSeg.lKnee, 0.4);
-                gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, Pa.kneeBase + poseSeg.rKnee, 0.4);
+                /*
+                ANDAR COM A BOLA TEM PASSO DE VERDADE. Relato, com a referencia 25B3: *"depois de
+                defender a bola em baixo o goleiro sai andando afastado do gramado: o pe esquerdo
+                quase apoia com a ponta e o direito fica no ar"*. Medido: a bota que balanca so
+                subia 3 cm (e as duas ficavam 3 cm acima do relvado), e o pe herdava a ponta do
+                encaixe ajoelhado (`peAberto` 0.60 / `peRecolhido` -0.30), que ninguem repunha.
+                O joelho levanta `levantaPe` vezes mais, e cada pe faz o que faz no passo: a
+                perna de tras sai na ponta (calcanhar para cima), a da frente apoia inteira.
+                */
+                const lp = (typeof Pa.levantaPe === 'number') ? Pa.levantaPe : 1.0;
+                gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, Pa.kneeBase + poseSeg.lKnee * lp, 0.4);
+                gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, Pa.kneeBase + poseSeg.rKnee * lp, 0.4);
+                const peDoPasso = (hip) => THREE.MathUtils.clamp(hip * 0.9, 0, 0.55);
+                if (gkRig.lFoot) gkRig.lFoot.rotation.x = lerpTo(gkRig.lFoot.rotation.x, peDoPasso(poseSeg.lHip), 0.4);
+                if (gkRig.rFoot) gkRig.rFoot.rotation.x = lerpTo(gkRig.rFoot.rotation.x, peDoPasso(poseSeg.rHip), 0.4);
+            } else {
+                // Parado com a bola: pes direitos (o encaixe deixa-os na ponta).
+                if (gkRig.lFoot) gkRig.lFoot.rotation.x = lerpTo(gkRig.lFoot.rotation.x, 0, 0.3);
+                if (gkRig.rFoot) gkRig.rFoot.rotation.x = lerpTo(gkRig.rFoot.rotation.x, 0, 0.3);
             }
 
             /*
@@ -9695,6 +9833,12 @@ class FootballPlayer {
         if (typeof maosProibidasNoRecuo === 'function' &&
             maosProibidasNoRecuo(Match.recuoParaGR, this.team)) return false;
 
+        // De onde vem a agarrada: de pe (os bracos ja estao a frente, nao se estalam) ou nao.
+        const vinhaDeMaos = (this.gkEstado === 'maos' && !this.gkEncaixe && !this.gkBarreira);
+        if (Match.ball && !manterPose) {
+            this.gkCatchBlend = { from: Match.ball.position.clone(), t: 0,
+                dur: (typeof GoalkeeperPose.catchBlend === 'number') ? GoalkeeperPose.catchBlend : 0.14 };
+        }
         Match.ballVel.set(0, 0, 0);
 
         /*
@@ -9760,7 +9904,7 @@ class FootballPlayer {
         durante essa transição ficava com um braço erguido/aberto, o outro
         já fechado na bola, uma pose assimétrica de "um braço no ar".
         */
-        if (this.rig && !manterPose) {
+        if (this.rig && !manterPose && !vinhaDeMaos) {
             const P = GoalkeeperPose.segurar;
             this.rig.lLeg.rotation.x = P.coxa; this.rig.rLeg.rotation.x = P.coxa;
             this.rig.lKnee.rotation.x = P.joelho; this.rig.rKnee.rotation.x = P.joelho;

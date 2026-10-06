@@ -856,6 +856,18 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     const pernaDir = criarPerna(-0.4); rig.rLeg = pernaDir.raiz; rig.rKnee = pernaDir.joelho; rig.rFoot = pernaDir.pe;
     rig.rBota = pernaDir.pe.userData.chuteira;
 
+    /*
+    AS MAOS EM REPOUSO LIGEIRAMENTE PARA DENTRO, como as do guarda-redes (`segurar.maoFecho`).
+    Pedido: *"a mao dos jogadores tem que ficar ligeiramente virada para dentro, como as do
+    goleiro"*. O pulso nasce a 0 e nenhuma pose de campo escreve o canal (so as dos
+    guarda-redes e do lateral), portanto o valor de partida e o que se ve.
+    */
+    {
+        const MDr = (typeof MaoDetalhada !== 'undefined') ? MaoDetalhada : null;
+        const f = (MDr && typeof MDr.repousoFecho === 'number') ? MDr.repousoFecho : 0;
+        if (f && rig.lHand && rig.rHand) { rig.lHand.rotation.z = -f; rig.rHand.rotation.z = f; }
+    }
+
     corpo.scale.set(ESCALA_CORPO, ESCALA_CORPO, ESCALA_CORPO); return { corpo, rig, backMat, shortFrente };
 }
 
@@ -1775,6 +1787,8 @@ function amostrarClipLancamentoGR(norm, clip) {
         bracoRz: mix('bracoRz'),
         cotoveloL: mix('cotoveloL'),
         cotoveloR: mix('cotoveloR'),
+        // Rolamento do punho (o eixo do antebraco): vira a palma. Opcional (0 se o clip nao o traz).
+        maoRy: (a.maoRy || 0) + ((b.maoRy || 0) - (a.maoRy || 0)) * u,
         altura: mix('altura')
     };
 }
