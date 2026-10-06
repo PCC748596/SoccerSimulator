@@ -1213,7 +1213,8 @@ function preencherSelectoresDeEquipa() {
         for (const sel of [selA, selB]) {
             const opt = document.createElement('option');
             opt.value = String(e.id);
-            opt.textContent = `${e.nome} (${e.plantel.length})`;
+            // O numero e a FORCA do time: media das skills dos onze titulares (tools/gen_squads.js).
+            opt.textContent = `${e.nome} (${e.forca})`;
             sel.appendChild(opt);
         }
     }

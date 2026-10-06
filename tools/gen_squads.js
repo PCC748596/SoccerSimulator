@@ -17,6 +17,8 @@ const path = require('path');
 
 const RAIZ = path.resolve(__dirname, '..');
 const MIN_PLANTEL = Number(process.argv[2] || 16);
+// Tecto do plantel (pedido): no maximo 30 jogadores por equipa. O ficheiro de origem chega aos 100.
+const MAX_PLANTEL = Number(process.argv[3] || 30);
 
 /*
 O `skill_map.js` é um script clássico, como todo o `js/config` — o browser
@@ -187,6 +189,33 @@ function derivarEstilos(todos) {
     }
 }
 
+/*
+O PLANTEL CORTADO A `MAX_PLANTEL`: ficam os onze titulares (mesma regra do jogo), os dois melhores
+guarda-redes e, para o resto, os de melhor media nas skills do motor. A ordem original mantem-se.
+A escala (`calibrarPlanteis`) continua a medir-se na populacao inteira do ficheiro.
+*/
+function limitarPlantel(plantel) {
+    if (plantel.length <= MAX_PLANTEL) return plantel;
+    const media = (j) => { const v = Object.keys(SkillMap).map(k => j[k]).filter(x => typeof x === 'number'); return v.reduce((a, b) => a + b, 0) / Math.max(1, v.length); };
+    const escolhidos = new Set(escolherOnzeDaFormacao(plantel, ONZE_442) || []);
+    const gks = plantel.filter(j => j.pos === 'GK').sort((a, b) => media(b) - media(a));
+    for (const g of gks.slice(0, 2)) escolhidos.add(g);
+    const resto = plantel.filter(j => !escolhidos.has(j)).sort((a, b) => media(b) - media(a));
+    for (const j of resto) { if (escolhidos.size >= MAX_PLANTEL) break; escolhidos.add(j); }
+    return plantel.filter(j => escolhidos.has(j));
+}
+
+/*
+A FORCA DO TIME (o numero entre parenteses no seletor): a media das skills do motor dos onze titulares
+(mesma escolha do jogo), arredondada. Medida no plantel completo, antes do corte a `MAX_PLANTEL`.
+*/
+function forcaDoTime(plantel) {
+    const onze = escolherOnzeDaFormacao(plantel, ONZE_442) || [];
+    const v = [];
+    for (const j of onze) for (const k of Object.keys(SkillMap)) if (typeof j[k] === 'number') v.push(j[k]);
+    return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : 0;
+}
+
 // Planteis por equipa.
 const porEquipa = new Map();
 for (const reg of players) {
@@ -244,7 +273,8 @@ for (const [id, lista] of porEquipa) {
         pais: info ? String(info.country || '') : '',
         prestigio: info ? Number(info.nationalPrestige) || 0 : 0,
         adeptos: info ? Number(info.fanBase) || 0 : 0,
-        plantel: plantel
+        forca: forcaDoTime(plantel),
+        plantel: limitarPlantel(plantel)
     });
 }
 
