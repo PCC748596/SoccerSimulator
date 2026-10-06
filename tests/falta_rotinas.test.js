@@ -1,170 +1,118 @@
 /*
-AS QUATRO ROTINAS DA FALTA NA INTERMEDIÁRIA — ataque e defesa.
+AS QUATRO ROTINAS DA FALTA QUE NAO E DIRECTA — FK2, FK3, FK5, FK6.
 
-Pedido, com quatro diagramas de treino: *"cria essas 4 opções de faltas no
-ataque. Para o time atacante e para o time defensor. Vamos sortear uma delas
-quando tiver uma falta na intermediária de ataque"*.
+Pedido, com quatro diagramas de treino: atacantes pretos, barreira azul clara, tracejado = movimento
+antes da cobranca, setas = passes, circulos verdes = alvos; depois de ajustar o ataque, a defesa marca
+nos outros lugares fora da barreira. O desenho de cada uma esta em FaltaRotinas
+(js/config/falta_rotinas.js).
 
 O que este teste prende:
 
-  . são QUATRO, cada uma com as duas metades (ataque e defesa);
-  . cada desenho de ataque coloca todos os grupos, e dentro do campo;
-  . a faixa da defesa respeita sempre a Lei 13 (9.15 m) e é COERENTE com o
-    lance que a rotina desenha — quem espera a bola longa arma-se mais atrás
-    do que quem espera o passe curto;
-  . o sorteio só acontece nos sectores da intermediária, e dá as quatro.
+  . sao QUATRO (fk2_wide, fk3_triple, fk5_over_the_hill, fk6_crossfire), uma "wide" e tres "central";
+  . cada uma poe os numeros 2 a 11 (o batedor incluido) e todos os passos referem numeros que existem;
+  . todos os pontos, dos dois lados e a qualquer distancia, ficam dentro do campo;
+  . o espelho e simetrico (a bola em x > 0 dá o desenho invertido);
+  . a atribuicao dos numeros nao repete jogadores;
+  . num jogo montado: sai um plano, a barreira tem o numero de homens da rotina e a cadeia de passes
+    chega ao fim pelo menos numa das sementes.
 
-Ver FreeKickModel.rotinasDaIntermediaria (js/config/shooting.js), que traz cada
-diagrama escrito ao lado do desenho que gerou.
-
-Corre com: node --test tests/falta_rotinas.test.js
+Corre com: node tests/falta_rotinas.test.js
 */
-const fs = require('fs');
-const path = require('path');
-const assert = require('assert');
-const test = require('node:test');
+const { FaltaRotinas, pontoDaRotina, ladoDaRotina, atribuirNumerosDaRotina } = require('../js/config/falta_rotinas.js');
+let falhas = 0;
+const ok = m => console.log('  . ' + m);
+const erro = m => { falhas++; console.log('  X ' + m); };
+const COMP = 106, LARG = 68;
 
-const CR = String.fromCharCode(13), LF = String.fromCharCode(10);
-const semCR = s => s.split(CR + LF).join(LF);
-const raiz = path.join(__dirname, '..');
-const src = f => semCR(fs.readFileSync(path.join(raiz, f), 'utf8'));
+const nomes = FaltaRotinas.rotinas.map(r => r.nome).sort().join(',');
+if (nomes === 'fk2_wide,fk3_triple,fk5_over_the_hill,fk6_crossfire') ok('as quatro rotinas: ' + nomes);
+else erro('rotinas: ' + nomes);
+const tipos = FaltaRotinas.rotinas.map(r => r.tipo).sort().join(',');
+if (tipos === 'central,central,central,wide') ok('uma wide e tres central');
+else erro('tipos: ' + tipos);
 
-const srcCfg = src('js/config/shooting.js');
-const srcUtils = src('js/utils.js');
-
-function extrairObjecto(s, nome) {
-    const ini = s.indexOf('const ' + nome + ' = {');
-    assert.ok(ini > 0, nome + ' não encontrado');
-    const fim = s.indexOf(LF + '};', ini);
-    return new Function(s.slice(ini, fim + 3) + '; return ' + nome + ';')();
-}
-function extrairFuncao(s, nome) {
-    const ini = s.indexOf('function ' + nome + '(');
-    assert.ok(ini > 0, nome + ' não encontrada');
-    const fim = s.indexOf(LF + '}', ini);
-    return s.slice(ini, fim + 2);
-}
-
-const FreeKickModel = extrairObjecto(srcCfg, 'FreeKickModel');
-const CAMPO_COMP = 106, CAMPO_LARG = 68, LARGURA_BALIZA = 7.32;
-const amb = { FreeKickModel, CAMPO_COMP, CAMPO_LARG, LARGURA_BALIZA };
-const nomes = ['decisaoDeFalta', 'setorDaFalta', 'grupoNaBolaParada', 'lugaresDaFalta'];
-const U = new Function(...Object.keys(amb),
-    nomes.map(n => extrairFuncao(srcUtils, n)).join(LF) + LF + 'return {' + nomes.join(',') + '};'
-)(...Object.values(amb));
-
-const dir = 1;
-const zDe = (avanco) => avanco * dir;
-
-function plantel() {
-    const f = (pos, role, x, z) => ({
-        pos: pos, role: role, skillFor: () => 70,
-        model: { position: { x: x, z: z } }
-    });
-    return [
-        f('CB', 'def', -6, -30), f('CB', 'def', 6, -30),
-        f('LB', 'def', 24, -12), f('RB', 'def', -24, -12),
-        f('DM', 'mid', 0, -8), f('CM', 'mid', 4, 0),
-        f('LM', 'mid', 26, 4), f('RM', 'mid', -26, 4),
-        f('CF', 'atk', -5, 14), f('CF', 'atk', 5, 14)
-    ];
-}
-
-test('são quatro, e cada uma tem as duas metades', () => {
-    const R = FreeKickModel.rotinasDaIntermediaria;
-    assert.ok(Array.isArray(R), 'as rotinas têm de existir');
-    assert.strictEqual(R.length, 4, 'o pedido são quatro opções');
-
-    const vistos = new Set();
-    for (const r of R) {
-        assert.ok(r.nome, 'cada rotina tem nome — é o que fica em Match.rotinaDaFaltaActual');
-        assert.ok(!vistos.has(r.nome), 'nomes repetidos: ' + r.nome);
-        vistos.add(r.nome);
-        assert.ok(r.ataque && Object.keys(r.ataque).length, r.nome + ': sem desenho de ataque');
-        assert.ok(r.defesa && typeof r.defesa.de === 'number' && typeof r.defesa.ate === 'number',
-            r.nome + ': sem resposta da defesa');
+for (const r of FaltaRotinas.rotinas) {
+    const falta = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11].filter(n => !r.lugares[n]);
+    if (falta.length) erro(`${r.nome}: sem lugar para ${falta}`);
+    else ok(`${r.nome}: os numeros 2 a 11 tem lugar`);
+    if (!r.lugares[r.batedor]) erro(`${r.nome}: o batedor ${r.batedor} nao tem lugar`);
+    for (const o of r.opcoes) {
+        const mau = o.passos.filter(s => !r.lugares[s.de] || (s.para && !r.lugares[s.para]));
+        if (mau.length) erro(`${r.nome}: passo com numero inexistente`);
+        if (o.passos[0].de !== r.batedor) erro(`${r.nome}: o primeiro passo nao e do batedor`);
+        for (const n of Object.keys(o.corridas || {})) if (!r.lugares[n]) erro(`${r.nome}: corrida do ${n} sem lugar`);
     }
-});
-
-test('o desenho de ataque coloca a equipa toda, e dentro do campo', () => {
-    // Uma falta na intermediária, ligeiramente à esquerda.
-    const bolaX = 8, bolaZ = zDe(30);
-    for (const r of FreeKickModel.rotinasDaIntermediaria) {
-        const eq = plantel();
-        const lug = U.lugaresDaFalta(bolaX, bolaZ, dir, eq, 'ataque_entrada', r.ataque);
-        assert.strictEqual(lug.length, eq.length,
-            r.nome + ': ficou gente sem lugar (' + lug.length + ' de ' + eq.length + ')');
-
-        for (const o of lug) {
-            assert.ok(Math.abs(o.x) <= CAMPO_LARG / 2,
-                r.nome + ': x=' + o.x.toFixed(1) + ' fora do campo');
-            assert.ok(Math.abs(o.z) <= CAMPO_COMP / 2,
-                r.nome + ': z=' + o.z.toFixed(1) + ' fora do campo');
+    // Pontos dentro do campo, dos dois lados e de varias distancias.
+    let fora = 0;
+    for (const bx of [-30, -14, -5, 0.5, 5, 14, 30]) {
+        for (const zd of [15, 28, 42]) {
+            for (const dir of [1, -1]) {
+                const bola = { x: bx, z: dir * (COMP / 2 - zd) };
+                const lado = ladoDaRotina(bx);
+                const alvos = Object.values(r.lugares).concat(...r.opcoes.map(o => Object.values(o.corridas || {})))
+                    .concat(...r.opcoes.map(o => o.passos.map(s => s.alvo).filter(Boolean)));
+                for (const l of alvos) {
+                    const p = pontoDaRotina(l, bola, dir, lado, COMP, LARG);
+                    if (Math.abs(p.x) > LARG / 2 || Math.abs(p.z) > COMP / 2) fora++;
+                }
+            }
         }
     }
-});
+    if (fora) erro(`${r.nome}: ${fora} pontos fora do campo`);
+    else ok(`${r.nome}: todos os pontos ficam dentro do campo`);
+}
 
-test('a faixa da defesa respeita a Lei 13 e é coerente com o lance', () => {
-    const REGULAMENTAR = 9.15;
-    for (const r of FreeKickModel.rotinasDaIntermediaria) {
-        assert.ok(r.defesa.de >= REGULAMENTAR - 1e-9,
-            r.nome + ': o homem mais adiantado a ' + r.defesa.de + ' m viola os 9.15');
-        assert.ok(r.defesa.ate > r.defesa.de,
-            r.nome + ': a faixa está invertida (' + r.defesa.de + ' a ' + r.defesa.ate + ')');
-        assert.ok(r.defesa.ate <= 34.0,
-            r.nome + ': o bloco a ' + r.defesa.ate + ' m é mais fundo do que o normal (34)');
+// Espelho: a bola em x > 0 inverte o lado.
+{
+    const lugar = { x: 5, z: 12 };
+    const a = pontoDaRotina(lugar, { x: -10, z: 20 }, 1, ladoDaRotina(-10), COMP, LARG);
+    const b = pontoDaRotina(lugar, { x: 10, z: 20 }, 1, ladoDaRotina(10), COMP, LARG);
+    if (Math.abs(a.x + b.x) < 1e-9 && a.z === b.z) ok('o espelho inverte x e mantem z');
+    else erro('espelho: ' + JSON.stringify([a, b]));
+}
+
+// Atribuicao: sem repeticoes.
+{
+    const r = FaltaRotinas.rotinas[1];
+    const mk = (pos, x, z) => ({ pos: pos, model: { position: { x: x, z: z } } });
+    const grupo = p => ({ CB: 'cb', LB: 'lat', RB: 'lat', CM: 'mc', LM: 'ml', RM: 'ml', CF: 'ata' }[p.pos]);
+    const todos = ['LB', 'CB', 'CB', 'RB', 'CM', 'CM', 'LM', 'RM', 'CF', 'CF'].map((p, i) => mk(p, i * 3 - 12, 10));
+    const batedor = mk('CM', 0, 0);
+    const num = atribuirNumerosDaRotina(r, batedor, todos, n => ({ x: 0, z: 0 }), grupo, FaltaRotinas);
+    const usados = Object.values(num);
+    if (new Set(usados).size === usados.length && usados.length === 10) ok('a atribuicao dos numeros nao repete jogadores');
+    else erro('atribuicao: ' + usados.length + ' / ' + new Set(usados).size);
+}
+
+// Jogo montado.
+{
+    require('../tools/headless/harness.js');
+    if (typeof Sim === 'undefined') global.Sim = {};
+    Sim.running = false;
+    let completas = 0, planos = 0;
+    for (const semente of [2, 3, 5, 8]) {
+        let s = semente; Math.random = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+        Match.init(new THREE.Scene());
+        Match.state = 'PLAY'; Match.kickoffActive = false; Match.kickoffPendingPassToDef = false;
+        Match.ball.position.set(-4, 0.11, COMP / 2 - 33); Match.ballVel.set(0, 0, 0);
+        Match.lastTouchedTeam = 'TeamB';
+        Match.setupSetPiece('FREE_KICK', 'TeamA');
+        const pl = Match.rotinaPlano;
+        if (!pl) continue;
+        planos++;
+        const barreira = (Match.faltaDirectaBarreira || []).length;
+        if (barreira !== pl.rotina.barreira) erro(`${pl.rotina.nome}: barreira de ${barreira}, a rotina pede ${pl.rotina.barreira}`);
+        let maxFase = 0;
+        for (let f = 0; f < 60 * 25; f++) {
+            Match.delta = 1 / 60; Match.update(1 / 60);
+            if (Match.rotinaPlano) maxFase = Math.max(maxFase, Match.rotinaPlano.fase);
+            else if (maxFase) break;
+        }
+        if (maxFase >= pl.passos.length || !Match.rotinaPlano) completas++;
     }
+    if (planos === 4) ok('numa falta de passe ao centro sai sempre um plano'); else erro('planos: ' + planos + '/4');
+    if (completas >= 1) ok(`a cadeia chegou ao fim em ${completas} de ${planos} jogos`); else erro('nenhuma cadeia chegou ao fim');
+}
 
-    const de = (n) => FreeKickModel.rotinasDaIntermediaria.find(r => r.nome === n).defesa.ate;
-    /*
-    As duas rotinas que acabam em bola na área — a longa e o cruzamento
-    out-swinging — têm de armar a defesa MAIS ATRÁS do que as duas que se jogam
-    curto. Se isto se invertesse, a resposta da defesa deixava de ser resposta.
-    */
-    assert.ok(de('deep_free_kick') > de('wide_pela_linha'),
-        'a bola longa tem de armar a defesa mais atrás do que o passe pela linha');
-    assert.ok(de('wide_out_swinging') > de('central_over_the_hill'),
-        'o cruzamento alto tem de armar a defesa mais atrás do que a bola picada');
-});
-
-test('o sorteio é só na intermediária, e sai cada uma das quatro', () => {
-    const setores = FreeKickModel.setoresComRotina;
-    assert.ok(Array.isArray(setores) && setores.length, 'os sectores com rotina têm de existir');
-
-    // A intermediária de ataque: meio-campo adversário e entrada da área.
-    assert.ok(setores.indexOf('meio_avancado') >= 0, 'o meio-campo adversário tem rotina');
-    assert.ok(setores.indexOf('ataque_entrada') >= 0, 'a entrada da área tem rotina');
-    // E onde não tem: na ala manda o cruzamento, e no próprio campo não há nada
-    // para montar.
-    for (const fora of ['defesa', 'meio_recuado', 'ataque_lateral']) {
-        assert.ok(setores.indexOf(fora) < 0, fora + ' não pode sortear rotina');
-    }
-
-    // Os sectores nomeados são os que o `setorDaFalta` produz mesmo.
-    assert.strictEqual(U.setorDaFalta(0, zDe(10), dir), 'meio_avancado');
-    assert.strictEqual(U.setorDaFalta(0, zDe(40), dir), 'ataque_entrada');
-
-    // O sorteio (a mesma conta do setupSetPiece) dá as quatro.
-    const R = FreeKickModel.rotinasDaIntermediaria;
-    const saiu = new Set();
-    let seed = 12345;
-    const rnd = () => {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        return seed / 0x7fffffff;
-    };
-    for (let i = 0; i < 400; i++) saiu.add(R[Math.floor(rnd() * R.length)].nome);
-    assert.strictEqual(saiu.size, 4, 'o sorteio tem de poder dar qualquer das quatro');
-});
-
-test('sem rotina, o desenho por omissão do sector continua a valer', () => {
-    // É o que garante que isto não mudou o resto do campo: a mesma chamada sem
-    // desenho dado tem de dar o desenho do sector.
-    const eq1 = plantel(), eq2 = plantel();
-    const semRotina = U.lugaresDaFalta(8, zDe(30), dir, eq1, 'ataque_entrada');
-    const doSector = U.lugaresDaFalta(8, zDe(30), dir, eq2, 'ataque_entrada', null);
-    assert.strictEqual(semRotina.length, doSector.length);
-    for (let i = 0; i < semRotina.length; i++) {
-        assert.strictEqual(semRotina[i].x, doSector[i].x);
-        assert.strictEqual(semRotina[i].z, doSector[i].z);
-    }
-});
+console.log(falhas ? 'FALHOU: ' + falhas : 'OK: as quatro rotinas montam, correm e respeitam o campo.');
+process.exit(falhas ? 1 : 0);

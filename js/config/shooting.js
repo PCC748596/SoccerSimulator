@@ -1271,68 +1271,8 @@ const FreeKickModel = {
     `Match.rotinaDaFaltaActual` — as duas equipas leem a MESMA, senão o ataque
     montava uma coisa e a defesa respondia a outra.
     */
-    rotinasDaIntermediaria: [
-        {
-            nome: 'deep_free_kick',
-            ataque: {
-                // Os dois melhores de cabeça na primeira bola, à entrada da área.
-                cb: { modo: 'baliza', slots: [{ relX: 2.0, dist: 17.0 }, { relX: -2.0, dist: 17.0 }] },
-                // E os pontas a atacar o que sobrar dela, mais perto da baliza.
-                ata: { modo: 'baliza', slots: [{ relX: 5.0, dist: 9.0 }, { relX: -5.0, dist: 9.0 }] },
-                ml: { modo: 'baliza', slots: [{ relX: 13.0, dist: 14.0 }, { relX: -13.0, dist: 14.0 }] },
-                // O 4 da segunda fase: fica atrás, para o que voltar.
-                mc: { modo: 'bola', avanco: 4.0, xs: [-7, 7] },
-                lat: { modo: 'bola', avanco: -6.0, xs: [-20, 20] }
-            },
-            // Ela espera a bola longa: arma-se atrás, a defender a área.
-            defesa: { de: 9.15, ate: 26.0 }
-        },
-        {
-            nome: 'wide_pela_linha',
-            ataque: {
-                // O homem aberto na linha, que "pulls a defender out".
-                ml: { modo: 'bola', avanco: 8.0, xs: [-30, 30] },
-                // O apoio curto que lhe dá a bola.
-                mc: { modo: 'apoio', dx: 6.0, dz: 1.0 },
-                // E a área ocupada à espera do cruzamento dele.
-                ata: { modo: 'baliza', slots: [{ relX: 4.0, dist: 6.0 }, { relX: -4.5, dist: 10.0 }] },
-                cb: { modo: 'baliza', slots: [{ relX: 0.0, dist: 13.0 }] },
-                lat: { modo: 'bola', avanco: -10.0, xs: [-18, 18] }
-            },
-            // Passe curto pela ala: a defesa sobe para o encurtar.
-            defesa: { de: 9.15, ate: 18.0 }
-        },
-        {
-            nome: 'central_over_the_hill',
-            ataque: {
-                // Os dois que atacam a bola por CIMA da barreira, no limite.
-                ata: { modo: 'bola', avanco: 12.0, xs: [-4, 4] },
-                // Os médios no ressalto, de onde sai o remate se ela sobrar.
-                mc: { modo: 'bola', avanco: -1.0, xs: [-8, 8] },
-                // Um homem bem aberto a esticar a linha deles.
-                ml: { modo: 'bola', avanco: 4.0, xs: [-28, 28] },
-                cb: { modo: 'bola', avanco: -14.0, xs: [-9, 9] },
-                lat: { modo: 'apoio', dx: 9.0, dz: -2.0 }
-            },
-            // Barreira e linha alta: o que se defende é a bola picada curta.
-            defesa: { de: 9.15, ate: 16.0 }
-        },
-        {
-            nome: 'wide_out_swinging',
-            ataque: {
-                // A bola cai na SEGUNDA trave: é lá que se junta a gente.
-                ata: { modo: 'baliza', slots: [{ relX: -4.0, dist: 5.5 }, { relX: -1.0, dist: 7.0 }] },
-                cb: { modo: 'baliza', slots: [{ relX: -6.5, dist: 6.0 }, { relX: 1.5, dist: 9.5 }] },
-                // O que dá a volta por fora, a chegar de trás.
-                ml: { modo: 'baliza', slots: [{ relX: 9.0, dist: 12.0 }, { relX: -12.0, dist: 13.0 }] },
-                // E o apoio curto: a alternativa do remate directo.
-                mc: { modo: 'apoio', dx: 5.0, dz: -1.0 },
-                lat: { modo: 'bola', avanco: -12.0, xs: [-17, 17] }
-            },
-            // Cruzamento alto à espera: bloco na área, sem subir.
-            defesa: { de: 9.15, ate: 24.0 }
-        }
-    ],
+    // As rotinas da falta que nao e directa vivem em FaltaRotinas (js/config/falta_rotinas.js): FK2, FK3, FK5 e FK6.
+    rotinasDaIntermediaria: [],
 
     /*
     E EM QUE SECTORES É QUE SE SORTEIA. A "intermediária de ataque" é a faixa de

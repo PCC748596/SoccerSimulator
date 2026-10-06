@@ -599,6 +599,13 @@ Object.assign(Match, {
 
             this.setPieceTaker = takerFK || null;
 
+            /*
+            A ROTINA DA FALTA QUE NAO E DIRECTA (FaltaRotinas, FK2/FK3/FK5/FK6): sorteia-se aqui, antes da
+            barreira, porque ela diz quantos homens a formam e onde se armam os outros.
+            */
+            const planoRotina = bateOGuardaRedes ? null : this.planearRotinaDaFalta(
+                bolaFK, attDir, takerFK, decisaoFK, indirecta, attackingPlayers);
+
             if (takerFK && bateOGuardaRedes) {
                 takerFK.velocity.set(0, 0, 0);
                 takerFK.alvoFalta = null;
@@ -655,6 +662,8 @@ Object.assign(Match, {
             menos de 7 m da linha). Ver OffsideRestartShape.areaPropria.
             */
             if (typeof Area !== 'undefined' && Area.contem(bolaFK.x, bolaFK.z, -attDir * LINHA_FUNDO)) nBarreira = 0;
+            // A rotina desenha a sua barreira (2 na ala, 4 no centro).
+            if (planoRotina) nBarreira = planoRotina.rotina.barreira;
 
             // Determina de que lado a barreira protege (lado do poste correspondente ao lado da bola)
             // Se bolaFK.x > 0 (lado direito do ataque), barreira alinha cobrindo o poste direito (x > 0).
@@ -721,6 +730,10 @@ Object.assign(Match, {
                 setoresRotina.indexOf(setorPreliminar) >= 0)
                 ? rotinas[Math.floor(Math.random() * rotinas.length)]
                 : null;
+            if (planoRotina) {
+                // O desenho do ataque vem do plano; a defesa le a faixa dele (formaDaDefesaNoLivre).
+                this.rotinaDaFalta = { nome: planoRotina.rotina.nome, ataque: null, defesa: planoRotina.rotina.defesa };
+            }
             this.rotinaDaFaltaActual = this.rotinaDaFalta ? this.rotinaDaFalta.nome : null;
 
             // E os que NÃO ficaram na barreira, que eram a metade sem dono.
@@ -774,7 +787,7 @@ Object.assign(Match, {
             this.setorDaFaltaActual = setorFK;
 
             const restantes = attackingPlayers.filter(p => p !== takerFK && p.role !== 'gk');
-            const lugares = lugaresDaFalta(bolaFK.x, bolaFK.z, attDir, restantes, setorFK,
+            const lugares = planoRotina ? planoRotina.lugares : lugaresDaFalta(bolaFK.x, bolaFK.z, attDir, restantes, setorFK,
                 this.rotinaDaFalta ? this.rotinaDaFalta.ataque : null);
 
             /*
@@ -870,7 +883,9 @@ Object.assign(Match, {
             O afastamento dos 9.15 m corre DEPOIS disto (ver mais abaixo): estes
             slots são medidos da linha de fundo e não sabem onde está a bola.
             */
-            if (setorFK === 'ataque_lateral' || setorFK === 'ataque_entrada') {
+            // Com rotina marca-se pelo diagrama (marcarAtacantesNaRotina), nao pelos slots do sector.
+            if (planoRotina) this.marcarAtacantesNaRotina(planoRotina, defesaOrdenada.slice(nBarreira), bolaFK);
+            if (!planoRotina && (setorFK === 'ataque_lateral' || setorFK === 'ataque_entrada')) {
                 const ladoFK = Math.sign(bolaFK.x) || 1;
                 const linhaFundoFK = attDir * LINHA_FUNDO;
                 const naArea = lugares.filter(l => Area.contem(l.x, l.z, linhaFundoFK));

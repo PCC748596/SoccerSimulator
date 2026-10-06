@@ -4835,6 +4835,29 @@ const PlayerAI = {
         // das 14 entradas no estado, 10 saíam para PASS antes do toque.
         if (player.actionState || s === "PASS" || s === "SHOOT" || s === "CROSS" || s === "TACKLE" || s === "SLIDE_TACKLE" || s === "CHEST_CONTROL" || s === "LATERAL" || s === "DRIBBLE") return;
 
+        /*
+        AS ORDENS DA ROTINA DA FALTA (ver Match.correrRotinaDaFalta): `ir` leva-o ao ponto do diagrama
+        (o tracejado), `segurar` deixa-o parado com a bola (o que "pára a bola") ate ao passo seguinte.
+        */
+        if (player.rotinaOrdem) {
+            if (typeof Match !== 'undefined' && Match.rotinaPlano) {
+                const o = player.rotinaOrdem;
+                if (o.tipo === 'ir') {
+                    player.dynamicTarget.set(o.x, ALTURA_BASE_Y, o.z);
+                    player.speedMult = o.vel || 4.0;
+                    if (s !== 'MOVE_TO_POS') player.fsm.changeState('MOVE_TO_POS');
+                    return;
+                }
+                if (o.tipo === 'segurar' && player.hasBall) {
+                    player.carryHold = 0.4;
+                    if (s !== 'CARRY') player.fsm.changeState('CARRY');
+                    return;
+                }
+            } else {
+                player.rotinaOrdem = null;
+            }
+        }
+
         if (!player.btCtx) player.btCtx = new PlayerContext(player);
         const ctx = player.btCtx.prepare(dt);
 

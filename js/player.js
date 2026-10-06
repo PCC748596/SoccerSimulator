@@ -1910,6 +1910,18 @@ class FootballPlayer {
     }
 
     executarFalta(decisao) {
+        /*
+        A ROTINA DA FALTA (FaltaRotinas): o contacto do batedor e o primeiro passo da cadeia — o passe
+        para o ponto do diagrama. Os seguintes saem de `Match.correrRotinaDaFalta`.
+        */
+        const planoRotina = Match.rotinaPlano;
+        if (planoRotina && planoRotina.fase === 0 && planoRotina.taker === this) {
+            const saiu = Match.executarPassoDaRotina(planoRotina, 0);
+            planoRotina.fase = 1;
+            planoRotina.tFase = 0;
+            if (saiu) return;
+            Match.encerrarRotinaDaFalta();
+        }
         if (decisao === 'remate') {
             /*
             O REMATE DA FALTA, RESOLVIDO À MÃO — como o penálti.
@@ -4580,6 +4592,24 @@ class FootballPlayer {
     }
 
     update(dt) {
+        /*
+        MOVER SEM PASSOS NAO EXISTE: se algo o deslocou entre dois frames (colisao, o proprio lance parado,
+        a volta da queda) a mais de `ColisaoJogadores.deslizeMin` m/s com a velocidade a zero e sem gesto,
+        o `animateBones` recebe essa velocidade como `empurrao` e da passos em vez de deslizar (relato:
+        "depois das faltas jogadores escorregam para as posicoes sem animacao"). Acima de `deslizeMax` e
+        um teleporte de montagem e nao conta.
+        */
+        {
+            const CJ = (typeof ColisaoJogadores !== 'undefined') ? ColisaoJogadores : null;
+            const px = this.model.position.x, pz = this.model.position.z;
+            if (CJ && this._pAntX !== undefined && dt > 0.0001 && this.role !== 'gk' &&
+                !this.actionState && !this.queda && !(this.jumpTimer > 0) &&
+                this.velocity.lengthSq() < 0.04) {
+                const vm = Math.hypot(px - this._pAntX, pz - this._pAntZ) / dt;
+                if (vm >= CJ.deslizeMin && vm <= CJ.deslizeMax) this.empurrao = Math.max(this.empurrao || 0, Math.min(vm, CJ.empurraoMax));
+            }
+            this._pAntX = px; this._pAntZ = pz;
+        }
         if (this.touchLock > 0) this.touchLock = Math.max(0, this.touchLock - dt);
         if (this.overlapTimer > 0) this.overlapTimer = Math.max(0, this.overlapTimer - dt);
         if (this.pedindoBola > 0) {

@@ -248,6 +248,9 @@ Object.assign(Match, {
             }
         }
 
+        // A cadeia de passes da rotina da falta (so em jogo, depois da cobranca).
+        if (this.rotinaPlano) this.correrRotinaDaFalta(dt);
+
         if (this.state === 'FREE_KICK') {
             this.setPieceTimer += dt;
             if (this.faltaPendente) {
@@ -270,6 +273,11 @@ Object.assign(Match, {
                 que havia, `recuoBatedor` de 1.4 m) não há cobrança nenhuma para
                 ver: a bola parecia saltar-lhe para o pé.
                 */
+                // O tracejado da rotina: arranca um pouco antes da cobranca (ver dispararCorridasDaFalta).
+                if (this.rotinaPlano && !this.rotinaPlano.disparou &&
+                    this.faltaAtraso <= FaltaRotinas.tempoCorrida) {
+                    this.dispararCorridasDaFalta(this.rotinaPlano);
+                }
                 const takerFalta = this.setPieceTaker;
                 const FK = FreeKickModel;
                 // O guarda-redes faz a caminhada no proprio `updateGK`

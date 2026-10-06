@@ -271,8 +271,11 @@ Object.assign(Match, {
             Era "na altura do ultimo degrau" da bancada; a 34 fica um degrau
             mais abaixo.
             */
-            targetPos.set(58 * zoom, 34 * zoom, 0);
             lookTarget.copy(this.ball.position);
+            // O ZOOM APROXIMA DA BOLA e nao do centro do campo: posicao = bola + (base - bola) * zoom.
+            targetPos.set(lookTarget.x + (58 - lookTarget.x) * zoom,
+                lookTarget.y + (34 - lookTarget.y) * zoom,
+                lookTarget.z + (0 - lookTarget.z) * zoom);
         } else if (window.cameraMode === 'sideline') {
             // Câmara Lateral bem mais próxima, acompanhando a bola no eixo Z
             let bz = THREE.MathUtils.clamp(this.ball.position.z, -45, 45);
@@ -309,8 +312,11 @@ Object.assign(Match, {
             afastamento lateral (48) nao se mexeu: baixar a camara e descer o
             ponto de vista, nao aproxima-lo.
             */
-            targetPos.set(48 * zoom, 20 * zoom, bz);
             lookTarget.copy(this.ball.position);
+            // O ZOOM APROXIMA DA BOLA (era do eixo x=0,y=0): posicao = bola + (base - bola) * zoom.
+            targetPos.set(lookTarget.x + (48 - lookTarget.x) * zoom,
+                lookTarget.y + (20 - lookTarget.y) * zoom,
+                lookTarget.z + (bz - lookTarget.z) * zoom);
 
             if (typeof TeamAI !== 'undefined') {
                 const teamA = TeamAI.get('TeamA');

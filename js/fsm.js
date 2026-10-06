@@ -2293,6 +2293,16 @@ class PlayerFSM {
                     // sabe o contactTime do clip 'pass' — este case só lê o tempo
                     // normalizado para posar o rig; o efeito real (bola sai do pé)
                     // dispara dentro do próprio ActionState, via onContact.
+                    /*
+                    O gesto ja nao existe (outro codigo limpou o `actionState` a meio — a bola foi
+                    tocada por outro, o lance acabou): com o seguimento do passe a correr depois do
+                    contacto isto pode acontecer ainda em PASS. Sai em vez de rebentar.
+                    */
+                    if (!p.actionState) {
+                        if (p.passeComClip) p.resetBonesToDefault();
+                        this.changeState('IDLE');
+                        break;
+                    }
                     const norm = p.actionState.update(dt, p);
 
                     /*

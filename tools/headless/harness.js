@@ -59,7 +59,7 @@ const FICHEIROS = [
     'assets/ball_mesh.js', 'data/player_skills.js', 'data/squads.js',
     'js/event_bus.js', 'js/joint_limits.js',
     'js/config/physics.js', 'js/config/animations.js', 'js/config/gait.js',
-    'js/config/tactics.js', 'js/config/passing.js', 'js/config/shooting.js',
+    'js/config/tactics.js', 'js/config/passing.js', 'js/config/shooting.js', 'js/config/falta_rotinas.js',
     'js/config/defense.js', 'js/config/goalkeeper.js', 'js/config/player_behavior.js',
     'js/config/skill_map.js',
     'js/stats.js',
@@ -70,7 +70,7 @@ const FICHEIROS = [
     'js/goal_net.js',
     // O monólito js/match.js foi dividido; a ordem é a do index.html.
     'js/match/match_state.js', 'js/match/match_setup.js', 'js/match/match_physics.js',
-    'js/match/match_setpieces.js', 'js/match/match_loop.js', 'js/match/match_ui.js',
+    'js/match/match_setpieces.js', 'js/match/match_falta_rotinas.js', 'js/match/match_loop.js', 'js/match/match_ui.js',
     'js/pose.js', 'js/player.js',
     'js/fsm.js', 'js/officials.js'
 ];
