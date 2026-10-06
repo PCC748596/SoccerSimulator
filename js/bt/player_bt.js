@@ -1557,6 +1557,22 @@ function actPass(ctx) {
 
     // 1. Atrasar / circular a alguém perto, para reiniciar a jogada e circular o jogo
     const recuo = PassTypes.melhorRecuo(p);
+
+    /*
+    0b. PONTA CERCADA (Posicional e Possession): na ponta, quase na linha de fundo e bem marcado,
+    gira para o lado contrario ao golo e devolve a um colega livre ATRAS para reiniciar a jogada,
+    em vez de forcar o 1x1 ou o cruzamento apertado. Ver PONTA_CERCADA (tactics.js).
+    */
+    if (recuo && typeof p.emPontaCercada === 'function') {
+        const PC = p.emPontaCercada();
+        if (PC && (recuo.model.position.z - p.model.position.z) * p.dirZ <= -PC.ganhoAtrasMin) {
+            p.carryRecuo = false;
+            const rc = PassTypes.paraMate(p, recuo);
+            aplicarMiraDoPasse(p, rc.tipo, rc.ponto);
+            p.initiatePass(recuo);
+            return;
+        }
+    }
     if (recuo && (naDefesa || !ctx.campoAberto || ctx.underPressure)) {
         p.carryRecuo = false;
         const r = PassTypes.paraMate(p, recuo);

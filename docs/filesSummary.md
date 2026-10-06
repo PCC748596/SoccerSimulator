@@ -11874,3 +11874,11 @@ nada sobre a causa. Passou a `atributoOuMedia`.
 - **Segundo tempo**: `iniciarSegundoTempo` repõe os expulsos (`reporExpulsos`) antes de `assignFormations` (com 10 jogadores a lista rebentava).
 - **Fluminense-RJ**: número da camisa branco (`numero #ffffff`, contorno escuro). Equipas por omissão: A Fluminense-RJ, B Flamengo-RJ (`equipaNomeOmissaoA/B`).
 - **Torcida**: `CrowdModel.torcida` — 50% camisa do clube, 25% cor 1, 25% cor 2; 50% calças compridas (canal novo `perna`; os outros pele + calção do clube); 20% boné (canal novo `bone`, matriz a zero para quem não o usa). `Crowd.recolorir`/`coresDaEquipa` pintam a partir das equipas em campo (arranque e `TEAMS_CHANGED`). O pessoal do estádio (`staff.js`) não muda (`_pecas` com `mapa`).
+
+### Torcida com o desenho da camisa, soco, T.Offensive, ponta cercada
+
+- **O "(60)" ao lado do clube no painel** é o número de jogadores do plantel (`plantel.length`, `preencherSelectoresDeEquipa` em main.js). Não é nível.
+- **Torcida**: além da cor, quem veste a camisa do clube leva o desenho dela — canais novos `listraV` (3 listras verticais) e `listraH` (3 faixas), na segunda cor do uniforme; as camisas de cor 1/2 são lisas. `Crowd.recolorir` mostra/esconde as peças por matriz (guardada em cada adepto) conforme `padrao` (`coresDaEquipa`).
+- **Soco do goleiro**: `GkSaidaCruzamento.velocidadeSoco` 16 → 14.4 m/s (1.2x a cabeçada na própria área, ~12 m/s medido em 3 jogos de 30 min).
+- **T.Offensive mais rápido no Posicional e na Possession**: `BlockShape.transicaoOfensiva` — nos 3 s de T.Offensive o bloco segue a bola 2x mais depressa (`seguimentoDoBloco`) e o rectângulo ganha 3 m à frente (`computeBlock`, team_bt.js).
+- **Ponta cercada** (`PONTA_CERCADA`, tactics.js; só Positional e Possession): na ponta (|x| ≥ 22), a ≤ 14 m da linha de fundo e com adversário a < 2.8 m, o portador recicla — o `CARRY` (fsm.js) e o ramo 0b do passe (player_bt.js) devolvem a um colega livre atrás (`melhorRecuo`, recuo ≥ 3 m); `bonusPontaCercada` dá pontos ao passe atrás/livre e tira ao que insiste à frente.

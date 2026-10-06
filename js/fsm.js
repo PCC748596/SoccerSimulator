@@ -1679,6 +1679,23 @@ class PlayerFSM {
                     _q1.setFromRotationMatrix(_m1);
                     const giroHold = (typeof TurnModel !== 'undefined') ? TurnModel.comBola : 5.5;
                     p.model.quaternion.slerp(_q1, Math.min(1.0, giroHold * dt));
+                } else if (typeof p.emPontaCercada === 'function' && p.emPontaCercada() &&
+                    (() => {
+                        /*
+                        PONTA CERCADA (Posicional / Possession): em vez de conduzir para a linha de
+                        fundo marcado, devolve a um colega livre ATRAS e reinicia a jogada. Ver
+                        PONTA_CERCADA (tactics.js).
+                        */
+                        const PCz = p.emPontaCercada();
+                        const recuoPC = PassTypes.melhorRecuo(p);
+                        if (!recuoPC || (recuoPC.model.position.z - p.model.position.z) * p.dirZ > -PCz.ganhoAtrasMin) return false;
+                        p.carryRecuo = false;
+                        const rPC = PassTypes.paraMate(p, recuoPC);
+                        aplicarMiraDoPasse(p, rPC.tipo, rPC.ponto);
+                        p.initiatePass(recuoPC);
+                        return true;
+                    })()) {
+                    // A passagem ja foi iniciada acima.
                 } else {
                     // Escolhe a melhor direcção de condução (leque de ângulos adaptativo pela Técnica)
                     {

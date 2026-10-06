@@ -856,7 +856,7 @@ const GkSaidaCruzamento = {
         golpeX: -2.50, golpeZ: 0.35, golpeCotovelo: -0.15, peitoGolpe: 0.30
     },
     anguloSocoGraus: 10,     // o soco abre até isto para cada lado da trajectória
-    velocidadeSoco: 16.0,    // m/s à saída do punho
+    velocidadeSoco: 14.4,    // m/s à saída do punho: 1.2x a cabeçada na área (~12 m/s medido); era 16
     elevacaoSoco: 0.35,      // fraccão da velocidade que vai para cima
     /*
     ALTURA MINIMA PARA ISTO SER UM CRUZAMENTO: abaixo disto e bola rasteira e

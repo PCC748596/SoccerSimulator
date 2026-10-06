@@ -5746,6 +5746,40 @@ class FootballPlayer {
 
     O `fiab` (fiabilidade pela distancia) pesa o que depende de o passe chegar.
     */
+    /*
+    A PONTA CERCADA (ver PONTA_CERCADA, tactics.js): na ponta, perto da linha de fundo e bem marcado,
+    o portador recicla — premeia o passe para um colega livre ATRAS e castiga o que insiste para a frente.
+    */
+    emPontaCercada() {
+        const P = (typeof estiloDaEquipaDe === 'function') ? estiloDaEquipaDe(this.team).pontaCercada : null;
+        if (!P) return null;
+        const pos = this.model.position;
+        if (Math.abs(pos.x) < P.xMin) return null;
+        if (Math.abs(this.targetGoalZ - pos.z) > P.fundoMax) return null;
+        const advs = (this.team === 'TeamA') ? Match.opponents : Match.players;
+        for (const o of advs) {
+            if (o.role === 'gk' || !o.model) continue;
+            if (Math.hypot(o.model.position.x - pos.x, o.model.position.z - pos.z) < P.marcadorMax) return P;
+        }
+        return null;
+    }
+
+    bonusPontaCercada(opt, optPos, progression, fiab, teamStyle) {
+        if (!teamStyle || !teamStyle.pontaCercada) return 0;
+        const P = this.emPontaCercada();
+        if (!P) return 0;
+        if (progression <= -P.ganhoAtrasMin) {
+            // Atras, e livre de marcacao: o ponto de reinicio.
+            const advs = (this.team === 'TeamA') ? Match.opponents : Match.players;
+            for (const o of advs) {
+                if (o.role === 'gk' || !o.model) continue;
+                if (Math.hypot(o.model.position.x - optPos.x, o.model.position.z - optPos.z) < P.livre) return 0;
+            }
+            return P.bonusRecuo * fiab;
+        }
+        return progression > 0 ? -P.penalAvanco : 0;
+    }
+
     bonusPasseDoEstilo(opt, optPos, progression, fiab, teamStyle) {
         if (!teamStyle) return 0;
         let b = 0;
@@ -5771,6 +5805,7 @@ class FootballPlayer {
         }
         const A = teamStyle.alas;
         if (A && Math.abs(optPos.x) >= A.larguraAla && optPos.z * dirZ > -10) b += A.bonusReceptor * fiab;
+        b += this.bonusPontaCercada(opt, optPos, progression, fiab, teamStyle);
         return b;
     }
 

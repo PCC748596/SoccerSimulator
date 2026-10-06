@@ -58,6 +58,8 @@ Não há casos especiais.
 =============================================================================
 */
 
+const _zeroM = new THREE.Matrix4();
+
 const CrowdModel = {
     total: 10000,
 
@@ -378,7 +380,7 @@ const Crowd = {
         const canalPerna = (mapa && mapa.perna) || (adepto ? 'perna' : 'pele');
         const canalPe = (mapa && mapa.pe) || 'pele';
         const canais = { pele: [], camisa: [], calcao: [], cabelo: [] };
-        if (adepto) canais.bone = [];
+        if (adepto) { canais.bone = []; canais.listraV = []; canais.listraH = []; }
         canais[canalPerna] = canais[canalPerna] || [];
         canais[canalPe] = canais[canalPe] || [];
 
@@ -407,6 +409,12 @@ const Crowd = {
         chest.rotation.x = P.tronco;
         caixa(chest, 'pele', u * 1.4, u * 1.45, u * 0.75, 0, 0.125, 0);
         caixa(chest, 'camisa', u * 1.45, u * 1.5, u * 0.8, 0, 0.125, 0);
+        if (adepto) {
+            // O DESENHO DA CAMISA: listras verticais (3) ou faixas horizontais (3), um pouco maiores que
+            // o peito. Cada adepto so as mostra se a camisa do clube as tem (ver `recolorir`).
+            for (const x of [-0.5, 0, 0.5]) caixa(chest, 'listraV', u * 0.26, u * 1.52, u * 0.83, x, 0.125, 0);
+            for (const y of [-0.47, 0.125, 0.72]) caixa(chest, 'listraH', u * 1.47, u * 0.27, u * 0.83, 0, y, 0);
+        }
 
         const neck = no(chest, 0, 0.8, 0);
         caixa(neck, 'pele', u * 0.35, u * 0.15, u * 0.35, 0, 0, 0);
@@ -737,9 +745,25 @@ void crowdPesos(out float dePe, out float w1, out float w2,
                 if (g.calcao) g.calcao.setColorAt(f.i, tom(f.longa ? f.calcaHex : eq.calcao, f.k));
                 if (g.perna) g.perna.setColorAt(f.i, tom(f.longa ? f.calcaHex : f.pele, f.k));
                 if (g.bone) g.bone.setColorAt(f.i, tom(f.boneCor === 0 ? eq.cor1 : eq.cor2, f.k));
+                /*
+                O DESENHO: quem veste a camisa do clube (cam 0) leva as listras/faixas dela, na segunda
+                cor; as outras camisas (cor 1 / cor 2) sao lisas.
+                */
+                const comDesenho = (f.cam === 0) && eq.padrao;
+                for (const [canal, padrao] of [['listraV', 'listras'], ['listraH', 'faixas']]) {
+                    if (!g[canal]) continue;
+                    if (comDesenho && eq.padrao === padrao) {
+                        g[canal].setMatrixAt(f.i, f.m);
+                        g[canal].setColorAt(f.i, tom(eq.listra, f.k));
+                    } else {
+                        _zeroM.makeScale(0, 0, 0);
+                        g[canal].setMatrixAt(f.i, _zeroM);
+                    }
+                }
             }
-            for (const n of ['camisa', 'calcao', 'perna', 'bone']) {
+            for (const n of ['camisa', 'calcao', 'perna', 'bone', 'listraV', 'listraH']) {
                 if (g[n] && g[n].instanceColor) g[n].instanceColor.needsUpdate = true;
+                if (g[n] && (n === 'listraV' || n === 'listraH')) g[n].instanceMatrix.needsUpdate = true;
             }
         }
     },
@@ -754,11 +778,18 @@ void crowdPesos(out float dePe, out float w1, out float w2,
         if (u && u.camisa) {
             const cs = u.camisa.cores || [];
             const calc = (u.calcao && u.calcao.cores && u.calcao.cores[0]) || p.corCalcao;
+            const principal = (typeof corDoUniforme === 'function') ? corDoUniforme(u, cs[0]) : cs[0];
+            // A cor das listras: a primeira do desenho que nao seja a principal.
+            const claro = c => { const n = parseInt(String(c).slice(1), 16); return ((n >> 16) & 255) > 215 && ((n >> 8) & 255) > 215 && (n & 255) > 215; };
+            const outras = cs.filter(c => c && c.toLowerCase() !== String(principal).toLowerCase());
+            const listra = outras.find(c => !claro(c)) || outras[0] || principal;
             return {
-                principal: (typeof corDoUniforme === 'function') ? corDoUniforme(u, cs[0]) : cs[0],
+                principal,
                 cor1: cs[0] || p.corCamisa,
                 cor2: cs[1] || calc || p.corCamisa,
-                calcao: calc || '#ffffff'
+                calcao: calc || '#ffffff',
+                padrao: (u.camisa.padrao === 'listras' || u.camisa.padrao === 'faixas') ? u.camisa.padrao : null,
+                listra
             };
         }
         return { principal: p.corCamisa, cor1: p.corCamisa, cor2: p.corCalcao || p.corCamisa, calcao: p.corCalcao || '#ffffff' };
@@ -902,8 +933,13 @@ void crowdPesos(out float dePe, out float w1, out float w2,
                 };
                 fans.push(fan);
 
+                fan.m = dummy.matrix.clone();
                 for (const canal of canais) {
-                    if (canal === 'bone' && !fan.bone) {
+                    if (canal === 'listraV' || canal === 'listraH') {
+                        dummy.scale.set(0, 0, 0); dummy.updateMatrix();
+                        meshes[canal].setMatrixAt(i, dummy.matrix);
+                        dummy.scale.set(escala, escala, escala); dummy.updateMatrix();
+                    } else if (canal === 'bone' && !fan.bone) {
                         // Zero de escala: o chapeu so existe para 20%.
                         dummy.scale.set(0, 0, 0); dummy.updateMatrix();
                         meshes[canal].setMatrixAt(i, dummy.matrix);
@@ -921,6 +957,8 @@ void crowdPesos(out float dePe, out float w1, out float w2,
                 meshes.pele && meshes.pele.setColorAt(i, variar(fan.pele));
                 meshes.perna && meshes.perna.setColorAt(i, variar(fan.pele));
                 meshes.bone && meshes.bone.setColorAt(i, variar(eq.camisa));
+                meshes.listraV && meshes.listraV.setColorAt(i, variar(eq.camisa));
+                meshes.listraH && meshes.listraH.setColorAt(i, variar(eq.camisa));
                 meshes.cabelo && meshes.cabelo.setColorAt(i, variar(CrowdModel.cabelos[Math.floor(rnd() * CrowdModel.cabelos.length)]));
             }
 

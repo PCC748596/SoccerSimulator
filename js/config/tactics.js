@@ -892,6 +892,14 @@ const BlockShape = {
     seguimentoBola: 3.0,
 
     /*
+    T.OFFENSIVE MAIS RAPIDO NO POSICIONAL E NA POSSESSAO (pedido): nos 3 s a seguir a ganhar a bola, o
+    bloco segue a bola `seguimentoMult` vezes mais depressa e o rectangulo ganha `avancoExtra` m a
+    frente, para a equipa sair para o ataque mais cedo. So para os estilos de `estilos` (nome em
+    TeamPlayStyles). Ver `seguimentoDoBloco` e o `computeBlock` em team_bt.js.
+    */
+    transicaoOfensiva: { estilos: ['Positional', 'Possession'], seguimentoMult: 2.0, avancoExtra: 3.0 },
+
+    /*
     LIMITES DO RECTÂNGULO — as linhas do campo, e mais nada.
 
     O bloco desloca-se inteiro para dentro do campo quando bate numa linha;
@@ -1676,6 +1684,20 @@ Cada estilo ganha agora, alem dos multiplicadores:
     lancamento     multiplica a chance de pensar num lancamento (bola nas costas
                    da ultima linha), em findThroughBall.
 */
+/*
+A PONTA CERCADA (Posicional e Possession): quem tem a bola na ponta, quase na linha de fundo e bem
+marcado, em vez de forcar, gira para o lado contrario ao golo e procura um colega melhor
+colocado ATRAS para reiniciar a jogada. `xMin`: |x| a partir do qual esta na ponta; `fundoMax`:
+distancia (m) maxima a linha de fundo adversaria; `marcadorMax`: adversario mais perto que isto =
+bem marcado; `ganhoAtrasMin`: o passe tem de recuar pelo menos isto (m); `livre`: o colega nao pode
+ter adversario mais perto que isto; `bonusRecuo` / `penalAvanco`: pontos de passe.
+*/
+const PONTA_CERCADA = {
+    xMin: 22, fundoMax: 14, marcadorMax: 2.8,
+    ganhoAtrasMin: 3.0, livre: 4.0,
+    bonusRecuo: 300, penalAvanco: 220
+};
+
 const TeamPlayStyles = {
     possession: {
         nome: 'Possession',
@@ -1685,6 +1707,7 @@ const TeamPlayStyles = {
         corridas: 0.6, lancamento: 0.6,
         cadenciaPosse: 0.75, passeRapido: 1.1,
         riscoLinha: 1.7, seguranca: 140,
+        pontaCercada: PONTA_CERCADA,
         afinidade: { classic_no10: 160, creative_playmaker: 160, orchestrator: 170, target_man: 110, fox_in_the_box: 90 }
     },
     direct: {
@@ -1727,7 +1750,8 @@ const TeamPlayStyles = {
         nome: 'Positional',
         circulacao: 1.5, verticalidade: 0.75, viradas: 1.15,
         corredores: 1.1, cruzamento: 1.0, pressaoPosPerda: 1.0,
-        conducao: 0.55
+        conducao: 0.55,
+        pontaCercada: PONTA_CERCADA
     },
 };
 

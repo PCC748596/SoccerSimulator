@@ -195,6 +195,22 @@ com a bola a recuar. Um seguimento com 2.5 s de constante fica ~25 m atrás de
 uma bola a 10 m/s, e era isso que punha os dois rectângulos do TeamBT atrás da
 jogada em vez de sobre ela.
 */
+/*
+O ritmo a que o bloco segue a bola. Na T.Offensive dos estilos posicionais sobe (BlockShape.
+transicaoOfensiva): a equipa sai mais depressa para o ataque nos primeiros segundos de posse.
+*/
+function transicaoOfensivaDoEstilo(bb) {
+    const T = BlockShape.transicaoOfensiva;
+    if (!T || bb.state !== TeamState.TRANSITION_OFFENSIVE) return null;
+    const estilo = estiloDaEquipaDe(bb.team);
+    return (estilo && T.estilos.indexOf(estilo.nome) >= 0) ? T : null;
+}
+
+function seguimentoDoBloco(bb) {
+    const T = transicaoOfensivaDoEstilo(bb);
+    return BlockShape.seguimentoBola * (T ? T.seguimentoMult : 1);
+}
+
 function updateMomentum(bb, dt) {
     const alvoX = THREE.MathUtils.clamp(bb.ballX / (CAMPO_LARG / 2), -1, 1);
     const kX = 1 - Math.exp(-0.8 * dt);
@@ -211,8 +227,8 @@ function updateMomentum(bb, dt) {
     onde vive o resto da forma do bloco; aqui só se segue a bola.
     */
     const reposta = (typeof Match !== 'undefined' && Match.state !== 'PLAY');
-    bb.bolaZSuave = seguirBola(bb.bolaZSuave, bb.ballZ, BlockShape.seguimentoBola, dt, reposta);
-    bb.bolaXSuave = seguirBola(bb.bolaXSuave, bb.ballX, BlockShape.seguimentoBola, dt, reposta);
+    bb.bolaZSuave = seguirBola(bb.bolaZSuave, bb.ballZ, seguimentoDoBloco(bb), dt, reposta);
+    bb.bolaXSuave = seguirBola(bb.bolaXSuave, bb.ballX, seguimentoDoBloco(bb), dt, reposta);
 }
 
 // Congestão por banda lateral (esq/centro/dir, mesmo corte de
@@ -1029,12 +1045,16 @@ function computeBlock(bb) {
         avancoMeio += ThrowInModel.avancoDosMarcadores;
     }
 
+    // T.Offensive de estilo posicional: o rectangulo sobe um pouco mais (BlockShape.transicaoOfensiva).
+    const transOf = transicaoOfensivaDoEstilo(bb);
+    if (transOf) avancoMeio += transOf.avancoExtra;
+
     targetOffsetZ += avancoMeio;
 
     if (bb.blocoZSuave === undefined) {
         bb.blocoZSuave = targetOffsetZ;
     } else {
-        bb.blocoZSuave = seguirBola(bb.blocoZSuave, targetOffsetZ, BlockShape.seguimentoBola, dtMatch, reposta);
+        bb.blocoZSuave = seguirBola(bb.blocoZSuave, targetOffsetZ, seguimentoDoBloco(bb), dtMatch, reposta);
     }
 
     const mentalBloco = (typeof MentalidadeModel !== 'undefined' &&
