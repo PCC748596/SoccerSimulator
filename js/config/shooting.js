@@ -716,7 +716,13 @@ const ShotModel = {
 
         Fica a decisão, e fica o custo escrito pela quinta vez.
         */
-        escalaGlobal: 2.03
+        /*
+        2.03 -> 1.64, MENOS 19% (*"vamos tirar os erros colocados de quase 20% nas finalizações"*). O lote
+        de 380 jogos de 20 min dava 4.73 finalizações no alvo por jogo contra 8.8 do benchmark BR 2025
+        (54%), 1.65 golos contra 2.52 (65%) e 29% no alvo contra 33.7%: o erro de execução acumulado
+        nas cinco subidas era o que mais tirava remates da moldura. Mede-se de novo no lote seguinte.
+        */
+        escalaGlobal: 1.64
     }
 };
 

@@ -263,7 +263,8 @@ const ALVOS = [
     { campo: 'rematesBloqueados', rotulo: 'finalizações bloqueadas', alvo: 7.0, casas: 2 },
     { campo: 'penaltis', rotulo: 'penaltis', alvo: 0.28, casas: 2 },
     // Sem alvo, so informativo:
-    { campo: 'ataquesNaArea', rotulo: 'entradas na grande área', alvo: null, casas: 1 }
+    // Pedido: no minimo 15 entradas na grande area por jogo (as duas equipas, por 90 min).
+    { campo: 'ataquesNaArea', rotulo: 'entradas na área (mín.)', alvo: 15, casas: 1, minimo: true }
 ];
 
 /*
@@ -280,7 +281,9 @@ function tabelaDePercentagens(fichas) {
         const medido = vals.reduce((a, b) => a + b, 0) / vals.length;
         const pct = (m.alvo) ? 100 * medido / m.alvo : null;
         let sinal = '';
-        if (pct !== null && !m.provisorio) {
+        if (m.minimo) {
+            sinal = (medido >= m.alvo) ? 'ok' : 'X';
+        } else if (pct !== null && !m.provisorio) {
             const desvio = Math.abs(medido - m.alvo) / m.alvo;
             sinal = (desvio <= 0.15) ? 'ok' : (desvio <= 0.40 ? '~' : 'X');
         }
