@@ -188,12 +188,12 @@ function distribuicao(dist, tec) {
 }
 
 test('precisão por distância, com um rematador médio', () => {
-    // Remedidas à escala 1.31 (6 m 75%, 12 m 58%, 18 m 43%, 25 m 27%) — ver a nota do intervalo, no fim do ficheiro.
+    // Remedidas à escala 0.98 (6 m 82%, 12 m 69%, 18 m 52%, 25 m 37%) — ver a nota do intervalo, no fim do ficheiro.
     const faixas = [
-        { dist: 6, min: 0.65, max: 0.85 },
-        { dist: 12, min: 0.48, max: 0.68 },
-        { dist: 18, min: 0.33, max: 0.53 },
-        { dist: 25, min: 0.17, max: 0.37 }
+        { dist: 6, min: 0.72, max: 0.92 },
+        { dist: 12, min: 0.59, max: 0.79 },
+        { dist: 18, min: 0.42, max: 0.62 },
+        { dist: 25, min: 0.27, max: 0.47 }
     ];
     for (const f of faixas) {
         const d = distribuicao(f.dist, 50);
@@ -284,7 +284,7 @@ como as anteriores, para continuarem a apanhar uma mudança que não seja esta.
 */
 test('a escala global fica dentro do intervalo calibrado', () => {
     const e = ShotModel.erro.escalaGlobal;
-    assert.ok(e >= 0.95 && e <= 2.10,   // 1.31 desde o corte de 20% a pedido (faixas remedidas a esta escala)
+    assert.ok(e >= 0.95 && e <= 2.10,   // 0.98 desde o corte de 25% a pedido (faixas remedidas a esta escala)
         
         `escala global em ${e}: fora do intervalo em que as faixas de precisão ` +
         'acima foram medidas — remede-as antes de a deixar aqui');

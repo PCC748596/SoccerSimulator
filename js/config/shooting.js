@@ -727,7 +727,13 @@ const ShotModel = {
         dava 32.9% dos remates no alvo contra 33.7% do benchmark BR 2025 — ja no alvo —, por isso esta
         descida empurra a % no alvo para cima dele e aumenta golos e defesas. Mede-se no lote seguinte.
         */
-        escalaGlobal: 1.31
+        /*
+        1.31 -> 0.98, MENOS 25% (*"melhora a pontaria. Vai aumentar gols e finalizacoes no alvo. 25%"*).
+        Lido como menos erro de execucao (o sigma 25% menor): e o que sobe os remates no alvo e os golos.
+        Aviso medido: a 1.31 o lote de 40 jogos ja dava 36.9% no alvo (benchmark 33.7%), 2.11 golos e 6.54
+        no alvo contra 8.8; o que falta nao e pontaria, e volume de remates tentados.
+        */
+        escalaGlobal: 0.98
     }
 };
 

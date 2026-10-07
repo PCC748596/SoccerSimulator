@@ -11917,3 +11917,5 @@ nada sobre a causa. Passou a `atributoOuMedia`.
 - **Erro de remate**: `ShotModel.erro.escalaGlobal` 2.03 → 1.64 (−19%, pedido "tirar os erros colocados de quase 20% nas finalizações"). **Entradas na grande área**: o lote passa a ter o mínimo de 15 por jogo (duas equipas, por 90 min) como alvo (`minimo: true` em `ALVOS`, sinal ok/fora).
 
 - **Erro de remate**: `ShotModel.erro.escalaGlobal` 1.64 → 1.31 (−20%, pedido "reduz o erro em mais 20%"). Com 1.64 a % no alvo já estava em 32.9% (alvo 33.7%): esta descida empurra-a acima do alvo.
+
+- **Erro de remate**: `ShotModel.erro.escalaGlobal` 1.31 → 0.98 (−25%, pedido "melhora a pontaria, aumenta golos e finalizações no alvo"). Faixas de `remate_tipo_mira` remedidas (6 m 82%, 12 m 69%, 18 m 52%, 25 m 37%).
