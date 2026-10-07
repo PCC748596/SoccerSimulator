@@ -808,10 +808,11 @@ const GkDive = {
             do peito, na direcao da cabeca, assente no relvado; os dois bracos vao a ela pelo IK.
             */
             const BR = D.bolaNoRelvado;
-            if (BR) {
+            if (BR && (d.fase === 'chao' || d.fase === 'levantar')) {
                 this._vLocal.set(0, 0, 1).applyQuaternion(this._qOsso);
                 const fx = this._vLocal.x, fz = this._vLocal.z;
-                const wFrente = THREE.MathUtils.clamp((-this._vLocal.y - BR.fwdY) / 0.3, 0, 1);
+                const wFrente = THREE.MathUtils.clamp((-this._vLocal.y - BR.fwdY) / 0.3, 0, 1) *
+                    THREE.MathUtils.clamp((BR.pitoAte + 0.2 - this._v.y) / 0.2, 0, 1);
                 // Tambem deitado de lado (peito baixo): a bola nao pode pairar acima do relvado.
                 const wBaixo = THREE.MathUtils.clamp((BR.pitoAte - this._v.y) / BR.pitoFaixa, 0, 1);
                 const wR = Math.max(wFrente, wBaixo);
@@ -830,7 +831,6 @@ const GkDive = {
                     bp.z += (gz - bp.z) * wR;
                     bp.y += (BallPhysics.raio - bp.y) * wR;
                     Match.ballVel.set(0, 0, 0);
-                    this.apontarBracos(rig, wR);
                 }
             }
 

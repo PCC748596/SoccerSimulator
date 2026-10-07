@@ -2145,7 +2145,7 @@ const GoalkeeperDive = {
     */
     bolaNoPeito: { x: 0.0, y: 0.06, z: 0.30 },
     // De peito para baixo (frente do peito com y < -fwdY) a bola passa para o relvado, `avanco` m a frente do peito.
-    bolaNoRelvado: { fwdY: 0.35, avanco: 0.40, pitoAte: 0.80, pitoFaixa: 0.35 },
+    bolaNoRelvado: { fwdY: 0.35, avanco: 0.30, pitoAte: 0.55, pitoFaixa: 0.15 },
 
     /*
     E A BOLA NUNCA FICA ATRAS DO CORPO, em metros a frente dele.

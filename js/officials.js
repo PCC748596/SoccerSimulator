@@ -1670,7 +1670,7 @@ const Officials = {
     anunciar: function (texto) {
         if (!texto) return;
         // O aviso grande ao centro, como o GOOL!: independente do arbitro estar visivel.
-        this.avisoCentral(texto);
+        if (typeof Officials !== 'undefined' && Officials.avisoCentral) Officials.avisoCentral(texto);
         if (!this._ativo) return;
         const arb = this.arbitro;
         if (!arb || !arb.jogador || typeof arb.jogador.showActionBanner !== 'function') return;
