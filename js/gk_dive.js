@@ -188,6 +188,8 @@ const GkDive = {
         const PP = GoalkeeperDive.deslizeLado && GoalkeeperDive.deslizeLado.pesPrimeiro;
         if (!PP || !PP.activo || typeof Match === 'undefined' || !Match.ball) return false;
         if (Match.ballVel.length() > PP.velMax) return false;
+        // Bola lenta (a solta que passa ao lado): pes primeiro mesmo sem adversario perto.
+        if (typeof PP.velLenta === 'number' && Match.ballVel.length() <= PP.velLenta) return true;
         const adv = (p.team === 'TeamA') ? Match.opponents : Match.players;
         for (const o of adv) {
             if (!o || !o.model || o.role === 'gk') continue;

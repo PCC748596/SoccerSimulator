@@ -1562,8 +1562,8 @@ A QUEDA (QuedaClip) amostra-se em SEGUNDOS desde o toque, e não numa fracção:
 os keyframes trazem o seu `t`. Linear entre vizinhos, como os outros. Passado
 o fim, fica o último (de pé).
 */
-function amostrarClipQueda(t) {
-    const fr = QuedaClip.frames;
+function amostrarClipQueda(t, clip) {
+    const fr = (clip || QuedaClip).frames;
     let i = 0;
     while (i < fr.length - 2 && t >= fr[i + 1].t) i++;
     const a = fr[i], b = fr[i + 1];

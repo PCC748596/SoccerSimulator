@@ -856,7 +856,8 @@ Object.assign(Match, {
         const aDescer = this.ballVel.y < 0;
         const limiarFacil = (aDescer && bestAltura > BallControl.alturaQueda &&
             typeof BallControl.easySpeedQueda === 'number')
-            ? BallControl.easySpeedQueda : BallControl.easySpeed;
+            ? BallControl.easySpeedQueda
+            : (typeof BallControl.easySpeedDominio === 'number' ? BallControl.easySpeedDominio : BallControl.easySpeed);
 
         let dominou;
         if (speed < limiarFacil) {

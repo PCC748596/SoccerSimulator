@@ -398,6 +398,8 @@ const GoalkeeperPose = {
 
     // Duração (s) do agachar-e-apanhar quando a bola chega mansa/rolando.
     apanharDur: 0.35,
+    // Bola a este alcance do corpo (m) e quase parada: o `apanhar` agarra-a mesmo com as maos mais longe.
+    apanharDistCorpo: 0.75,
     // Quanto tempo o GR fica a segurar a bola (agachado a levantar-se) antes
     // de poder relançar o jogo — dá tempo às equipas para se reorganizarem.
     segurarDur: 8.0,
@@ -1714,8 +1716,19 @@ const GoalkeeperDive = {
         `raioAdversario` dela); num remate a cabeca e os bracos vao primeiro, como
         sempre (anguloFrente 0.75 acima).
         */
+        /*
+        A BOLA SOLTA E LENTA QUE PASSA AO LADO — o deslize de lado ("F3") que NAO estava a acontecer
+        (relato: *"em alguns chutes a bola passa mais lenta pelo goleiro; ele vai atras dela deslizando de
+        pe e agachado; o deslize lateral e o que nao esta acontecendo"*). No ramo da bola solta o guarda-redes
+        so corria atras dela (e agachava-se a seus pes). Agora, com a bola rasteira (`alturaMax`), a andar
+        entre `velMin` e `velMax` m/s, a menos de `distMax` m e prevista (daqui a `tempo` s) a menos de `alcancePrevisto` m dele, a passar entre `lateralMin` e `lateralMax` do corpo,
+        atira-se ao deslize de lado. A mais perto que `lateralMin` e dele (`apanhar`).
+        */
+        soltaLenta: { activo: true, alturaMax: 0.4, velMin: 1.0, velMax: 8.0, tempo: 0.80, distMax: 9.0, alcancePrevisto: 3.2, lateralMin: 1.3 },
         pesPrimeiro: {
             activo: true,
+            // A esta velocidade ou menos vai de pes primeiro sem precisar de adversario perto da bola.
+            velLenta: 7.0,
             velMax: 10.0,
             raioAdversario: 6.0,
             anguloFrente: 0.15,

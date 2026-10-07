@@ -193,7 +193,8 @@ test('nenhuma bola e agarrada de longe do corpo e da mao', () => {
     const aoCorpo = registos.filter(r => r.corpo <= limiteCorpo && r.mao > limiteMao).length;
     console.log(`  ${registos.length} agarradas | media ${media.toFixed(2)} m do ponto mais ` +
         `proximo (mao ou corpo), pior ${pior.toFixed(2)} m | ao corpo: ${aoCorpo} | de longe: ${longe.length}`);
-    assert.ok(registos.length >= 15,
+    assert.ok(registos.length >= 12,   // era 15; o deslize de lado (soltaLenta) mudou quais defesas são "agarradas"
+        
         `amostra curta: ${registos.length} agarradas em ${SEMENTES.length} sementes`);
     assert.ok(longe.length === 0,
         `${longe.length} de ${registos.length} agarradas com a bola a mais de ` +

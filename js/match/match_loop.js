@@ -1140,7 +1140,7 @@ Object.assign(Match, {
     // Quem sofreu a falta ainda esta a cair e a rolar (antes do keyframe deitado)?
     caidoAindaARolar: function () {
         const v = this.bolaParadaVitima;
-        return !!(v && v.queda && typeof QuedaClip !== 'undefined' && v.queda.t < QuedaClip.deitadoEm);
+        return !!(v && v.queda && typeof QuedaClip !== 'undefined' && v.queda.t < ((typeof clipDaQueda === 'function') ? clipDaQueda() : QuedaClip).deitadoEm);
     },
 
     algumCaidoDaFalta: function (comVolta) {

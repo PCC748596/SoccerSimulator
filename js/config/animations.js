@@ -862,6 +862,74 @@ const QuedaClip = {
 };
 if (typeof window !== 'undefined') window.QuedaClip = QuedaClip;
 
+/*
+=============================================================================
+A QUEDA EM ROLAMENTO PARA A FRENTE — o clip NOVO, activo por omissao
+=============================================================================
+Pedido: *"quero mudar a animacao de queda apos a falta. Ao inves de um rolamento no sentido do eixo
+vertical do jogador, uma rotacao em torno do eixo LATERAL — como um salto mortal para a frente, mas
+sem pular, so o rolamento. Nao deleta a anterior: cria outra e activa a nova, deixa a anterior de
+backup"*.
+
+O `QuedaClip` (acima) NAO foi tocado: rola em torno do eixo cabeca-pes (`rolarY`) e continua la, e
+usado tal e qual pelo guarda-redes no salto alto. Este roda a bacia em torno do eixo lateral (o
+`pitchX` passa de 0 a 3*pi/2 — 270 graus): tropeca para a frente, planta as maos, enrola (joelhos ao
+peito, queixo ao peito), passa por cima dos ombros e aterra DE COSTAS. Fica 3 s deitado e levanta-se
+a continuar a mesma rotacao: o `pitchX` segue de 3*pi/2 ate 2*pi (sentar, de gatas, de pe), por isso
+nunca ha uma volta atras. O fim vale 2*pi + 0.04 e o `actualizarQueda` poe a bacia a zero.
+
+A altura sai do `assentarCorpoInteiro` (o ponto mais baixo do boneco no relvado), como no clip
+antigo, portanto a bacia sobe sozinha quando a cabeca esta em baixo — nao ha salto: o corpo nunca
+sai do chao mais do que a propria volta pede.
+
+Mesmos canais e mesma ordem de chaves do QuedaClip (e o `rolarY` a zero): o `amostrarClipQueda` e o
+`escreverPoseBolaParada` desenham-no sem mudar. `QuedaModel.activa` escolhe qual dos dois corre.
+=============================================================================
+*/
+const QuedaFrenteClip = {
+    duracao: 5.25,
+    // Quando chega a deitado de costas. Dai os outros comecam a ir para os lugares do lance parado.
+    deitadoEm: 1.15,
+    frames: [
+        // O TOQUE: ainda de pe, a meio da passada (igual ao do clip antigo).
+        { t: 0.00, leanZ: 0.00, pitchX: 0.15, chest: 0.05, coxaChute: -0.55, joelhoChute: 0.35, coxaChuteZ: 0.00, coxaApoio: 0.40, joelhoApoio: 0.70, bracoLx: 0.45, bracoLz: 0.35, bracoRx: -0.55, bracoRz: -0.35, cotoveloL: -0.60, cotoveloR: -0.70, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 0.00, rolarY: 0.00, altura: -0.03 },
+        // Tropeca: o tronco vai a frente, os bracos estendem-se para o chao.
+        { t: 0.20, leanZ: 0.00, pitchX: 0.95, chest: 0.20, coxaChute: 0.10, joelhoChute: 0.50, coxaChuteZ: 0.00, coxaApoio: 0.50, joelhoApoio: 0.80, bracoLx: -1.40, bracoLz: 0.40, bracoRx: -1.50, bracoRz: -0.40, cotoveloL: -0.40, cotoveloR: -0.35, cabecaX: -0.20, peLy: 0.00, peRy: 0.00, avanco: 0.55, rolarY: 0.00, altura: -0.30 },
+        // Planta as maos e a bacia passa por cima: o tronco ja passou da horizontal, joelhos a subir ao peito.
+        { t: 0.40, leanZ: 0.00, pitchX: 1.90, chest: 0.50, coxaChute: -0.90, joelhoChute: 1.20, coxaChuteZ: 0.00, coxaApoio: -0.90, joelhoApoio: 1.20, bracoLx: -2.00, bracoLz: 0.25, bracoRx: -2.20, bracoRz: -0.25, cotoveloL: -0.20, cotoveloR: -0.20, cabecaX: 0.25, peLy: 0.00, peRy: 0.00, avanco: 1.00, rolarY: 0.00, altura: -0.45 },
+        // DE CABECA PARA BAIXO: o ponto alto do rolamento, bem enrolado (pitchX ~ pi).
+        { t: 0.62, leanZ: 0.00, pitchX: 3.10, chest: 0.70, coxaChute: -1.50, joelhoChute: 1.70, coxaChuteZ: 0.00, coxaApoio: -1.50, joelhoApoio: 1.70, bracoLx: -3.00, bracoLz: 0.20, bracoRx: -3.00, bracoRz: -0.20, cotoveloL: -0.15, cotoveloR: -0.15, cabecaX: 0.45, peLy: 0.00, peRy: 0.00, avanco: 1.50, rolarY: 0.00, altura: -0.60 },
+        // Passa pelos ombros: as costas tocam no relvado, os bracos largam.
+        { t: 0.88, leanZ: 0.00, pitchX: 4.30, chest: 0.40, coxaChute: -1.20, joelhoChute: 1.30, coxaChuteZ: 0.00, coxaApoio: -1.20, joelhoApoio: 1.30, bracoLx: -1.20, bracoLz: 0.60, bracoRx: -1.20, bracoRz: -0.60, cotoveloL: -0.30, cotoveloR: -0.30, cabecaX: 0.30, peLy: 0.00, peRy: 0.00, avanco: 1.85, rolarY: 0.00, altura: -0.55 },
+        // DEITADO DE COSTAS (pitchX = 3*pi/2): pernas a esticar, bracos abertos ao lado.
+        { t: 1.15, leanZ: 0.00, pitchX: 4.71, chest: -0.05, coxaChute: -0.35, joelhoChute: 0.55, coxaChuteZ: 0.00, coxaApoio: -0.15, joelhoApoio: 0.45, bracoLx: -0.10, bracoLz: 1.25, bracoRx: -0.10, bracoRz: -1.25, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: 0.10, peLy: 0.00, peRy: 0.00, avanco: 2.10, rolarY: 0.00, altura: -0.71 },
+        // ...e fica 3 s. So a cabeca e o peito mexem um pouco.
+        { t: 4.15, leanZ: 0.00, pitchX: 4.71, chest: -0.02, coxaChute: -0.35, joelhoChute: 0.55, coxaChuteZ: 0.00, coxaApoio: -0.15, joelhoApoio: 0.45, bracoLx: -0.10, bracoLz: 1.25, bracoRx: -0.10, bracoRz: -1.25, cotoveloL: -0.10, cotoveloR: -0.10, cabecaX: 0.15, peLy: 0.00, peRy: 0.00, avanco: 2.10, rolarY: 0.00, altura: -0.71 },
+        // Levanta-se a continuar a mesma rotacao: senta-se (o tronco sobe a frente, pernas dobradas).
+        { t: 4.45, leanZ: 0.00, pitchX: 5.20, chest: 0.35, coxaChute: -1.50, joelhoChute: 1.00, coxaChuteZ: 0.00, coxaApoio: -1.50, joelhoApoio: 1.00, bracoLx: -1.00, bracoLz: 0.50, bracoRx: -1.00, bracoRz: -0.50, cotoveloL: -0.40, cotoveloR: -0.40, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.10, rolarY: 0.00, altura: -0.40 },
+        // Em cocoras, os pes por baixo do corpo.
+        { t: 4.75, leanZ: 0.00, pitchX: 5.75, chest: 0.20, coxaChute: -1.70, joelhoChute: 1.60, coxaChuteZ: 0.00, coxaApoio: -1.70, joelhoApoio: 1.60, bracoLx: -0.60, bracoLz: 0.30, bracoRx: -0.60, bracoRz: -0.30, cotoveloL: -0.50, cotoveloR: -0.50, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.10, rolarY: 0.00, altura: -0.30 },
+        // Quase de pe, ainda dobrado.
+        { t: 5.05, leanZ: 0.00, pitchX: 6.10, chest: 0.10, coxaChute: -0.90, joelhoChute: 1.20, coxaChuteZ: 0.00, coxaApoio: -0.90, joelhoApoio: 1.20, bracoLx: -0.20, bracoLz: 0.20, bracoRx: -0.30, bracoRz: -0.20, cotoveloL: -0.40, cotoveloR: -0.50, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.10, rolarY: 0.00, altura: -0.10 },
+        // DE PE (pitchX = 2*pi + 0.04): a bacia volta a zero no fim (actualizarQueda).
+        { t: 5.25, leanZ: 0.00, pitchX: 6.32, chest: 0.00, coxaChute: -0.04, joelhoChute: 0.10, coxaChuteZ: 0.00, coxaApoio: -0.04, joelhoApoio: 0.10, bracoLx: 0.00, bracoLz: 0.12, bracoRx: 0.00, bracoRz: -0.12, cotoveloL: -0.20, cotoveloR: -0.20, cabecaX: 0.00, peLy: 0.00, peRy: 0.00, avanco: 2.10, rolarY: 0.00, altura: 0.03 }
+    ]
+};
+if (typeof window !== 'undefined') window.QuedaFrenteClip = QuedaFrenteClip;
+
+/*
+QUAL DAS DUAS QUEDAS corre quando alguem sofre uma falta. 'frente' = rolamento em torno do eixo lateral
+(QuedaFrenteClip, a nova); 'eixo' = o rolamento original em torno do eixo cabeca-pes (QuedaClip, de
+backup). So muda o jogador de campo que cai: o guarda-redes no salto alto continua no QuedaClip.
+*/
+const QuedaModel = { activa: 'frente' };
+if (typeof window !== 'undefined') window.QuedaModel = QuedaModel;
+
+function clipDaQueda() {
+    return (typeof QuedaModel !== 'undefined' && QuedaModel.activa === 'frente' &&
+        typeof QuedaFrenteClip !== 'undefined') ? QuedaFrenteClip : QuedaClip;
+}
+
 
 /*
 =============================================================================

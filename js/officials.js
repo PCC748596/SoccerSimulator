@@ -243,8 +243,13 @@ const RefereeModel = {
         tGuardar: 0.8,
         tIrMax: 6.0,
         chegou: 0.35,
-        largura: 0.12,
-        alturaCartao: 0.16,
+        // Mais de 2x o de antes (era 12 x 16): de pe, de longe e com a espessura de 4 mm, nao se via.
+        largura: 0.22,
+        alturaCartao: 0.30,
+        // O POLEGAR da mao erguida: rola-se a mao em torno do antebraco (rotation.y da mao) para o polegar
+        // ficar paralelo ao relvado e a palma (com o cartao) virada para o jogador. Radianos.
+        polegarRoll: -1.57,
+        polegarAbertura: -1.57,    // o polegar a 90 graus dos dedos (o repouso e -0.55)
         corAmarelo: '#f2d21b',
         corVermelho: '#d6201f',
         suavizacao: 0.25,
@@ -2085,10 +2090,12 @@ const Officials = {
         const rig = this.arbitro.rig;
         if (!this._cartaoMesh && rig && rig.rHand && typeof THREE !== 'undefined') {
             const esc = this.arbitro.model.scale.x || 1;
-            const geo = new THREE.BoxGeometry(C.largura / esc, C.alturaCartao / esc, 0.004 / esc);
-            this._cartaoMesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: C.corAmarelo }));
-            // Acima do punho (com o braço erguido o "para baixo" da mão aponta ao céu).
-            this._cartaoMesh.position.set(0, -(C.alturaCartao * 0.75) / esc, 0);
+            // A FACE do cartao e a da palma (o x local da mao): espessura em x, largura em z. Com a espessura em z
+            // (como estava) ficava de perfil para a camara e a 4 mm nao se via.
+            const geo = new THREE.BoxGeometry(0.006 / esc, C.alturaCartao / esc, C.largura / esc);
+            this._cartaoMesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: C.corAmarelo, side: THREE.DoubleSide }));
+            // Sobre a palma, a cobrir os dedos e a passar-lhes (com o braço erguido o "para baixo" da mão aponta ao céu).
+            this._cartaoMesh.position.set(-0.06, -(C.alturaCartao * 0.60) / esc, 0);
             rig.rHand.add(this._cartaoMesh);
         }
         if (this._cartaoMesh) {
@@ -2096,6 +2103,15 @@ const Officials = {
             this._cartaoMesh.visible = false;
         }
         return true;
+    },
+
+    // O grupo do polegar da mao (o unico com a abertura em z), guardado com a rotacao de repouso.
+    _polegarDaMao: function (mao) {
+        if (this._polegar && this._polegar.mao === mao) return this._polegar;
+        let g = null;
+        mao.traverse(o => { if (!g && o.isGroup && o.rotation.z !== 0 && o.children.length === 1 && o.children[0].isMesh) g = o; });
+        this._polegar = g ? { mao: mao, grupo: g, repouso: undefined } : null;
+        return this._polegar;
     },
 
     cartaoAMostrar: function () {
@@ -2109,6 +2125,11 @@ const Officials = {
         const arb = this.arbitro;
         if (arb && arb.rig) {
             arb.rig.rArm.rotation.set(0, 0, arb.rig.rArm.rotation.z * 0);
+            if (arb.rig.rHand) {
+                arb.rig.rHand.rotation.y = 0;
+                const pol = this._polegarDaMao(arb.rig.rHand);
+                if (pol && pol.repouso !== undefined) pol.grupo.rotation.z = pol.repouso;
+            }
             arb.rig.lArm.rotation.set(0, 0, 0);
         }
         if (c && c.jogador && c.jogador.expulsaoPendente) {
@@ -2171,6 +2192,16 @@ const Officials = {
             rig.lElbow.rotation.x = P.le;
             rig.rArm.rotation.set(P.rx, 0, P.rz);
             rig.rElbow.rotation.x = P.re;
+            // A mao erguida rola-se para a palma (com o cartao) olhar o jogador (polegarRoll) e o polegar abre a 90
+            // graus dos dedos (polegarAbertura): com os dedos para cima fica PARALELO ao relvado. Volta ao normal ao guardar.
+            P.hy = lerpTo(P.hy || 0, mostrar ? C.polegarRoll : 0, k);
+            rig.rHand.rotation.y = P.hy;
+            const pol = this._polegarDaMao(rig.rHand);
+            if (pol) {
+                if (pol.repouso === undefined) pol.repouso = pol.grupo.rotation.z;
+                P.pz = lerpTo((P.pz === undefined) ? pol.repouso : P.pz, mostrar ? C.polegarAbertura : pol.repouso, k);
+                pol.grupo.rotation.z = P.pz;
+            }
         }
         if (this._cartaoMesh) {
             // Sai do bolso a subir e volta a desaparecer quando lá chega.

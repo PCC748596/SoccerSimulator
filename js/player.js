@@ -1286,7 +1286,8 @@ class FootballPlayer {
         if (Math.hypot(pos.x - q.x, pos.z - q.z) > 0.5) q.destino = { x: pos.x, z: pos.z };
 
         q.t += dt;
-        const K = amostrarClipQueda(q.t);
+        const clip = (typeof clipDaQueda === 'function') ? clipDaQueda() : QuedaClip;
+        const K = amostrarClipQueda(q.t, clip);
         q.x = q.x0 + q.dirX * K.avanco;
         q.z = q.z0 + q.dirZ * K.avanco;
         pos.x = q.x; pos.z = q.z;
@@ -1300,10 +1301,11 @@ class FootballPlayer {
             pos.y = ALTURA_BASE_Y;
         }
 
-        if (q.t >= QuedaClip.duracao) {
+        if (q.t >= clip.duracao) {
             this.queda = null;
-            // O rolamento acaba em 2 pi, que é 0: ver a nota do `rolarY` no QuedaClip.
-            if (this.rig && this.rig.pelvis) this.rig.pelvis.rotation.y = 0;
+            // O rolamento acaba em 2 pi, que é 0: ver a nota do `rolarY` no QuedaClip. O novo (QuedaFrenteClip)
+            // acaba com a bacia a 2 pi + 0.04 em X: tambem volta a zero, senao o idle desfazia a volta ao contrario.
+            if (this.rig && this.rig.pelvis) { this.rig.pelvis.rotation.y = 0; this.rig.pelvis.rotation.x = 0; }
             if (q.destino && Match.state !== 'PLAY') this.voltaDaQueda = q.destino;
         }
     }
@@ -4714,6 +4716,21 @@ class FootballPlayer {
             } else {
                 const B = BolaParadaAndada;
                 const pos = this.model.position;
+                /*
+                A CAMINHO DO LUGAR NAO PODE ESTAR NUM GESTO: quem fica com a FSM num estado de gesto (PASS,
+                BALL_CONTROL_RIGHT...) do lance anterior anda ate ao lugar com o animateBones a ignorar a
+                passada (esses estados nao a desenham) — relato "deslizam para as posicoes sem animacao
+                antes das faltas". Passa a SET_PIECE_WAIT e o ciclo de andar volta.
+                */
+                {
+                    const sg = this.fsm ? this.fsm.currentState : '';
+                    if (sg === 'PASS' || sg === 'BALL_CONTROL_RIGHT' || sg === 'SHOOT' || sg === 'SET_PIECE_KICK' ||
+                        sg === 'CROSS' || sg === 'DRIBBLE' || sg === 'CHEST_CONTROL' || sg === 'TACKLE') {
+                        this.actionState = null;
+                        this.passeComClip = false;
+                        this.fsm.changeState('SET_PIECE_WAIT');
+                    }
+                }
                 L.t += dt;
                 const d = Math.hypot(L.x - pos.x, L.z - pos.z);
                 if (Match.caidoAindaARolar()) {
@@ -5837,6 +5854,30 @@ class FootballPlayer {
         if (A && Math.abs(optPos.x) >= A.larguraAla && optPos.z * dirZ > -10) b += A.bonusReceptor * fiab;
         b += this.bonusPontaCercada(opt, optPos, progression, fiab, teamStyle);
         return b;
+    }
+
+    /*
+    DEVE DESLIZAR DE LADO a esta bola solta? Rasteira, lenta mas a andar, a passar a mais de
+    `deslizeLado.lateralMinSolta` e a menos de `lateralMax` (4 m) do corpo, e perto (`distMaxSolta`). A bola
+    parada ou a seus pes e do `apanhar`; a rapida e do mergulho do remate.
+    */
+    devoDeslizarDeLado(distBola) {
+        const DL = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive.deslizeLado : null;
+        if (!DL || !DL.soltaLenta || !DL.soltaLenta.activo || !Match.ball) return false;
+        const S = DL.soltaLenta;
+        const b = Match.ball.position;
+        if (b.y > S.alturaMax) return false;
+        const v = Match.ballVel.length();
+        if (v < S.velMin || v > S.velMax) return false;
+        // So se atira quando a bola vai estar ao alcance DENTRO de `tempo` s (o deslize dura isso; antes
+        // ficava deitado a espera dela). A previsao leva em conta o atrito: uma bola lenta para a meio.
+        if (distBola > S.distMax) return false;
+        const prev = (typeof preverBolaEm === 'function') ? preverBolaEm(S.tempo) : null;
+        const px = prev ? prev.x : b.x, pz = prev ? prev.z : b.z;
+        const dPrev = Math.hypot(px - this.model.position.x, pz - this.model.position.z);
+        if (dPrev > S.alcancePrevisto) return false;
+        const lateral = Math.abs(px - this.model.position.x);
+        return lateral >= S.lateralMin && lateral <= DL.lateralMax;
     }
 
     horaDeMergulhar(lateral, tempoAteChegar) {
@@ -7463,6 +7504,22 @@ class FootballPlayer {
                         alvoGkX = ancora.x;
                         alvoGkZ = ancora.z;
                         speedLerp = 3.5;
+                    } else if (!maosProibidas && !bolaForaDaArea && this.devoDeslizarDeLado(distBolaAgora)) {
+                        /*
+                        A BOLA LENTA QUE PASSA AO LADO: DESLIZE DE LADO. Em vez de ir atras dela (a deslizar de
+                        pe, de pernas paradas, e agachar-se so quando la chegava), atira-se ao deslize de lado
+                        deitado com as pernas para a bola (GoalkeeperDive.deslizeLado.pesPrimeiro): o gesto que
+                        devia acontecer e nao acontecia.
+                        */
+                        this.gkEstado = 'mergulho';
+                        this.dive = null;
+                        this.gkDirMergulho = Math.sign(Match.ball.position.x - gkCorpo.position.x) || 1;
+                        // Onde a bola vai estar quando o deslize la chegar.
+                        const SL = GoalkeeperDive.deslizeLado.soltaLenta;
+                        const prevSL = (typeof preverBolaEm === 'function') ? preverBolaEm(SL.tempo) : null;
+                        this.gkAlvoX = prevSL ? prevSL.x : Match.ball.position.x;
+                        this.gkAlvoY = Math.max(0.15, Match.ball.position.y);
+                        this.gkTipoMergulho = 'baixo';
                     } else {
                         alvoGkX = Match.ball.position.x;
                         alvoGkZ = Match.ball.position.z;
@@ -9224,7 +9281,16 @@ class FootballPlayer {
                 aqui a tentar agarrar frame apos frame, com a bola parada a
                 seus pes — um encrave.
                 */
-                if (dMaoApanhar > alcanceApanhar) this.gkEstado = 'idle';
+                /*
+                A BOLA A SEUS PES BASTA: agachado, as maos nem sempre chegam (0.96 m medido) a uma bola que
+                parou a 0.54 m do corpo, e ele repetia o gesto para sempre — 'apanhar', 'idle', 'apanhar' — sem
+                nunca a agarrar. Se ela esta junto ao corpo e quase parada, apanha-se na mesma: a bola sobe
+                para as maos (GoalkeeperPose.catchBlend) em vez de ficar ali. So se a bola fugiu a serio
+                (mais do que `apanharDistCorpo` do corpo ou ainda a andar) e que ele volta a decidir.
+                */
+                const distCorpoApanhar = gkCorpo.position.distanceTo(Match.ball.position);
+                const aoPe = distCorpoApanhar <= GoalkeeperPose.apanharDistCorpo && Match.ballVel.length() < 3.0;
+                if (dMaoApanhar > alcanceApanhar && !aoPe) this.gkEstado = 'idle';
                 else if (!this.grabBall()) this.gkEstado = 'idle';
             }
         } else if (this.gkEstado === 'segurando') {
@@ -10042,7 +10108,9 @@ class FootballPlayer {
         const vinhaDeEncaixe = !!(this.gkEstado === 'maos' && (this.gkEncaixe || this.gkBarreira));
         const vinhaDeMaos = (this.gkEstado === 'maos' && !this.gkEncaixe && !this.gkBarreira) || vinhaDeEncaixe;
         // Do encaixe ajoelhado levanta-se COM a bola nas maos (ver o ramo 'segurando').
-        this.gkLevanta = (vinhaDeEncaixe && !manterPose) ? { t: 0 } : null;
+        // Do APANHAR (bola rasteira a seus pes) tambem: agachado leva a bola as maos e so depois sobe com ela.
+        const vinhaDeApanhar = (this.gkEstado === 'apanhar');
+        this.gkLevanta = ((vinhaDeEncaixe || vinhaDeApanhar) && !manterPose) ? { t: 0 } : null;
         if (Match.ball && !manterPose && !vinhaDeEncaixe) {
             this.gkCatchBlend = { from: Match.ball.position.clone(), t: 0,
                 dur: (typeof GoalkeeperPose.catchBlend === 'number') ? GoalkeeperPose.catchBlend : 0.14 };
@@ -10112,7 +10180,7 @@ class FootballPlayer {
         durante essa transição ficava com um braço erguido/aberto, o outro
         já fechado na bola, uma pose assimétrica de "um braço no ar".
         */
-        if (this.rig && !manterPose && !vinhaDeMaos) {
+        if (this.rig && !manterPose && !vinhaDeMaos && !vinhaDeApanhar) {   // do apanhar fica agachado: levanta-se depois com a bola (gkLevanta)
             const P = GoalkeeperPose.segurar;
             this.rig.lLeg.rotation.x = P.coxa; this.rig.rLeg.rotation.x = P.coxa;
             this.rig.lKnee.rotation.x = P.joelho; this.rig.rKnee.rotation.x = P.joelho;

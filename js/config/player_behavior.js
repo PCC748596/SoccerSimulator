@@ -805,7 +805,15 @@ const BallControl = {
     garantido a tudo o que e rasteiro e tirava a dificuldade as bolas altas,
     que chegam a 11-16 m/s. Os dois numeros andam juntos.
     */
-    easySpeed: 18.0,      // abaixo disto domina-se sempre (a regra antiga)
+    easySpeed: 8.5,       // abaixo disto domina-se sempre (a regra antiga)
+    /*
+    O limiar do DOMINIO DO PRIMEIRO TOQUE (resolveBallContact), separado do `easySpeed`. Subiu-se o
+    `easySpeed` para 18 para os passes serem mais certos e isso estragou o guarda-redes: ele (e a
+    percepcao, `bb.controllable`) usam o `easySpeed` para decidir se a bola e "mansa" — com 18 passou a
+    tentar apanhar com a mao remates de ate 18 m/s em vez de se atirar a eles. O dominio do receptor
+    usa so este.
+    */
+    easySpeedDominio: 18.0,
     hardSpeed: 30.0,      // acima disto é praticamente impossível dominar
 
     /*

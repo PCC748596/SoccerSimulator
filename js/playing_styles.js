@@ -1059,6 +1059,21 @@ function aplicarTectoDoEstilo(p, targetZ, bb) {
         }
     }
 
+    /*
+    A FAIXA DO ORQUESTRADOR: sempre entre a linha da propria area e a metade do campo adversario
+    (PlayingStyles.orchestrator.faixaDeJogo). Pela configuracao e nao pelo `estiloAtivoDe`: o gatilho dele
+    (`bolaAvanco < 10`) desliga-o quando a equipa sobe, que e justamente quando ele ia longe de mais.
+    */
+    if (p && p.playingStyle === 'orchestrator' && !p.playingStyleDesligado &&
+        !(typeof Config !== 'undefined' && Config.usePlayingStyles === false)) {
+        const FJ = PlayingStyles.orchestrator && PlayingStyles.orchestrator.faixaDeJogo;
+        if (FJ) {
+            const zA = targetZ * p.dirZ;
+            if (zA > FJ.max) targetZ = FJ.max * p.dirZ;
+            else if (zA < FJ.min) targetZ = FJ.min * p.dirZ;
+        }
+    }
+
     const zAtaque = targetZ * p.dirZ;
 
     if (est && est.travaNaEntradaArea) {
