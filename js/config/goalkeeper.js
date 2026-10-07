@@ -1396,6 +1396,8 @@ const GoalkeeperDive = {
     O limite da distancia da BOLA ao goleiro (`distanciaMaxParaMergulhar`) mantem-se.
     */
     mergulhaSemAlcance: true,
+    // No voo o cotovelo fica com esta fraccao da flexao do IK (1 = igual a antes, 0 = braco direito).
+    cotoveloVooFator: 0.35,
 
     /*
     =====================================================================
@@ -1963,9 +1965,11 @@ const GoalkeeperDive = {
         coladas de perfil.
         */
         voo: {
-            coxaBaixo: -0.45, joelhoBaixo: 0.70,
-            coxaCima: -0.70, joelhoCima: 0.15,
-            abertura: 0.22, chest: -0.12
+            // PERNAS ESTICADAS (referencia GK_Jump3: corpo na horizontal, pernas direitas atras). Era
+            // joelhoBaixo 0.70 / joelhoCima 0.15 e coxas -0.45 / -0.70 (pernas dobradas, relato 2023).
+            coxaBaixo: -0.20, joelhoBaixo: 0.06,
+            coxaCima: -0.30, joelhoCima: 0.03,
+            abertura: 0.18, chest: -0.12
         },
 
         /*

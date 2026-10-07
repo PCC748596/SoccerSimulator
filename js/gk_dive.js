@@ -471,6 +471,12 @@ const GkDive = {
                 */
                 if (!d.agarrou) {
                     this.mirarBola(p, rig);
+                    // BRACOS ESTICADOS no ar (GK_Jump3): tira parte da flexao que o IK deixou nos cotovelos.
+                    const ee = D.cotoveloVooFator;
+                    if (typeof ee === 'number') {
+                        if (rig.lElbow) rig.lElbow.rotation.x *= ee;
+                        if (rig.rElbow) rig.rElbow.rotation.x *= ee;
+                    }
                     // Passado o instante do contacto, o braco de tras sai do
                     // IK e estica ao longo do corpo.
                     this.poseBracosVoo(rig, d, k);
@@ -585,6 +591,12 @@ const GkDive = {
                 os frames, e media-se o preco — um salto de angulo a cada
                 entrada na fase.
                 */
+                // A cabeca nao fica atirada para tras do chao (o ajuste anti-relva do pescoco): volta ao centro.
+                if (rig.neck) {
+                    rig.neck.rotation.x = lerpTo(rig.neck.rotation.x, 0, 0.35);
+                    rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.35);
+                    rig.neck.rotation.z = lerpTo(rig.neck.rotation.z, 0, 0.35);
+                }
                 this.poseLevantar(rig, s, d.agarrou);
                 if (d.agarrou) this.poseAbracoBola(rig, d);
                 this.maosForaDoRelvado(rig);
@@ -593,6 +605,7 @@ const GkDive = {
                     corpo.position.y = ALTURA_BASE_Y;
                     corpo.quaternion.copy(d.qFacing);
                     p.resetBonesToDefault();
+                    if (rig.neck) rig.neck.rotation.set(0, 0, 0);
                     /*
                     Se agarrou a meio do voo, a posse já foi registada nessa
                     altura (ver `defender`) mas o estado só muda agora — senão
@@ -1677,6 +1690,7 @@ const GkDive = {
             corpo.position.y = ALTURA_BASE_Y;
             corpo.quaternion.copy(d.qFacing);
             p.resetBonesToDefault();
+            if (rig && rig.neck) rig.neck.rotation.set(0, 0, 0);
             p.gkEstado = 'idle';
             p.gkRecuperacao = (typeof D.recuperacao === 'number') ? D.recuperacao : 0;
             p.gkTempoMergulho = 0;
