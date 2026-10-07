@@ -805,7 +805,7 @@ const BallControl = {
     garantido a tudo o que e rasteiro e tirava a dificuldade as bolas altas,
     que chegam a 11-16 m/s. Os dois numeros andam juntos.
     */
-    easySpeed: 8.5,       // abaixo disto domina-se sempre (a regra antiga)
+    easySpeed: 18.0,      // abaixo disto domina-se sempre (a regra antiga)
     hardSpeed: 30.0,      // acima disto é praticamente impossível dominar
 
     /*
@@ -825,7 +825,7 @@ const BallControl = {
     */
     easySpeedQueda: 16.0,
     alturaQueda: 0.8,
-    receiverBonus: 0.35,  // vantagem de quem é o destinatário do passe
+    receiverBonus: 0.80,  // vantagem de quem é o destinatário do passe
     touchLock: 0.35,      // segundos sem poder tocar depois de largar a bola
     retryLock: 0.25,      // segundos até nova tentativa depois de falhar uma
     deflectKeep: 0.45,    // fracção da velocidade que sobra num desvio

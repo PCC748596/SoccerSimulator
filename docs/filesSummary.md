@@ -11919,3 +11919,5 @@ nada sobre a causa. Passou a `atributoOuMedia`.
 - **Erro de remate**: `ShotModel.erro.escalaGlobal` 1.64 → 1.31 (−20%, pedido "reduz o erro em mais 20%"). Com 1.64 a % no alvo já estava em 32.9% (alvo 33.7%): esta descida empurra-a acima do alvo.
 
 - **Erro de remate**: `ShotModel.erro.escalaGlobal` 1.31 → 0.98 (−25%, pedido "melhora a pontaria, aumenta golos e finalizações no alvo"). Faixas de `remate_tipo_mira` remedidas (6 m 82%, 12 m 69%, 18 m 52%, 25 m 37%).
+
+- **Mais acerto no passe** (`BallControl.easySpeed` 8.5 → 18.0 m/s e `receiverBonus` 0.35 → 0.80, `player_behavior.js`): o domínio falhado era 9% dos passes (15-20% acima de 15 m). Sobe o domínio do receptor sem mexer na escolha do passe nem no erro de pontaria (cortar o erro de passe já se tentou e não resultou — ver `PassErrorModel`). Medido (40 jogos de 20 min): passes certos 72.1% → 76.8%. O resto da falta aos 80% são cortes (≈14% dos passes), que dependem da defesa.
