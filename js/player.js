@@ -8120,7 +8120,8 @@ class FootballPlayer {
             */
             const naPosturaDePenalti = (Match.state === 'PENALTY' || Match.state === 'FREE_KICK') &&
                 this.team !== Match.setPieceTeam;
-            const pelvisAlvo = (naPosturaDePenalti && GoalkeeperPose.penalti.pelvis) || 0;
+            // So PARADO: a andar (a deslocar-se na baliza antes da falta) a anca inclinada dava uma pose torta a deslizar.
+            const pelvisAlvo = (naPosturaDePenalti && Math.hypot(velX, velZ) <= 0.5 && GoalkeeperPose.penalti.pelvis) || 0;
             gkRig.pelvis.rotation.x = lerpTo(gkRig.pelvis.rotation.x, pelvisAlvo, 0.25);
             gkRig.pelvis.rotation.y = lerpTo(gkRig.pelvis.rotation.y, 0, 0.25);
             gkRig.pelvis.rotation.z = lerpTo(gkRig.pelvis.rotation.z, 0, 0.25);
