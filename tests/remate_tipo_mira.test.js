@@ -188,17 +188,18 @@ function distribuicao(dist, tec) {
 }
 
 test('precisão por distância, com um rematador médio', () => {
-    // Remedidas à escala 2.03 — ver a nota do intervalo, no fim do ficheiro.
+    // Remedidas à escala 1.31 (6 m 75%, 12 m 58%, 18 m 43%, 25 m 27%) — ver a nota do intervalo, no fim do ficheiro.
     const faixas = [
-        { dist: 6, min: 0.50, max: 0.70 },
-        { dist: 12, min: 0.32, max: 0.52 },
-        { dist: 18, min: 0.19, max: 0.39 },
-        { dist: 25, min: 0.10, max: 0.28 }
+        { dist: 6, min: 0.65, max: 0.85 },
+        { dist: 12, min: 0.48, max: 0.68 },
+        { dist: 18, min: 0.33, max: 0.53 },
+        { dist: 25, min: 0.17, max: 0.37 }
     ];
     for (const f of faixas) {
         const d = distribuicao(f.dist, 50);
         console.log(`  ${String(f.dist).padStart(2)} m: no alvo ${(d.dentro * 100).toFixed(0)}%  ` +
             `perto da madeira ${(d.madeira * 100).toFixed(0)}%  fora ${(d.fora * 100).toFixed(0)}%`);
+        if (process.env.MEDIR) continue;   // MEDIR=1 so imprime as distribuicoes (para remedir as faixas)
         assert.ok(d.dentro > f.min && d.dentro < f.max,
             `${f.dist} m: ${(d.dentro * 100).toFixed(0)}% no alvo, fora da faixa ` +
             `${(f.min * 100).toFixed(0)}-${(f.max * 100).toFixed(0)}%`);
@@ -283,7 +284,8 @@ como as anteriores, para continuarem a apanhar uma mudança que não seja esta.
 */
 test('a escala global fica dentro do intervalo calibrado', () => {
     const e = ShotModel.erro.escalaGlobal;
-    assert.ok(e >= 0.95 && e <= 2.10,
+    assert.ok(e >= 0.95 && e <= 2.10,   // 1.31 desde o corte de 20% a pedido (faixas remedidas a esta escala)
+        
         `escala global em ${e}: fora do intervalo em que as faixas de precisão ` +
         'acima foram medidas — remede-as antes de a deixar aqui');
 });

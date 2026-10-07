@@ -722,7 +722,12 @@ const ShotModel = {
         (54%), 1.65 golos contra 2.52 (65%) e 29% no alvo contra 33.7%: o erro de execução acumulado
         nas cinco subidas era o que mais tirava remates da moldura. Mede-se de novo no lote seguinte.
         */
-        escalaGlobal: 1.64
+        /*
+        1.64 -> 1.31, MENOS 20% (*"reduz o erro em mais 20%"*). Aviso medido: com 1.64 o lote de 380 jogos
+        dava 32.9% dos remates no alvo contra 33.7% do benchmark BR 2025 — ja no alvo —, por isso esta
+        descida empurra a % no alvo para cima dele e aumenta golos e defesas. Mede-se no lote seguinte.
+        */
+        escalaGlobal: 1.31
     }
 };
 
