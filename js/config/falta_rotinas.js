@@ -49,8 +49,12 @@ const FaltaRotinas = {
     zMax: 42.0,
     // Falta pela ala: |x| a partir do qual se usa a rotina "wide".
     alaX: 14.0,
-    // Segundos antes da cobranca em que o tracejado arranca.
-    tempoCorrida: 1.6,
+    // O TRACEJADO ARRANCA 200 ms ANTES DO CONTACTO do batedor (pedido: *"eles tem que se movimentar 200 ms antes
+    // do cobrador tocar na bola"*) e nao antes: era 1.6 s antes da cobranca. Contado a partir do contacto
+    // do gesto de bola parada (ver baterFalta em player.js).
+    tempoCorrida: 0.20,
+    // Depois do ultimo passo as ordens de corrida duram mais isto (s): os atacantes acabam o tracejado.
+    sobraDepoisDoFim: 1.5,
     // Velocidade das corridas tracejadas (m/s).
     velCorrida: 5.5,
     // Quem marca fica deste lado do atacante, em direccao a baliza (m).

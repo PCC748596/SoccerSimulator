@@ -273,11 +273,7 @@ Object.assign(Match, {
                 que havia, `recuoBatedor` de 1.4 m) não há cobrança nenhuma para
                 ver: a bola parecia saltar-lhe para o pé.
                 */
-                // O tracejado da rotina: arranca um pouco antes da cobranca (ver dispararCorridasDaFalta).
-                if (this.rotinaPlano && !this.rotinaPlano.disparou &&
-                    this.faltaAtraso <= FaltaRotinas.tempoCorrida) {
-                    this.dispararCorridasDaFalta(this.rotinaPlano);
-                }
+                // (O tracejado da rotina arranca 200 ms antes do CONTACTO, no gesto do batedor: ver baterFalta.)
                 const takerFalta = this.setPieceTaker;
                 const FK = FreeKickModel;
                 // O guarda-redes faz a caminhada no proprio `updateGK`

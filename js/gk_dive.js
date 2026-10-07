@@ -837,7 +837,7 @@ const GkDive = {
     baixo da linha ombro-mão, mesmo com o corpo deitado. Ver a nota sobre pole
     vectors em js/ik.js.
     */
-    apontarBracos(rig, peso) {
+    apontarBracos(rig, peso, lados) {
         const D = GoalkeeperDive;
         const C = IKChains.braco;
 
@@ -877,8 +877,9 @@ const GkDive = {
         }
 
         const w = (typeof peso === 'number') ? peso : D.pesoIK;
-        IK.resolverSuave(rig.lArm, rig.lElbow, C.L1, C.L2, this._alvoMao, this._cima, w);
-        IK.resolverSuave(rig.rArm, rig.rElbow, C.L1, C.L2, this._alvoMao, this._cima, w);
+        // `lados` (['l'], ['r']) restringe o IK a um braco: o outro fica com a pose que lhe der quem chama (o soco).
+        if (!lados || lados.indexOf('l') >= 0) IK.resolverSuave(rig.lArm, rig.lElbow, C.L1, C.L2, this._alvoMao, this._cima, w);
+        if (!lados || lados.indexOf('r') >= 0) IK.resolverSuave(rig.rArm, rig.rElbow, C.L1, C.L2, this._alvoMao, this._cima, w);
     },
 
     /*

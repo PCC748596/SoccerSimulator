@@ -125,7 +125,9 @@ Object.assign(Match, {
         const FR = FaltaRotinas;
         const ir = (p, x, z) => {
             if (!p || !p.model || p === plano.taker) return;
+            // Pre-contacto: a caminhada de bola parada; depois do contacto (PLAY) a ordem do PlayerAI continua o tracejado.
             p.lugarBolaParada = { x: x, z: z, t: 0, vel: FR.velCorrida };
+            p.rotinaOrdem = { tipo: 'ir', x: x, z: z, vel: FR.velCorrida };
         };
         plano.corridas.forEach(c => ir(c.p, c.x, c.z));
         plano.marcadores.forEach(m => { if (m.corrida) ir(m.d, m.corrida.x, m.corrida.z); });
@@ -219,7 +221,13 @@ Object.assign(Match, {
             if (pl.tFase > 1.0) this.encerrarRotinaDaFalta();
             return;
         }
-        if (pl.fase >= pl.passos.length) { this.encerrarRotinaDaFalta(); return; }
+        // Quem so tinha a corrida (nao e dos passos) larga-a quando a bola e de outra equipa: tratado abaixo.
+        if (pl.fase >= pl.passos.length) {
+            // A cadeia acabou: as ordens de corrida ainda duram `sobraDepoisDoFim` s.
+            pl.depoisT = (pl.depoisT || 0) + dt;
+            if (pl.depoisT >= FR.sobraDepoisDoFim) this.encerrarRotinaDaFalta();
+            return;
+        }
         pl.tFase += dt;
         const portador = this.ballCarrier;
         if (pl.tFase > FR.prazoPasso || (portador && portador.team !== pl.taker.team)) {
@@ -254,6 +262,7 @@ Object.assign(Match, {
             const p = pl.jogadores[n];
             if (p) p.rotinaOrdem = null;
         }
+        (pl.marcadores || []).forEach(m => { if (m.d) m.d.rotinaOrdem = null; });
         this.rotinaPlano = null;
     }
 });

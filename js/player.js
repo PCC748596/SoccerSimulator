@@ -1807,6 +1807,13 @@ class FootballPlayer {
         this.actionState = new ActionState(clip, {
             // Corpo pela curva `avanco` do clip (ver PlayerKickClip).
             onPrepare: (ctx, norm) => {
+                // O TRACEJADO DA ROTINA: arranca `FaltaRotinas.tempoCorrida` (200 ms) antes do contacto.
+                const planoR = Match.rotinaPlano;
+                if (planoR && !planoR.disparou && typeof FaltaRotinas !== 'undefined') {
+                    const durClip = ActionAnimClips[clip] ? ActionAnimClips[clip].duration : 0.55;
+                    const faltaT = Math.max(0, (dur - norm)) * durClip;
+                    if (faltaT <= FaltaRotinas.tempoCorrida) Match.dispararCorridasDaFalta(planoR);
+                }
                 const K = amostrarClipPlayerKick(Math.min(1, norm / dur));
                 const k = (typeof K.avanco === 'number') ? K.avanco : Math.min(1, norm / dur);
                 this.model.position.x = inicio.x + (fim.x - inicio.x) * k;
@@ -9077,11 +9084,6 @@ class FootballPlayer {
                 gkRig.rArm.rotation.z = lerpTo(gkRig.rArm.rotation.z, -alvoZSalto, 0.3);
                 gkRig.lArm.rotation.x = lerpTo(gkRig.lArm.rotation.x, alvoXSalto, 0.3);
                 gkRig.rArm.rotation.x = lerpTo(gkRig.rArm.rotation.x, alvoXSalto, 0.3);
-                gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, 1.2, 0.3);
-                gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, 1.2, 0.3);
-            } else if (t < 0.6) {
-                gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, 0.6, 0.2);
-                gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, 0.6, 0.2);
             } else if (t < 1.2) {
                 gkCorpo.position.y = lerpTo(gkCorpo.position.y, ALTURA_BASE_Y, 0.2);
                 gkRig.lArm.rotation.z = lerpTo(gkRig.lArm.rotation.z, 0.5, 0.15);
@@ -9100,6 +9102,24 @@ class FootballPlayer {
                 this.gkEstado = 'idle';
                 this.gkSoco = null;
                 this.resetBonesToDefault();
+            }
+
+            /*
+            AS PERNAS SAO AS DO SALTO DE CABECEIO (pedido: *"o pulo do soco e o da defesa sao iguais ao da
+            cabecada: pernas quase retas, so mudam os bracos"*): a mesma curva do joelho — dobra no inicio da
+            subida e volta a esticar bem antes do pico — e a mesma coxa quase direita. Antes ficava a 1.2 rad
+            (69 graus) de joelho a subir e 0.6 no pico.
+            */
+            if (t < 1.2) {
+                const SC = (typeof SaltoCabeceio !== 'undefined') ? SaltoCabeceio.duracao : 0.62;
+                const pj = THREE.MathUtils.clamp(t / SC, 0, 1);
+                const kneeSalto = (pj < 0.28)
+                    ? Math.sin(THREE.MathUtils.clamp(pj / 0.28, 0, 1) * Math.PI / 2) * 1.0
+                    : 1.0 * (1 - THREE.MathUtils.clamp((pj - 0.28) / 0.30, 0, 1));
+                gkRig.lKnee.rotation.x = lerpTo(gkRig.lKnee.rotation.x, kneeSalto, 0.5);
+                gkRig.rKnee.rotation.x = lerpTo(gkRig.rKnee.rotation.x, kneeSalto, 0.5);
+                gkRig.lLeg.rotation.x = lerpTo(gkRig.lLeg.rotation.x, 0.10 * Math.sin(pj * Math.PI), 0.5);
+                gkRig.rLeg.rotation.x = lerpTo(gkRig.rLeg.rotation.x, 0.10 * Math.sin(pj * Math.PI), 0.5);
             }
 
             /*
@@ -9125,7 +9145,9 @@ class FootballPlayer {
             condição que o teste da defesa usa mais abaixo.
             */
             if (t < 0.7 && typeof GkDive !== 'undefined' && GkDive.apontarBracos) {
-                GkDive.apontarBracos(gkRig);
+                // No soco o IK e so do braco da MIRA; o do soco esta no V (ver animarSocoNoSalto).
+                GkDive.apontarBracos(gkRig, undefined,
+                    (this.gkSoco && this.gkSoco.lado) ? [this.gkSoco.lado === 'r' ? 'l' : 'r'] : null);
             }
             // O braco do soco, por cima do IK: arma para tras e golpeia para a frente.
             if (this.gkSoco) this.animarSocoNoSalto(t);
@@ -9772,12 +9794,14 @@ class FootballPlayer {
         const rig = this.rig;
         const S = (typeof GkSaidaCruzamento !== 'undefined') ? GkSaidaCruzamento.socoAnim : null;
         if (!rig || !S) return;
-        const sinal = (lado === 'r') ? -1 : 1;
         const arm = rig[lado + 'Arm'], cot = rig[lado + 'Elbow'];
-        arm.rotation.x = lerpTo(arm.rotation.x, S.armaX, w);
-        arm.rotation.z = lerpTo(arm.rotation.z, sinal * S.armaZ, w);
-        cot.rotation.x = lerpTo(cot.rotation.x, S.armaCotovelo, w);
-        rig.chest.rotation.x = lerpTo(rig.chest.rotation.x, S.peitoArma, w);
+        // A pose em V (braco para tras, antebraco para a frente, paralelos ao relvado): ver socoAnim.V.
+        const V = S.V;
+        const sg = (lado === 'r') ? 1 : -1;
+        arm.rotation.x = lerpTo(arm.rotation.x, V.x, w);
+        arm.rotation.y = lerpTo(arm.rotation.y, sg * V.y, w);
+        arm.rotation.z = lerpTo(arm.rotation.z, sg * V.z, w);
+        cot.rotation.x = lerpTo(cot.rotation.x, V.cotovelo, w);
     }
 
     /*
@@ -9849,35 +9873,46 @@ class FootballPlayer {
         const so = this.gkSoco;
         if (!rig || !so) return;
         const lado = so.lado;
+        const ladoMira = (lado === 'r') ? 'l' : 'r';
         const arm = rig[lado + 'Arm'], cot = rig[lado + 'Elbow'];
-        const sinal = (lado === 'r') ? -1 : 1;          // rArm abre com z negativo
+        const armM = rig[ladoMira + 'Arm'], cotM = rig[ladoMira + 'Elbow'];
+        const V = S.V;
+        const sgP = (lado === 'r') ? 1 : -1, sgM = -sgP;     // o V e escrito para o direito; o esquerdo e o espelho
         const tGolpeFim = so.tc;
         const tGolpeIni = tGolpeFim - S.golpe;
-        // Ja vinha armado da corrida: segura. Senao arma, comprimido, desde o arranque.
+        // Ja vinha armado da corrida: segura. Senao forma o V desde o arranque.
         const tArmaIni = so.preArmado ? -1 : 0;
         const liso = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
-        // Depois do contacto, segura o braco la e solta.
+        // Depois do contacto, segura os bracos la e solta.
         if (so.golpeado && so.tGolpe === null) so.tGolpe = t;
         const fim = (so.tGolpe !== null ? so.tGolpe : tGolpeFim) + S.segura;
         if (t > fim) { this.gkSoco = null; return; }
         if (t < tArmaIni) return;
-        let x, z, c, peito;
-        if (t < tGolpeIni) {                              // arma: para tras
-            const u = so.preArmado ? 1 : liso((t - tArmaIni) / Math.max(0.001, tGolpeIni - tArmaIni));
-            if (so.x0 === undefined) { so.x0 = arm.rotation.x; so.z0 = arm.rotation.z; so.c0 = cot.rotation.x; }
-            x = THREE.MathUtils.lerp(so.x0, S.armaX, u);
-            z = THREE.MathUtils.lerp(so.z0, sinal * S.armaZ, u);
-            c = THREE.MathUtils.lerp(so.c0, S.armaCotovelo, u);
-            peito = S.peitoArma * u;
-        } else {                                          // golpe: para a frente
+        const poeV = (a, c, sg, u) => {
+            a.rotation.x = THREE.MathUtils.lerp(a.rotation.x, V.x, u);
+            a.rotation.y = THREE.MathUtils.lerp(a.rotation.y, sg * V.y, u);
+            a.rotation.z = THREE.MathUtils.lerp(a.rotation.z, sg * V.z, u);
+            c.rotation.x = THREE.MathUtils.lerp(c.rotation.x, V.cotovelo, u);
+        };
+        if (t < tGolpeIni) {
+            // ANTES DO GOLPE: o braco do soco forma o V (para tras, antebraco para a frente); o da MIRA segue a bola (IK).
+            const u = so.preArmado ? 1 : liso((t - tArmaIni) / Math.max(0.001, Math.min(S.vFormar, tGolpeIni - tArmaIni)));
+            if (so.x0 === undefined) { so.x0 = arm.rotation.x; so.y0 = arm.rotation.y; so.z0 = arm.rotation.z; so.c0 = cot.rotation.x; }
+            arm.rotation.x = THREE.MathUtils.lerp(so.x0, V.x, u);
+            arm.rotation.y = THREE.MathUtils.lerp(so.y0, sgP * V.y, u);
+            arm.rotation.z = THREE.MathUtils.lerp(so.z0, sgP * V.z, u);
+            cot.rotation.x = THREE.MathUtils.lerp(so.c0, V.cotovelo, u);
+        } else {
+            // A BOLA CHEGOU: INVERTE-SE. O da mira vai para o V; o do soco vai a frente, a bola (IK).
             const u = liso((t - tGolpeIni) / Math.max(0.001, S.golpe));
-            x = THREE.MathUtils.lerp(S.armaX, S.golpeX, u);
-            z = THREE.MathUtils.lerp(sinal * S.armaZ, sinal * S.golpeZ, u);
-            c = THREE.MathUtils.lerp(S.armaCotovelo, S.golpeCotovelo, u);
-            peito = THREE.MathUtils.lerp(S.peitoArma, S.peitoGolpe, u);
+            if (so.mx === undefined) { so.mx = armM.rotation.x; so.my = armM.rotation.y; so.mz = armM.rotation.z; so.mc = cotM.rotation.x; }
+            armM.rotation.x = THREE.MathUtils.lerp(so.mx, V.x, u);
+            armM.rotation.y = THREE.MathUtils.lerp(so.my, sgM * V.y, u);
+            armM.rotation.z = THREE.MathUtils.lerp(so.mz, sgM * V.z, u);
+            cotM.rotation.x = THREE.MathUtils.lerp(so.mc, V.cotovelo, u);
+            // O do soco: do V para o IK da bola, peso a subir; no fim esta em cima dela.
+            if (typeof GkDive !== 'undefined' && GkDive.apontarBracos) GkDive.apontarBracos(rig, Math.max(0.15, u), [lado]);
         }
-        arm.rotation.x = x; arm.rotation.z = z; cot.rotation.x = c;
-        rig.chest.rotation.x = peito;
     }
 
     resolverSaidaAoCruzamento() {

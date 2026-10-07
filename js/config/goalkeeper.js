@@ -855,7 +855,19 @@ const GkSaidaCruzamento = {
         contacto: 0.14, armaDistancia: 4.0,
         armar: 0.13, golpe: 0.09, segura: 0.20,
         armaX: 0.75, armaZ: 0.55, armaCotovelo: -1.90, peitoArma: -0.25,
-        golpeX: -2.50, golpeZ: 0.35, golpeCotovelo: -0.15, peitoGolpe: 0.30
+        golpeX: -2.50, golpeZ: 0.35, golpeCotovelo: -0.15, peitoGolpe: 0.30,
+        /*
+        A POSE EM V (pedido): *"quando o goleiro pula para o soco, o braco da mira acompanha a trajectoria
+        da bola enquanto o outro braco vai para tras fazendo um V; quando a bola chega perto do ponto do
+        soco INVERTE-SE: o da mira vai para o V e o do soco vai a frente bater na bola. O V fica paralelo ao
+        gramado: braco do soco para tras, antebraco e mao para a frente"*. Angulos do BRACO DIREITO ('r'):
+        ombro (x, y, z) e cotovelo, achados por busca no rig com o corpo de frente (braco para tras a y 0,
+        antebraco para a frente-fora a y 0 — medido: braco (-0.05, -0.07, -1.00), antebraco (-0.46, -0.02,
+        0.89) no referencial do corpo). O esquerdo e o espelho: y e z com o sinal trocado.
+        */
+        V: { x: 1.20, y: -1.40, z: -0.30, cotovelo: -2.60 },
+        // Segundos para a pose em V se formar (o braco do soco, a partir do arranque do salto).
+        vFormar: 0.12
     },
     anguloSocoGraus: 10,     // o soco abre até isto para cada lado da trajectória
     velocidadeSoco: 14.4,    // m/s à saída do punho: 1.2x a cabeçada na área (~12 m/s medido); era 16
