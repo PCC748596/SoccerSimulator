@@ -788,6 +788,8 @@ class FootballPlayer {
         } else {
             Match.ball.position.copy(_v1);
         }
+        // Apoiada no relvado, nunca por baixo dele (o goleiro caido com a bola nas maos).
+        if (Match.ball.position.y < BallPhysics.raio) Match.ball.position.y = BallPhysics.raio;
         Match.ballVel.set(0, 0, 0);
     }
 
@@ -5783,7 +5785,9 @@ class FootballPlayer {
         const D = (typeof GoalkeeperDive !== 'undefined') ? GoalkeeperDive : null;
         if (!D || typeof D.distanciaMaxParaMergulhar !== 'number') return false;
         if (typeof Match === 'undefined' || !Match.ball) return false;
+        // Em 3D (a bola alta tambem esta longe): o teste gk_salta_no_momento mede assim.
         const d = Math.hypot(Match.ball.position.x - this.model.position.x,
+            Match.ball.position.y - this.model.position.y,
             Match.ball.position.z - this.model.position.z);
         return d > D.distanciaMaxParaMergulhar;
     }
@@ -7331,7 +7335,8 @@ class FootballPlayer {
                     } else if (Math.abs(lateral) < GoalkeeperPose.mergulhoLateralMin) {
                         this.gkEstado = 'maos';
                     } else if (!this.isPenaltyDive && (
-                        Math.abs(interXLido - gkCorpo.position.x) > this.alcanceDoMergulho(tempoAteGolo) ||
+                        (!GoalkeeperDive.mergulhaSemAlcance &&
+                            Math.abs(interXLido - gkCorpo.position.x) > this.alcanceDoMergulho(tempoAteGolo)) ||
                         this.bolaLongeParaMergulhar())) {
                         /*
                         LONGE DE MAIS: não se atira. Ver `alcanceDoMergulho` e
@@ -7937,8 +7942,9 @@ class FootballPlayer {
                                     altura é a âncora, ou seja a posição em que o
                                     remate o apanhou.
                                     */
-                                } else if (!this.isPenaltyDive &&
-                                    Math.abs((alvoEsp ? alvoEsp.x : espX) - gkCorpo.position.x) > this.alcanceDoMergulho(alvoEspT)) {
+                                } else if (!this.isPenaltyDive && (this.bolaLongeParaMergulhar() ||
+                                    (!GoalkeeperDive.mergulhaSemAlcance &&
+                                    Math.abs((alvoEsp ? alvoEsp.x : espX) - gkCorpo.position.x) > this.alcanceDoMergulho(alvoEspT)))) {
                                     /*
                                     LONGE DE MAIS PARA SE ATIRAR — o mesmo tecto
                                     do outro ramo (ver alcanceDoMergulho). Este

@@ -243,9 +243,9 @@ const RefereeModel = {
         tGuardar: 0.8,
         tIrMax: 6.0,
         chegou: 0.35,
-        // Mais de 2x o de antes (era 12 x 16): de pe, de longe e com a espessura de 4 mm, nao se via.
-        largura: 0.22,
-        alturaCartao: 0.30,
+        // Mais de 2x o de antes (era 12 x 16): de pe, de longe e com a espessura de 4 mm, nao se via. Depois reduzido 20% (22 x 30 -> 17,6 x 24 cm).
+        largura: 0.176,
+        alturaCartao: 0.24,
         // O POLEGAR da mao erguida: rola-se a mao em torno do antebraco (rotation.y da mao) para o polegar
         // ficar paralelo ao relvado e a palma (com o cartao) virada para o jogador. Radianos.
         polegarRoll: -1.57,
@@ -1632,6 +1632,33 @@ const Officials = {
     },
 
     /*
+    O AVISO GRANDE AO CENTRO, `duracaoAviso` s, igual ao GOOL! — pedido: *"FOUL !!!, CORNER KICK, GOAL KICK, etc.
+    por uns 3 s da mesma maneira que aparece GOOL"* e *"YELLOW CARD !, RED CARD !"*. So as marcacoes da tabela
+    `avisosCentrais` (o "CARA A CARA 30°" e outras etiquetas de depuracao ficam so no banner do arbitro).
+    */
+    duracaoAviso: 3.0,
+    avisosCentrais: {
+        'FOUL': 'FOUL !!!', 'PENALTY': 'PENALTY !!!', 'CORNER': 'CORNER KICK', 'GOAL KICK': 'GOAL KICK',
+        'THROW-IN': 'THROW-IN', 'OFFSIDE': 'OFFSIDE !', 'YELLOW CARD': 'YELLOW CARD !', 'RED CARD': 'RED CARD !'
+    },
+    avisoCentral: function (texto) {
+        const t = this.avisosCentrais[texto];
+        if (!t || typeof document === 'undefined') return;
+        const el = document.getElementById('alerta-jogo');
+        if (!el) return;
+        el.textContent = t;
+        el.style.opacity = '1';
+        el.style.transform = 'translate(-50%, -50%) scale(1.2)';
+        const marca = (this._avisoMarca = (this._avisoMarca || 0) + 1);
+        setTimeout(() => { if (this._avisoMarca === marca) el.style.transform = 'translate(-50%, -50%) scale(1)'; }, 150);
+        setTimeout(() => {
+            if (this._avisoMarca !== marca) return;
+            el.style.opacity = '0';
+            el.style.transform = 'translate(-50%, -50%) scale(0.5)';
+        }, this.duracaoAviso * 1000);
+    },
+
+    /*
     Escreve a etiqueta por cima do arbitro, reaproveitando o banner dos
     jogadores (player.js, showActionBanner).
 
@@ -1642,6 +1669,8 @@ const Officials = {
     */
     anunciar: function (texto) {
         if (!texto) return;
+        // O aviso grande ao centro, como o GOOL!: independente do arbitro estar visivel.
+        this.avisoCentral(texto);
         if (!this._ativo) return;
         const arb = this.arbitro;
         if (!arb || !arb.jogador || typeof arb.jogador.showActionBanner !== 'function') return;

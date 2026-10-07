@@ -458,6 +458,24 @@ button.btn-action:active {
     z-index: 100;
 }
 
+/* O aviso grande das marcacoes (FOUL !!!, CORNER KICK, GOAL KICK, cartoes...): como o GOOL!, 3 s. */
+#alerta-jogo {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    font-size: 64px;
+    font-weight: 900;
+    white-space: nowrap;
+    color: #f8fafc;
+    text-shadow: 4px 4px 0px #1d4ed8, 0 0 30px rgba(59, 130, 246, 0.8);
+    font-style: italic;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 100;
+}
+
 #hud-info {
     /* Retirados absolute, top e right. O container fica normal dentro do novo painel */
     background: transparent;

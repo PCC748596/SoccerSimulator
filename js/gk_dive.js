@@ -799,6 +799,41 @@ const GkDive = {
                 Match.ball.position.y = BallPhysics.raio;
             }
 
+            /*
+            DE PEITO PARA BAIXO A BOLA FICA NO RELVADO, A FRENTE, e as maos em cima dela — relato com
+            capturas (aterragem da defesa baixa): *"a bola tem que ficar apoiada no gramado; nao pode entrar
+            para baixo"*. O ponto do peito (frente do peito) aponta ao chao quando ele esta de bruços, e a bola
+            ia presa por baixo do tronco (ou a pairar a 0.2 m do chao). Com a frente do peito a apontar para
+            baixo (`bolaNoRelvado.fwdY`), a bola passa (suavemente) para `bolaNoRelvado.avanco` m a frente
+            do peito, na direcao da cabeca, assente no relvado; os dois bracos vao a ela pelo IK.
+            */
+            const BR = D.bolaNoRelvado;
+            if (BR) {
+                this._vLocal.set(0, 0, 1).applyQuaternion(this._qOsso);
+                const fx = this._vLocal.x, fz = this._vLocal.z;
+                const wFrente = THREE.MathUtils.clamp((-this._vLocal.y - BR.fwdY) / 0.3, 0, 1);
+                // Tambem deitado de lado (peito baixo): a bola nao pode pairar acima do relvado.
+                const wBaixo = THREE.MathUtils.clamp((BR.pitoAte - this._v.y) / BR.pitoFaixa, 0, 1);
+                const wR = Math.max(wFrente, wBaixo);
+                if (wR > 0) {
+                    // Frente do peito no plano do relvado; de bruços (aponta ao chao) a direcao da cabeca.
+                    let dx = fx, dz = fz;
+                    if (Math.hypot(dx, dz) < 0.5) {
+                        this._vLocal.set(0, 1, 0).applyQuaternion(this._qOsso);
+                        dx = this._vLocal.x; dz = this._vLocal.z;
+                    }
+                    const hl = Math.hypot(dx, dz) || 1;
+                    const gx = this._v.x + (dx / hl) * BR.avanco;
+                    const gz = this._v.z + (dz / hl) * BR.avanco;
+                    const bp = Match.ball.position;
+                    bp.x += (gx - bp.x) * wR;
+                    bp.z += (gz - bp.z) * wR;
+                    bp.y += (BallPhysics.raio - bp.y) * wR;
+                    Match.ballVel.set(0, 0, 0);
+                    this.apontarBracos(rig, wR);
+                }
+            }
+
             Match.ballVel.set(0, 0, 0);
         }
 
@@ -1080,6 +1115,7 @@ const GkDive = {
         guarda-redes faz é tirá-la do caminho. Devolvê-la ao miólo seria
         oferecer a recarga à boca da baliza.
         */
+        const vIn0 = Match.ballVel.clone();
         const destino = semAgarrar ? 'canto' : destinoDaEspalmada({
             qualidade: qualidade,
             podeSair: alta || (folgaPoste < D.espalmarForaMargem)
@@ -1175,6 +1211,15 @@ const GkDive = {
             Match.ballVel.z *= -0.30;
             Match.ballVel.x = Match.ballVel.x * 0.3 + (Math.random() - 0.5) * 3;
             Match.ballVel.y += 1.5;
+        }
+        // A rebatida (qualquer destino) nunca e mais forte do que o remate (ver espalmarSaidaFrac).
+        {
+            const vIn = Math.hypot(vIn0.x, vIn0.y, vIn0.z);
+            // Para canto a bola TEM de passar o poste/travessao a tempo (senao entra): piso proprio.
+            const piso = (destino === 'canto') ? Math.max(D.espalmarSaidaMin, D.espalmarVMax * 1.4) : D.espalmarSaidaMin;
+            const vTecto = Math.max(piso, vIn * D.espalmarSaidaFrac);
+            const vOut = Match.ballVel.length();
+            if (vOut > vTecto) Match.ballVel.multiplyScalar(vTecto / vOut);
         }
         Match.lastTouchedPlayer = p;
         Match.lastTouchedTeam = p.team;
@@ -1587,6 +1632,28 @@ const GkDive = {
         `amorteceX`/`amorteceZ`, cotovelo dobrado) e abrem depois para a pose deitada do clip (os
         dois bracos a frente, em V rente ao relvado) — que nao escora o corpo.
         */
+        /*
+        OS BRACOS NAO VOLTAM A FICAR "DENTRO" DO CORPO — relato com capturas 11B42/771A/EA2B: *"posiciona
+        os bracos e depois voltam a ficar dentro do corpo; sobe com os bracos colados; gira na mesma
+        posicao com a cabeca para tras"*.
+        Para o GR, a levantar, os bracos ficam no V de apoio da flexao (`amorteceX/Z`) a LEVANTAR, enquanto
+        o tronco ainda esta perto da horizontal (`pitchX` > `levantarBracosAte`), e so entao
+        passam aos do clip. A cabeca fica a direito (a do clip vai para tras: `cabecaX` negativo).
+        */
+        if (D.levantarApoioBracos && typeof D.amorteceX === 'number') {
+            const ate = (typeof D.levantarBracosAte === 'number') ? D.levantarBracosAte : 0.9;
+            let wA = 0;
+            if (c.fase === 'levantar') {
+                wA = THREE.MathUtils.clamp((K.pitchX - (ate - 0.5)) / 0.5, 0, 1);
+            }
+            if (wA > 0) {
+                const mixV = (v0, v1) => v0 + (v1 - v0) * wA;
+                K.bracoLx = mixV(K.bracoLx, D.amorteceX); K.bracoRx = mixV(K.bracoRx, D.amorteceX);
+                K.bracoLz = mixV(K.bracoLz, D.amorteceZ); K.bracoRz = mixV(K.bracoRz, -D.amorteceZ);
+                K.cotoveloL = mixV(K.cotoveloL, D.amorteceCotovelo); K.cotoveloR = mixV(K.cotoveloR, D.amorteceCotovelo);
+            }
+            if (c.fase === 'levantar') K.cabecaX = Math.max(K.cabecaX, 0);
+        }
         if (c.fase === 'chao' && typeof D.amorteceDur === 'number' && c.t < D.amorteceDur) {
             const u = c.t / D.amorteceDur, w = u * u * (3 - 2 * u);
             const mixA = (v0, v1) => v0 + (v1 - v0) * w;

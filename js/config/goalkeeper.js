@@ -1388,6 +1388,14 @@ const GoalkeeperDive = {
     */
     alcanceLateralMin: 4.0,
     alcanceLateralMax: 6.0,
+    /*
+    MERGULHA MESMO SEM ALCANCE — pedido: *"varios chutes passam ao lado do goleiro e ele nao pula; parece que
+    so pula quando vai conseguir defender. O goleiro pode pular mesmo nao conseguindo"*. Com `true` o tecto de
+    cima (`alcanceDoMergulho`, nos dois ramos que decidem o mergulho) deixa de impedir o salto: ele atira-se
+    a bola que vai a baliza mesmo que passe fora do seu alcance. `false` volta ao comportamento anterior.
+    O limite da distancia da BOLA ao goleiro (`distanciaMaxParaMergulhar`) mantem-se.
+    */
+    mergulhaSemAlcance: true,
 
     /*
     =====================================================================
@@ -1681,6 +1689,9 @@ const GoalkeeperDive = {
     =========================================================================
     */
     quedaNoAlto: true,
+    // A LEVANTAR os bracos ficam no V de apoio (amortece*), ate o tronco passar de `pitchX` < levantarBracosAte.
+    levantarApoioBracos: true,
+    levantarBracosAte: 0.9,
     fracFrentePorTipo: { alto: 0.35 },
 
     rolamentoAlto: {
@@ -1905,7 +1916,13 @@ const GoalkeeperDive = {
     chegou, que e um desfecho de futebol e nao um defeito.
     */
     espalmarTempoMin: 0.08,
-    espalmarVMax: 16.0,
+    // 16 -> 10 e o tecto relativo abaixo: *"a rebatida do goleiro esta muito forte"*. Medido: espalmadas a
+    // 15 m/s saiam a 21 m/s (vx 14 + vy 16).
+    espalmarVMax: 10.0,
+    // A bola nunca sai da mao mais rapida do que `espalmarSaidaFrac` x a que chegou (com o piso
+    // `espalmarSaidaMin`, para ainda poder passar o poste/travessao).
+    espalmarSaidaFrac: 0.85,
+    espalmarSaidaMin: 9.0,
     ombroY: 1.35,          // altura do ombro acima da origem, de pé
 
     // Pose das pernas em voo: estendidas e ligeiramente abertas.
@@ -2127,6 +2144,8 @@ const GoalkeeperDive = {
     =========================================================================
     */
     bolaNoPeito: { x: 0.0, y: 0.06, z: 0.30 },
+    // De peito para baixo (frente do peito com y < -fwdY) a bola passa para o relvado, `avanco` m a frente do peito.
+    bolaNoRelvado: { fwdY: 0.35, avanco: 0.40, pitoAte: 0.80, pitoFaixa: 0.35 },
 
     /*
     E A BOLA NUNCA FICA ATRAS DO CORPO, em metros a frente dele.
