@@ -1005,7 +1005,8 @@ const OffsideModel = {
     um lado preferido — arrancar cedo. O defensor e que tem a linha toda no
     campo de visao.
     */
-    vies: 0.45,
+    // 0.45 -> 1.6: varrimento 0.45 / 1.0 / 1.6 / 2.4 deu 0.29 / 0.71 / 0.88 / 0.55 impedimentos por 90 (satura).
+    vies: 1.6,
 
     erroDeLeitura: function (tacticknow, sorteio) {
         const f = this._fraccao(tacticknow);
@@ -1046,8 +1047,8 @@ const OffsideModel = {
     numero de impedimentos). Agora a linha que ele ve e deslocada por um sorteio gaussiano de `passeSigma` m a
     tacticknow 50 (`passeSigmaMin` a 100) mais um `passeVies` para o lado arriscado.
     */
-    passeSigma: 1.4,
-    passeSigmaMin: 0.6,
+    passeSigma: 2.5,
+    passeSigmaMin: 1.1,
     passeVies: 0.4,
     erroDoPassador: function (tacticknow) {
         const f = this._fraccao(tacticknow);

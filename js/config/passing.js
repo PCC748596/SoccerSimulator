@@ -1418,7 +1418,10 @@ const RunIntoSpaceModel = {
     escolhido em 47.6% das oportunidades e leva 37.2% dos passes executados
     (eram 39% e 33% com risco 4.5).
     */
-    riscoAlemDaLinha: 1.0,
+    // 1.0 -> 8.0 (8 de Outubro de 2026): *"os jogadores tem que ficar um pouco mais impedidos"*. Varrimento de 16
+    // sementes x 30 min com o vies 1.6 e o erro do passador (OffsideModel): risco 5 -> 1.51, 8 -> 2.05, 12 -> 2.73
+    // impedimentos por 90 (de 0.28), com remates e golos iguais.
+    riscoAlemDaLinha: 8.0,
 
     /*
     INFILTRAR É PARA A FRENTE, E MAIS NADA.
