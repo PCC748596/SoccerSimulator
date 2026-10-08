@@ -136,7 +136,11 @@ const PassCandidates = {
             // Impedimento: descarta TODOS os pontos deste companheiro.
             if (offsideLimitDir !== null) {
                 const mateAdv = mate.model.position.z * mate.dirZ;
-                if (mateAdv > offsideLimitDir) continue;
+                // O PASSADOR LE A LINHA COM ERRO (OffsideModel.erroDoPassador): as vezes acha que o colega
+                // esta em jogo quando ja nao esta, e passa-lhe a bola.
+                const erroP = (typeof OffsideModel !== 'undefined' && OffsideModel.erroDoPassador)
+                    ? OffsideModel.erroDoPassador(carrier.skillFor ? carrier.skillFor('tacticknow') : 50) : 0;
+                if (mateAdv > offsideLimitDir + erroP) continue;
             }
 
             const mx = mate.model.position.x, mz = mate.model.position.z;

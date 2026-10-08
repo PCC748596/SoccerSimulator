@@ -1040,6 +1040,24 @@ const OffsideModel = {
     penalNota: 0.12,
 
     /*
+    O PASSADOR LE A LINHA COM ERRO (pedido: *"percepcao de quem passa que o colega nao esta impedido"*). Ate aqui o
+    filtro de candidatos (`PassCandidates.gerarCandidatos`) cortava TODO o colega alem da linha verdadeira, sem erro
+    nenhum — e o `penalNota` acima nunca chegava a actuar (medido: variar 0.12 / 0.5 / 1.0 dava exactamente o mesmo
+    numero de impedimentos). Agora a linha que ele ve e deslocada por um sorteio gaussiano de `passeSigma` m a
+    tacticknow 50 (`passeSigmaMin` a 100) mais um `passeVies` para o lado arriscado.
+    */
+    passeSigma: 1.4,
+    passeSigmaMin: 0.6,
+    passeVies: 0.4,
+    erroDoPassador: function (tacticknow) {
+        const f = this._fraccao(tacticknow);
+        const sigma = this.passeSigma + (this.passeSigmaMin - this.passeSigma) * f;
+        const u = Math.max(1e-9, Math.random()), v = Math.random();
+        const g = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        return this.passeVies + sigma * g;
+    },
+
+    /*
     O colega esta em posicao ha tempo suficiente para o passador dar por isso?
     `tempoEmPosicao` vem de `p.offsideTempoEmPosicao` (match_physics.js).
     */

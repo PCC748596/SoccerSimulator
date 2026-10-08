@@ -30,6 +30,14 @@ const mulberry32 = (a) => () => {
 Math.random = mulberry32(1000 + semente * 977);
 
 require('./harness.js');
+// RISCO / FOLGA / SIGMA: sobrepoem os numeros sem tocar na configuracao (varrimentos).
+if (process.env.AVIES) OffsideModel.vies = Number(process.env.AVIES);
+if (process.env.PVIES) OffsideModel.passeVies = Number(process.env.PVIES);
+if (process.env.PSIGMA) { OffsideModel.passeSigma = Number(process.env.PSIGMA); OffsideModel.passeSigmaMin = Number(process.env.PSIGMA) * 0.45; }
+if (process.env.PENAL) OffsideModel.penalNota = Number(process.env.PENAL);
+if (process.env.REACLENTA) OffsideModel.reaccaoLenta = Number(process.env.REACLENTA);
+if (process.env.RISCO) RunIntoSpaceModel.riscoAlemDaLinha = Number(process.env.RISCO);
+if (process.env.SIGMA && typeof OfficialLevels !== 'undefined') OfficialLevels.niveis.forEach(n => { n.sigmaLinha = Number(process.env.SIGMA); });
 
 const dt = 1 / 60;
 const scene = new THREE.Scene();
