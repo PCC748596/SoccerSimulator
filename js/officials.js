@@ -925,6 +925,12 @@ const Officials = {
     tools/lab/impedimento.js). Quem julga e o toque — ver a nota da Lei 11 no
     cabecalho desta seccao.
     */
+    // Gaussiana padrao (Box-Muller) para o erro de linha do bandeirinha.
+    _gauss: function () {
+        const u = Math.max(1e-9, Math.random()), v = Math.random();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    },
+
     marcarPosicoesDeImpedimento: function (passador, destinatario) {
         const M = (typeof OffsideModel !== 'undefined') ? OffsideModel : null;
         if (!M || !M.activo || !passador || typeof Match === 'undefined') return;
@@ -964,12 +970,23 @@ const Officials = {
         this._impedidos = [];
         for (const p of colegas) {
             if (p === passador || !p.model) continue;
-            const zDir = p.model.position.z * dir;
+            /*
+            O ERRO DO BANDEIRINHA (OfficialLevels): a posicao do jogador e vista com um desvio gaussiano do nivel
+            (`sigmaLinha` m). Em linha (ate ~0.5 m atras) pode ser apanhado sem o estar; um irregular pode passar.
+            As condicoes da Lei 11 abaixo ficam as mesmas, aplicadas a posicao VISTA.
+            */
+            const zReal = p.model.position.z * dir;
+            const sigma = (typeof OfficialLevels !== 'undefined') ? OfficialLevels.sigmaLinha() : 0;
+            const zDir = zReal + (sigma > 0 ? sigma * this._gauss() : 0);
             // Na propria metade nunca ha impedimento; em linha com a bola ou
             // com o penultimo adversario tambem nao (dai a tolerancia).
             if (zDir <= 0) continue;
             if (zDir <= bolaDir + tol) continue;
             if (zDir <= linhaDir + tol) continue;
+            if (zReal <= Math.max(bolaDir, linhaDir) + tol) {
+                const ec = this.errosDeLinha || (this.errosDeLinha = { falsos: 0, omitidos: 0 });
+                ec.falsos++;   // estava em linha e foi dado como irregular
+            }
             const marca = {
                 jogador: p,
                 x: p.model.position.x,

@@ -1053,6 +1053,53 @@ if (typeof window !== 'undefined') window.OffsideModel = OffsideModel;
 
 /*
 =============================================================================
+NIVEL DOS JUIZES E BANDEIRINHAS — 7 niveis, de Iniciante a Nivel Mundial
+=============================================================================
+Pedido: *"os jogadores tem que ficar um pouco mais impedidos — seja pela demora em perceber (atacantes),
+pela percepcao de quem passa, ou por erro na marcacao (bandeirinhas). Vamos criar uma categoria para juizes e
+bandeirinhas: de iniciante ate Nivel Mundial, 7 niveis; cada nivel marca melhor e erra menos. Quanto maior o
+nivel da liga, mais experientes. A nossa serie e a A, com o menor nivel de erros, mas sempre com algum erro. No
+futuro vem o VAR; por enquanto so um erro."*
+
+O UNICO ERRO por agora e o da LINHA DE FORA-DE-JOGO (`Officials.marcarPosicoesDeImpedimento`): cada colega em
+causa e medido contra a linha com um erro gaussiano de `sigmaLinha` metros. Com erro positivo um jogador que
+esta em linha (ate ~0.5 m atras) e apanhado (impedimento falso); com erro negativo um irregular passa
+(impedimento por marcar). O nivel decide o desvio-padrao. A bandeira tambem se atrasa: `atrasoBandeira` (s)
+fica registado para o VAR/animacao do futuro e nao altera a decisao.
+
+A LIGA manda no nivel (`ligas`): a Serie A e o nivel 6 (Internacional) — o melhor de uma liga nacional; o nivel 7
+(Mundial) fica para competicoes de elite e para o futuro VAR. `ligaAtual` escolhe qual vale no jogo.
+=============================================================================
+*/
+const OfficialLevels = {
+    ligaAtual: 'A',
+    // Nivel por liga: quanto mais alta, mais experientes.
+    ligas: { 'A': 6, 'B': 5, 'C': 4, 'D': 3 },
+    niveis: [
+        { nivel: 1, nome: 'Iniciante',      sigmaLinha: 1.10, atrasoBandeira: 0.60 },
+        { nivel: 2, nome: 'Amador',         sigmaLinha: 0.80, atrasoBandeira: 0.50 },
+        { nivel: 3, nome: 'Regional',       sigmaLinha: 0.60, atrasoBandeira: 0.40 },
+        { nivel: 4, nome: 'Nacional',       sigmaLinha: 0.45, atrasoBandeira: 0.35 },
+        { nivel: 5, nome: 'Profissional',   sigmaLinha: 0.35, atrasoBandeira: 0.30 },
+        { nivel: 6, nome: 'Internacional',  sigmaLinha: 0.25, atrasoBandeira: 0.25 },
+        { nivel: 7, nome: 'Nível Mundial',  sigmaLinha: 0.10, atrasoBandeira: 0.20 }
+    ],
+    nivelDaLiga: function (liga) {
+        const n = this.ligas[liga || this.ligaAtual];
+        return (typeof n === 'number') ? n : 4;
+    },
+    dados: function (nivel) {
+        const n = Math.max(1, Math.min(this.niveis.length, nivel || this.nivelDaLiga()));
+        return this.niveis[n - 1];
+    },
+    // Desvio-padrao (m) do erro de marcacao da linha para o nivel (por omissao o da liga actual).
+    sigmaLinha: function (nivel) { return this.dados(nivel).sigmaLinha; }
+};
+
+if (typeof window !== 'undefined') window.OfficialLevels = OfficialLevels;
+
+/*
+=============================================================================
 DISPUTA AEREA DA BOLA CORRIDA — ver tratarDisputaAerea (bt/player_bt.js)
 =============================================================================
 Com a bola alta jogada pelo adversario, a equipa que defende manda os
