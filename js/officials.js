@@ -100,6 +100,29 @@ const RefereeModel = {
     // Assistentes: quanto ficam PARA FORA da linha lateral.
     margemLinha: 1.4,
     velocidadeAssistente: 8.5,
+    /*
+    O ASSISTENTE VIGIA A LINHA — pedido: *"quando o bandeirinha estiver ate 2 m da linha de impedimento ele tem que
+    ficar meio virado para o campo a 45 graus e olhar a bola e a linha, uns 4 s cada, para conferir a hora do
+    lancamento"*. Com a linha a `distancia` m ou menos, o corpo vira-se `graus` para o campo (entre a direccao da
+    linha lateral para o lado da bola e a do campo) e a cabeca alterna entre a bola e a linha de `segundos` em
+    `segundos`.
+    */
+    vigia: { distancia: 2.0, graus: 45, segundos: 4.0, alcanceLinha: 8.0, giroMaxCabeca: 1.3 },
+    /*
+    A BANDEIRA DO ASSISTENTE — pedido: *"ta faltando a bandeirinha na mao do bandeirinha. Quando for marcado o
+    impedimento o bandeirinha deve permanecer no lugar, levantar o braco com a bandeira perpendicular ao campo,
+    permanecer por uns 2 s e baixar o braco esticado paralelo ao gramado com a bandeira esticada no prolongamento do
+    braco"*. A bandeira vai na mao direita, ao longo do eixo da mao (-y: o prolongamento do braco). No impedimento o
+    assistente do lado da marcacao fica no sitio, vira-se para o campo e: ergue o braco (tErguer), segura `tSegurar`
+    s, baixa-o horizontal (tBaixar), mantem-no ate a falta ser batida (no maximo tHorizontalMax s) e guarda-o (tGuardar).
+    Os angulos sao os do ombro do rig: x negativo leva o braco a frente (-2.95 quase a vertical, -1.57 horizontal).
+    */
+    bandeira: {
+        comprimento: 0.62, cor: 0xffd400, corte: 0xd81f26, larguraPano: 0.34, alturaPano: 0.24,
+        erguerX: -2.95, erguerZ: -0.08, erguerCotovelo: -0.05,
+        horizX: -1.57, horizZ: -0.04, horizCotovelo: -0.05,
+        tErguer: 0.35, tSegurar: 2.0, tBaixar: 0.45, tHorizontalMax: 10.0, tGuardar: 0.5, suavizacao: 0.3
+    },
 
     /*
     ZONA MORTA COM HISTERESE, e um filtro na velocidade da animacao.
@@ -805,6 +828,8 @@ const Officials = {
         this.arbitro = this.criarOficial(scene, 0, 'R');
         this.assistentes = [this.criarOficial(scene, 1, 'A'),
                             this.criarOficial(scene, 2, 'A')];
+        // A bandeira, na mao direita de cada assistente.
+        this.assistentes.forEach(a => this._criarBandeira(a));
         this.colocarInicial();
     },
 
@@ -1125,8 +1150,121 @@ const Officials = {
         const contra = (marca.team === 'TeamA') ? 'TeamB' : 'TeamA';
         Match.setupSetPiece('FREE_KICK', contra);
         if (this.anunciar) this.anunciar('OFFSIDE');
+        // O assistente da metade levanta a bandeira (ver RefereeModel.bandeira).
+        this.erguerBandeira(marca);
         if (typeof EfeitosSonoros !== 'undefined') EfeitosSonoros.apito(1.0);
         return true;
+    },
+
+    /*
+    A BANDEIRA: uma haste fina e um pano de duas cores, filhos da mao direita e ao longo do seu eixo -y (o
+    prolongamento do braco). As medidas sao em metros do mundo; divide-se pela escala do corpo (como o cartao).
+    */
+    _criarBandeira: function (o) {
+        if (!o || !o.rig || !o.rig.rHand || typeof THREE === 'undefined') return;
+        const B = RefereeModel.bandeira;
+        const esc = o.model.scale.x || 1;
+        const g = new THREE.Group();
+        g.name = 'bandeira_assistente';
+        const haste = new THREE.Mesh(new THREE.BoxGeometry(0.02 / esc, B.comprimento / esc, 0.02 / esc),
+            new THREE.MeshLambertMaterial({ color: 0x2b2b2b }));
+        haste.position.set(0, -(B.comprimento / 2) / esc, 0);
+        g.add(haste);
+        // O pano, na ponta da haste, para o lado +z da mao; dois blocos (amarelo e vermelho) como a bandeira real.
+        const w = B.larguraPano / esc, h = B.alturaPano / esc;
+        const yPano = -(B.comprimento - B.alturaPano / 2) / esc;
+        const pano1 = new THREE.Mesh(new THREE.BoxGeometry(0.004 / esc, h, w / 2),
+            new THREE.MeshLambertMaterial({ color: B.cor, side: THREE.DoubleSide }));
+        pano1.position.set(0, yPano, w / 4);
+        const pano2 = new THREE.Mesh(new THREE.BoxGeometry(0.004 / esc, h, w / 2),
+            new THREE.MeshLambertMaterial({ color: B.corte, side: THREE.DoubleSide }));
+        pano2.position.set(0, yPano, 3 * w / 4);
+        g.add(pano1); g.add(pano2);
+        g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+        o.rig.rHand.add(g);
+        o.bandeiraMesh = g;
+    },
+
+    // O impedimento acaba de ser marcado: o assistente da metade onde ele foi (z <= 0: o 0; z > 0: o 1) levanta a bandeira.
+    erguerBandeira: function (marca) {
+        if (!this.assistentes || !marca) return;
+        const o = this.assistentes[(marca.z <= 0) ? 0 : 1];
+        if (!o || !o.rig) return;
+        o.bandeira = { fase: 'erguer', t: 0, pose: null };
+    },
+
+    // A coreografia da bandeira (ver RefereeModel.bandeira). A pose tem memoria propria porque o `mover` reescreve os bracos.
+    tickBandeira: function (o, dt) {
+        const B = RefereeModel.bandeira;
+        const b = o.bandeira;
+        const rig = o.rig;
+        const pos = o.model.position;
+        b.t += dt;
+
+        // No sitio: o mover com o proprio ponto mantem-no parado (e escreve a pose de repouso, que a nossa cobre).
+        this.mover(o, pos.x, pos.z, 0.1, dt);
+        // Virado para o campo.
+        const alvoYaw = Math.atan2(-Math.sign(pos.x) || 1, 0);
+        const dif = Math.atan2(Math.sin(alvoYaw - o.model.rotation.y), Math.cos(alvoYaw - o.model.rotation.y));
+        o.model.rotation.y += dif * (1 - Math.exp(-dt * 8));
+        if (rig.neck) rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.3);
+
+        if (b.fase === 'erguer' && b.t >= B.tErguer) { b.fase = 'segurar'; b.t = 0; }
+        else if (b.fase === 'segurar' && b.t >= B.tSegurar) { b.fase = 'baixar'; b.t = 0; }
+        else if (b.fase === 'baixar' && b.t >= B.tBaixar) { b.fase = 'horizontal'; b.t = 0; }
+        else if (b.fase === 'horizontal' &&
+            ((typeof Match !== 'undefined' && Match.state !== 'FREE_KICK') || b.t >= B.tHorizontalMax)) { b.fase = 'guardar'; b.t = 0; }
+        else if (b.fase === 'guardar' && b.t >= B.tGuardar) { o.bandeira = null; return; }
+
+        const alvo = (b.fase === 'erguer' || b.fase === 'segurar')
+            ? { x: B.erguerX, z: B.erguerZ, c: B.erguerCotovelo }
+            : (b.fase === 'guardar' ? { x: 0, z: -0.08, c: -0.3 } : { x: B.horizX, z: B.horizZ, c: B.horizCotovelo });
+        if (!b.pose) b.pose = { x: rig.rArm.rotation.x, z: rig.rArm.rotation.z, c: rig.rElbow.rotation.x };
+        const P = b.pose, k = B.suavizacao;
+        P.x = lerpTo(P.x, alvo.x, k); P.z = lerpTo(P.z, alvo.z, k); P.c = lerpTo(P.c, alvo.c, k);
+        rig.rArm.rotation.set(P.x, 0, P.z);
+        rig.rElbow.rotation.x = P.c;
+    },
+
+    /*
+    O assistente acompanha a linha de impedimento (`alvoZ`) a andar ao longo da lateral. A `vigia.distancia` m ou
+    menos dela vigia: corpo a `graus` do campo e cabeca a alternar entre a bola e a linha (ver RefereeModel.vigia).
+    */
+    moverAssistente: function (o, alvoX, alvoZ, dt) {
+        // Impedimento marcado: fica no sitio com a bandeira no ar (ver RefereeModel.bandeira).
+        if (o.bandeira) { this.tickBandeira(o, dt); return; }
+        const R = RefereeModel, V = R.vigia;
+        const pos = o.model.position;
+        const perto = V && Math.abs(pos.z - alvoZ) <= V.distancia && Math.abs(pos.x - alvoX) < 3.0;
+        if (!perto) {
+            this.mover(o, alvoX, alvoZ, R.velocidadeAssistente, dt);
+            if (o.rig && o.rig.neck) o.rig.neck.rotation.y = lerpTo(o.rig.neck.rotation.y, 0, 0.2);
+            return;
+        }
+        // Direccao do campo (para dentro da lateral) e ao longo dela, para o lado da bola.
+        const fx = -Math.sign(alvoX) || 1;
+        const bz = Match.ball.position.z - pos.z;
+        if (Math.abs(bz) > 3 || o.vigiaAlong === undefined) o.vigiaAlong = Math.sign(bz) || o.vigiaAlong || 1;
+        const a = V.graus * Math.PI / 180;
+        // Ponto para onde o corpo se vira: `graus` para o campo a partir da linha lateral.
+        const olhar = { x: pos.x + fx * Math.sin(a) * 10, z: pos.z + o.vigiaAlong * Math.cos(a) * 10 };
+        this.mover(o, alvoX, alvoZ, R.velocidadeAssistente, dt, olhar);
+
+        // A cabeca: bola e linha, `segundos` cada.
+        o.vigiaT = (o.vigiaT || 0) + dt;
+        const fase = Math.floor(o.vigiaT / V.segundos) % 2;
+        const alvo = fase === 0
+            ? { x: Match.ball.position.x, z: Match.ball.position.z }
+            : { x: pos.x + fx * V.alcanceLinha, z: alvoZ };
+        if (o.rig && o.rig.neck) {
+            const yaw = o.model.rotation.y;
+            const fwdX = Math.sin(yaw), fwdZ = Math.cos(yaw);
+            let tx = alvo.x - pos.x, tz = alvo.z - pos.z;
+            const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
+            const ang = Math.atan2(fwdZ * tx - fwdX * tz, fwdX * tx + fwdZ * tz);
+            const lim = V.giroMaxCabeca;
+            o.rig.neck.rotation.y = lerpTo(o.rig.neck.rotation.y, Math.max(-lim, Math.min(lim, ang)), 0.15);
+        }
     },
 
     /*
@@ -2034,13 +2172,8 @@ const Officials = {
 
         const linhaA = THREE.MathUtils.clamp(zA, -(CAMPO_COMP / 2), 0);
         const linhaB = THREE.MathUtils.clamp(zB, 0, CAMPO_COMP / 2);
-        this.mover(this.assistentes[0],
-            meiaLarg + R.margemLinha, linhaA,
-            R.velocidadeAssistente, dt);
-
-        this.mover(this.assistentes[1],
-            -(meiaLarg + R.margemLinha), linhaB,
-            R.velocidadeAssistente, dt);
+        this.moverAssistente(this.assistentes[0], meiaLarg + R.margemLinha, linhaA, dt);
+        this.moverAssistente(this.assistentes[1], -(meiaLarg + R.margemLinha), linhaB, dt);
 
         // O árbitro anda entre estas duas linhas: ver o fim do pontoDoArbitro.
         this._faixaArbitro = { min: linhaA, max: linhaB };

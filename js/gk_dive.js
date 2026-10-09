@@ -557,7 +557,7 @@ const GkDive = {
                 this.torcerTronco(rig, d, 'chao');
                 // Depois de toda a gente escrever os bracos — ver a nota da
                 // funcao: e uma correccao por cima do que ficou, nao uma pose.
-                this.maosForaDoRelvado(rig);
+                if (!d.ladoComBola) this.maosForaDoRelvado(rig);
 
                 // O prazo é o do lance, escrito no `iniciar` — ver `tempoChaoAlto`.
                 let prazoChao = (typeof d.tempoChao === 'number') ? d.tempoChao : D.tempoChao;
@@ -598,8 +598,8 @@ const GkDive = {
                     rig.neck.rotation.z = lerpTo(rig.neck.rotation.z, 0, 0.35);
                 }
                 this.poseLevantar(rig, s, d.agarrou);
-                if (d.agarrou) this.poseAbracoBola(rig, d);
-                this.maosForaDoRelvado(rig);
+                if (d.agarrou) this.poseAbracoBola(rig, d, s);
+                if (!d.ladoComBola) this.maosForaDoRelvado(rig);
 
                 if (d.t >= D.tempoLevantar) {
                     corpo.position.y = ALTURA_BASE_Y;
@@ -654,9 +654,11 @@ const GkDive = {
         }
         if (fracFrente > 0) {
             // No deslize de lado a barriga quase não vira: ver GoalkeeperDive.deslizeLado.
-            const angFrenteMax = d.deslizeLado
-                ? (d.pesPrimeiro ? D.deslizeLado.pesPrimeiro.anguloFrente : D.deslizeLado.anguloFrente)
-                : ((typeof D.anguloFrente === 'number') ? D.anguloFrente : 0.62);
+            const angFrenteMax = (d.ladoComBola && D.quedaDeLadoComBola)
+                ? D.quedaDeLadoComBola.anguloFrente
+                : (d.deslizeLado
+                    ? (d.pesPrimeiro ? D.deslizeLado.pesPrimeiro.anguloFrente : D.deslizeLado.anguloFrente)
+                    : ((typeof D.anguloFrente === 'number') ? D.anguloFrente : 0.62));
             let angF = fracFrente * angFrenteMax;
             /*
             O ROLAMENTO NO FIM DO SALTO ALTO — ver GoalkeeperDive.rolamentoAlto.
@@ -769,7 +771,7 @@ const GkDive = {
         tecto) levava varios frames a tira-las, e via-se.
         */
         if (d.fase === 'voo' || d.fase === 'chao') {
-            for (let i = 0; i < 4; i++) this.maosForaDoRelvado(rig);
+            if (!d.ladoComBola) for (let i = 0; i < 4; i++) this.maosForaDoRelvado(rig);
         }
 
         // Deitado no chao: cara fora da relva e palma a apoiar (apoioNoChao).
@@ -788,7 +790,16 @@ const GkDive = {
         quem a segura passa a ser o ramo 'segurando' (player.js), que a poe ao
         peito dele tambem — a passagem nao tem salto.
         */
-        if (d.agarrou && rig.chest) {
+        if (d.agarrou && d.ladoComBola && rig.lHand && rig.rHand) {
+            // De lado com a bola em V: ela vai no ponto medio das duas maos, e nunca abaixo do relvado.
+            rig.lHand.getWorldPosition(this._v);
+            rig.rHand.getWorldPosition(this._vLocal);
+            Match.ball.position.set((this._v.x + this._vLocal.x) / 2,
+                // Apoiada no relvado: a altura da mao de baixo (+2 cm), nunca abaixo do raio.
+                Math.max(BallPhysics.raio, Math.min(this._v.y, this._vLocal.y) + 0.02),
+                (this._v.z + this._vLocal.z) / 2);
+            Match.ballVel.set(0, 0, 0);
+        } else if (d.agarrou && rig.chest) {
             const BP = D.bolaNoPeito || { x: 0, y: 0.06, z: 0.30 };
             rig.chest.updateWorldMatrix(true, false);
             /*
@@ -1054,6 +1065,8 @@ const GkDive = {
 
         if (decisao.resultado === 'agarra') {
             d.agarrou = true;
+            // Baixa ou a meia altura: cai de lado com a bola nas maos em V (ver GoalkeeperDive.quedaDeLadoComBola).
+            d.ladoComBola = !!(D.quedaDeLadoComBola && D.quedaDeLadoComBola.activo && d.tipo !== 'alto');
             d.abracarJa = true;   // ver o fim do `update`: os braços fecham-se neste frame
             d.maoAgarrou = melhorMao;
             // Posse já; a pose continua a ser do mergulho até ele se levantar.
@@ -1318,9 +1331,11 @@ const GkDive = {
     poseChao(rig, d) {
         const S = GoalkeeperDive.sequenciaPernas;
         // Deitado de lado a escorregar, as pernas vão esticadas atrás do corpo.
-        const P = (d && d.deslizeLado)
-            ? (d.pesPrimeiro ? GoalkeeperDive.deslizeLado.pesPrimeiro.pernas : GoalkeeperDive.deslizeLado.pernas)
-            : (S && S.chao);
+        const P = (d && d.ladoComBola && GoalkeeperDive.quedaDeLadoComBola)
+            ? GoalkeeperDive.quedaDeLadoComBola.pernas
+            : ((d && d.deslizeLado)
+                ? (d.pesPrimeiro ? GoalkeeperDive.deslizeLado.pesPrimeiro.pernas : GoalkeeperDive.deslizeLado.pernas)
+                : (S && S.chao));
         const L = this.pernas(rig, d);
         if (!P) {
             L.joelhoB.rotation.x = lerpTo(L.joelhoB.rotation.x, 1.0, 0.2);
@@ -1557,9 +1572,30 @@ const GkDive = {
 
     Ver GoalkeeperDive.abracoBola para os angulos e para a convencao do sinal.
     */
-    poseAbracoBola(rig, d) {
+    poseAbracoBola(rig, d, mix) {
         const P = GoalkeeperDive.abracoBola;
         if (!P || !rig) return;
+        /*
+        DE LADO COM A BOLA: os dois bracos a frente em V (GoalkeeperDive.quedaDeLadoComBola), e a levantar (`mix` 0..1) fecham-se ao
+        abraco do peito. A pose V escreve-se directa, como o abraco (ver a nota abaixo sobre os saltos de Euler).
+        */
+        const QL = GoalkeeperDive.quedaDeLadoComBola;
+        if (d && d.ladoComBola && QL) {
+            const m = Math.max(0, Math.min(1, mix || 0));
+            const baixoEhDireito = (d.ladoLocal === undefined) || d.ladoLocal >= 0;
+            for (const lado of [['lArm', 'lElbow', 1], ['rArm', 'rElbow', -1]]) {
+                const ombro = rig[lado[0]], cot = rig[lado[1]];
+                const ehBaixo = (lado[2] === -1) === baixoEhDireito;
+                const zV = ehBaixo ? QL.bracos.zBaixo : QL.bracos.zCima;
+                if (ombro) {
+                    ombro.rotation.x = QL.bracos.x + (P.ombroX - QL.bracos.x) * m;
+                    ombro.rotation.y = 0;
+                    ombro.rotation.z = lado[2] * (zV + (P.ombroZ - zV) * m);
+                }
+                if (cot) cot.rotation.x = QL.bracos.cotovelo + (P.cotovelo - QL.bracos.cotovelo) * m;
+            }
+            return;
+        }
         /*
         ESCRITA DIRECTA, todos os frames — nao ha lerp nenhum aqui, e e de
         proposito.

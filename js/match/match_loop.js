@@ -24,6 +24,16 @@ Object.assign(Match, {
         return false;
     },
 
+    /*
+    O MURMURIO DA TORCIDA tambem corre fora do jogo corrido (abertura, intervalo, apito final): o `AmbienteSonoro.update`
+    so estava no fim do caminho normal do `update`, e por isso a torcida so se ouvia depois do primeiro apito do juiz.
+    */
+    somDoEstadio: function (dt) {
+        if (typeof AmbienteSonoro !== 'undefined' && !(typeof Sim !== 'undefined' && Sim.running)) {
+            AmbienteSonoro.update(dt);
+        }
+    },
+
     pararTodos: function () {
         this.ballVel.set(0, 0, 0);
         this.ballCarrier = null;
@@ -117,6 +127,7 @@ Object.assign(Match, {
         // Intervalo e apito final: o relogio para, a bola fica no sitio.
         if (this.state === 'INTERVALO' || this.state === 'FIM_DE_JOGO') {
             this.correrPausaDeJogo(dt);
+            this.somDoEstadio(dt);
             return;
         }
 
@@ -129,6 +140,7 @@ Object.assign(Match, {
             this.players.forEach(p => p.update(dt));
             this.opponents.forEach(p => p.update(dt));
             if (typeof Officials !== 'undefined') Officials.update(dt);
+            this.somDoEstadio(dt);
             return;
         }
 

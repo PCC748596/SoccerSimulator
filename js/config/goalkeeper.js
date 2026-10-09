@@ -2149,6 +2149,25 @@ const GoalkeeperDive = {
     */
     bolaNoPeito: { x: 0.0, y: 0.06, z: 0.30 },
     // De peito para baixo (frente do peito com y < -fwdY) a bola passa para o relvado, `avanco` m a frente do peito.
+    /*
+    A DEFESA BAIXA OU A MEIA ALTURA COM A BOLA NAS MAOS CAI DE LADO — pedido, com a fotografia 3021: *"quando o
+    goleiro defende uma bola baixa ou a media altura ele tem que cair de lado com a bola nas maos: de lado, bracos
+    para a frente mas em V segurando a bola"*. A bola ALTA continua como estava (quedaNoAlto).
+
+    O tronco quase nao vira a barriga (`anguloFrente` pequeno: fica deitado de lado), as pernas ficam esticadas
+    atras e os dois bracos vao a frente abertos em V (`bracos`: `x` a frente, `z` a abrir, cotovelo). A bola
+    segue o ponto medio das duas maos (no relvado se as maos descem a ele). A levantar, os bracos fecham-se ao
+    abraco do peito (`abracoBola`) para a passagem a 'segurando' nao dar salto.
+    */
+    quedaDeLadoComBola: {
+        activo: true,
+        anguloFrente: 0.10,
+        // Deitado de lado a abertura `z` e na vertical: o braco de BAIXO (o do lado do mergulho) fica rente ao relvado e o de CIMA
+        // abre uma nada, com a bola entre as duas maos (um V visto de cima, as maos a abracar a bola no chao).
+        bracos: { x: -1.40, zBaixo: 0.0, zCima: 0.0, cotovelo: -0.95 },
+        pernas: { coxaBaixo: -0.05, joelhoBaixo: 0.15, coxaCima: 0.05, joelhoCima: 0.20, chest: 0.0 }
+    },
+
     bolaNoRelvado: { fwdY: 0.35, avanco: 0.30, pitoAte: 0.55, pitoFaixa: 0.15 },
 
     /*

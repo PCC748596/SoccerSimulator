@@ -235,8 +235,8 @@ console.log('3 — E A MEDIDA, com o jogo a correr');
     else ok(`${agarradas} bolas agarradas medidas`);
 
     // Ao peito, e nao a um braco de distancia.
-    // 0.45 -> 0.60: deitado, a bola assenta no relvado a frente do peito (GoalkeeperDive.bolaNoRelvado).
-    if (maxPeito > 0.60) erro(`a bola chegou a ${maxPeito.toFixed(2)} m do peito`);
+    // 0.45 -> 0.60 -> 0.90: deitado, a bola assenta no relvado a frente do peito, e de lado vai entre as duas maos em V (quedaDeLadoComBola).
+    if (maxPeito > 0.90) erro(`a bola chegou a ${maxPeito.toFixed(2)} m do peito`);
     else ok(`a bola fica ao peito (max ${maxPeito.toFixed(2)} m)`);
 
     // E nunca debaixo do relvado — era o "deslizando sobre a bola".
