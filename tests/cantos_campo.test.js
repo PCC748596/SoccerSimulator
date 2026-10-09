@@ -136,13 +136,15 @@ console.log(LF + '4 — a bandeira');
 
     if (!bloco) { erro('a bandeira não está no createField'); }
     else {
-        if (/bandeira\.rotation\.y\s*=/.test(bloco)) {
-            erro('a bandeira roda em Y — sai em Z e descola do poste');
-        } else ok('sem rotação: a largura já está em X, presa ao poste');
+        // 9 de Outubro de 2026: o pano estende-se a 45 graus para FORA do campo (diagonal do canto), em vez de
+        // ao longo da linha para dentro. Roda em Y para a largura apontar a (sx, sz).
+        if (!/bandeira\.rotation\.y\s*=\s*Math\.atan2\(-sz, sx\)/.test(bloco)) {
+            erro('a bandeira nao roda em Y para a diagonal do canto');
+        } else ok('roda em Y: a largura aponta a 45 graus');
 
-        if (!/cx - sx \*/.test(bloco)) {
-            erro('a bandeira não é deslocada para DENTRO do campo');
-        } else ok('deslocada para dentro do campo (-sx)');
+        if (!/cx \+ sx \*/.test(bloco) || !/cz \+ sz \*/.test(bloco)) {
+            erro('a bandeira nao e deslocada para FORA do campo (+sx, +sz)');
+        } else ok('deslocada para fora do campo (+sx, +sz)');
 
         // Distância ao poste: tem de encostar, não pairar.
         const CFl = CornerFlag;

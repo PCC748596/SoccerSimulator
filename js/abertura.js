@@ -186,14 +186,38 @@ const Abertura = {
         if (s.tipo === 'jog') s.obj.velocity.set(0, 0, 0);
     },
 
-    // A bola segue a mao direita do juiz.
+    /*
+    A BOLA NO ANTEBRACO DO JUIZ — pedido: *"o juiz tem que estar com o antebraco direito um pouco mais levantado e com a
+    bola apoiada entre a mao e o braco"*. O braco direito fica com o cotovelo dobrado e o antebraco levantado
+    (`AberturaModel.bracoDaBola`) e a bola assenta POR CIMA do antebraco, a meio entre o cotovelo e a mao.
+    */
+    _poseDoBracoDoJuiz: function () {
+        const arb = Officials.arbitro;
+        const AM = AberturaModel;
+        if (!arb || !arb.rig || !AM.bracoDaBola) return;
+        const B = AM.bracoDaBola;
+        arb.rig.rArm.rotation.set(B.ombroX, 0, B.ombroZ);
+        arb.rig.rElbow.rotation.x = B.cotovelo;
+        if (arb.rig.rHand) arb.rig.rHand.rotation.set(0, B.maoRoll || 0, 0);
+    },
+
     _bolaNaMao: function () {
         const arb = Officials.arbitro;
-        if (!arb || !arb.rig || !arb.rig.rHand) return;
-        const v = this._v;
+        if (!arb || !arb.rig || !arb.rig.rHand || !arb.rig.rElbow) return;
+        const AM = AberturaModel;
+        const v = this._v, w = this._w || (this._w = new THREE.Vector3());
+        this._poseDoBracoDoJuiz();
         arb.model.updateMatrixWorld(true);
         arb.rig.rHand.getWorldPosition(v);
-        Match.ball.position.set(v.x, v.y + 0.02, v.z);
+        arb.rig.rElbow.getWorldPosition(w);
+        const BB = AM.bracoDaBola || {};
+        const k = (typeof BB.pontoNoAntebraco === 'number') ? BB.pontoNoAntebraco : 1.0;
+        const sobe = BB.sobe || 0.12;
+        // A bola assenta na palma: no ponto do antebraco, um pouco para la da mao (na direccao cotovelo -> mao) e por cima.
+        let dx = v.x - w.x, dz = v.z - w.z;
+        const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+        const av = BB.avancoMao || 0;
+        Match.ball.position.set(w.x + (v.x - w.x) * k + dx * av, w.y + (v.y - w.y) * k + sobe, w.z + (v.z - w.z) * k + dz * av);
         Match.ballVel.set(0, 0, 0);
     },
 
@@ -273,7 +297,10 @@ const Abertura = {
             Officials.mover(s.obj, w.x, w.z, s.vel || AM.velocidade, dt, this.modo === 'segundo' ? undefined : olhar);
             if (Math.hypot(w.x - s.model.position.x, w.z - s.model.position.z) < AM.chegada) s.chegou = true;
             else s.chegou = false;
+            if (s.tipo === 'lin') Officials._ajustarPano(s.obj, dt);
         }
+        // Depois do `mover` (que reescreve os bracos): a pose do braco do juiz e a bola no antebraco.
+        if (this.modo === 'inicio') this._bolaNaMao();
         Officials.atualizarVista();
     },
 

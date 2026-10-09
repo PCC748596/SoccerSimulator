@@ -1277,6 +1277,7 @@ function ligarActualizacaoDoElenco() {
     EventBus.on('TEAMS_CHANGED', () => {
         if (typeof Crowd !== 'undefined' && Crowd.recolorir) {
             Crowd.recolorir({ A: Crowd.coresDaEquipa(Match.players), B: Crowd.coresDaEquipa(Match.opponents) });
+            if (Match.pintarBandeirasDeCanto) Match.pintarBandeirasDeCanto(Crowd.coresDaEquipa(Match.players));
         }
         if (jogadorNoModal) {
             const emCampo = Match.players.includes(jogadorNoModal) ||
@@ -1396,6 +1397,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // e o Internacional a jogar.
         sincronizarSelectoresDeEquipa();
         if (typeof Crowd !== 'undefined' && Crowd.recolorir) Crowd.recolorir({ A: Crowd.coresDaEquipa(Match.players), B: Crowd.coresDaEquipa(Match.opponents) });
+        if (typeof Crowd !== 'undefined' && Match.pintarBandeirasDeCanto) Match.pintarBandeirasDeCanto(Crowd.coresDaEquipa(Match.players));
         popularPainelJogadores();
         actualizarNomesNoPlacar();
         // A entrada pelo tunel (js/abertura.js): so no browser, uma vez, ao carregar a pagina.

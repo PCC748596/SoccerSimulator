@@ -121,7 +121,11 @@ const RefereeModel = {
         comprimento: 0.62, cor: 0xffd400, corte: 0xd81f26, larguraPano: 0.34, alturaPano: 0.24,
         erguerX: -2.95, erguerZ: -0.08, erguerCotovelo: -0.05,
         horizX: -1.57, horizZ: -0.04, horizCotovelo: -0.05,
-        tErguer: 0.35, tSegurar: 2.0, tBaixar: 0.45, tHorizontalMax: 10.0, tGuardar: 0.5, suavizacao: 0.3
+        tErguer: 0.35, tSegurar: 2.0, tBaixar: 0.45, tHorizontalMax: 10.0, tGuardar: 0.5, suavizacao: 0.3,
+        // O pano fica do lado oposto ao de onde a haste aponta (ver `_ajustarPano`).
+        panoZonaMorta: 0.15, panoSuavizacao: 0.12,
+        // APONTAR a bandeira (canto: para o canto; tiro de meta: para a quina da pequena area): braco quase horizontal.
+        apontarX: -1.45, apontarZ: -0.06, apontarCotovelo: -0.05
     },
 
     /*
@@ -1184,16 +1188,88 @@ const Officials = {
         // XADREZ: 2 x 2 quadrados, dois amarelos e dois vermelhos (os da mesma cor em diagonal).
         const matA = new THREE.MeshLambertMaterial({ color: B.cor, side: THREE.DoubleSide });
         const matV = new THREE.MeshLambertMaterial({ color: B.corte, side: THREE.DoubleSide });
+        const pano = new THREE.Group();
+        pano.name = 'pano_bandeira';
         for (let iy = 0; iy < 2; iy++) {
             for (let iz = 0; iz < 2; iz++) {
                 const q = new THREE.Mesh(new THREE.BoxGeometry(0.004 / esc, h / 2, w / 2), ((iy + iz) % 2 === 0) ? matA : matV);
                 q.position.set(0, yPano + (iy === 0 ? h / 4 : -h / 4), (iz + 0.5) * w / 2);
-                g.add(q);
+                pano.add(q);
             }
         }
+        g.add(pano);
+        o.bandeiraPano = pano;
+        o.panoLado = -1;
         g.traverse(m => { if (m.isMesh) m.castShadow = true; });
         o.rig.rHand.add(g);
         o.bandeiraMesh = g;
+    },
+
+    /*
+    O PANO ACOMPANHA O VENTO DO MOVIMENTO — pedido: *"o tecido da bandeira tem que estar para tras quando a bandeira
+    esta para a frente e para a frente quando a bandeira esta para tras"*. O pano roda em torno da haste para ficar do
+    lado OPOSTO ao de onde a haste aponta (em relacao a frente do corpo): haste para a frente, pano para tras; haste
+    para tras, pano para a frente. Com a haste na vertical (|componente a frente| < `panoZonaMorta`) fica como estava.
+    A rotacao suaviza-se (`panoSuavizacao`) para o pano arrastar-se em vez de estalar.
+    */
+    _ajustarPano: function (o, dt) {
+        const pano = o && o.bandeiraPano;
+        if (!pano || !o.rig || !o.rig.rHand) return;
+        const B = RefereeModel.bandeira;
+        o.model.updateMatrixWorld(true);
+        const v = this._vPano || (this._vPano = {
+            a: new THREE.Vector3(), b: new THREE.Vector3(), f: new THREE.Vector3(), w: new THREE.Vector3(), q: new THREE.Quaternion()
+        });
+        // Direccao da haste no mundo: o eixo -y da mao.
+        o.rig.rHand.getWorldQuaternion(v.q);
+        v.a.set(0, -1, 0).applyQuaternion(v.q).normalize();
+        // Frente do corpo.
+        v.f.set(0, 0, 1).applyQuaternion(o.model.quaternion);
+        v.f.y = 0; v.f.normalize();
+        const frente = v.a.dot(v.f);
+        if (frente > B.panoZonaMorta) o.panoLado = -1;        // haste para a frente: pano para tras
+        else if (frente < -B.panoZonaMorta) o.panoLado = 1;   // haste para tras: pano para a frente
+        // Direccao desejada do pano no mundo, tirada a componente ao longo da haste.
+        v.w.copy(v.f).multiplyScalar(o.panoLado);
+        v.w.addScaledVector(v.a, -v.w.dot(v.a));
+        if (v.w.lengthSq() < 1e-4) return;
+        v.w.normalize();
+        // Para o espaco da mao: o pano estende-se ao longo de +z local.
+        o.rig.rHand.getWorldQuaternion(v.q);
+        v.q.invert();
+        v.w.applyQuaternion(v.q);
+        const alvo = Math.atan2(v.w.x, v.w.z);
+        const dif = Math.atan2(Math.sin(alvo - pano.rotation.y), Math.cos(alvo - pano.rotation.y));
+        pano.rotation.y += dif * (1 - Math.exp(-dt / B.panoSuavizacao));
+    },
+
+    /*
+    CANTO E TIRO DE META: o assistente aponta a bandeira (pedido: *"quando e corner o bandeirinha aponta a bandeira
+    para o corner, do seu lado mesmo; e quando e tiro de meta aponta para a quina da pequena area"*).
+
+      CANTO         o assistente do lado (x) do canto, do sitio onde esta, aponta para a bandeirola do canto;
+      TIRO DE META  o assistente da metade (z) dessa baliza aponta para a quina da pequena area do SEU lado.
+
+    Fica no sitio, vira-se para o alvo e mantem o braco ate o lance recomecar (o estado deixa de ser o do lance) ou
+    `tHorizontalMax` s. Mesma maquina da bandeira do impedimento (`tickBandeira`), com `alvo`.
+    */
+    apontarBandeira: function (tipo, canto) {
+        if (!this.assistentes || typeof Match === 'undefined') return;
+        const A = (typeof Area !== 'undefined') ? Area : { pequenaProfundidade: 5.5, pequenaMeiaLargura: 9.16 };
+        let o, alvo, estado;
+        if (tipo === 'CORNER_KICK' && canto) {
+            o = this.assistentes[canto.x > 0 ? 0 : 1];          // o 0 esta em +X, o 1 em -X
+            alvo = { x: canto.x, z: canto.z };
+            estado = 'CORNER_KICK';
+        } else if (tipo === 'GOAL_KICK' && canto) {
+            // `canto.z` e o lado da baliza (sinal). O assistente 0 cobre z <= 0, o 1 z > 0.
+            o = this.assistentes[canto.z <= 0 ? 0 : 1];
+            const sx = Math.sign(o.model.position.x) || 1;
+            alvo = { x: sx * A.pequenaMeiaLargura, z: Math.sign(canto.z) * (CAMPO_COMP / 2 - A.pequenaProfundidade) };
+            estado = 'GOAL_KICK';
+        } else return;
+        if (!o || !o.rig) return;
+        o.bandeira = { fase: 'erguer', t: 0, pose: null, alvo: alvo, estado: estado };
     },
 
     // O impedimento acaba de ser marcado: o assistente da metade onde ele foi (z <= 0: o 0; z > 0: o 1) levanta a bandeira.
@@ -1214,20 +1290,28 @@ const Officials = {
 
         // No sitio: o mover com o proprio ponto mantem-no parado (e escreve a pose de repouso, que a nossa cobre).
         this.mover(o, pos.x, pos.z, 0.1, dt);
-        // Virado para o campo.
-        const alvoYaw = Math.atan2(-Math.sign(pos.x) || 1, 0);
+        // Virado para o campo (ou para o alvo, se a bandeira aponta para um sitio: canto / tiro de meta).
+        const alvoYaw = b.alvo ? Math.atan2(b.alvo.x - pos.x, b.alvo.z - pos.z) : Math.atan2(-Math.sign(pos.x) || 1, 0);
         const dif = Math.atan2(Math.sin(alvoYaw - o.model.rotation.y), Math.cos(alvoYaw - o.model.rotation.y));
         o.model.rotation.y += dif * (1 - Math.exp(-dt * 8));
         if (rig.neck) rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.3);
 
-        if (b.fase === 'erguer' && b.t >= B.tErguer) { b.fase = 'segurar'; b.t = 0; }
+        if (b.alvo) {
+            // Apontar: erguer -> manter (horizontal) ate o lance recomecar -> guardar.
+            if (b.fase === 'erguer' && b.t >= B.tErguer) { b.fase = 'horizontal'; b.t = 0; }
+            else if (b.fase === 'horizontal' &&
+                ((typeof Match !== 'undefined' && Match.state !== b.estado) || b.t >= B.tHorizontalMax)) { b.fase = 'guardar'; b.t = 0; }
+            else if (b.fase === 'guardar' && b.t >= B.tGuardar) { o.bandeira = null; return; }
+        } else if (b.fase === 'erguer' && b.t >= B.tErguer) { b.fase = 'segurar'; b.t = 0; }
         else if (b.fase === 'segurar' && b.t >= B.tSegurar) { b.fase = 'baixar'; b.t = 0; }
         else if (b.fase === 'baixar' && b.t >= B.tBaixar) { b.fase = 'horizontal'; b.t = 0; }
         else if (b.fase === 'horizontal' &&
             ((typeof Match !== 'undefined' && Match.state !== 'FREE_KICK') || b.t >= B.tHorizontalMax)) { b.fase = 'guardar'; b.t = 0; }
         else if (b.fase === 'guardar' && b.t >= B.tGuardar) { o.bandeira = null; return; }
 
-        const alvo = (b.fase === 'erguer' || b.fase === 'segurar')
+        const alvo = b.alvo && b.fase !== 'guardar'
+            ? { x: B.apontarX, z: B.apontarZ, c: B.apontarCotovelo }
+            : (b.fase === 'erguer' || b.fase === 'segurar')
             ? { x: B.erguerX, z: B.erguerZ, c: B.erguerCotovelo }
             : (b.fase === 'guardar' ? { x: 0, z: -0.08, c: -0.3 } : { x: B.horizX, z: B.horizZ, c: B.horizCotovelo });
         if (!b.pose) b.pose = { x: rig.rArm.rotation.x, z: rig.rArm.rotation.z, c: rig.rElbow.rotation.x };
@@ -1242,6 +1326,12 @@ const Officials = {
     menos dela vigia: corpo a `graus` do campo e cabeca a alternar entre a bola e a linha (ver RefereeModel.vigia).
     */
     moverAssistente: function (o, alvoX, alvoZ, dt) {
+        this._moverAssistente(o, alvoX, alvoZ, dt);
+        // Depois de a pose do braco estar escrita: o pano acompanha a haste.
+        this._ajustarPano(o, dt);
+    },
+
+    _moverAssistente: function (o, alvoX, alvoZ, dt) {
         // Impedimento marcado: fica no sitio com a bandeira no ar (ver RefereeModel.bandeira).
         if (o.bandeira) { this.tickBandeira(o, dt); return; }
         const R = RefereeModel, V = R.vigia;

@@ -85,6 +85,12 @@ const AberturaModel = {
     chegada: 0.4,
     prazoEntrada: 70.0,
     // Cameras: [posicao, alvo]. A de entrada olha para o juiz a andar; a da fila enquadra as duas equipas de frente.
+    // O braco direito do juiz com a bola: ombro a frente, cotovelo dobrado (antebraco levantado) e a bola por cima do
+    // antebraco, a `pontoNoAntebraco` (0 cotovelo .. 1 mao) do caminho, `sobe` m acima dele.
+    // Antebraco PARALELO ao relvado (ombro -0.30 + cotovelo -1.30: medido dy mao-cotovelo = 0.01 m), a mao virada um pouco
+    // para dentro (`maoRoll`: rola a mao em torno do antebraco, para o lado do corpo) e a bola ASSENTE NA MAO
+    // (`pontoNoAntebraco` 1 = a mao, `avancoMao` m para a frente dela, `sobe` m por cima).
+    bracoDaBola: { ombroX: -0.30, ombroZ: -0.10, cotovelo: -1.30, maoRoll: 0.40, pontoNoAntebraco: 1.0, avancoMao: 0.05, sobe: 0.12 },
     cameraEntrada: { pos: [-20, 3.2, 13], alturaAlvo: 1.3 },
     cameraFila: { pos: [4, 8, 0], alvo: [-24, 1.3, 0] }
 };

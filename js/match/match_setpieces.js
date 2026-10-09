@@ -124,6 +124,17 @@ Object.assign(Match, {
             // E o braco: a direccao do ataque de quem beneficia, ou a marca de
             // penalti. Ver Officials.sinalizarMarcacao.
             if (Officials.sinalizarMarcacao) Officials.sinalizarMarcacao(type, team);
+            // O assistente aponta a bandeira: para o canto, ou para a quina da pequena area no tiro de meta.
+            if (Officials.apontarBandeira) {
+                if (type === 'CORNER_KICK') {
+                    Officials.apontarBandeira(type, {
+                        x: (Math.sign(this.ball.position.x) || 1) * CAMPO_LARG / 2,
+                        z: (Math.sign(this.ball.position.z) || 1) * CAMPO_COMP / 2 });
+                } else if (type === 'GOAL_KICK') {
+                    const gk = (team === 'TeamA') ? this.players[0] : this.opponents[0];
+                    if (gk) Officials.apontarBandeira(type, { x: 0, z: gk.ownGoalZ });
+                }
+            }
         }
         this.kickoffPendingPassToDef = false;
         

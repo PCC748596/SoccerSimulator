@@ -272,6 +272,8 @@ Object.assign(Match, {
         const matBandeira = new THREE.MeshStandardMaterial({
             color: CF.corBandeira, roughness: 0.9, side: THREE.DoubleSide
         });
+        // Guardado para a repintar quando as equipas mudam (`pintarBandeirasDeCanto`).
+        this.matBandeiraCanto = matBandeira;
 
         [1, -1].forEach(sx => [1, -1].forEach(sz => {
             const cx = sx * larg / 2, cz = sz * comp / 2;
@@ -312,12 +314,19 @@ Object.assign(Match, {
             punha-o a estender-se em Z enquanto a posição o desloca em X, e a
             bandeira ficava ao lado do poste em vez de presa a ele.
             */
+            /*
+            O PANO A 45 GRAUS PARA FORA DO CAMPO (pedido): estende-se do poste na diagonal do canto, para o lado de
+            FORA (sx, sz), e nao ao longo da linha para dentro. Quadriculado com as duas cores do mandante (ver
+            `pintarBandeirasDeCanto`).
+            */
             const bandeira = new THREE.Mesh(
                 new THREE.PlaneGeometry(CF.larguraBandeira, CF.alturaBandeira), matBandeira);
+            const meio = CF.larguraBandeira / 2 + CF.raioPoste;
             bandeira.position.set(
-                cx - sx * (CF.larguraBandeira / 2 + CF.raioPoste),
+                cx + sx * meio * Math.SQRT1_2,
                 CF.alturaPoste - CF.alturaBandeira / 2 - 0.05,
-                cz);
+                cz + sz * meio * Math.SQRT1_2);
+            bandeira.rotation.y = Math.atan2(-sz, sx);
             bandeira.castShadow = true;
             campoGrupo.add(bandeira);
         }));
@@ -2206,6 +2215,34 @@ Object.assign(Match, {
         if (pos === 'GK') {
             p.gkStyleBase = (chave === 'offensive_gk') ? 'offensive' : 'defensive';
         }
+    },
+
+    /*
+    AS BANDEIRAS DOS CANTOS, quadriculadas com as DUAS CORES DO MANDANTE (a equipa A): `cores` e o que o
+    `Crowd.coresDaEquipa` devolve (`principal` e `cor2`; se forem iguais usa-se a `cor1`). Chamado depois de as equipas
+    existirem e de cada TEAMS_CHANGED (main.js).
+    */
+    pintarBandeirasDeCanto: function (cores) {
+        const mat = this.matBandeiraCanto;
+        if (!mat || !cores || typeof document === 'undefined') return;
+        const c1 = cores.principal || cores.cor1 || '#f2c400';
+        let c2 = cores.cor2 || cores.cor1 || '#ffffff';
+        if (String(c2).toLowerCase() === String(c1).toLowerCase()) c2 = cores.cor1 && cores.cor1 !== c1 ? cores.cor1 : '#ffffff';
+        const cv = document.createElement('canvas');
+        cv.width = 64; cv.height = 64;
+        const g = cv.getContext('2d');
+        const nx = 2, ny = 2, w = cv.width / nx, h = cv.height / ny;
+        for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+            g.fillStyle = ((i + j) % 2 === 0) ? c1 : c2;
+            g.fillRect(i * w, j * h, w, h);
+        }
+        const tex = new THREE.CanvasTexture(cv);
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        if (mat.map && mat.map.dispose) mat.map.dispose();
+        mat.map = tex;
+        mat.color.set(0xffffff);
+        mat.needsUpdate = true;
     },
 
     resetPlay: function (forcingKickoffTeam = null) {
