@@ -285,6 +285,17 @@ Object.assign(Match, {
             quarto.receiveShadow = true;
             campoGrupo.add(quarto);
 
+            /*
+            O TRACO DOS 9.15 m: fora do campo, na continuacao perpendicular da linha de fundo, a `distanciaBarreira`
+            (9.15 m) do canto. Marca a distancia minima a que um adversario fica de quem marca o canto. Pedido:
+            *"esta faltando um pequeno traco branco fora de campo na linha de fundo a 9.15 m do corner"*.
+            */
+            const traco = new THREE.Mesh(new THREE.PlaneGeometry(esp, 0.6), matLinha);
+            traco.rotation.x = -Math.PI / 2;
+            traco.position.set(cx - sx * 9.15, 0.02, cz + sz * (0.1 + 0.3));
+            traco.receiveShadow = true;
+            campoGrupo.add(traco);
+
             const poste = new THREE.Mesh(
                 new THREE.CylinderGeometry(CF.raioPoste, CF.raioPoste, CF.alturaPoste, 8),
                 matPosteCanto);

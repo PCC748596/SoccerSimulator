@@ -1545,10 +1545,12 @@ const GkLowClip = {
     frames: [
         // GK_Low(1) — comeca a descer: o tronco ja vai a frente e os bracos
         // partem de baixo. Cabeca a 1.34 m.
-        { chest: 0.45, coxaL: 0.15, joelhoL: 0.55, coxaR: -0.65, joelhoR: 0.70, bracoLx: -1.00, bracoLz: 0.50, bracoRx: -1.00, bracoRz: -0.50, cotoveloL: -0.60, cotoveloR: -0.60, cabecaX: -0.25, altura: -0.06 },
+        // PERNAS QUASE ESTICADAS e bracos quase esticados (9 de Outubro de 2026, referencia 5133): joelhos 0.55/0.70 -> 0.28/0.34.
+        { chest: 0.45, coxaL: 0.10, joelhoL: 0.28, coxaR: -0.40, joelhoR: 0.34, bracoLx: -1.15, bracoLz: 0.40, bracoRx: -1.15, bracoRz: -0.40, cotoveloL: -0.25, cotoveloR: -0.25, cabecaX: -0.25, altura: -0.06 },
         // GK_Low(2) — CONTACTO: ja quase ajoelhado (cabeca a 1.10 m), os dois
         // bracos a frente e os cotovelos a abrir. E a fotografia da mao na bola.
-        { chest: 0.75, coxaL: 0.26, joelhoL: 0.90, coxaR: -1.05, joelhoR: 1.05, bracoLx: -1.35, bracoLz: 0.32, bracoRx: -1.35, bracoRz: -0.32, cotoveloL: -0.30, cotoveloR: -0.30, cabecaX: -0.35, altura: -0.21 },
+        // No voo as pernas vao atras quase direitas (joelho 0.90/1.05 -> 0.14/0.20) e os bracos esticados (cotovelo -0.30 -> -0.05).
+        { chest: 0.75, coxaL: 0.05, joelhoL: 0.14, coxaR: -0.30, joelhoR: 0.20, bracoLx: -1.55, bracoLz: 0.22, bracoRx: -1.55, bracoRz: -0.22, cotoveloL: -0.05, cotoveloR: -0.05, cabecaX: -0.35, altura: -0.21 },
         // GK_Low(3) — CHEGADA, a posicao que as fotografias mostram. Medido no
         // rig, em graus COM O RELVADO (0 = deitado, 90 = a prumo):
         //
@@ -1558,7 +1560,8 @@ const GkLowClip = {
         //
         // O joelho e a canela de um lado no relvado, o pe do outro plantado, e
         // o corpo curvado por cima da bola.
-        { chest: 0.95, coxaL: 0.35, joelhoL: 1.22, coxaR: -1.33, joelhoR: 1.33, bracoLx: -1.30, bracoLz: 0.25, bracoRx: -1.30, bracoRz: -0.25, cotoveloL: -1.10, cotoveloR: -1.10, cabecaX: -0.40, altura: -0.39 }
+// (a chegada com as pernas menos dobradas: o voo ate ela mantem-nas quase esticadas; o chao dobra-as depois)
+        { chest: 0.95, coxaL: 0.25, joelhoL: 0.60, coxaR: -0.80, joelhoR: 0.65, bracoLx: -1.40, bracoLz: 0.25, bracoRx: -1.40, bracoRz: -0.25, cotoveloL: -0.50, cotoveloR: -0.50, cabecaX: -0.40, altura: -0.39 }
     ]
 };
 
@@ -1578,12 +1581,12 @@ const GkJump3Clip = {
           cotoveloL: -0.70, cotoveloR: -0.70, altura: -0.05 },
         // GK_Jump3(2) — sai do chão: o tronco alinha e os braços sobem à
         // frente, ainda com o cotovelo dobrado.
-        { chest: 0.10, coxaL: -0.50, joelhoL: 0.80, coxaR: -0.30, joelhoR: 0.60,
+        { chest: 0.10, coxaL: -0.40, joelhoL: 0.40, coxaR: -0.30, joelhoR: 0.30,
           bracoLx: -1.25, bracoLz: 0.45, bracoRx: -1.25, bracoRz: -0.45,
-          cotoveloL: -0.40, cotoveloR: -0.40, altura: 0.00 },
+          cotoveloL: -0.25, cotoveloR: -0.25, altura: 0.00 },
         // GK_Jump3(3) — CONTACTO: extensão máxima, corpo na horizontal, os
         // dois braços esticados à altura do peito e as pernas atrás.
-        { chest: -0.05, coxaL: -0.75, joelhoL: 0.45, coxaR: -0.60, joelhoR: 0.30,
+        { chest: -0.05, coxaL: -0.45, joelhoL: 0.14, coxaR: -0.40, joelhoR: 0.12,
           bracoLx: -1.70, bracoLz: 0.25, bracoRx: -1.70, bracoRz: -0.25,
           cotoveloL: -0.05, cotoveloR: -0.05, altura: 0.00 },
         // GK_Jump3(4) — chegada ao chão: os braços seguram à frente e as

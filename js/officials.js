@@ -196,7 +196,15 @@ const RefereeModel = {
     Só vale para quem tem um ponto para vigiar (o árbitro, com a bola). Os
     assistentes correm na linha e não recebem `olharPara`.
     */
-    anguloMaxDaBola: 75 * Math.PI / 180,
+    // 75 -> 60 graus (9 de Outubro de 2026, outra vez: *"o juiz esta correndo de costas para a bola"*).
+    anguloMaxDaBola: 60 * Math.PI / 180,
+    /*
+    Com a bola a mais de `vigiaLonge` m ele PODE virar-se e correr de frente para onde vai (a bola nao esta a
+    jogar-se perto dele); mais perto fica sempre a menos de `anguloMaxDaBola` dela.
+    */
+    vigiaLonge: 1e9,   // 28 deixava-o virar-se e correr de costas para a bola quando ela estava longe: medido, 921 frames num canto
+    // Tecto (m/s) a andar para tras, quando o movimento e contrario a frente (ver `recuoVelocidade`).
+    recuoVelMax: 2.4,
     /*
     ANDAR NO SÍTIO, e a zona morta era a causa. Relato: *"o juiz está com
     animação de andar sem sair da posição"*. O alvo dele quase nunca está
@@ -1173,13 +1181,16 @@ const Officials = {
         // O pano, na ponta da haste, para o lado +z da mao; dois blocos (amarelo e vermelho) como a bandeira real.
         const w = B.larguraPano / esc, h = B.alturaPano / esc;
         const yPano = -(B.comprimento - B.alturaPano / 2) / esc;
-        const pano1 = new THREE.Mesh(new THREE.BoxGeometry(0.004 / esc, h, w / 2),
-            new THREE.MeshLambertMaterial({ color: B.cor, side: THREE.DoubleSide }));
-        pano1.position.set(0, yPano, w / 4);
-        const pano2 = new THREE.Mesh(new THREE.BoxGeometry(0.004 / esc, h, w / 2),
-            new THREE.MeshLambertMaterial({ color: B.corte, side: THREE.DoubleSide }));
-        pano2.position.set(0, yPano, 3 * w / 4);
-        g.add(pano1); g.add(pano2);
+        // XADREZ: 2 x 2 quadrados, dois amarelos e dois vermelhos (os da mesma cor em diagonal).
+        const matA = new THREE.MeshLambertMaterial({ color: B.cor, side: THREE.DoubleSide });
+        const matV = new THREE.MeshLambertMaterial({ color: B.corte, side: THREE.DoubleSide });
+        for (let iy = 0; iy < 2; iy++) {
+            for (let iz = 0; iz < 2; iz++) {
+                const q = new THREE.Mesh(new THREE.BoxGeometry(0.004 / esc, h / 2, w / 2), ((iy + iz) % 2 === 0) ? matA : matV);
+                q.position.set(0, yPano + (iy === 0 ? h / 4 : -h / 4), (iz + 0.5) * w / 2);
+                g.add(q);
+            }
+        }
         g.traverse(m => { if (m.isMesh) m.castShadow = true; });
         o.rig.rHand.add(g);
         o.bandeiraMesh = g;
@@ -1644,7 +1655,7 @@ const Officials = {
             if (olharPara && typeof R.anguloMaxDaBola === 'number') {
                 const ox = olharPara.x - o.model.position.x;
                 const oz = olharPara.z - o.model.position.z;
-                if (Math.hypot(ox, oz) > 0.05) {
+                if (Math.hypot(ox, oz) > 0.05 && Math.hypot(ox, oz) < R.vigiaLonge) {
                     const paraBola = Math.atan2(ox, oz);
                     const desvio = Math.atan2(Math.sin(o.model.rotation.y - paraBola),
                         Math.cos(o.model.rotation.y - paraBola));
@@ -1680,7 +1691,8 @@ const Officials = {
             const fx = Math.sin(o.model.rotation.y), fz = Math.cos(o.model.rotation.y);
             recua = ((fx * dx + fz * dz) / d) < R.recuoAlinhamento;
         }
-        if (recua) velMax *= R.recuoVelocidade;
+        // A recuar: mais devagar e com tecto — ninguem corre de costas a 5 m/s.
+        if (recua) velMax = Math.min(velMax * R.recuoVelocidade, R.recuoVelMax);
 
         let passo = 0;
         if (!o.paradoNoAlvo && d > 0.0001) {
