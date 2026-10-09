@@ -5556,6 +5556,13 @@ class FootballPlayer {
             this.jumpAltura = Math.sin(jt * Math.PI) * (this.jumpApex || SaltoCabeceio.alturaMax);
             this.model.position.y = ALTURA_BASE_Y + this.jumpAltura;
             if (this.jumpTimer <= 0) {
+                // A recuperacao da aterragem (SaltoCabeceio.aterragem): mais curta se tocou na bola.
+                const AT = SaltoCabeceio.aterragem;
+                if (AT && AT.activo) {
+                    const dur = this.hasHeaderedInJump ? AT.duracaoTocou : AT.duracaoFalhou;
+                    this.aterragemT = dur;
+                    this.aterragemDur = dur;
+                }
                 this.jumpTimer = 0;
                 this.jumpAltura = 0;
                 this.hasHeaderedInJump = false;
@@ -5584,6 +5591,17 @@ class FootballPlayer {
         if (typeof VelocidadeHumana !== 'undefined') {
             const tecto = VelocidadeHumana.tecto(this.skillFor('SPEED')) * this.factorCansaco();
             if (maxSpeed > tecto) maxSpeed = tecto;
+        }
+
+        /*
+        A RECUPERACAO DA ATERRAGEM (SaltoCabeceio.aterragem): depois do cabeceio o tecto de velocidade
+        cai e volta ao normal em rampa. `r` vai de 0 (acabou de aterrar) a 1 (recuperado).
+        */
+        if (this.aterragemT > 0) {
+            const AT = SaltoCabeceio.aterragem;
+            this.aterragemT = Math.max(0, this.aterragemT - Match.delta);
+            const r = 1 - this.aterragemT / (this.aterragemDur || 1);
+            maxSpeed *= AT.velFrac + (1 - AT.velFrac) * r;
         }
 
         let desired = _p_v1.subVectors(target, this.model.position);

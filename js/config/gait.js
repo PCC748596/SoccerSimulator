@@ -147,6 +147,13 @@ const SaltoCabeceio = {
     // So se cabeceia (salto ou inclinacao) uma bola que vem a menos disto da direccao dele: 60 graus para cada lado.
     anguloFrontalMax: 60 * Math.PI / 180,
     alturaMax: 0.80,      // subida máxima que as pernas dão (m)
+    /*
+    A ATERRAGEM TIRA-LHE TEMPO — pedido: *"depois de um pulo para o cabeceio o jogador tem que perder um pouco de
+    velocidade ao voltar para o chao, meio que perde o tempo de bola se nao conseguir cabecear"*. Ao aterrar entra
+    numa recuperacao: o tecto de velocidade cai para `velFrac` e volta ao normal em rampa ao longo de ~3 s
+    (`duracaoTocou` / `duracaoFalhou`: ficam iguais por pedido — *"reduz a velocidade por uns 3 seg"*).
+    */
+    aterragem: { activo: true, velFrac: 0.55, duracaoTocou: 3.0, duracaoFalhou: 3.0 },
     // Tem de ficar <= BallControl.reach (0.9): esse é o raio que REGISTA o
     // contacto de verdade (match.js/distanciaAoCorpo). Estava em 1.4 —
     // saltava para bolas até 1.4m, mas entre 0.9-1.4m o contacto nunca
@@ -400,8 +407,9 @@ central: 100 dá `maximo`, 0 dá `maximo - amplitude`.
 =============================================================================
 */
 const VelocidadeHumana = {
-    maximo: 9.5,      // m/s com SPEED 100 — ponta de um profissional rápido
-    amplitude: 2.2,   // quanto desce até SPEED 0 (7.3 m/s)
+    // +10% (9 de Outubro de 2026, pedido): 9.5 -> 10.45 e 2.2 -> 2.42 (SPEED 0: 8.03 m/s).
+    maximo: 10.45,    // m/s com SPEED 100 — ponta de um profissional rápido
+    amplitude: 2.42,  // quanto desce até SPEED 0
 
     /*
     O tecto deste jogador. `skillSpeed` é 0..100; fora disso corta-se, para um

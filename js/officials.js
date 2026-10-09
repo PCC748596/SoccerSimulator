@@ -1264,6 +1264,7 @@ const Officials = {
         } else if (tipo === 'GOAL_KICK' && canto) {
             // `canto.z` e o lado da baliza (sinal). O assistente 0 cobre z <= 0, o 1 z > 0.
             o = this.assistentes[canto.z <= 0 ? 0 : 1];
+            if (!o || !o.model) return;
             const sx = Math.sign(o.model.position.x) || 1;
             alvo = { x: sx * A.pequenaMeiaLargura, z: Math.sign(canto.z) * (CAMPO_COMP / 2 - A.pequenaProfundidade) };
             estado = 'GOAL_KICK';
