@@ -621,6 +621,22 @@ const BlockShape = {
     Como sempre, cede a quem vai a bola: chaser, intercetor e bloqueador.
     */
     limiteAlemDaBolaSemBola: true,
+    /*
+    COM A BOLA NA DEFESA, OS MEIAS DAO OPCAO DE PASSE — pedido: *"os meias estao se mandando demais para o ataque com
+    a bola ainda na defesa; assim a defesa fica sem opcao de passe no meio. So podem avancar mais se a bola estiver no
+    ataque (para dar opcao de passe ao ataque, a bola voltar e circular). Enquanto a defesa tiver a bola eles tem que
+    dar opcao de passe a defesa"*.
+
+    Com a equipa a ter a bola, o alvo de um meia nao passa `frente` m a frente DA BOLA, e esse limite SOBE com a bola:
+
+        bola no terco defensivo (avanco <= `tercoDefensivo`)   `frenteDefesa`  m
+        da ai ate ao meio-campo (0)                            sobe em recta ate `frenteMeio`
+        do meio-campo a `bolaAtaque`                            sobe em recta ate `frenteAtaque`
+        com a bola no ataque (> `bolaAtaque`)                  sem limite
+
+    Fica de fora quem tem a bola, o receptor do passe e quem tem tarefa de bola. `activo: false` desliga.
+    */
+    meiasComBola: { activo: true, tercoDefensivo: -17.5, bolaAtaque: 8.0, frenteDefesa: 9.0, frenteMeio: 16.0, frenteAtaque: 28.0 },
     folgaAlemDaBola: 1.5,
     recuamAlemDaBola: ['def', 'mid'],
 

@@ -3246,6 +3246,28 @@ nao deve mudar de estado nenhum.
 
 Pura: sem Match, sem THREE.
 */
+/*
+O TECTO DO MEIA COM A BOLA NA DEFESA (BlockShape.meiasComBola), em avanco (z * dirZ): `Infinity` se nao se aplica.
+Aplica-se a quem tem o papel `mid` quando a equipa tem a bola; o limite e `frente` m a frente da bola e SOBE com ela
+(terco defensivo -> meio-campo -> ataque). Vive aqui porque tem DOIS chamadores: o `tickFinal` (o alvo do posto) e as
+corridas ao espaco (`avancoDeInfiltracao`).
+*/
+function tectoDoMeiaComBola(p) {
+    const B = (typeof BlockShape !== 'undefined') ? BlockShape : null;
+    const MC = B && B.meiasComBola;
+    if (!MC || !MC.activo || !p || p.role !== 'mid') return Infinity;
+    if (typeof TeamAI === 'undefined' || typeof Match === 'undefined' || !Match.ball) return Infinity;
+    const bb = TeamAI.get(p.team);
+    if (!bb || !bb.isAttacking) return Infinity;
+    const bolaAvanco = Match.ball.position.z * p.dirZ;
+    let frente;
+    if (bolaAvanco <= MC.tercoDefensivo) frente = MC.frenteDefesa;
+    else if (bolaAvanco <= 0) frente = MC.frenteDefesa + (MC.frenteMeio - MC.frenteDefesa) * ((bolaAvanco - MC.tercoDefensivo) / (0 - MC.tercoDefensivo));
+    else if (bolaAvanco <= MC.bolaAtaque) frente = MC.frenteMeio + (MC.frenteAtaque - MC.frenteMeio) * (bolaAvanco / MC.bolaAtaque);
+    else return Infinity;
+    return bolaAvanco + frente;
+}
+
 function avancoDeInfiltracao(o) {
     const MARGEM_LINHA = 2.0;
     const ganhoMin = (typeof o.ganhoMinimo === 'number')
@@ -3253,6 +3275,8 @@ function avancoDeInfiltracao(o) {
         : ((typeof RunIntoSpaceModel !== 'undefined' && RunIntoSpaceModel.ganhoMinimo) || 4.0);
 
     let avanco = Math.min(o.avancoPedido, CAMPO_COMP / 2 - MARGEM_LINHA);
+    // O meia com a bola na defesa nao se infiltra para la do seu tecto (ver tectoDoMeiaComBola).
+    if (typeof o.tecto === 'number' && isFinite(o.tecto)) avanco = Math.min(avanco, o.tecto);
 
     if (typeof avancoLegalDeCorrida === 'function') {
         avanco = avancoLegalDeCorrida(avanco, o.offsideLimitDir);

@@ -2642,7 +2642,7 @@ function podeInfiltrar(ctx) {
     */
     if (typeof avancoDeInfiltracao === 'function' &&
         avancoDeInfiltracao({ avancoActual: meuAvanco, avancoPedido: meuAvanco + 20.0,
-            offsideLimitDir: linhaLidaPor(p, true) }) === null) {
+            offsideLimitDir: linhaLidaPor(p, true), tecto: tectoDoMeiaComBola(p) }) === null) {
         return false;
     }
 
@@ -2862,7 +2862,8 @@ function actInfiltrar(ctx) {
             ? avancoDeInfiltracao({
                 avancoActual: meuAvanco,
                 avancoPedido: meuAvanco + 20.0,
-                offsideLimitDir: linhaLidaPor(p, true)
+                offsideLimitDir: linhaLidaPor(p, true),
+                tecto: tectoDoMeiaComBola(p)
             })
             : meuAvanco + 20.0;
 

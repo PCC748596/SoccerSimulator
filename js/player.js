@@ -5604,6 +5604,22 @@ class FootballPlayer {
             maxSpeed *= AT.velFrac + (1 - AT.velFrac) * r;
         }
 
+        /*
+        O MEIA COM A BOLA NA DEFESA NAO PASSA DO SEU TECTO (BlockShape.meiasComBola, utils.js `tectoDoMeiaComBola`): o
+        corte no `tickFinal` nao chegava — corridas, apoios e o estilo escrevem o alvo depois dele. Aqui e o funil por
+        onde TODOS os movimentos passam. Cede a quem tem a bola, ao receptor e a quem vai a bola.
+        */
+        if (this.role === 'mid' && !this.hasBall && typeof tectoDoMeiaComBola === 'function' &&
+            !(typeof Match !== 'undefined' && Match.intendedReceiver === this)) {
+            const tectoM = tectoDoMeiaComBola(this);
+            if (isFinite(tectoM) && target.z * this.dirZ > tectoM) {
+                const bbM = (typeof TeamAI !== 'undefined') ? TeamAI.get(this.team) : null;
+                if (!(bbM && (bbM.chaser === this || bbM.intercetor === this || bbM.bloqueador === this))) {
+                    target = new THREE.Vector3(target.x, target.y, tectoM * this.dirZ);
+                }
+            }
+        }
+
         let desired = _p_v1.subVectors(target, this.model.position);
         desired.y = 0; let d = desired.length();
 

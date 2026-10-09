@@ -2727,6 +2727,19 @@ const PosicionamentoAI = {
         }
 
         /*
+        COM A BOLA NA DEFESA, OS MEIAS NAO SE MANDAM PARA O ATAQUE (BlockShape.meiasComBola, utils.js
+        `tectoDoMeiaComBola`): o alvo do meia fica a `frente` m da bola no maximo, e esse limite sobe a medida que a
+        bola sobe no campo. Aplica-se NO FIM (depois do tecto de desvio ao slot e do pendulo, que o puxavam para a
+        frente) e so cede a quem tem a bola, ao receptor e a quem vai a bola.
+        */
+        if (p.role === 'mid' && !p.hasBall && !temTarefaDeBola &&
+            !(typeof Match !== 'undefined' && Match.intendedReceiver === p) &&
+            typeof tectoDoMeiaComBola === 'function') {
+            const tectoM = tectoDoMeiaComBola(p);
+            if (isFinite(tectoM) && finalZ * p.dirZ > tectoM) finalZ = tectoM * p.dirZ;
+        }
+
+        /*
         Respeito ao limite legal de fora-de-jogo (offside) mesmo com inércia.
 
         O limite é o que ELE julga que é: `offsideBias` é o erro de leitura da
