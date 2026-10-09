@@ -384,8 +384,22 @@ Object.assign(Match, {
             };
 
             // Laterais: correm em Z, portanto a caixa roda 90 graus em Y.
-            addPlaca(compLateral, matLateralPP, xLateral, 0, Math.PI / 2);
-            addPlaca(compLateral, matLateralPP, -xLateral, 0, Math.PI / 2);
+            /*
+            A PLACA DO LADO DO TUNEL ABRE-SE no centro (`TunelJogadores`): duas placas mais curtas, com o vao da
+            largura do tunel — por ali passam os jogadores. A textura repete-se pelo comprimento: as duas metades
+            usam o mesmo material e ficam com blocos de largura ligeiramente diferente (nao se nota).
+            */
+            const addPlacaLateral = (sinal) => {
+                const TJp = (typeof TunelJogadores !== 'undefined' && TunelJogadores.activo &&
+                    TunelJogadores.lado === sinal) ? TunelJogadores : null;
+                if (!TJp) { addPlaca(compLateral, matLateralPP, sinal * xLateral, 0, Math.PI / 2); return; }
+                const meia = TJp.largura / 2 + TJp.folgaPlaca;
+                const len = compLateral / 2 - meia, c = (compLateral / 2 + meia) / 2;
+                addPlaca(len, matLateralPP, sinal * xLateral, c, Math.PI / 2);
+                addPlaca(len, matLateralPP, sinal * xLateral, -c, Math.PI / 2);
+            };
+            addPlacaLateral(1);
+            addPlacaLateral(-1);
             // Fundos: correm em X, sem rotacao.
             addPlaca(compFundo, matFundoPP, 0, zFundo, 0);
             addPlaca(compFundo, matFundoPP, 0, -zFundo, 0);
@@ -804,6 +818,10 @@ Object.assign(Match, {
         const cornerX = BANCADA_X - RAIO_PRIMEIRA_FILA;
         const cornerZ = BANCADA_Z - RAIO_PRIMEIRA_FILA;
 
+        // O TUNEL DOS JOGADORES (config/tunel.js): sabe onde fica a bancada, e corta-lhe os primeiros degraus no centro.
+        const TJ = (typeof TunelJogadores !== 'undefined' && TunelJogadores.activo) ? TunelJogadores : null;
+        if (TJ) TJ.definirGeometria(BANCADA_X);
+
         /*
         A ESQUINA DE UM ANEL. `offProf` e `offY` sao o recuo e a subida do anel
         — a zero dao a esquina do anel de baixo, exactamente como era.
@@ -882,12 +900,24 @@ Object.assign(Match, {
             for (let r = 0; r < rows; r++) {
                 const standX = -BANCADA_X - (offProf + r * 1.2);
                 const standY = offY + 0.25 + (r * 0.5);
-                addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
+                /*
+                O TUNEL DOS JOGADORES: nos primeiros degraus do anel de baixo o degrau parte-se em dois, com o
+                vao da largura do tunel no centro (e nao ha cadeiras nele). So vale se o tunel estiver deste lado.
+                */
+                const cortaTunel = !!(TJ && TJ.lado < 0 && anel === 0 && r < TJ.degrausCortados);
+                if (cortaTunel) {
+                    const meia = TJ.largura / 2, c = (cornerZ + meia) / 2, len = cornerZ - meia;
+                    addStepBox(1.2, 0.5, len, standX, standY, c, 0);
+                    addStepBox(1.2, 0.5, len, standX, standY, -c, 0);
+                } else {
+                    addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
+                }
 
                 const seatYOffset = standY + 0.25 + 0.15;
                 // Até onde a esquina começa — ver `cornerZ`.
                 grelha(cornerZ, (z, colIdx) => {
                     if (noCorredor(z)) return;   // corredor centrado no meio-campo
+                    if (cortaTunel && Math.abs(z) < TJ.largura / 2 + 0.3) return;
                     addSeatInstance(standX, seatYOffset, z, Math.PI / 2, r, colIdx);
                 });
             }
@@ -896,12 +926,20 @@ Object.assign(Match, {
             for (let r = 0; r < rows; r++) {
                 const standX = BANCADA_X + (offProf + r * 1.2);
                 const standY = offY + 0.25 + (r * 0.5);
-                addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
+                const cortaTunel = !!(TJ && TJ.lado > 0 && anel === 0 && r < TJ.degrausCortados);
+                if (cortaTunel) {
+                    const meia = TJ.largura / 2, c = (cornerZ + meia) / 2, len = cornerZ - meia;
+                    addStepBox(1.2, 0.5, len, standX, standY, c, 0);
+                    addStepBox(1.2, 0.5, len, standX, standY, -c, 0);
+                } else {
+                    addStepBox(1.2, 0.5, cornerZ * 2, standX, standY, 0, 0);
+                }
 
                 const seatYOffset = standY + 0.25 + 0.15;
                 // Até onde a esquina começa — ver `cornerZ`.
                 grelha(cornerZ, (z, colIdx) => {
                     if (noCorredor(z)) return;   // corredor centrado no meio-campo
+                    if (cortaTunel && Math.abs(z) < TJ.largura / 2 + 0.3) return;
                     addSeatInstance(standX, seatYOffset, z, -Math.PI / 2, r, colIdx);
                 });
             }
@@ -1512,6 +1550,9 @@ Object.assign(Match, {
                 placaZ: LINHA_FUNDO + recuoPlacas
             });
         }
+
+        // A caixa do tunel dos jogadores (paredes, tecto e fundo): ver js/tunel.js.
+        if (typeof Tunel !== 'undefined' && TJ) Tunel.construir(campoGrupo);
 
         // Geometria fundida das bancadas para mínimo de draw calls
         if (stepGeos.length > 0) {

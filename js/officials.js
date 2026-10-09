@@ -2015,6 +2015,9 @@ const Officials = {
         // E as linhas do momento do passe, quando houve impedimento.
         this.tickLinhaDoPasse(dt);
 
+        // A abertura do jogo (js/abertura.js): o trio anda pela coreografia, nao pelo jogo.
+        if (typeof Abertura !== 'undefined' && Abertura.activa) { Abertura.moverOficiais(dt); return; }
+
         if (!this.arbitro || !this._ativo) return;
 
         const R = RefereeModel;

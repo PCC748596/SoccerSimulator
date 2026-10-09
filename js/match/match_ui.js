@@ -50,6 +50,12 @@ Object.assign(Match, {
             emprestada.
             */
             if (e.key === 'Escape' || e.key === 'Esc') {
+                // Na abertura (entrada pelo tunel) o ESC salta para a formacao inicial de sempre.
+                if (typeof Abertura !== 'undefined' && Abertura.activa) {
+                    Abertura.cancelar();
+                    e.preventDefault();
+                    return;
+                }
                 const R = window.MatchReplay;
                 if (R && R.isReplaying) {
                     R.stopReplay();
@@ -258,7 +264,10 @@ Object.assign(Match, {
         if (!this._cTPos) { this._cTPos = new THREE.Vector3(); this._cLTar = new THREE.Vector3(); this._cFwd = new THREE.Vector3(); } let targetPos = this._cTPos;
         let lookTarget = this._cLTar;
 
-        if (window.cameraMode === 'center') {
+        // A abertura do jogo tem a camara dela (js/abertura.js). A orbital, que e do utilizador, nao se toca.
+        if (typeof Abertura !== 'undefined' && Abertura.activa && Abertura.modo !== 'segundo') {
+            Abertura.camera(targetPos, lookTarget);
+        } else if (window.cameraMode === 'center') {
             /*
             TV CENTRO. ALTURA 34 E NAO 39 — pedido: baixar cinco metros.
 

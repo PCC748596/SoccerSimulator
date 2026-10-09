@@ -1398,6 +1398,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof Crowd !== 'undefined' && Crowd.recolorir) Crowd.recolorir({ A: Crowd.coresDaEquipa(Match.players), B: Crowd.coresDaEquipa(Match.opponents) });
         popularPainelJogadores();
         actualizarNomesNoPlacar();
+        // A entrada pelo tunel (js/abertura.js): so no browser, uma vez, ao carregar a pagina.
+        if (typeof Abertura !== 'undefined') Abertura.iniciar();
         requestAnimationFrame(animate);
     } catch (err) {
         console.error("Erro crítico de inicialização:", err);

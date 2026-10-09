@@ -4603,6 +4603,11 @@ class FootballPlayer {
     }
 
     update(dt) {
+        // A abertura do jogo (js/abertura.js) manda neste jogador enquanto ele sai do tunel e se alinha.
+        if (this.aberturaOrdem && typeof Abertura !== 'undefined' && Abertura.activa) {
+            Abertura.passoDoJogador(this, dt);
+            return;
+        }
         /*
         MOVER SEM PASSOS NAO EXISTE: se algo o deslocou entre dois frames (colisao, o proprio lance parado,
         a volta da queda) a mais de `ColisaoJogadores.deslizeMin` m/s com a velocidade a zero e sem gesto,
@@ -6295,7 +6300,11 @@ class FootballPlayer {
         enquanto a cintura mal rodava. Aqui a cabeca fica direita sobre o tronco e
         vai para onde o tronco (o giro da cintura, ver prepararGiroLateral) a leva.
         */
-        if (rig.neck && this.fsm.currentState === 'LATERAL') {
+        if (rig.neck && this.aberturaOrdem) {
+            // Na abertura (js/abertura.js) olham em frente, para a torcida, e nao para a bola.
+            rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.35);
+            this.cinturaAlvoY = 0;
+        } else if (rig.neck && this.fsm.currentState === 'LATERAL') {
             rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.35);
             this.cinturaAlvoY = 0;
         } else if (rig.neck && Match.ball && this.fsm.currentState !== 'TACKLE' && this.fsm.currentState !== 'SLIDE_TACKLE') {

@@ -91,6 +91,10 @@ Object.assign(Match, {
         this.nextKickoffTeam = (abriu === 'TeamA') ? 'TeamB' : 'TeamA';
         this.saidaPlano = null;
         this.ball.position.set(0, BallPhysics.raio, 0);
+        // A saida do tunel (js/abertura.js): trio e depois os 22 em ordem aleatoria, direto para os postos.
+        if (typeof Abertura !== 'undefined' && Abertura.segundoTempo()) return;
+        // Sem tunel (lotes...): a caminhada de sempre, e sem o grito de golo (ver ambiente_sonoro.js).
+        this.semFestaDeGolo = true;
         this.mudarEstado('GOAL', 'segundo_tempo');
         this.goalSequenceStage = 1;
         this.tempoParada = 0;
@@ -113,6 +117,18 @@ Object.assign(Match, {
         // Intervalo e apito final: o relogio para, a bola fica no sitio.
         if (this.state === 'INTERVALO' || this.state === 'FIM_DE_JOGO') {
             this.correrPausaDeJogo(dt);
+            return;
+        }
+
+        /*
+        A ABERTURA DO JOGO (js/abertura.js): a entrada pelo tunel. Relogio e IA parados; so a coreografia anda. O
+        `Abertura.update` pode terminar a abertura (muda o estado para GOAL): o frame acaba aqui na mesma.
+        */
+        if (this.state === 'ABERTURA') {
+            if (typeof Abertura !== 'undefined') Abertura.update(dt);
+            this.players.forEach(p => p.update(dt));
+            this.opponents.forEach(p => p.update(dt));
+            if (typeof Officials !== 'undefined') Officials.update(dt);
             return;
         }
 

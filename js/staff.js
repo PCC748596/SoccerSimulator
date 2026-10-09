@@ -305,12 +305,15 @@ const Staff = {
             geo.bancadaZ - F.recuoDaBancada,
             Math.max(0.5, geo.raioPrimeiraFila - F.recuoDaBancada),
             geo.cantoX, geo.cantoZ, F.espacamento);
-        for (const p of anel) lugares.dePe.push({ x: p.x, z: p.z, tipo: 'anel' });
+        // Ninguem no caminho do tunel dos jogadores (TunelJogadores.bloqueia).
+        const livreDoTunel = (p) => !(typeof TunelJogadores !== 'undefined' && TunelJogadores.bloqueia(p.x, p.z));
+        for (const p of anel) if (livreDoTunel(p)) lugares.dePe.push({ x: p.x, z: p.z, tipo: 'anel' });
 
         if (F.grupos && F.grupos.activo) {
             const pts = this._pontosDosGrupos(
                 geo.placaX, geo.placaZ, geo.cantoX, geo.cantoZ, F.grupos, rnd);
             for (const p of pts) {
+                if (!livreDoTunel(p)) continue;
                 const sentado = rnd() < F.grupos.fraccaoSentados;
                 /*
                 O `tipo` viaja com o ponto porque as duas poses misturam os

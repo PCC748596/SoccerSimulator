@@ -107,7 +107,9 @@ const AmbienteSonoro = {
         for GOAL a faixa continua a tocar sozinha ate ao fim.
         */
         const estado = (typeof Match !== 'undefined') ? Match.state : null;
-        if (estado === 'GOAL' && this._estadoAnterior !== 'GOAL') this.gritarGolo();
+        // O estado GOAL sem golo (a caminhada de saida depois da abertura do jogo, Match.semFestaDeGolo): sem grito.
+        if (estado !== 'GOAL' && typeof Match !== 'undefined') Match.semFestaDeGolo = false;
+        if (estado === 'GOAL' && this._estadoAnterior !== 'GOAL' && !Match.semFestaDeGolo) this.gritarGolo();
         this._estadoAnterior = estado;
 
         this._alvo = this.volumeAlvo();
@@ -133,7 +135,7 @@ const AmbienteSonoro = {
     */
     volumeAlvo() {
         if (typeof Crowd === 'undefined' || !Crowd._frac) return this.volumeRepouso;
-        if (typeof Match !== 'undefined' && Match.state === 'GOAL') return this.volumeGolo;
+        if (typeof Match !== 'undefined' && Match.state === 'GOAL' && !Match.semFestaDeGolo) return this.volumeGolo;
 
         const maior = Math.max(Crowd._frac.A || 0, Crowd._frac.B || 0);
         const repouso = (typeof CrowdModel !== 'undefined') ? CrowdModel.fraccaoRepouso : 0.08;
