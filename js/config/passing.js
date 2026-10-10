@@ -1421,7 +1421,10 @@ const RunIntoSpaceModel = {
     // 1.0 -> 8.0 (8 de Outubro de 2026): *"os jogadores tem que ficar um pouco mais impedidos"*. Varrimento de 16
     // sementes x 30 min com o vies 1.6 e o erro do passador (OffsideModel): risco 5 -> 1.51, 8 -> 2.05, 12 -> 2.73
     // impedimentos por 90 (de 0.28), com remates e golos iguais.
-    riscoAlemDaLinha: 8.0,
+    // 8 -> 4 (10 de Outubro de 2026): com 8 os passes certos caiam de 77% para 68% (so este parametro os derruba: o erro
+    // do passador e o vies quase nao mexem neles nem nos impedimentos). Lotes de 60 x 20 min: risco 1 -> 0.2 imped. e 77%;
+    // 4 -> 0.93 imped. e 70.9%; 8 -> 1.9 imped. e 68%.
+    riscoAlemDaLinha: 4.0,
 
     /*
     INFILTRAR É PARA A FRENTE, E MAIS NADA.

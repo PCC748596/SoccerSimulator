@@ -64,6 +64,16 @@ if (process.env.LOTE_WORKER) {
     };
 
     require('./harness.js');
+    // Sobreposicoes para A/B sem tocar na configuracao: LOTE_VEL (maximo m/s), LOTE_SEMMEIAS=1 (desliga o tecto dos meias), LOTE_SEMATERRAGEM=1.
+    if (process.env.LOTE_VEL) { VelocidadeHumana.maximo = Number(process.env.LOTE_VEL); VelocidadeHumana.amplitude = Number(process.env.LOTE_VEL) * (2.2 / 9.5); }
+    if (process.env.LOTE_SEMMEIAS === '1') BlockShape.meiasComBola.activo = false;
+    if (process.env.LOTE_SEMATERRAGEM === '1') SaltoCabeceio.aterragem.activo = false;
+    // Varrimento dos impedimentos: LOTE_PSIGMA (erro do passador, m), LOTE_RISCO (riscoAlemDaLinha), LOTE_AVIES (vies do atacante).
+    if (process.env.LOTE_PSIGMA) { OffsideModel.passeSigma = Number(process.env.LOTE_PSIGMA); OffsideModel.passeSigmaMin = Number(process.env.LOTE_PSIGMA) * 0.45; }
+    if (process.env.LOTE_RISCO) RunIntoSpaceModel.riscoAlemDaLinha = Number(process.env.LOTE_RISCO);
+    if (process.env.LOTE_AVIES) OffsideModel.vies = Number(process.env.LOTE_AVIES);
+    // LOTE_IMPOLD=1: volta a calibracao antiga dos impedimentos (sem erro do passador, vies 0.45, risco 1.0).
+    if (process.env.LOTE_IMPOLD === '1') { OffsideModel.passeSigma = 0.001; OffsideModel.passeSigmaMin = 0.001; OffsideModel.passeVies = 0; OffsideModel.vies = 0.45; RunIntoSpaceModel.riscoAlemDaLinha = 1.0; }
     const dt = 1 / 60;
     const scene = new THREE.Scene();
 
@@ -224,9 +234,20 @@ for (const lista of porTrabalhador) {
         if (m.tipo === 'jogo') {
             resultados.push(m.jogo);
             const feitos = resultados.length;
-            if (feitos % 5 === 0 || feitos === JOGOS) {
-                const seg = ((Date.now() - inicio) / 1000).toFixed(0);
-                console.log(`  ${feitos}/${JOGOS} jogos (${seg}s)`);
+            /*
+            BARRA DE PROGRESSO com percentagem, tempo decorrido e tempo que falta — um lote demora dezenas de minutos
+            e sem isto parece que o computador travou. Num terminal reescreve-se a mesma linha (``); redireccionado
+            para ficheiro escreve-se uma linha de cada vez, a cada jogo que acaba.
+            */
+            const seg = (Date.now() - inicio) / 1000;
+            const falta = feitos > 0 ? seg / feitos * (JOGOS - feitos) : 0;
+            const fmt = (t) => { t = Math.round(t); const m = Math.floor(t / 60), r = t % 60; return `${m}m${String(r).padStart(2, '0')}s`; };
+            const larg = 30, cheio = Math.round(larg * feitos / JOGOS);
+            const linha = `  [${'#'.repeat(cheio)}${'-'.repeat(larg - cheio)}] ${(100 * feitos / JOGOS).toFixed(0).padStart(3)}%  ${feitos}/${JOGOS} jogos  decorrido ${fmt(seg)}  falta ~${fmt(falta)}`;
+            if (process.stdout.isTTY) {
+                process.stdout.write(String.fromCharCode(13) + linha + (feitos === JOGOS ? String.fromCharCode(10) : ''));
+            } else {
+                console.log(linha);
             }
         }
     });
