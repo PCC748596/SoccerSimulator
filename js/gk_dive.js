@@ -436,7 +436,11 @@ const GkDive = {
                 // com smoothstep para não haver ressalto na velocidade.
                 const k = Math.min(1, t / d.tVoo);
                 const s = k * k * (3 - 2 * k);
-                d.ang = d.angMax * (0.18 + 0.82 * s);
+                // A defesa BAIXA deita-se mais cedo (FF7B: corpo quase na horizontal e rente ao chao a meio do voo):
+                // a curva do tombo sobe com o expoente `inclinacaoBaixoExp` < 1.
+                const sInc = (d.tipo === 'baixo' && typeof D.inclinacaoBaixoExp === 'number') ? Math.pow(s, D.inclinacaoBaixoExp) : s;
+                d.ang = d.angMax * (0.18 + 0.82 * sInc);
+                d.sAlt = sInc;
 
                 /*
                 ALTURA = a base do modelo MAIS a parábola.
@@ -452,7 +456,20 @@ const GkDive = {
                 salto soma-se-lhe. Aterra quando a parábola volta a zero.
                 */
                 const salto = d.v0y * t - 0.5 * g * t * t;
-                const base = ALTURA_BASE_Y + (D.alturaDeitado - ALTURA_BASE_Y) * s;
+                let base = ALTURA_BASE_Y + (D.alturaDeitado - ALTURA_BASE_Y) * s;
+                /*
+                A ALTURA SEGUE A ALTURA DA BOLA (D.alturaPorAlvo) — relato: *"nao faz sentido o goleiro pular para cima e
+                defender em baixo; a pelve da defesa baixa nao pode estar mais alta que a da media"*. O impulso vertical
+                tem um piso (`vySubidaMin`) igual para todas, por isso o corpo subia o mesmo; agora a defesa BAIXA desce
+                (ate `baixaMax` m, para alvos abaixo de `baixaAte`) e a do MEIO sobe (ate `sobeMeio` m, entre `sobeDe` e
+                `sobeAte`), em proporcao do tombo.
+                */
+                const AP = D.alturaPorAlvo;
+                if (AP && d.tipo !== 'alto') {
+                    const baixa = AP.baixaMax * Math.max(0, 1 - d.alvoY / AP.baixaAte);
+                    const sobe = AP.sobeMeio * THREE.MathUtils.clamp((d.alvoY - AP.sobeDe) / (AP.sobeAte - AP.sobeDe), 0, 1);
+                    base += (sobe - baixa) * (d.sAlt !== undefined ? d.sAlt : s);
+                }
                 corpo.position.y = base + Math.max(0, salto);
 
                 if (!this.poseDoClip(rig, d)) this.poseVoo(rig, d);

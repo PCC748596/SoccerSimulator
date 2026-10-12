@@ -147,6 +147,9 @@ const SaltoCabeceio = {
     // So se cabeceia (salto ou inclinacao) uma bola que vem a menos disto da direccao dele: 60 graus para cada lado.
     anguloFrontalMax: 60 * Math.PI / 180,
     alturaMax: 0.80,      // subida máxima que as pernas dão (m)
+    // CABECEAR COM A TESTA E NAO COM O QUEIXO (pedido): o salto leva a testa `folgaTesta` m ABAIXO da bola, para ela bater
+    // na parte alta da testa — saltar menos (a bola mais alta em relacao a cabeca).
+    folgaTesta: 0.12,
     /*
     A ATERRAGEM TIRA-LHE TEMPO — pedido: *"depois de um pulo para o cabeceio o jogador tem que perder um pouco de
     velocidade ao voltar para o chao, meio que perde o tempo de bola se nao conseguir cabecear"*. Ao aterrar entra

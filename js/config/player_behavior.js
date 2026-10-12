@@ -1673,7 +1673,15 @@ const OffsideRestartShape = {
     largura: 1.0
 };
 
+/*
+`receptoresMax` / `raioNaoReceptor`: NO LATERAL SO VAO AO BATEDOR OS MAIS PERTO — pedido: *"enquanto um time volta todo para a
+defesa o outro vai quase todo para perto do batedor; nao precisa ir o time todo"*. Medido (29 laterais, 6 s depois de
+marcado): 5.9 dos 10 jogadores de campo de quem bate a menos de 25 m da bola. So os `receptoresMax` (3) mais perto dela
+podem ficar a menos de `raioNaoReceptor` m (26); o alvo dos outros e empurrado para fora desse raio e eles mantem a forma.
+*/
 const ThrowInModel = {
+    receptoresMax: 3,
+    raioNaoReceptor: 26.0,
     alcanceMin: 9.0,
 
     /*

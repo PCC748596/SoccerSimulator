@@ -1273,7 +1273,9 @@ class FootballPlayer {
         dx /= d; dz /= d;
         this.queda = {
             t: 0, dirX: dx, dirZ: dz, rumo: Math.atan2(dx, dz),
-            x0: pos.x, z0: pos.z, x: pos.x, z: pos.z, destino: null
+            x0: pos.x, z0: pos.z, x: pos.x, z: pos.z, destino: null,
+            // O lado para onde o rolamento se enviesa (QuedaModel.inclinacaoRolamento): sorteado por queda.
+            lado: (Math.random() < 0.5) ? -1 : 1
         };
         this.voltaDaQueda = null;
         this.hasBall = false;
@@ -1290,6 +1292,13 @@ class FootballPlayer {
         q.t += dt;
         const clip = (typeof clipDaQueda === 'function') ? clipDaQueda() : QuedaClip;
         const K = amostrarClipQueda(q.t, clip);
+        /*
+        O ROLAMENTO ENVIESADO (referencia A17A): em vez de rolar perfeitamente alinhado, a bacia inclina de lado (leanZ)
+        durante a volta, em seno: 0 no toque, `inclinacaoRolamento` a meio, 0 quando fica deitado. So no clip novo.
+        */
+        if (clip === QuedaFrenteClip && typeof QuedaModel !== 'undefined' && QuedaModel.inclinacaoRolamento && q.t < clip.deitadoEm) {
+            K.leanZ = (K.leanZ || 0) + QuedaModel.inclinacaoRolamento * (q.lado || 1) * Math.sin(Math.PI * q.t / clip.deitadoEm);
+        }
         q.x = q.x0 + q.dirX * K.avanco;
         q.z = q.z0 + q.dirZ * K.avanco;
         pos.x = q.x; pos.z = q.z;
@@ -1309,6 +1318,27 @@ class FootballPlayer {
             // acaba com a bacia a 2 pi + 0.04 em X: tambem volta a zero, senao o idle desfazia a volta ao contrario.
             if (this.rig && this.rig.pelvis) { this.rig.pelvis.rotation.y = 0; this.rig.pelvis.rotation.x = 0; }
             if (q.destino && Match.state !== 'PLAY') this.voltaDaQueda = q.destino;
+            /*
+            NAO FICA EM CIMA DA BOLA: depois de se levantar, quem sofreu a falta (que nao e o batedor) ficava, as vezes,
+            em cima do ponto da cobranca. Se o lugar a que vai (ou onde esta) fica a menos de `QuedaModel.distanciaDaBola`
+            m da bola parada, afasta-se dela ao longo da recta bola -> ele (ou de lado, se estiver exactamente em cima).
+            */
+            if (Match.state !== 'PLAY' && Match.state !== 'GOAL' && Match.ball && Match.setPieceTaker !== this) {
+                const QMd = (typeof QuedaModel !== 'undefined' && QuedaModel.distanciaDaBola) || 4.0;
+                const b = Match.ball.position;
+                const dest = this.voltaDaQueda || { x: pos.x, z: pos.z };
+                let ux = dest.x - b.x, uz = dest.z - b.z;
+                const dd = Math.hypot(ux, uz);
+                if (dd < QMd) {
+                    if (dd < 0.05) { ux = this.dirZ || 1; uz = 0; } else { ux /= dd; uz /= dd; }
+                    const lim = (typeof CAMPO_LARG !== 'undefined') ? CAMPO_LARG / 2 - 1 : 33;
+                    const limZ = (typeof CAMPO_COMP !== 'undefined') ? CAMPO_COMP / 2 - 1 : 52;
+                    this.voltaDaQueda = {
+                        x: THREE.MathUtils.clamp(b.x + ux * QMd, -lim, lim),
+                        z: THREE.MathUtils.clamp(b.z + uz * QMd, -limZ, limZ)
+                    };
+                }
+            }
         }
     }
 
@@ -5500,7 +5530,7 @@ class FootballPlayer {
                     // bola por tras ou de lado: nao e dele.
                 } else if (dXZ < alcanceEfetivo && subida > S.alturaSemPulo && subida < S.alturaMax) {
                     this.jumpTimer = S.duracao;
-                    this.jumpApex = subida;
+                    this.jumpApex = Math.max(0.05, subida - (S.folgaTesta || 0));
                     this.jumpCooldown = S.duracao + S.cooldown;
                     this.hasHeaderedInJump = false;
 
@@ -5616,6 +5646,46 @@ class FootballPlayer {
                 const bbM = (typeof TeamAI !== 'undefined') ? TeamAI.get(this.team) : null;
                 if (!(bbM && (bbM.chaser === this || bbM.intercetor === this || bbM.bloqueador === this))) {
                     target = new THREE.Vector3(target.x, target.y, tectoM * this.dirZ);
+                }
+            }
+        }
+
+        /*
+        OS MEIAS CENTRAIS NA FAIXA CENTRAL (BlockShape.meiasCentrais): o alvo do CM/DM/AM nao passa de `xMax` m do eixo.
+        Cede a quem tem a bola, ao receptor e a quem vai a bola.
+        */
+        if ((this.pos === 'CM' || this.pos === 'DM' || this.pos === 'AM') && !this.hasBall &&
+            typeof BlockShape !== 'undefined' && BlockShape.meiasCentrais && BlockShape.meiasCentrais.activo &&
+            Math.abs(target.x) > BlockShape.meiasCentrais.xMax &&
+            !(typeof Match !== 'undefined' && Match.intendedReceiver === this)) {
+            const bbC = (typeof TeamAI !== 'undefined') ? TeamAI.get(this.team) : null;
+            if (!(bbC && (bbC.chaser === this || bbC.intercetor === this || bbC.bloqueador === this))) {
+                target = new THREE.Vector3(Math.sign(target.x) * BlockShape.meiasCentrais.xMax, target.y, target.z);
+            }
+        }
+
+        /*
+        NO LATERAL SO OS `receptoresMax` MAIS PERTO DA BOLA SE AGRUPAM A VOLTA DO BATEDOR (ThrowInModel): o alvo dos outros
+        jogadores de campo da equipa que bate fica a mais de `raioNaoReceptor` m da bola.
+        */
+        if (typeof Match !== 'undefined' && Match.state === 'THROW_IN' && Match.ball && this.role !== 'gk' &&
+            this.team === Match.setPieceTeam && Match.setPieceTaker !== this &&
+            typeof ThrowInModel !== 'undefined' && ThrowInModel.receptoresMax) {
+            const bT = Match.ball.position;
+            const meusT = (this.team === 'TeamA') ? Match.players : Match.opponents;
+            const dMeu = Math.hypot(this.model.position.x - bT.x, this.model.position.z - bT.z);
+            let maisPerto = 0;
+            for (const o of meusT) {
+                if (o === this || o === Match.setPieceTaker || !o.model || o.role === 'gk') continue;
+                if (Math.hypot(o.model.position.x - bT.x, o.model.position.z - bT.z) < dMeu) maisPerto++;
+            }
+            if (maisPerto >= ThrowInModel.receptoresMax) {
+                let ux = target.x - bT.x, uz = target.z - bT.z;
+                const dt2 = Math.hypot(ux, uz);
+                if (dt2 < ThrowInModel.raioNaoReceptor) {
+                    if (dt2 < 0.05) { ux = this.model.position.x - bT.x; uz = this.model.position.z - bT.z; }
+                    const l = Math.hypot(ux, uz) || 1;
+                    target = new THREE.Vector3(bT.x + ux / l * ThrowInModel.raioNaoReceptor, target.y, bT.z + uz / l * ThrowInModel.raioNaoReceptor);
                 }
             }
         }

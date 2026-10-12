@@ -1396,6 +1396,10 @@ const GoalkeeperDive = {
     O limite da distancia da BOLA ao goleiro (`distanciaMaxParaMergulhar`) mantem-se.
     */
     mergulhaSemAlcance: true,
+    // Na defesa BAIXA o tombo sobe mais depressa (s^0.65): o corpo fica quase na horizontal e rente ao chao cedo (referencia FF7B).
+    inclinacaoBaixoExp: 0.65,
+    // A altura do corpo no voo segue a da bola: baixa desce, meia sobe (ver gk_dive.js, `alturaPorAlvo`).
+    alturaPorAlvo: { baixaMax: 0.30, baixaAte: 0.9, sobeMeio: 0.22, sobeDe: 0.5, sobeAte: 1.4 },
     // No voo o cotovelo fica com esta fraccao da flexao do IK (1 = igual a antes, 0 = braco direito).
     cotoveloVooFator: 0.35,
 

@@ -1606,6 +1606,11 @@ function amostrarClipRemate(norm) {
         bracoRx: mix('bracoRx'), bracoRz: mix('bracoRz'),
         cotoveloL: mix('cotoveloL'), cotoveloR: mix('cotoveloR'),
         coxaChuteY: mixOpt('coxaChuteY'), peChuteY: mixOpt('peChuteY'),
+        // O PE DO REMATE: `peRx` positivo = ponta do pe para BAIXO (~20 graus no contacto: bate com o peito do pe, e nao com o bico).
+        // Sem o canal em nenhum dos dois keyframes fica `undefined` e o pe como estava.
+        peRx: (typeof a.peRx === 'number' || typeof b.peRx === 'number')
+            ? (mixOpt('peRx'))
+            : undefined,
         /*
         Os canais que o editor ganhou depois — a inclinação lateral do tronco e
         as três rotações de cada mão. O repouso de todos eles é ZERO, portanto

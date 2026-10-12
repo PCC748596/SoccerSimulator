@@ -127,7 +127,9 @@ const RefereeModel = {
         // A correr o pano muda de lado conforme a ponta da haste vai para a frente ou para tras (m/s ao longo do corpo).
         panoVelMin: 0.4,
         // APONTAR a bandeira (canto: para o canto; tiro de meta: para a quina da pequena area): braco quase horizontal.
-        apontarX: -1.45, apontarZ: -0.06, apontarCotovelo: -0.05
+        apontarX: -1.45, apontarZ: -0.06, apontarCotovelo: -0.05,
+        // O antebraco/haste aponta ~17 graus para fora do ombro (medido): correccao em rad somada ao azimute.
+        apontarCorrecao: -0.30
     },
 
     /*
@@ -1313,8 +1315,22 @@ const Officials = {
 
         // No sitio: o mover com o proprio ponto mantem-no parado (e escreve a pose de repouso, que a nossa cobre).
         this.mover(o, pos.x, pos.z, 0.1, dt);
-        // Virado para o campo (ou para o alvo, se a bandeira aponta para um sitio: canto / tiro de meta).
-        const alvoYaw = b.alvo ? Math.atan2(b.alvo.x - pos.x, b.alvo.z - pos.z) : Math.atan2(-Math.sign(pos.x) || 1, 0);
+        /*
+        Virado para o CAMPO. Se a bandeira aponta para um sitio (canto / tiro de meta) o corpo CONTINUA virado para o campo
+        e e o BRACO que se abre para o alvo (ombro x -1.5 + z = azimute do alvo): pedido *"o bandeirinha fica virado para o
+        campo e aponta a bandeira para o corner"*. `rel` e o azimute do alvo relativo ao campo (positivo = a esquerda do
+        corpo). A direita o braco abre-se (z negativo, ate -1.7); a esquerda atravessa o peito (z positivo, tecto 1.0), e se
+        passar disso o corpo roda so o que falta.
+        */
+        const yawCampo = Math.atan2(-Math.sign(pos.x) || 1, 0);
+        let alvoYaw = yawCampo, relBraco = 0;
+        if (b.alvo) {
+            const angAlvo = Math.atan2(b.alvo.x - pos.x, b.alvo.z - pos.z);
+            let rel = Math.atan2(Math.sin(angAlvo - yawCampo), Math.cos(angAlvo - yawCampo));
+            if (rel > 1.0) { alvoYaw = yawCampo + (rel - 1.0); rel = 1.0; }
+            else if (rel < -1.7) { alvoYaw = yawCampo + (rel + 1.7); rel = -1.7; }
+            relBraco = rel;
+        }
         const dif = Math.atan2(Math.sin(alvoYaw - o.model.rotation.y), Math.cos(alvoYaw - o.model.rotation.y));
         o.model.rotation.y += dif * (1 - Math.exp(-dt * 8));
         if (rig.neck) rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.3);
@@ -1333,7 +1349,7 @@ const Officials = {
         else if (b.fase === 'guardar' && b.t >= B.tGuardar) { o.bandeira = null; return; }
 
         const alvo = b.alvo && b.fase !== 'guardar'
-            ? { x: B.apontarX, z: B.apontarZ, c: B.apontarCotovelo }
+            ? { x: B.apontarX, z: relBraco + (B.apontarCorrecao || 0), c: B.apontarCotovelo }
             : (b.fase === 'erguer' || b.fase === 'segurar')
             ? { x: B.erguerX, z: B.erguerZ, c: B.erguerCotovelo }
             : (b.fase === 'guardar' ? { x: 0, z: -0.08, c: -0.3 } : { x: B.horizX, z: B.horizZ, c: B.horizCotovelo });

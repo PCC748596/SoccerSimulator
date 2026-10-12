@@ -653,6 +653,13 @@ const BlockShape = {
 
     Fica de fora quem tem a bola, o receptor do passe e quem tem tarefa de bola. `activo: false` desliga.
     */
+    /*
+    OS MEIAS CENTRAIS NA FAIXA CENTRAL — pedido: *"os meias centrais estao abrindo demais para as pontas; tem que jogar
+    mais na faixa central"*. Medido (3 jogos de 10 min): os CM tem o posto em x = +-8 m mas 24% do tempo andavam a mais de
+    14 m do eixo (4% a mais de 20 m). O alvo do CM/DM/AM nao passa de `xMax` m do eixo, salvo a quem tem tarefa de bola
+    (portador, receptor, quem vai a bola). Os alas (RM/LM) ficam de fora. `activo: false` desliga.
+    */
+    meiasCentrais: { activo: true, xMax: 12.0 },
     meiasComBola: { activo: true, tercoDefensivo: -17.5, bolaAtaque: 8.0, frenteDefesa: 9.0, frenteMeio: 16.0, frenteAtaque: 28.0 },
     folgaAlemDaBola: 1.5,
     recuamAlemDaBola: ['def', 'mid'],
