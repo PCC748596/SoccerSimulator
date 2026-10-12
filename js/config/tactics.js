@@ -272,6 +272,23 @@ Tática Cima precisa de 5/105 = 0.048, e por isso 0.05 não chegava — parava a
 `distanciaMinima` fica acima do `near` da câmara (0.1 m, ver main.js), portanto
 não há nada a ser cortado pelo plano de recorte.
 */
+/*
+TV CENTRO COM A BOLA PERTO DA LATERAL DA CAMARA — pedido: *"quando a bola esta proxima a lateral do lado da camera a
+filmagem esta muito de cima, ruim de ver; baixar a camera mas afastar um pouco para nao ficar muito proxima dos
+jogadores"*. A camara fica em x = 58, y = 34; com a bola junto a lateral (x = 34) o angulo e de ~55 graus. Quando a bola
+passa de `xInicio` (a caminho da lateral +X) a camara baixa `baixa` m e recua `recua` m, em proporcao (0 em `xInicio`,
+inteiro em `xFim`): a distancia a bola fica parecida, o angulo cai para ~30 graus.
+*/
+const CameraCentroLado = {
+    activo: true, xInicio: 8.0, xFim: 32.0, baixa: 12.0, recua: 14.0,
+    // As cameras 7 (Lateral TV: x 48, y 20) e 5 (Lateral Movel: x 35, y 14) tambem: baixam e recuam com a bola na lateral +X.
+    lateralTV: { baixa: 6.0, recua: 10.0 },
+    // A Lateral Movel esta SOBRE a linha lateral (x 35): com a bola la fica quase a prumo. Recua `recua` m para fora, baixa
+    // `baixa` m e a distancia a bola aumenta `afasta` (fraccao) — o tecto de 30 m sobe na mesma proporcao.
+    lateralMovel: { baixa: 5.0, recua: 12.0, afasta: 0.35 }
+};
+if (typeof window !== 'undefined') window.CameraCentroLado = CameraCentroLado;
+
 const CameraZoom = {
     min: 0.04,              // piso do multiplicador; os 5 m vêm do de baixo
     max: 2.5,

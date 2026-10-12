@@ -282,8 +282,16 @@ Object.assign(Match, {
             */
             lookTarget.copy(this.ball.position);
             // O ZOOM APROXIMA DA BOLA e nao do centro do campo: posicao = bola + (base - bola) * zoom.
-            targetPos.set(lookTarget.x + (58 - lookTarget.x) * zoom,
-                lookTarget.y + (34 - lookTarget.y) * zoom,
+            // Com a bola a caminho da lateral da camara (+X) ela baixa e recua (ver CameraCentroLado).
+            let baseX = 58, baseY = 34;
+            const CL = (typeof CameraCentroLado !== 'undefined') ? CameraCentroLado : null;
+            if (CL && CL.activo) {
+                const k = THREE.MathUtils.clamp((this.ball.position.x - CL.xInicio) / (CL.xFim - CL.xInicio), 0, 1);
+                baseX += CL.recua * k;
+                baseY -= CL.baixa * k;
+            }
+            targetPos.set(lookTarget.x + (baseX - lookTarget.x) * zoom,
+                lookTarget.y + (baseY - lookTarget.y) * zoom,
                 lookTarget.z + (0 - lookTarget.z) * zoom);
         } else if (window.cameraMode === 'sideline') {
             // Câmara Lateral bem mais próxima, acompanhando a bola no eixo Z
@@ -295,13 +303,18 @@ Object.assign(Match, {
             DIRECCAO vem daqui; a distancia e a de zoom 1 vezes o zoom, cortada
             a `CameraZoom.movelMin`/`movelMax`.
             */
-            targetPos.set(35, 14, bz);
+            // Com a bola a caminho da lateral +X ela esta quase por cima da camera: recua e baixa (ver CameraCentroLado).
+            const CLm = (typeof CameraCentroLado !== 'undefined' && CameraCentroLado.activo) ? CameraCentroLado : null;
+            let kLado = 0;
+            if (CLm) kLado = THREE.MathUtils.clamp((this.ball.position.x - CLm.xInicio) / (CLm.xFim - CLm.xInicio), 0, 1);
+            targetPos.set(35 + (CLm ? CLm.lateralMovel.recua * kLado : 0), 14 - (CLm ? CLm.lateralMovel.baixa * kLado : 0), bz);
             lookTarget.copy(this.ball.position);
             // Pedido seguinte: o zoom volta a contar, mas SO ENTRE 10 E 30 M da bola.
             const ZC = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
-            const dMin = (ZC && typeof ZC.movelMin === 'number') ? ZC.movelMin : 10.0;
-            const dMax = (ZC && typeof ZC.movelMax === 'number') ? ZC.movelMax : 30.0;
-            const dMovel = THREE.MathUtils.clamp(Math.hypot(35, 14) * zoom, dMin, dMax);
+            const afasta = 1 + (CLm ? CLm.lateralMovel.afasta * kLado : 0);
+            const dMin = ((ZC && typeof ZC.movelMin === 'number') ? ZC.movelMin : 10.0) * afasta;
+            const dMax = ((ZC && typeof ZC.movelMax === 'number') ? ZC.movelMax : 30.0) * afasta;
+            const dMovel = THREE.MathUtils.clamp(Math.hypot(35, 14) * zoom * afasta, dMin, dMax);
             this._cFwd.subVectors(targetPos, this.ball.position);
             if (this._cFwd.lengthSq() > 1e-6) {
                 this._cFwd.normalize().multiplyScalar(dMovel);
@@ -323,8 +336,16 @@ Object.assign(Match, {
             */
             lookTarget.copy(this.ball.position);
             // O ZOOM APROXIMA DA BOLA (era do eixo x=0,y=0): posicao = bola + (base - bola) * zoom.
-            targetPos.set(lookTarget.x + (48 - lookTarget.x) * zoom,
-                lookTarget.y + (20 - lookTarget.y) * zoom,
+            // Com a bola a caminho da lateral +X a camara baixa e recua (ver CameraCentroLado).
+            let baseX7 = 48, baseY7 = 20;
+            const CL7 = (typeof CameraCentroLado !== 'undefined' && CameraCentroLado.activo) ? CameraCentroLado : null;
+            if (CL7) {
+                const k7 = THREE.MathUtils.clamp((this.ball.position.x - CL7.xInicio) / (CL7.xFim - CL7.xInicio), 0, 1);
+                baseX7 += CL7.lateralTV.recua * k7;
+                baseY7 -= CL7.lateralTV.baixa * k7;
+            }
+            targetPos.set(lookTarget.x + (baseX7 - lookTarget.x) * zoom,
+                lookTarget.y + (baseY7 - lookTarget.y) * zoom,
                 lookTarget.z + (bz - lookTarget.z) * zoom);
 
             if (typeof TeamAI !== 'undefined') {

@@ -3259,6 +3259,9 @@ function tectoDoMeiaComBola(p) {
     if (typeof TeamAI === 'undefined' || typeof Match === 'undefined' || !Match.ball) return Infinity;
     // So em jogo corrido: no tiro de meta (e nas outras bolas paradas) a equipa tem de se POR em campo — o teste da bola a 9 m puxava os meias para dentro da area (relato: a linha do meio nao avanca no tiro de meta).
     if (Match.state !== 'PLAY') return Infinity;
+    // O guarda-redes com a bola (nas maos ou aos pes): a equipa sobe para dar linha de passe ao lancamento — o tecto de 9 m da bola puxava os meias para tras (relato: no fim da defesa os meias nao vao para a frente).
+    const portGR = Match.ballCarrier;
+    if ((portGR && portGR.role === 'gk' && portGR.team === p.team) || (Match.gkHoldingBall && Match.gkHoldingBall[p.team])) return Infinity;
     const bb = TeamAI.get(p.team);
     if (!bb || !bb.isAttacking) return Infinity;
     const bolaAvanco = Match.ball.position.z * p.dirZ;
