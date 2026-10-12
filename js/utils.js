@@ -3257,6 +3257,8 @@ function tectoDoMeiaComBola(p) {
     const MC = B && B.meiasComBola;
     if (!MC || !MC.activo || !p || p.role !== 'mid') return Infinity;
     if (typeof TeamAI === 'undefined' || typeof Match === 'undefined' || !Match.ball) return Infinity;
+    // So em jogo corrido: no tiro de meta (e nas outras bolas paradas) a equipa tem de se POR em campo — o teste da bola a 9 m puxava os meias para dentro da area (relato: a linha do meio nao avanca no tiro de meta).
+    if (Match.state !== 'PLAY') return Infinity;
     const bb = TeamAI.get(p.team);
     if (!bb || !bb.isAttacking) return Infinity;
     const bolaAvanco = Match.ball.position.z * p.dirZ;
