@@ -124,6 +124,8 @@ const RefereeModel = {
         tErguer: 0.35, tSegurar: 2.0, tBaixar: 0.45, tHorizontalMax: 10.0, tGuardar: 0.5, suavizacao: 0.3,
         // O pano fica do lado oposto ao de onde a haste aponta (ver `_ajustarPano`).
         panoZonaMorta: 0.15, panoSuavizacao: 0.12,
+        // A correr o pano muda de lado conforme a ponta da haste vai para a frente ou para tras (m/s ao longo do corpo).
+        panoVelMin: 0.4,
         // APONTAR a bandeira (canto: para o canto; tiro de meta: para a quina da pequena area): braco quase horizontal.
         apontarX: -1.45, apontarZ: -0.06, apontarCotovelo: -0.05
     },
@@ -1227,8 +1229,28 @@ const Officials = {
         v.f.set(0, 0, 1).applyQuaternion(o.model.quaternion);
         v.f.y = 0; v.f.normalize();
         const frente = v.a.dot(v.f);
-        if (frente > B.panoZonaMorta) o.panoLado = -1;        // haste para a frente: pano para tras
-        else if (frente < -B.panoZonaMorta) o.panoLado = 1;   // haste para tras: pano para a frente
+        if (o.bandeira) {
+            // Bandeira levantada / a apontar: pela POSICAO da haste (haste para a frente: pano para tras).
+            if (frente > B.panoZonaMorta) o.panoLado = -1;
+            else if (frente < -B.panoZonaMorta) o.panoLado = 1;
+            o.panoPonta = undefined;
+        } else {
+            /*
+            A CORRER, o braco balanca e a haste (o prolongamento do antebraco) aponta SEMPRE um pouco para a frente
+            (medido: componente a frente de 0.03 a 0.98, nunca negativa) — a regra da posicao nunca trocava o pano. O
+            que muda de sentido e a VELOCIDADE da ponta da haste ao longo do corpo: a ponta a ir para a frente: pano
+            para tras; a ir para tras: pano para a frente (o pano arrasta-se).
+            */
+            o.rig.rHand.getWorldPosition(v.b);
+            v.b.addScaledVector(v.a, B.comprimento);
+            const pf = v.b.dot(v.f) - o.model.position.dot(v.f);   // posicao da ponta ao longo da frente do corpo
+            if (o.panoPonta !== undefined && dt > 1e-5) {
+                const vel = (pf - o.panoPonta) / dt;
+                if (vel > B.panoVelMin) o.panoLado = -1;
+                else if (vel < -B.panoVelMin) o.panoLado = 1;
+            }
+            o.panoPonta = pf;
+        }
         // Direccao desejada do pano no mundo, tirada a componente ao longo da haste.
         v.w.copy(v.f).multiplyScalar(o.panoLado);
         v.w.addScaledVector(v.a, -v.w.dot(v.a));
@@ -1347,6 +1369,13 @@ const Officials = {
         const fx = -Math.sign(alvoX) || 1;
         const bz = Match.ball.position.z - pos.z;
         if (Math.abs(bz) > 3 || o.vigiaAlong === undefined) o.vigiaAlong = Math.sign(bz) || o.vigiaAlong || 1;
+        /*
+        SE A LINHA ANDA PARA O LADO CONTRARIO AO DA BOLA, o corpo vira-se para onde ELE anda (os 45 graus continuam para
+        o campo): virado para o lado da bola e a deslocar-se para o outro, andava de costas (medido: 24% dos frames em
+        movimento, todos a menos de 2 m/s, na vigia da linha).
+        */
+        const dzMov = alvoZ - pos.z;
+        if (Math.abs(dzMov) > 0.25) o.vigiaAlong = Math.sign(dzMov);
         const a = V.graus * Math.PI / 180;
         // Ponto para onde o corpo se vira: `graus` para o campo a partir da linha lateral.
         const olhar = { x: pos.x + fx * Math.sin(a) * 10, z: pos.z + o.vigiaAlong * Math.cos(a) * 10 };
