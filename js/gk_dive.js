@@ -246,6 +246,18 @@ const GkDive = {
 
         const alturaBaliza = (typeof ALTURA_BALIZA === 'number') ? ALTURA_BALIZA : 2.44;
         const y = (typeof alvoY === 'number') ? alvoY : 0;
+
+        /*
+        COM OS CLIPS EXTRAÍDOS, quando ligados (ver config/gk_clips_pes.js). As
+        bandas são as mesmas — só muda qual é o clip de cada uma. Desligado, ou
+        se o ficheiro não estiver carregado, segue para os clips à mão.
+        */
+        if (typeof GkClipsPes !== 'undefined' && GkClipsPes.activo) {
+            if (y <= alturaBaliza * D.bandaBaixa) return GkClipsPes.baixo;
+            if (y <= alturaBaliza * D.bandaAlta) return GkClipsPes.medio;
+            return GkClipsPes.alto;
+        }
+
         if (y <= alturaBaliza * D.bandaBaixa) return GkLowClip;
         if (y <= alturaBaliza * D.bandaAlta) return GkJump3Clip;
         return GkJumpClip;

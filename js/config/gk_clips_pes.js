@@ -247,7 +247,21 @@ const GkDiveAltoPes = {
         { chest: 0.976, pelvis: 0.482, coxaL: -1.190, joelhoL: 1.718, coxaR: -0.866, joelhoR: 1.486, bracoLx: -0.741, bracoLz: -1.387, bracoRx: 0.029, bracoRz: 1.301, cotoveloL: -1.065, cotoveloR: 1.048, peLx: 0.844, peLy: 0.443, peRx: -0.342, peRy: -0.424, cabecaX: -0.788 },
     ]
 };
+/*
+O INTERRUPTOR. Ligado, o `GoalkeeperDive.clipDaDefesa` escolhe destes em vez
+dos clips à mão; desligado, o jogo fica exactamente como estava. As três bandas
+de altura são as mesmas (`GoalkeeperDive.bandaBaixa` e `bandaAlta`) — só muda
+qual é o clip de cada banda.
+*/
+const GkClipsPes = {
+    activo: true,
+    baixo: GkDiveBaixoPes,
+    medio: GkDiveMedioPes,
+    alto: GkDiveAltoPes
+};
+
 if (typeof window !== 'undefined') {
+    window.GkClipsPes = GkClipsPes;
     window.GkDiveBaixoPes = GkDiveBaixoPes;
     window.GkDiveMedioPes = GkDiveMedioPes;
     window.GkDiveAltoPes = GkDiveAltoPes;

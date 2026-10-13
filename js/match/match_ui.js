@@ -379,8 +379,16 @@ Object.assign(Match, {
                         const recuo = 34 - edgeX;
                         if (recuo > 0) {
                             // Aproxima a câmera na direção do seu próprio look target (frente/trás local)
-                            let fwd = this._cFwd.subVectors(lookTarget, targetPos).normalize();
-                            targetPos.addScaledVector(fwd, recuo * 0.5);
+                            /*
+                            NÃO PASSA DO ALVO. Com o zoom no máximo a câmara já está a poucos metros da bola,
+                            e avançar `recuo * 0.5` (até uns 17 m) ao longo da linha de visão atravessava a
+                            bola e saía por baixo da relva — era o "o zoom passa para baixo da grama". O avanço
+                            pára à distância mínima (CameraZoom.distanciaMinima) do que se está a ver.
+                            */
+                            const falta = this._cFwd.subVectors(lookTarget, targetPos).length();
+                            const dMinA = (typeof CameraZoom !== 'undefined') ? CameraZoom.distanciaMinima : 5.0;
+                            const avanco = Math.min(recuo * 0.5, Math.max(0, falta - dMinA));
+                            targetPos.addScaledVector(this._cFwd.normalize(), avanco);
                         }
                     }
                 }
@@ -516,6 +524,11 @@ Object.assign(Match, {
         desenhada uma vez por frame mesmo quando o `Match.update` correu duas.
         */
         const dtFrame = (typeof window.lastFrameDelta === 'number') ? window.lastFrameDelta : (1 / 60);
+        // A câmara nunca desce da relva: um piso de altura, para qualquer vista e qualquer zoom.
+        if (window.cameraMode !== 'topdown') {
+            const piso = (typeof CameraZoom !== 'undefined' && CameraZoom.alturaMinima) || 0.6;
+            if (targetPos.y < piso) targetPos.y = piso;
+        }
         window.cameraCore.position.lerp(targetPos, fatorSuavizacao(0.05, dtFrame));
 
         // Interpolação do ponto de foco

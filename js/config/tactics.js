@@ -293,6 +293,7 @@ const CameraZoom = {
     min: 0.04,              // piso do multiplicador; os 5 m vêm do de baixo
     max: 2.5,
     distanciaMinima: 5.0,   // metros, o mais perto que a câmara chega do alvo
+    alturaMinima: 0.6,      // metros: a câmara nunca desce abaixo disto (não atravessa a relva)
     movelMin: 10.0,         // Câmara Móvel (5): distância à bola, mínima (m)
     movelMax: 30.0,         // ... e máxima: o zoom só anda entre as duas
     /*
