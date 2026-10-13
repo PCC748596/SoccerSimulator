@@ -416,6 +416,7 @@ const CidadeGente = {
                 if (mesh.calcao) mesh.calcao.setColorAt(a.i, cc.set(a.calca));
                 if (mesh.cabelo) mesh.cabelo.setColorAt(a.i, cc.set(a.cabelo));
                 if (mesh.sapato) mesh.sapato.setColorAt(a.i, cc.set(0x1b1b1d));
+                if (mesh.rosto) mesh.rosto.setColorAt(a.i, cc.set(0x1b1512));
             } else {
                 mesh.roupa.setColorAt(a.i, cc.set(a.camisa));
                 mesh.cabeca.setColorAt(a.i, cc.set(a.pele));

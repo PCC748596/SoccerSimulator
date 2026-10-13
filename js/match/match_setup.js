@@ -920,6 +920,8 @@ Object.assign(Match, {
         exactamente a bancada de sempre, portanto com `aneis: 1` nada disto
         muda. Ver BancadaAneis.
         */
+        // Iluminação sob as coberturas: painéis (posições) e luzes reais, preenchidos por anel.
+        const sobCob = { paineis: [], luzes: [] };
         for (let anel = 0; anel < N_ANEIS; anel++) {
             const offProf = anel * PASSO_PROF;
             const offY = anel * PASSO_Y;
@@ -1016,6 +1018,65 @@ Object.assign(Match, {
             */
             const profFim = offProf + rows * 1.2;
             const yFim = offY + rows * 0.5;
+
+            /*
+            GRADE DE PROTECAO de 1,5 m na beira da frente do anel superior
+            (laterais, fundos e curvas): corrimao no topo, travessa no meio e
+            postes de 2 em 2 m. Fundida numa malha so.
+            */
+            if (N_ANEIS > 1 && anel === N_ANEIS - 1) {
+                const ALT = 1.5, E = 0.07;
+                const y0 = offY + (BA.coberturaEspessura || 0.5);
+                // Bordo da cobertura do anel de baixo: recuoSobreCobertura antes do inicio deste anel.
+                const d = offProf - (BA.recuoSobreCobertura || 3.0);
+                const geos = [];
+                const caixa = (dx, dy, dz, x, y, z, rotY) => {
+                    const g = new THREE.BoxGeometry(dx, dy, dz).toNonIndexed();
+                    if (rotY) g.rotateY(rotY);
+                    g.translate(x, y, z);
+                    geos.push(g);
+                };
+                const reta = (eixo, sinal, base, meio) => {
+                    const p = sinal * (Math.abs(base) + d);
+                    const dims = (c) => eixo === 'x' ? [E, E, c] : [c, E, E];
+                    const pos = (c, y) => eixo === 'x' ? [p, y, c] : [c, y, p];
+                    for (const y of [y0 + ALT - E / 2, y0 + ALT / 2]) {
+                        const [dx, dy, dz] = dims(meio * 2);
+                        caixa(dx, dy, dz, ...pos(0, y));
+                    }
+                    for (let c = -meio; c <= meio + 0.01; c += 2) {
+                        caixa(E, ALT, E, ...pos(c, y0 + ALT / 2));
+                    }
+                };
+                reta('x', -1, BANCADA_X, cornerZ);
+                reta('x', 1, BANCADA_X, cornerZ);
+                reta('z', 1, BANCADA_Z, cornerX);
+                reta('z', -1, BANCADA_Z, cornerX);
+
+                const Rc = RAIO_PRIMEIRA_FILA + d;
+                const nSeg = Math.max(6, Math.floor(Rc * (Math.PI / 2) / 1.0));
+                const segLen = (Rc * (Math.PI / 2) / nSeg) * 1.06;
+                for (const [ccx, ccz, a0] of [
+                    [-cornerX, cornerZ, Math.PI / 2], [cornerX, cornerZ, 0],
+                    [-cornerX, -cornerZ, Math.PI], [cornerX, -cornerZ, 3 * Math.PI / 2]]) {
+                    for (let j = 0; j <= nSeg; j++) {
+                        const a = a0 + (j / nSeg) * (Math.PI / 2);
+                        const x = ccx + Rc * Math.cos(a), z = ccz + Rc * Math.sin(a);
+                        for (const y of [y0 + ALT - E / 2, y0 + ALT / 2]) {
+                            caixa(E, E, segLen, x, y, z, -a);
+                        }
+                        if (j % 2 === 0) caixa(E, ALT, E, x, y0 + ALT / 2, z, 0);
+                    }
+                }
+                const gg = mergeNonIndexedGeometries(geos);
+                gg.computeVertexNormals();
+                const mg = new THREE.Mesh(gg, new THREE.MeshStandardMaterial({
+                    color: 0x9aa3ad, roughness: 0.5, metalness: 0.6
+                }));
+                mg.castShadow = false; mg.receiveShadow = false;
+                campoGrupo.add(mg);
+            }
+
             const yParedeMeio = yFim + BA.alturaParede / 2;
             const matParede = new THREE.MeshStandardMaterial({
                 color: BA.corParede, roughness: 0.9
@@ -1077,6 +1138,72 @@ Object.assign(Match, {
                 addCobertura('x', 1, BANCADA_X, cornerZ * 2);
                 addCobertura('z', 1, BANCADA_Z, cornerX * 2);
                 addCobertura('z', -1, -BANCADA_Z, cornerX * 2);
+
+                /*
+                LUZES POR BAIXO DA COBERTURA, para iluminar os torcedores.
+                Duas fileiras de painéis na face inferior (a 35% e 75% do avanço)
+                e, por lado, duas SpotLights junto ao bordo a apontar para as
+                cadeiras cobertas. Luzes reais são poucas de propósito.
+                */
+                const yBaixo = yFim + BA.alturaParede - 0.08;
+                const seatY = (t) => offY + 0.25 + ((profFim - t) - offProf) / 1.2 * 0.5 + 0.4;
+                const lados = [
+                    ['x', -1, -BANCADA_X, cornerZ], ['x', 1, BANCADA_X, cornerZ],
+                    ['z', 1, BANCADA_Z, cornerX], ['z', -1, -BANCADA_Z, cornerX]
+                ];
+                for (const [eixo, sinal, base, meio] of lados) {
+                    const ponto = (t, c) => {
+                        const p = base + sinal * (profFim - t);
+                        return eixo === 'x' ? [p, c] : [c, p];
+                    };
+                    for (const t of [avanco * 0.35, avanco * 0.75]) {
+                        for (let c = -meio + 2.5; c <= meio - 2.5; c += 5) {
+                            const [px, pz] = ponto(t, c);
+                            sobCob.paineis.push([px, yBaixo, pz, eixo === 'x' ? 0 : Math.PI / 2]);
+                        }
+                    }
+                    for (const frac of [-0.5, 0.5]) {
+                        const [lx, lz] = ponto(avanco * 0.9, frac * meio);
+                        const [tx, tz] = ponto(avanco * 0.3, frac * meio);
+                        const sp = new THREE.SpotLight(0xfff1d0, 0, 45, 1.2, 0.8, 1.0);
+                        sp.position.set(lx, yBaixo - 0.3, lz);
+                        sp.target.position.set(tx, seatY(avanco * 0.3), tz);
+                        sp.castShadow = false;
+                        campoGrupo.add(sp);
+                        campoGrupo.add(sp.target);
+                        sobCob.luzes.push(sp);
+                    }
+                }
+
+                // As curvas: o mesmo, ao longo do arco da cobertura.
+                const rFimC = RAIO_PRIMEIRA_FILA + offProf + rows * 1.2;
+                const cantos = [
+                    [-cornerX, cornerZ, Math.PI / 2], [cornerX, cornerZ, 0],
+                    [-cornerX, -cornerZ, Math.PI], [cornerX, -cornerZ, 3 * Math.PI / 2]
+                ];
+                for (const [ccx, ccz, a0] of cantos) {
+                    for (const t of [avanco * 0.35, avanco * 0.75]) {
+                        const rr = rFimC - t;
+                        const n = Math.max(2, Math.floor(rr * (Math.PI / 2) / 5));
+                        for (let j = 0; j < n; j++) {
+                            const a = a0 + ((j + 0.5) / n) * (Math.PI / 2);
+                            sobCob.paineis.push([ccx + rr * Math.cos(a), yBaixo,
+                                ccz + rr * Math.sin(a), -a]);
+                        }
+                    }
+                    for (const f of [0.25, 0.75]) {
+                        const a = a0 + f * (Math.PI / 2);
+                        const rl = rFimC - avanco * 0.9, rt = rFimC - avanco * 0.3;
+                        const sp = new THREE.SpotLight(0xfff1d0, 0, 45, 1.2, 0.8, 1.0);
+                        sp.position.set(ccx + rl * Math.cos(a), yBaixo - 0.3, ccz + rl * Math.sin(a));
+                        sp.target.position.set(ccx + rt * Math.cos(a), seatY(avanco * 0.3), ccz + rt * Math.sin(a));
+                        sp.castShadow = false;
+                        campoGrupo.add(sp);
+                        campoGrupo.add(sp.target);
+                        sobCob.luzes.push(sp);
+                    }
+                }
+
             }
 
             /*
@@ -1295,6 +1422,27 @@ Object.assign(Match, {
             campoGrupo.add(imL);
 
             window.holofotes = { luzes, matLampada, lampadas: imL };
+        }
+
+        // Painéis sob as coberturas (um material -> acendem todos juntos).
+        if (sobCob.paineis.length) {
+            const matLuzSob = new THREE.MeshStandardMaterial({
+                color: 0x555555, roughness: 0.5, emissive: new THREE.Color(0x000000)
+            });
+            const imS = new THREE.InstancedMesh(
+                new THREE.BoxGeometry(1.6, 0.1, 0.5), matLuzSob, sobCob.paineis.length);
+            const dS = new THREE.Object3D();
+            sobCob.paineis.forEach((pp, i) => {
+                dS.position.set(pp[0], pp[1], pp[2]);
+                dS.rotation.set(0, pp[3], 0);
+                dS.updateMatrix();
+                imS.setMatrixAt(i, dS.matrix);
+            });
+            imS.castShadow = false; imS.receiveShadow = false;
+            campoGrupo.add(imS);
+            window.holofotes = window.holofotes || { luzes: [], matLampada: null, lampadas: null };
+            window.holofotes.luzesSob = sobCob.luzes;
+            window.holofotes.matLuzSob = matLuzSob;
         }
 
         /*

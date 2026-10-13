@@ -1091,8 +1091,19 @@ O receptor e o `Match.intendedReceiver`. `activo: false` volta ao pontape cego d
 const GoalKickPlan = {
     activo: true,
     curtoEm: ['positional', 'possession'],
+    /*
+    ESTILO E SORTEIO, e não só estilo. Pedido: *"o goleiro ou vai sair jogando com os laterais e zagueiros,
+    dependendo do estilo ofensivo, ou vai chutar em um alvo dentro do retângulo onde estão os jogadores de
+    ataque e meio do seu time"*. Antes, o estilo decidia sozinho (Positional/Possession sempre curto, os
+    outros sempre longo): previsível. Agora decide a PROBABILIDADE de sair curto.
+    */
+    chanceCurtoEstilo: 0.85,    // nos estilos de `curtoEm`
+    chanceCurtoOutros: 0.15,    // nos restantes
     curto: { distMin: 9.0, distMax: 26.0, livreMin: 5.0, velBase: 6.0, velPorM: 0.8, velMin: 10.0, velMax: 22.0, erroGraus: 4.0 },
-    longo: { distMin: 26.0, distMax: 60.0, livreMin: 4.5, elevGraus: 30.0, erroGraus: 6.0, erroAlcance: 0.06, bonusAvancado: 3.0 }
+    // `alvoNoRetangulo`: a bola longa vai a um PONTO sorteado dentro do rectângulo dos médios e avançados dele
+    // (encolhido `encolheRetangulo` de cada lado), e não ao pé de um homem; o receptor é o mais perto desse ponto.
+    longo: { distMin: 26.0, distMax: 60.0, livreMin: 4.5, elevGraus: 30.0, erroGraus: 6.0, erroAlcance: 0.06, bonusAvancado: 3.0,
+        alvoNoRetangulo: true, encolheRetangulo: 0.12 }
 };
 if (typeof window !== 'undefined') window.GoalKickPlan = GoalKickPlan;
 

@@ -3097,8 +3097,15 @@ class FootballPlayer {
             ? estiloDaEquipaDe(this.team)
             : null;
         const secToCongestionKey = { esq: 'esq', dir: 'dir', cen: 'centro' };
-        const ladoBola = getSectorOfX(ownX);
-        const congestaoMeuLado = (teamBB) ? (teamBB.congestion[secToCongestionKey[ladoBola]] || 0) : 0;
+        /*
+        A CONGESTÃO É MEDIDA EM BANDAS DO MUNDO (x < -10 'esq', x > 10 'dir', ver computeCongestion no
+        team_bt.js), e os sectores do passe estão no referencial de ATAQUE (x * dirZ). Misturar os dois
+        (`secToCongestionKey[sectorDeX(...)]`) trocava os flancos para a equipa que ataca em -z: ela media
+        a congestão do lado errado e o incentivo de virar o jogo apontava para o lado já cheio. Aqui as
+        duas pontas da conta usam a mesma régua, a do mundo.
+        */
+        const bandaCong = (x) => (x < -10 ? 'esq' : (x > 10 ? 'dir' : 'centro'));
+        const congestaoMeuLado = (teamBB) ? (teamBB.congestion[bandaCong(ownX)] || 0) : 0;
 
         /*
         SAIR A JOGAR: função, zona e ausência de pressão, decididas UMA vez por
@@ -3410,6 +3417,22 @@ class FootballPlayer {
             // Progressão
             let progression = (optPos.z - ownZ) * dirZ;
             let relX = Math.abs(optPos.x - ownX);
+
+            /*
+            INVERSÃO DE JOGO — ver InversaoDeJogo (config/passing.js). Com a banda da bola congestionada, um
+            passe que muda a bola de banda para uma bem mais vazia, a um colega livre, é uma inversão: pode
+            recuar um pouco (`recuoMax`) e não paga as penalidades de recuar nem de virar o corpo.
+            */
+            let inversao = false;
+            const IV = (typeof InversaoDeJogo !== 'undefined' && InversaoDeJogo.activo) ? InversaoDeJogo : null;
+            if (IV && teamBB) {
+                const bBola = bandaCong(ownX), bAlvo = bandaCong(optPos.x);
+                const cBola = teamBB.congestion[bBola] || 0, cAlvo = teamBB.congestion[bAlvo] || 0;
+                inversao = bBola !== bAlvo && relX >= IV.larguraMin && cBola >= IV.congestaoMin &&
+                    cAlvo <= cBola - IV.folgaCongestao && progression >= -IV.recuoMax &&
+                    distMarcEf >= IV.livreMin;
+                if (inversao) score += IV.bonus * Math.max(fiab, IV.fiabMin);
+            }
             
             // MULTIPLICADORES DE TENDÊNCIA POR POSIÇÃO
             if (typeof getPositionalTendency === 'function') {
@@ -3433,7 +3456,7 @@ class FootballPlayer {
             } else {
                 if (isOrchestrator) {
                     score += Math.abs(progression) * 0.8;
-                } else if (!isDefender && !inDefensiveZone) {
+                } else if (!isDefender && !inDefensiveZone && !inversao) {
                     score -= Math.abs(progression) * 1.5 / circulacao;
                 }
             }
@@ -3461,7 +3484,7 @@ class FootballPlayer {
             
             if (angleDiff < Math.PI / 3) {
                 score += 80; // Alvo está no campo de visão natural (frente)
-            } else if (angleDiff > Math.PI * 0.6) {
+            } else if (angleDiff > Math.PI * 0.6 && !inversao) {
                 score -= 80; // Penaliza passes de costas que exigem girar o corpo
             }
 
@@ -3479,7 +3502,7 @@ class FootballPlayer {
             } else {
                 if (progression <= 2.0 && relX > 5.0) {
                     score *= 1.25; // Lado
-                } else if (progression < -2.0) {
+                } else if (progression < -2.0 && !inversao) {
                     if (!livreAFrente && inDefensiveZone) {
                         score *= 1.20; // Trás sob pressão na defesa
                     } else if (!inDefensiveZone) {
@@ -3507,7 +3530,7 @@ class FootballPlayer {
                 }
             }
             if (teamBB && congestaoMeuLado >= 50) {
-                const congestaoAlvo = teamBB.congestion[secToCongestionKey[optSec]] || 0;
+                const congestaoAlvo = teamBB.congestion[bandaCong(optPos.x)] || 0;
                 if (congestaoAlvo < congestaoMeuLado - 15) {
                     score += 250; // Forte incentivo para virar o jogo se o lado atual estiver congestionado
                 }
@@ -10517,9 +10540,40 @@ class FootballPlayer {
             }
             return melhor;
         };
-        let modo = chaveCurto ? 'curto' : 'longo';
-        let alvo = chaveCurto ? escolher(['def'], P.curto, 0) : escolher(['mid', 'atk'], P.longo, P.longo.bonusAvancado);
-        if (!alvo && chaveCurto) { modo = 'longo'; alvo = escolher(['mid', 'atk'], P.longo, P.longo.bonusAvancado); }
+        // Sai curto com uma PROBABILIDADE que o estilo ofensivo define (ver GoalKickPlan.chanceCurto*).
+        const chanceCurto = chaveCurto
+            ? (P.chanceCurtoEstilo !== undefined ? P.chanceCurtoEstilo : 1)
+            : (P.chanceCurtoOutros !== undefined ? P.chanceCurtoOutros : 0);
+        const saiCurto = Math.random() < chanceCurto;
+        // O ALVO LONGO: um ponto sorteado no rectângulo dos médios e avançados dele; o receptor é o mais perto.
+        let pontoLongo = null;
+        const escolherLongo = () => {
+            if (!P.longo.alvoNoRetangulo) return escolher(['mid', 'atk'], P.longo, P.longo.bonusAvancado);
+            const of = meus.filter(o => o.role === 'mid' || o.role === 'atk');
+            if (!of.length) return null;
+            let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+            for (const o of of) {
+                x0 = Math.min(x0, o.model.position.x); x1 = Math.max(x1, o.model.position.x);
+                z0 = Math.min(z0, o.model.position.z); z1 = Math.max(z1, o.model.position.z);
+            }
+            const e = P.longo.encolheRetangulo || 0;
+            const px = x0 + (x1 - x0) * (e + Math.random() * (1 - 2 * e));
+            const pz = z0 + (z1 - z0) * (e + Math.random() * (1 - 2 * e));
+            // Só serve se estiver ao alcance de um chutão.
+            const d = Math.hypot(px - b.x, pz - b.z);
+            if (d < P.longo.distMin * 0.6 || d > P.longo.distMax) return null;
+            pontoLongo = { x: px, z: pz };
+            let melhor = null, dm = 1e9;
+            for (const o of of) {
+                const dd = Math.hypot(o.model.position.x - px, o.model.position.z - pz);
+                if (dd < dm) { dm = dd; melhor = o; }
+            }
+            return melhor;
+        };
+        let modo = saiCurto ? 'curto' : 'longo';
+        let alvo = saiCurto ? escolher(['def'], P.curto, 0) : escolherLongo();
+        if (!alvo && saiCurto) { modo = 'longo'; alvo = escolherLongo(); }
+        if (!alvo && !saiCurto) { pontoLongo = null; alvo = escolher(['mid', 'atk'], P.longo, P.longo.bonusAvancado); }
         if (!alvo) return null;
         const skill = this.skillFor ? this.skillFor('GK') : 50;
         const precisao = 1.3 - 0.6 * (skill / 100);      // GK 0 -> 1.3x o erro, GK 100 -> 0.7x
@@ -10539,7 +10593,8 @@ class FootballPlayer {
         }
         const L = P.longo;
         const tVoo = 1.6;
-        const tx = alvo.model.position.x + vt.x * tVoo * 0.6 - b.x, tz = alvo.model.position.z + vt.z * tVoo * 0.6 - b.z;
+        const tx = pontoLongo ? pontoLongo.x - b.x : alvo.model.position.x + vt.x * tVoo * 0.6 - b.x;
+        const tz = pontoLongo ? pontoLongo.z - b.z : alvo.model.position.z + vt.z * tVoo * 0.6 - b.z;
         let alc = Math.hypot(tx, tz) * (1 + (Math.random() * 2 - 1) * L.erroAlcance * precisao);
         const elev = THREE.MathUtils.degToRad(L.elevGraus);
         let v = (typeof velocidadeParaAlturaNoAlvo === 'function')

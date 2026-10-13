@@ -238,6 +238,7 @@ const Staff = {
         if (canal === 'camisa') {
             return c.set(imprensa ? F.cores.coleteImprensa : F.cores.colete);
         }
+        if (canal === 'rosto') return c.set('#1b1512');
         if (canal === 'sapato') {
             c.set(F.cores.sapatos);
             const ks = 1 + (rnd() - 0.5) * 2 * F.variacaoCor;

@@ -2034,10 +2034,18 @@ Object.assign(Match, {
         const attDir = Lados.dirDe(team);
         const linhaZ = -attDir * LINHA_FUNDO;      // linha de fundo de quem bate
 
+        // A faixa entre as duas intermediárias: da frente de uma grande área à da outra (referencial de quem bate).
+        const banda = LINHA_FUNDO - Area.profundidade - (S.margemArea !== undefined ? S.margemArea : 1.0);
+        const rnd2 = () => Math.random() * 2 - 1;
+
         const escrever = (p, zAtkDeQuemBate) => {
             if (!mover && p.fsm.currentState !== 'MOVE_TO_POS') return;
             p.hasBall = false;
-            p.dynamicTarget.set(p.baseTarget.x, ALTURA_BASE_Y, zAtkDeQuemBate * attDir);
+            // Desvio aleatório por lance: sorteia-se na montagem e mantém-se enquanto o lance espera.
+            if (mover || !p._tmDesvio) p._tmDesvio = { x: rnd2() * (S.jitterX || 0), z: rnd2() * (S.jitterZ || 0) };
+            const zAtk = THREE.MathUtils.clamp(zAtkDeQuemBate + p._tmDesvio.z, -banda, banda);
+            const xAlvo = THREE.MathUtils.clamp(p.baseTarget.x + p._tmDesvio.x, -(CAMPO_LARG / 2 - 2.0), CAMPO_LARG / 2 - 2.0);
+            p.dynamicTarget.set(xAlvo, ALTURA_BASE_Y, zAtk * attDir);
 
             // Lei 16: ninguém do adversário dentro da grande área de quem bate.
             if (p.team !== team && Area.contem(p.dynamicTarget.x, p.dynamicTarget.z, linhaZ)) {

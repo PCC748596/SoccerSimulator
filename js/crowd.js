@@ -379,7 +379,7 @@ const Crowd = {
         const adepto = !mapa;
         const canalPerna = (mapa && mapa.perna) || (adepto ? 'perna' : 'pele');
         const canalPe = (mapa && mapa.pe) || 'pele';
-        const canais = { pele: [], camisa: [], calcao: [], cabelo: [] };
+        const canais = { pele: [], camisa: [], calcao: [], cabelo: [], rosto: [] };
         if (adepto) { canais.bone = []; canais.listraV = []; canais.listraH = []; }
         canais[canalPerna] = canais[canalPerna] || [];
         canais[canalPe] = canais[canalPe] || [];
@@ -425,6 +425,11 @@ const Crowd = {
 
         const head = no(neck, 0, 0.575, 0);
         caixa(head, 'pele', u * 0.8, u * 1.0, u * 0.85, 0, 0, 0);
+        // Rosto (canal escuro): olhos, nariz e boca na face da frente (+z).
+        caixa(head, 'rosto', u * 0.15, u * 0.15, u * 0.06, -u * 0.18, u * 0.1, u * 0.44);
+        caixa(head, 'rosto', u * 0.15, u * 0.15, u * 0.06, u * 0.18, u * 0.1, u * 0.44);
+        caixa(head, 'rosto', u * 0.12, u * 0.18, u * 0.1, 0, -u * 0.08, u * 0.46);
+        caixa(head, 'rosto', u * 0.34, u * 0.07, u * 0.06, 0, -u * 0.3, u * 0.44);
         // Cabelo: as cinco peças do modelo do jogador.
         caixa(head, 'cabelo', u * 0.88, u * 0.25, u * 0.9, 0, u * 0.5, 0);
         caixa(head, 'cabelo', u * 0.88, u * 0.7, u * 0.25, 0, u * 0.15, -u * 0.35);
@@ -963,6 +968,7 @@ void crowdPesos(out float dePe, out float w1, out float w2,
                 meshes.bone && meshes.bone.setColorAt(i, variar(eq.camisa));
                 meshes.listraV && meshes.listraV.setColorAt(i, variar(eq.camisa));
                 meshes.listraH && meshes.listraH.setColorAt(i, variar(eq.camisa));
+                meshes.rosto && meshes.rosto.setColorAt(i, variar('#1b1512'));
                 meshes.cabelo && meshes.cabelo.setColorAt(i, variar(CrowdModel.cabelos[Math.floor(rnd() * CrowdModel.cabelos.length)]));
             }
 

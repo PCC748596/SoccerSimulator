@@ -254,7 +254,7 @@ de altura são as mesmas (`GoalkeeperDive.bandaBaixa` e `bandaAlta`) — só mud
 qual é o clip de cada banda.
 */
 const GkClipsPes = {
-    activo: true,
+    activo: false,
     baixo: GkDiveBaixoPes,
     medio: GkDiveMedioPes,
     alto: GkDiveAltoPes

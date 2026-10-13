@@ -1171,6 +1171,17 @@ fundo — e quem recebe tem uma linha da frente própria, medida da mesma origem
 =============================================================================
 */
 const GoalKickShape = {
+    /*
+    AS POSIÇÕES NÃO SÃO CENTRADAS NEM IGUAIS. Pedido: *"a posição não precisa ser necessariamente centralizada;
+    pode estar um pouco para frente, um pouco para trás, para um lado ou para o outro. Faz ficar aleatório"*.
+    Cada jogador leva, por lance, um desvio sorteado de até `jitterX` m de lado e `jitterZ` m de profundidade
+    (guardado no jogador, para não mudar a cada frame). O resultado fica sempre ENTRE AS DUAS INTERMEDIÁRIAS:
+    na faixa entre as frentes das duas grandes áreas, `margemArea` m para dentro delas.
+    */
+    jitterX: 4.5,
+    jitterZ: 4.0,
+    margemArea: 1.0,
+
     // Quem bate, em metros da própria linha de fundo. A grande área acaba aos
     // 16.5: os defesas ficam à saída dela, que é onde se recebe curto.
     linhaDefesa: 19.0,

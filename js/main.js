@@ -257,6 +257,13 @@ function definirPeriodo(noite) {
             HF.matLampada.emissive.setHex(P.holofotesAcesos ? H.corLampadaAcesa : 0x000000);
             HF.matLampada.emissiveIntensity = P.holofotesAcesos ? 1.0 : 0;
         }
+        if (HF.luzesSob) for (const l of HF.luzesSob) l.intensity = P.holofotesAcesos ? 0.9 : 0;
+        if (HF.matLuzSob) {
+            HF.matLuzSob.color.setHex(P.holofotesAcesos ? 0xfff1d0 : 0x555555);
+            HF.matLuzSob.emissive.setHex(P.holofotesAcesos ? 0xfff1d0 : 0x000000);
+            HF.matLuzSob.emissiveIntensity = P.holofotesAcesos ? 1.8 : 0;
+
+        }
     }
 
     const btn = document.getElementById('btn-periodo');

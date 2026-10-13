@@ -34,6 +34,46 @@ const PassLineModel = {
 
 /*
 =============================================================================
+INVERSÃO DE JOGO — virar a bola para o lado vazio, recuando se for preciso
+=============================================================================
+Relato: *"está tendo pouca inversão de jogo por passes mais curtos. Quando o jogo está congestionado
+de um lado, os times vão invertendo a jogada passando a bola pelo meio para o outro lado. Podem
+voltar um pouco a bola, com passes para trás"*.
+
+MEDIDO (tools/headless/inversoes.js, 600 s de relógio de jogo): ~2% dos passes mudavam a bola de
+lado (4-6 por 90 min); 55-60% tinham menos de 10 m de largura e nenhum dos passes para trás
+invertia. Três causas, todas no `findPassTarget`:
+
+  1. A CONGESTÃO ESTAVA NO REFERENCIAL ERRADO. `computeCongestion` mede em bandas do MUNDO e o passe
+     indexava-a por sectores de ATAQUE: para a equipa que ataca em -z, 'esq' era o flanco contrário.
+     O bónus de virar (+250) e a penalização de insistir (-200) apontavam ao lado errado.
+  2. O BÓNUS (+250) PERDIA-SE. Um passe de 25-30 m recebe da escada de desmarcação 500 × fiabilidade
+     (0.44 acima de 25 m, contra 0.84 aos 8 m): perde ~200 pontos para o toque curto, e o bónus
+     de virar só empata. Mais a nota de distância e a progressão, que favorecem o curto.
+  3. RECUAR CUSTAVA TRÊS VEZES: -1.5 por metro de recuo, -50 (ou -150) por recuar no ataque e -80 por
+     o passe pedir o corpo virado. Uma inversão pelo meio, com o colega um pouco atrás, nunca ganhava.
+
+Esta é a regra nova, e só soma quando as condições todas se juntam: a banda da BOLA está congestionada
+(`congestaoMin`), a do destino tem pelo menos `folgaCongestao` a menos, o passe muda de banda com
+`larguraMin` m de largura, recua no máximo `recuoMax` m e o colega está livre (`livreMin`). Então
+soma `bonus` × fiabilidade (com piso `fiabMin`: a bola vai por uma zona menos povoada, é um passe
+mais fácil do que a distância diz) e ignora as três penalizações de recuar.
+=============================================================================
+*/
+const InversaoDeJogo = {
+    activo: true,
+    congestaoMin: 40,     // congestão (0-100; 25 por adversário na banda, ±22 m da bola) da banda da bola
+    folgaCongestao: 15,   // o destino tem de ter pelo menos isto a menos
+    larguraMin: 18,       // m de largura (|dx|) para contar como inversão
+    recuoMax: 14,         // m que o passe pode recuar e ainda ser inversão
+    livreMin: 3.5,        // o colega livre (marcador efectivo)
+    bonus: 420,
+    fiabMin: 0.75
+};
+if (typeof window !== 'undefined') window.InversaoDeJogo = InversaoDeJogo;
+
+/*
+=============================================================================
 O HOMEM LIVRE A FRENTE — a conjuncao, que nao estava a valer nada
 =============================================================================
 Pedido: *"temos que ajustar para que um jogador sem marcacao (sem nenhum

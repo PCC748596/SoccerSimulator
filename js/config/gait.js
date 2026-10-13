@@ -130,8 +130,16 @@ const GaitModel = {
         braco: 1.00,
         cotovelo: -1.55,      // braços bem dobrados a bombear
         tronco: 0.30,         // inclinado para a frente
-        descida: 0.095,        // centra a corrida na mesma altura do parado (medido)
-        ressalto: 0.045       // ~9 cm de oscilação total, como numa corrida a sério
+        /*
+        OS PÉS ASSENTAM NA CORRIDA RÁPIDA. Relato: *"na corrida mais rápida os jogadores não estão
+        apoiando os pés no chão, um pouco acima da grama"*. Medido (tools/scratch/altura_corpo_clip.js):
+        a 8 m/s a bota tocava o relvado no apoio, mas no voo subia até 5 cm acima dele
+        (ressalto 0.045 = 9 cm de oscilação), e metade do ciclo ficava no ar. O ressalto desce a
+        0.02 e a descida sobe 1 cm (0.105): o apoio entra 1 cm no relvado (a sola esconde-se, em vez
+        de pairar) e o ponto mais alto do voo fica a ~1.5 cm.
+        */
+        descida: 0.105,
+        ressalto: 0.020
     }
 };
 

@@ -402,6 +402,15 @@ const Weather = {
                 HF.matLampada.emissive.setHex(ligarHolofotes ? HConfig.corLampadaAcesa : 0x000000);
                 HF.matLampada.emissiveIntensity = ligarHolofotes ? (this.periodo === 'noite' ? 2.0 : 1.0) : 0;
             }
+            const ligarSob = ligarHolofotes && (this.periodo === 'noite' || pConfig.holofotesIntensidade >= 0.25);
+            if (HF.luzesSob) for (const l of HF.luzesSob) l.intensity = ligarSob ? 0.9 : 0;
+            if (HF.matLuzSob) {
+                HF.matLuzSob.color.setHex(ligarSob ? 0xfff1d0 : 0x555555);
+                HF.matLuzSob.emissive.setHex(ligarSob ? 0xfff1d0 : 0x000000);
+                HF.matLuzSob.emissiveIntensity = ligarSob ? 1.8 : 0;
+            }
+
+
         }
 
         // 6. Nuvens
