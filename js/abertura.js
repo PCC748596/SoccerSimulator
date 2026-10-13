@@ -230,7 +230,9 @@ const Abertura = {
         }
         if (this.fase === 'entrada') {
             if (this.modo === 'segundo') {
-                if (this.partes.every(s => s.chegou) || this.t > AM.prazoEntrada) this.terminar();
+                // Espera `viraParaBola` s depois de o ultimo chegar, para os jogadores acabarem de se virar para a bola.
+                if (this.partes.every(s => s.chegou)) this.tChegaram = (this.tChegaram || 0) + dt; else this.tChegaram = 0;
+                if (this.tChegaram >= (AM.viraParaBola || 0.8) || this.t > AM.prazoEntrada) { this.tChegaram = 0; this.terminar(); }
                 return;
             }
             if (this.partes.every(s => s.chegou) || this.t > AM.prazoEntrada) {
@@ -275,7 +277,13 @@ const Abertura = {
                 yawAlvo = Math.atan2(dx, dz);
             }
         }
-        if (s.i >= s.wps.length) { s.chegou = true; p.velocity.set(0, 0, 0); }
+        if (s.i >= s.wps.length) {
+            s.chegou = true; p.velocity.set(0, 0, 0);
+            // Na volta do intervalo, ao chegar ao posto vira-se para a bola (antes de o jogo comecar).
+            if (this.modo === 'segundo' && typeof Match !== 'undefined' && Match.ball) {
+                yawAlvo = Math.atan2(Match.ball.position.x - pos.x, Match.ball.position.z - pos.z);
+            }
+        }
         // Vira-se suave para o rumo. O angulo e guardado a parte (`s.yaw`) e escrito no QUATERNIAO: ler `rotation.y`
         // de volta enganava-se (o Euler decompoe-se com x = z = pi quando |yaw| > pi/2) e quem andava para -Z ia de costas.
         let dif = Math.atan2(Math.sin(yawAlvo - s.yaw), Math.cos(yawAlvo - s.yaw));

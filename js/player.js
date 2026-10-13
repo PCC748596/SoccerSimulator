@@ -10469,8 +10469,69 @@ class FootballPlayer {
             });
     }
 
+    /*
+    O DESTINO DO TIRO DE META (GoalKickPlan, config/goalkeeper.js): `{ alvo, vel: Vector3 }` ou null (pontape cego de sempre).
+    Positional / Possession: passe curto a um defesa livre; os outros estilos: bola longa a um meio ou avancado livre.
+    */
+    planearTiroDeMeta() {
+        const P = (typeof GoalKickPlan !== 'undefined') ? GoalKickPlan : null;
+        if (!P || !P.activo || typeof Match === 'undefined' || Match.state !== 'GOAL_KICK') return null;
+        const estilo = (typeof estiloDaEquipaDe === 'function') ? estiloDaEquipaDe(this.team) : null;
+        const chaveCurto = (typeof TeamPlayStyles !== 'undefined') ? P.curtoEm.some(k => TeamPlayStyles[k] === estilo) : false;
+        const meus = ((this.team === 'TeamA') ? Match.players : Match.opponents).filter(o => o && o.model && o !== this && o.role !== 'gk' && !o.expulso);
+        const advs = ((this.team === 'TeamA') ? Match.opponents : Match.players).filter(o => o && o.model && !o.expulso);
+        const b = Match.ball.position;
+        const livre = (o) => advs.reduce((m, a) => Math.min(m, Math.hypot(a.model.position.x - o.model.position.x, a.model.position.z - o.model.position.z)), 99);
+        const escolher = (papeis, cfg, bonusAtk) => {
+            let melhor = null, sc = -1e9;
+            for (const o of meus) {
+                if (papeis.indexOf(o.role) < 0) continue;
+                const d = Math.hypot(o.model.position.x - b.x, o.model.position.z - b.z);
+                if (d < cfg.distMin || d > cfg.distMax) continue;
+                const l = livre(o);
+                if (l < cfg.livreMin) continue;
+                const s = l + (bonusAtk && o.role === 'atk' ? bonusAtk : 0) - 0.05 * d;
+                if (s > sc) { sc = s; melhor = o; }
+            }
+            return melhor;
+        };
+        let modo = chaveCurto ? 'curto' : 'longo';
+        let alvo = chaveCurto ? escolher(['def'], P.curto, 0) : escolher(['mid', 'atk'], P.longo, P.longo.bonusAvancado);
+        if (!alvo && chaveCurto) { modo = 'longo'; alvo = escolher(['mid', 'atk'], P.longo, P.longo.bonusAvancado); }
+        if (!alvo) return null;
+        const skill = this.skillFor ? this.skillFor('GK') : 50;
+        const precisao = 1.3 - 0.6 * (skill / 100);      // GK 0 -> 1.3x o erro, GK 100 -> 0.7x
+        const vt = alvo.velocity || { x: 0, z: 0 };
+        const gG = BallPhysics.gravidade;
+        if (modo === 'curto') {
+            const C = P.curto;
+            const dx0 = alvo.model.position.x - b.x, dz0 = alvo.model.position.z - b.z;
+            const d0 = Math.hypot(dx0, dz0);
+            const v = THREE.MathUtils.clamp(C.velBase + C.velPorM * d0, C.velMin, C.velMax);
+            const t = d0 / Math.max(1, v * 0.85);
+            const tx = alvo.model.position.x + vt.x * t * 0.7 - b.x, tz = alvo.model.position.z + vt.z * t * 0.7 - b.z;
+            let ang = Math.atan2(tx, tz) + THREE.MathUtils.degToRad((Math.random() * 2 - 1) * C.erroGraus * precisao);
+            const elev = THREE.MathUtils.degToRad(3);
+            return { alvo: alvo, modo: modo, vel: new THREE.Vector3(Math.sin(ang) * v * Math.cos(elev), v * Math.sin(elev), Math.cos(ang) * v * Math.cos(elev)),
+                aim: { x: b.x + tx, z: b.z + tz } };
+        }
+        const L = P.longo;
+        const tVoo = 1.6;
+        const tx = alvo.model.position.x + vt.x * tVoo * 0.6 - b.x, tz = alvo.model.position.z + vt.z * tVoo * 0.6 - b.z;
+        let alc = Math.hypot(tx, tz) * (1 + (Math.random() * 2 - 1) * L.erroAlcance * precisao);
+        const elev = THREE.MathUtils.degToRad(L.elevGraus);
+        let v = (typeof velocidadeParaAlturaNoAlvo === 'function')
+            ? velocidadeParaAlturaNoAlvo(alc, elev, BallControl.peitoAltura, b.y) : null;
+        if (!v) v = Math.sqrt((alc * gG) / Math.sin(2 * elev));
+        v = Math.min(v, 45);
+        const ang = Math.atan2(tx, tz) + THREE.MathUtils.degToRad((Math.random() * 2 - 1) * L.erroGraus * precisao);
+        return { alvo: alvo, modo: modo, vel: new THREE.Vector3(Math.sin(ang) * v * Math.cos(elev), v * Math.sin(elev), Math.cos(ang) * v * Math.cos(elev)),
+            aim: { x: b.x + tx, z: b.z + tz } };
+    }
+
     kickFromGround() {
         const gGrav = BallPhysics.gravidade;
+        const planoTM = this.planearTiroDeMeta();
         // Ângulo ajustado entre 25 e 35 graus
         const anguloGraus = 25 + Math.random() * 10;
         const elev = THREE.MathUtils.degToRad(anguloGraus);
@@ -10483,11 +10544,13 @@ class FootballPlayer {
         _v2.set(0, 0, this.dirZ).applyAxisAngle(_vUp, desvio);
         Match.ball.position.y = BallPhysics.raio;
         Match.ballVel.set(_v2.x * horiz, v * Math.sin(elev), _v2.z * horiz);
+        // Tiro de meta com destino (GoalKickPlan): a velocidade e o receptor vem do plano.
+        if (planoTM) Match.ballVel.copy(planoTM.vel);
 
         this.touchLock = BallControl.touchLock;
         Match.ballCarrier = null;
-        Match.intendedReceiver = null;
-        Match.passTargetPos = null;
+        Match.intendedReceiver = planoTM ? planoTM.alvo : null;
+        Match.passTargetPos = planoTM ? new THREE.Vector3(planoTM.aim.x, ALTURA_BASE_Y, planoTM.aim.z) : null;
         Match.lastTouchedTeam = this.team;
         Match.lastTouchedPlayer = this;
         window.bolaChutada = false;

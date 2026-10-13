@@ -1071,6 +1071,31 @@ const GkSaltoAlto = {
 
 if (typeof window !== 'undefined') window.GkSaltoAlto = GkSaltoAlto;
 
+/*
+=============================================================================
+O TIRO DE META TEM DESTINO — GoalKickPlan
+=============================================================================
+Pedido: *"a maioria dos tiros de meta cai nos pes dos adversarios. Nos estilos Positional e Possession o goleiro deve sair
+a jogar com os defensores de preferencia; nos outros pode tentar a ligacao directa com o meio ou o ataque"*.
+
+Antes `kickFromGround` era um pontape cego: 42-60 m para a frente, +-15 graus, sem receptor. Agora o goleiro ESCOLHE:
+
+  curto  (Positional / Possession)  um defesa (lateral ou central) a `curto.distMin`..`distMax` m, o mais livre (distancia ao
+         adversario mais perto, `livreMin`); passo rasteiro ao pe. Sem ninguem livre, cai no longo.
+  longo  (os outros estilos)        um meio ou avancado a `longo.distMin`..`distMax` m, o mais livre; bola ao arco (peito)
+         com o erro de pontaria `erroGraus` (menor com mais GK).
+
+O receptor e o `Match.intendedReceiver`. `activo: false` volta ao pontape cego de sempre.
+=============================================================================
+*/
+const GoalKickPlan = {
+    activo: true,
+    curtoEm: ['positional', 'possession'],
+    curto: { distMin: 9.0, distMax: 26.0, livreMin: 5.0, velBase: 6.0, velPorM: 0.8, velMin: 10.0, velMax: 22.0, erroGraus: 4.0 },
+    longo: { distMin: 26.0, distMax: 60.0, livreMin: 4.5, elevGraus: 30.0, erroGraus: 6.0, erroAlcance: 0.06, bonusAvancado: 3.0 }
+};
+if (typeof window !== 'undefined') window.GoalKickPlan = GoalKickPlan;
+
 const GoalkeeperDive = {
     /*
     TEMPO DE REACÇÃO A UM REMATE, em segundos, antes de o gesto sequer começar.
