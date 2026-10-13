@@ -93,8 +93,75 @@ que o fazia deslizar em vez de correr.
 O joelho só dobra na fase de balanço (`max(0, sin)`): a perna de apoio fica
 quase direita, que é o que distingue uma passada de uma corrida.
 */
+/*
+Amostra um ciclo de passada extraído, no ponto `t` (0..1) do ciclo.
+
+Os frames são igualmente espaçados e o ciclo FECHA — o último frame do ficheiro
+é o primeiro, por isso foi retirado na extração e aqui o índice dá a volta com
+`% n`. Interpola linearmente entre os dois frames vizinhos: a 30 fps são 33 ms
+entre chaves, e a diferença angular nesse intervalo é pequena de mais para
+justificar slerp num ciclo de passada.
+
+Devolve os mesmos campos de articulação que o `getGaitPose` monta a partir dos
+senos, e NADA MAIS: `ressalto`, `descida` e `passada` ficam a cargo de quem
+chama, porque o clip não traz movimento vertical do root (ver gait_clips.js).
+*/
+function amostrarClipGait(clip, t) {
+    const n = clip.frames.length;
+    const pos = (((t % 1) + 1) % 1) * n;
+    const i = Math.floor(pos);
+    const a = clip.frames[i % n], b = clip.frames[(i + 1) % n];
+    const k = pos - i;
+
+    const r = {};
+    for (const campo in a) r[campo] = lerp(a[campo], b[campo], k);
+    return r;
+}
+
 function getGaitPose(t, vel) {
     const g = misturarAndamento(vel);
+    const r = poseDeSenos(t, g);
+    let passada = g.passada;
+
+    /*
+    CICLO EXTRAÍDO, quando ligado. Só o andar tem clip por agora, por isso só
+    substitui perto da velocidade dele: acima do trote volta aos senos, e entre
+    os dois mistura, para a troca não dar um salto na pose.
+
+    A `passada` mistura na mesma proporção que a pose (2.09 m do clip contra
+    1.55 m do modelo). Se só uma das duas mudasse, os pés patinavam no meio.
+    */
+    if (typeof GaitClips !== 'undefined' && GaitClips.activo && GaitClips.andar) {
+        const C = GaitClips.andar;
+        const peso = vel <= C.vel ? 1
+            : Math.max(0, 1 - (vel - C.vel) / (GaitModel.trote.vel - C.vel));
+        if (peso > 0) {
+            const clipe = amostrarClipGait(C, t);
+            for (const campo in r) r[campo] = lerp(r[campo], clipe[campo], peso);
+            passada = lerp(g.passada, C.passada, peso);
+        }
+    }
+
+    // Dois ressaltos por ciclo, um por cada apoio. O termo constante
+    // mantém a anca ligeiramente acima do zero, como no código anterior —
+    // sem ele os pés afundam no relvado no ponto mais baixo do ciclo.
+    // O clip não traz movimento vertical do root, por isso isto fica sempre
+    // a cargo do modelo, ligado ou desligado (ver gait_clips.js).
+    r.ressalto = g.ressalto * (1.0 + Math.sin(t * Math.PI * 4 + Math.PI)) * 0.5;
+    // Quanto o corpo assenta mais abaixo neste andamento — ver GaitModel.descida.
+    r.descida = g.descida || 0;
+    r.passada = passada;
+    return r;
+}
+
+/*
+As articulações do ciclo de passada, a partir das amplitudes de um andamento.
+
+Saiu de dentro do `getGaitPose` para o ciclo extraído poder ser misturado com
+ela campo a campo. O ressalto, a descida e a passada ficaram de fora de
+propósito: não são articulações e o clip não os traz.
+*/
+function poseDeSenos(t, g) {
     const c = t * Math.PI * 2;
 
     return {
@@ -107,14 +174,7 @@ function getGaitPose(t, vel) {
         lArm: Math.sin(c + Math.PI) * g.braco,
         rArm: Math.sin(c) * g.braco,
         cotovelo: g.cotovelo,
-        tronco: g.tronco,
-        // Dois ressaltos por ciclo, um por cada apoio. O termo constante
-        // mantém a anca ligeiramente acima do zero, como no código anterior —
-        // sem ele os pés afundam no relvado no ponto mais baixo do ciclo.
-        ressalto: g.ressalto * (1.0 + Math.sin(c * 2 + Math.PI)) * 0.5,
-        // Quanto o corpo assenta mais abaixo neste andamento — ver GaitModel.descida.
-        descida: g.descida || 0,
-        passada: g.passada
+        tronco: g.tronco
     };
 }
 

@@ -44,6 +44,7 @@ const GaitModel = extrairObjecto(srcConfig, 'GaitModel');
 const lerp = (a, b, k) => a + (b - a) * k;
 const fns = new Function('GaitModel', 'lerp',
     `${extrairFuncao(srcUtils, 'misturarAndamento')}
+     ${extrairFuncao(srcUtils, 'poseDeSenos')}
      ${extrairFuncao(srcUtils, 'getGaitPose')}
      return { getGaitPose };`)(GaitModel, lerp);
 const { getGaitPose } = fns;

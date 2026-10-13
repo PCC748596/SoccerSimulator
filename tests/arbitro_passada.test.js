@@ -55,6 +55,7 @@ const THREE = { MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } }
 const ambiente = { GaitModel, LateralGait, RefereeModel, THREE, lerp, lerpTo };
 const fns = new Function(...Object.keys(ambiente), `
     ${extrairFuncao(srcUtils, 'misturarAndamento', 'js/utils.js')}
+    ${extrairFuncao(srcUtils, 'poseDeSenos', 'js/utils.js')}
     ${extrairFuncao(srcUtils, 'getGaitPose', 'js/utils.js')}
     return { misturarAndamento, getGaitPose };
 `)(...Object.values(ambiente));
