@@ -206,6 +206,9 @@ class FootballPlayer {
         um apoio de costas. Ver RunIntoSpaceModel.arranqueAposPasse.
         */
         this.arrancarAposPasse = 0;
+        // O desmarque de afastamento em curso ({x, z, t}) e a espera ate ao seguinte — ver PullAwayModel.
+        this.pullAway = null;
+        this.pullAwayCooldown = 0;
         // Espera depois de uma tentativa de corte — ver CorteModel.
         this.corteCooldown = 0;
 
@@ -4699,6 +4702,13 @@ class FootballPlayer {
         if (this.arrancarAposPasse > 0) {
             this.arrancarAposPasse = Math.max(0, this.arrancarAposPasse - dt);
         }
+        // O desmarque de afastamento acaba por tempo (corre aqui, e nao na arvore, para acabar tambem
+        // quando a equipa perde a bola e a arvore deixa de passar por ele) e deixa o arrefecimento.
+        if (this.pullAway) {
+            this.pullAway.t -= dt;
+            if (this.pullAway.t <= 0) this.terminarPullAway();
+        }
+        if (this.pullAwayCooldown > 0) this.pullAwayCooldown = Math.max(0, this.pullAwayCooldown - dt);
         // A espera entre cortes corre com o jogo, como as outras — ver CorteModel.
         if (this.corteCooldown > 0) this.corteCooldown = Math.max(0, this.corteCooldown - dt);
 
@@ -5600,6 +5610,11 @@ class FootballPlayer {
                 this.model.position.y = ALTURA_BASE_Y;
             }
         }
+    }
+
+    terminarPullAway() {
+        this.pullAway = null;
+        this.pullAwayCooldown = (typeof PullAwayModel !== 'undefined') ? PullAwayModel.arrefecimento : 0;
     }
 
     steerArrive(target, maxSpeed, brakingDist = 2.0) {

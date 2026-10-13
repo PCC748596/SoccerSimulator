@@ -87,7 +87,7 @@ console.log(LF + '1 — a ordem das folhas nao mudou');
         'Desarme', 'Intercetar', 'IrABola', 'Tabelinha', 'Overlap',
         'Receber', 'GuardaRedes',
         'Marcar', 'EsperarNaArea',
-        'Infiltracao', 'ApoioDeCirculacao',
+        'Infiltracao', 'ApoioDeCirculacao', 'DesmarqueDeAfastamento',
         'ocuparPosicao'
     ];
     const contentores = ['SemBola', 'SemBolaDefendendo', 'SemBolaAtacando'];
@@ -159,10 +159,10 @@ console.log(LF + '4 — os ramos de cada fase estao na fase certa');
     if (!dentroDe('SemBolaDefendendo', 'Marcar')) erro('Marcar nao esta na arvore de defesa');
     else ok('Marcar: a defender');
 
-    for (const nome of ['Infiltracao', 'ApoioDeCirculacao']) {
+    for (const nome of ['Infiltracao', 'ApoioDeCirculacao', 'DesmarqueDeAfastamento']) {
         if (!dentroDe('SemBolaAtacando', nome)) erro(nome + ' nao esta na arvore de ataque');
     }
-    ok('Infiltracao e ApoioDeCirculacao: a atacar');
+    ok('Infiltracao, ApoioDeCirculacao e DesmarqueDeAfastamento: a atacar');
 }
 
 console.log(LF + (falhas === 0

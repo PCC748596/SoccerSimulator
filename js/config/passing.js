@@ -1492,6 +1492,50 @@ const RunIntoSpaceModel = {
 };
 
 /*
+=============================================================================
+O DESMARQUE DE AFASTAMENTO (pullAway) — sair de cima do marcador
+=============================================================================
+Quem tem um adversario colado, sem a bola, e a equipa tem a posse: afasta-se
+dele para ficar livre e ser opcao de passe. Ver `destinoDeDesmarque` (utils.js)
+e `podeDesmarcar`/`actDesmarcar` (player_bt.js).
+
+Polar, como a tabela do PES: o ponto sai de um CONE em volta da direccao
+"para longe do marcador" (`anguloMax` graus de cada lado; 0 e directamente para
+longe, 90 e de lado) a uma distancia entre `distMin` e `distMax`.
+
+    raioMarcador       so se desmarca quem tem um adversario a menos disto
+    distMin / distMax  quanto se afasta, em metros
+    anguloMax          meia-abertura do cone, em graus
+    passoAngulo        resolucao do cone
+    recuoMax           quanto pode recuar (em avanco), para nao ir para a defesa
+    folgaMin           nenhum adversario a menos disto do ponto
+    distPortador*      so se desmarca com o portador entre Min e Max, e prefere
+                       o ponto a `distPortadorIdeal` dele (distancia de passe)
+    duracao            quanto dura o compromisso, em segundos
+    arrefecimento      espera ate poder voltar a desmarcar-se
+    chance             probabilidade por tick de arrancar (como a infiltracao)
+    posicoes           quem se desmarca (`p.pos`)
+=============================================================================
+*/
+const PullAwayModel = {
+    activo: true,
+    raioMarcador: 4.0,
+    distMin: 5.0,
+    distMax: 9.0,
+    anguloMax: 90,
+    passoAngulo: 30,
+    recuoMax: 8.0,
+    folgaMin: 3.0,
+    distPortadorMin: 8.0,
+    distPortadorMax: 30.0,
+    distPortadorIdeal: 16.0,
+    duracao: 2.5,
+    arrefecimento: 4.0,
+    chance: 0.04,
+    posicoes: ['CF', 'SS', 'AM', 'LW', 'RW', 'LM', 'RM']
+};
+
+/*
 Fecho do sector (fechoDoSector) foi movido para js/utils.js (ver docs/auditoria_config_match.md item 5).
 */
 

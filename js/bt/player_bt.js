@@ -2920,6 +2920,72 @@ function actApoioCirculacao(ctx) {
     p.fsm.changeState('SUPPORT_PASS');
 }
 
+/*
+O DESMARQUE DE AFASTAMENTO (pullAway) — ver PullAwayModel (config/passing.js).
+
+A equipa tem a posse, ele nao tem a bola nem ponto de apoio, e tem um adversario
+colado: sai de cima dele, dentro de um cone, para ser opcao de passe. O destino
+sai de `destinoDeDesmarque` (utils.js) e e um COMPROMISSO (`p.pullAway`, dura
+`duracao` s) — recalcula-lo por frame era o que fazia o apoio saltar de ponto.
+A duracao e o arrefecimento correm no `player.update`.
+*/
+function podeDesmarcar(ctx) {
+    const p = ctx.p;
+    if (typeof PullAwayModel === 'undefined' || !PullAwayModel.activo) return false;
+    if (typeof destinoDeDesmarque !== 'function') return false;
+    const M = PullAwayModel;
+    if (p.role === 'gk' || p.role === 'def' || p === Match.ballCarrier) return false;
+    if (M.posicoes.indexOf(p.pos) < 0) return false;
+
+    // Ja a desmarcar-se: mantem enquanto o prazo correr e ele nao tiver chegado.
+    if (p.pullAway) {
+        if (Math.hypot(p.model.position.x - p.pullAway.x, p.model.position.z - p.pullAway.z) < 1.0) {
+            p.terminarPullAway();
+            return false;
+        }
+        return true;
+    }
+    if (p.pullAwayCooldown > 0) return false;
+    if (p.fsm.currentState === 'RUN_INTO_SPACE') return false;
+
+    const c = Match.ballCarrier;
+    if (!c || c.team !== p.team || !c.model) return false;
+    const dPort = p.model.position.distanceTo(c.model.position);
+    if (dPort < M.distPortadorMin || dPort > M.distPortadorMax) return false;
+
+    const adversarios = ((p.team === 'TeamA') ? Match.opponents : Match.players)
+        .filter(o => o && o.model && o.role !== 'gk' && !o.expulso)
+        .map(o => ({ x: o.model.position.x, z: o.model.position.z }));
+    let marcador = null, dMarc = M.raioMarcador;
+    for (const a of adversarios) {
+        const d = Math.hypot(a.x - p.model.position.x, a.z - p.model.position.z);
+        if (d < dMarc) { dMarc = d; marcador = a; }
+    }
+    if (!marcador) return false;
+
+    if (Math.random() >= M.chance) return false;
+
+    const alvo = destinoDeDesmarque({
+        px: p.model.position.x, pz: p.model.position.z, dirZ: p.dirZ,
+        marcador: marcador, adversarios: adversarios,
+        portador: { x: c.model.position.x, z: c.model.position.z },
+        offsideLimitDir: linhaLidaPor(p, false)
+    }, M);
+    if (!alvo) return false;
+
+    p.pullAway = { x: alvo.x, z: alvo.z, t: M.duracao };
+    return true;
+}
+
+function actDesmarcar(ctx) {
+    const p = ctx.p;
+    p.dynamicTarget.set(p.pullAway.x, ALTURA_BASE_Y, p.pullAway.z);
+    // O mesmo ritmo de quem se desmarca no apoio (ver actApoioCirculacao).
+    p.speedMult = (6.2 + ((ctx.skillSpeed - 50) / 50) * 1.3) * 1.25 * 0.9;
+    p.apoioAtivo = false;
+    p.fsm.changeState('SUPPORT_PASS');
+}
+
 function actHoldPosition(ctx) {
     const p = ctx.p;
     if (p.role === 'gk') {
@@ -4615,6 +4681,11 @@ const PlayerBT = sel('PlayerRoot',
 
                     cond('fuiChamadoAApoiar', podeApoiarCirculacao),
                     act('apoiarCirculacao', actApoioCirculacao)
+                ),
+                // Quem nao e apoio e tem o marcador em cima, sai de cima dele (PullAwayModel).
+                seq('DesmarqueDeAfastamento',
+                    cond('marcadorEmCima', podeDesmarcar),
+                    act('desmarcar', actDesmarcar)
                 )
                 )
             ),

@@ -3473,6 +3473,77 @@ function destinoDeCorrida(o) {
 }
 
 /*
+DESTINO DE UM DESMARQUE DE AFASTAMENTO — para onde sai quem tem o marcador em cima.
+
+Polar, no referencial de ATAQUE (x, avanco = z * dirZ), para o espelho ser exacto:
+a direccao "para longe do marcador" e o 0; o cone vai de -anguloMax a +anguloMax
+graus em volta dela (PullAwayModel, config/passing.js). Cada ponto candidato fica a
+`distMin`, meio e `distMax` metros, e tem de:
+
+    estar dentro das linhas (com folga),
+    nao passar a linha de fora-de-jogo (`offsideLimitDir`, null = sem linha),
+    nao recuar mais de `recuoMax` m,
+    ter todos os adversarios a `folgaMin` m ou mais.
+
+Pontua pela folga ao adversario mais perto (ate 10 m) e, havendo portador, por estar
+perto da distancia de passe ideal dele. Empate: o ponto mais perto do 0 graus.
+
+Entrada `o`: px, pz, dirZ, marcador {x, z}, adversarios [{x, z}], portador {x, z} | null,
+offsideLimitDir. Devolve { x, z, grau, raio } no MUNDO, ou null.
+
+Pura: sem Match, sem THREE.
+*/
+function destinoDeDesmarque(o, M) {
+    const MARGEM_LINHA = 2.0;
+    const dirZ = o.dirZ;
+    const meiaLarg = CAMPO_LARG / 2 - MARGEM_LINHA;
+    const meioComp = CAMPO_COMP / 2 - MARGEM_LINHA;
+    const av0 = o.pz * dirZ;
+
+    // Para longe do marcador, em (x, avanco).
+    let ax = o.px - o.marcador.x;
+    let aa = (o.pz - o.marcador.z) * dirZ;
+    const al = Math.hypot(ax, aa);
+    if (al > 0.0001) { ax /= al; aa /= al; } else { ax = 0; aa = -1; }
+
+    const passo = Math.max(1, M.passoAngulo);
+    const graus = [0];
+    for (let g = passo; g <= M.anguloMax + 1e-9; g += passo) { graus.push(g); graus.push(-g); }
+    const raios = [M.distMin, (M.distMin + M.distMax) / 2, M.distMax];
+
+    let melhor = null;
+    for (const grau of graus) {
+        const rad = grau * Math.PI / 180;
+        const c = Math.cos(rad), s = Math.sin(rad);
+        const dx = ax * c - aa * s;
+        const da = ax * s + aa * c;
+        for (const raio of raios) {
+            const x = o.px + dx * raio;
+            const av = av0 + da * raio;
+            const z = av * dirZ;
+            if (Math.abs(x) > meiaLarg || Math.abs(z) > meioComp) continue;
+            if (typeof o.offsideLimitDir === 'number' && av > o.offsideLimitDir) continue;
+            if (av < av0 - M.recuoMax) continue;
+
+            let folga = Infinity;
+            for (const a of o.adversarios) {
+                const d = Math.hypot(a.x - x, a.z - z);
+                if (d < folga) folga = d;
+            }
+            if (folga < M.folgaMin) continue;
+
+            let nota = Math.min(folga, 10.0);
+            if (o.portador) {
+                const dp = Math.hypot(o.portador.x - x, o.portador.z - z);
+                nota -= 0.15 * Math.abs(dp - M.distPortadorIdeal);
+            }
+            if (!melhor || nota > melhor.nota + 1e-9) melhor = { x: x, z: z, grau: grau, raio: raio, nota: nota };
+        }
+    }
+    return melhor ? { x: melhor.x, z: melhor.z, grau: melhor.grau, raio: melhor.raio } : null;
+}
+
+/*
 NOTA DE DISTANCIA DO PASSE — a forma da curva que faz o jogo girar.
 
 Era, dentro do findPassTarget (player.js):
