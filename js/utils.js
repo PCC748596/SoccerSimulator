@@ -102,9 +102,9 @@ Os frames são igualmente espaçados e o ciclo FECHA — o último frame do fich
 entre chaves, e a diferença angular nesse intervalo é pequena de mais para
 justificar slerp num ciclo de passada.
 
-Devolve os mesmos campos de articulação que o `getGaitPose` monta a partir dos
-senos, e NADA MAIS: `ressalto`, `descida` e `passada` ficam a cargo de quem
-chama, porque o clip não traz movimento vertical do root (ver gait_clips.js).
+Devolve os mesmos campos de articulação que o `poseDeSenos` monta, e NADA MAIS:
+`ressalto`, `descida` e `passada` ficam a cargo de quem chama, porque o clip
+não traz movimento vertical do root (ver gait_clips.js).
 */
 function amostrarClipGait(clip, t) {
     const n = clip.frames.length;
@@ -118,27 +118,48 @@ function amostrarClipGait(clip, t) {
     return r;
 }
 
+/*
+Mistura a escada de ciclos extraídos para uma dada velocidade.
+
+Faz com os clips o que o `misturarAndamento` faz com as amplitudes: procura o
+par de andamentos que cerca a velocidade e interpola. Abaixo do primeiro e
+acima do último não extrapola — fica no extremo.
+
+Devolve também a `passada`, misturada na mesma proporção que a pose. Se só uma
+das duas mudasse na transição, os pés patinavam no meio.
+*/
+function misturarClipsGait(t, vel) {
+    const E = GaitClips.escada;
+    if (!E || !E.length) return null;
+
+    let i = 0;
+    while (i < E.length - 1 && vel > E[i + 1].vel) i++;
+    const a = E[i], b = E[Math.min(i + 1, E.length - 1)];
+    const vao = b.vel - a.vel;
+    const k = vao > 0 ? Math.max(0, Math.min(1, (vel - a.vel) / vao)) : 0;
+
+    const pa = amostrarClipGait(a, t), pb = amostrarClipGait(b, t);
+    const r = {};
+    for (const campo in pa) r[campo] = lerp(pa[campo], pb[campo], k);
+    r.passada = lerp(a.passada, b.passada, k);
+    return r;
+}
+
 function getGaitPose(t, vel) {
     const g = misturarAndamento(vel);
     const r = poseDeSenos(t, g);
     let passada = g.passada;
 
     /*
-    CICLO EXTRAÍDO, quando ligado. Só o andar tem clip por agora, por isso só
-    substitui perto da velocidade dele: acima do trote volta aos senos, e entre
-    os dois mistura, para a troca não dar um salto na pose.
-
-    A `passada` mistura na mesma proporção que a pose (2.09 m do clip contra
-    1.55 m do modelo). Se só uma das duas mudasse, os pés patinavam no meio.
+    CICLO EXTRAÍDO, quando ligado. Substitui a pose inteira em toda a gama de
+    velocidades — a escada do `gait_clips.js` cobre os mesmos quatro
+    andamentos do `GaitModel`, por isso não há faixa onde falte clip.
     */
-    if (typeof GaitClips !== 'undefined' && GaitClips.activo && GaitClips.andar) {
-        const C = GaitClips.andar;
-        const peso = vel <= C.vel ? 1
-            : Math.max(0, 1 - (vel - C.vel) / (GaitModel.trote.vel - C.vel));
-        if (peso > 0) {
-            const clipe = amostrarClipGait(C, t);
-            for (const campo in r) r[campo] = lerp(r[campo], clipe[campo], peso);
-            passada = lerp(g.passada, C.passada, peso);
+    if (typeof GaitClips !== 'undefined' && GaitClips.activo) {
+        const clipe = misturarClipsGait(t, vel);
+        if (clipe) {
+            for (const campo in r) r[campo] = clipe[campo];
+            passada = clipe.passada;
         }
     }
 

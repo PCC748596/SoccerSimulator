@@ -850,6 +850,35 @@ const Editor = {
         document.getElementById('titulo-canais').textContent =
             `GaitModel.${nome} — a ${this.velocidade.toFixed(1)} m/s`;
 
+        /*
+        QUEM ESTÁ A POSAR O BONECO. Com os ciclos extraídos ligados
+        (`gait_clips.js`), o `getGaitPose` devolve a pose do clip e estes
+        sliders deixam de ter efeito no que se vê — continuam a escrever no
+        `GaitModel`, mas ninguém lê. Sem este aviso ficava-se a mexer sliders
+        mortos sem perceber porquê.
+
+        A caixa liga e desliga ao vivo, que é a forma de comparar os dois.
+        */
+        if (typeof GaitClips !== 'undefined' && GaitClips.escada) {
+            const aviso = document.createElement('div');
+            aviso.className = 'canal';
+            const caixa = document.createElement('input');
+            caixa.type = 'checkbox';
+            caixa.checked = !!GaitClips.activo;
+            caixa.id = 'usar-clips';
+            caixa.onchange = () => { GaitClips.activo = caixa.checked; this.montarCanaisPassada(); };
+            const et = document.createElement('label');
+            et.htmlFor = 'usar-clips';
+            et.textContent = ' usar ciclos extraídos (PES)';
+            const legenda = document.createElement('div');
+            legenda.className = 'canal-legenda';
+            legenda.textContent = GaitClips.activo
+                ? 'o boneco está a ser posado pelo CLIP — os sliders abaixo não têm efeito'
+                : 'o boneco está a ser posado pelos senos do GaitModel — os sliders mandam';
+            aviso.appendChild(caixa); aviso.appendChild(et); aviso.appendChild(legenda);
+            div.appendChild(aviso);
+        }
+
         for (const canal of Object.keys(G)) {
             const amp = AMPLITUDE_GAIT[canal] || 2.0;
             const bloco = document.createElement('div');
