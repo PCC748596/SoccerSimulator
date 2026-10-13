@@ -28,7 +28,15 @@ Tudo o resto é estático.
 */
 
 class CidadeAcumulador {
-    constructor() {
+    /*
+    Dois modos. `instancias` (o da cidade): cada forma que entra é uma INSTÂNCIA de
+    uma forma-unidade (caixa, cilindro, plano, telhado, painel) com a sua matriz e a
+    sua cor, e `malha` devolve um InstancedMesh por forma. `fundido` (o dos
+    comboios, que têm de ser UMA malha clonável): junta os vértices numa só.
+    */
+    constructor(modo) {
+        this.modo = modo || 'instancias';
+        this.inst = new Map();
         this.partes = [];
         this.base = new THREE.Matrix4();   // transformação aplicada a tudo o que entra
         this._cores = new Map();
@@ -50,6 +58,12 @@ class CidadeAcumulador {
 
     // `un`: {pos, nor, uv} não indexados; `uv` substitui o da forma.
     forma(un, M, hex, uv) {
+        if (this.modo === 'instancias') {
+            let l = this.inst.get(un.nome);
+            if (!l) { l = { un, m: [], c: [] }; this.inst.set(un.nome, l); }
+            l.m.push(new Float32Array(M.elements)); l.c.push(hex);
+            return;
+        }
         const T = CidadeAcumulador._tmp;
         const n = un.pos.length / 3;
         const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3);
@@ -99,6 +113,17 @@ class CidadeAcumulador {
         this.forma(U.caixa, M, cor, uv);
     }
 
+    // Painel vertical (grade) entre dois pontos do chão; o UV repete a barra a cada 0.25 m.
+    painel(x0, z0, x1, z1, y0, h, cor) {
+        const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
+        if (len < 0.05) return;
+        const U = CidadeAcumulador.U;
+        const M = this._matriz((x0 + x1) / 2, y0 + h / 2, (z0 + z1) / 2, len, h, 1, Math.atan2(-dz, dx), 0);
+        const uv = new Float32Array(U.painel.uv.length);
+        for (let i = 0; i < uv.length; i += 2) { uv[i] = U.painel.uv[i] * len / 0.25; uv[i + 1] = U.painel.uv[i + 1]; }
+        this.forma(U.painel, M, cor, uv);
+    }
+
     cilindro(cx, y0, cz, diam, h, cor) {
         this.forma(CidadeAcumulador.U.cil, this._matriz(cx, y0 + h / 2, cz, diam, h, diam, 0, 0), cor);
     }
@@ -113,6 +138,20 @@ class CidadeAcumulador {
     }
 
     malha(mat) {
+        if (this.modo === 'instancias') {
+            if (!this.inst.size) return null;
+            const grupo = new THREE.Group();
+            const cor = new THREE.Color();
+            for (const l of this.inst.values()) {
+                const m = new THREE.InstancedMesh(CidadeAcumulador.geoUnidade(l.un), mat, l.m.length);
+                for (let i = 0; i < l.m.length; i++) { m.instanceMatrix.array.set(l.m[i], i * 16); m.setColorAt(i, cor.setHex(l.c[i])); }
+                m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+                m.frustumCulled = false; m.castShadow = false; m.receiveShadow = false;
+                m.name = 'Cidade_' + l.un.nome;
+                grupo.add(m);
+            }
+            return grupo;
+        }
         if (!this.partes.length) return null;
         let total = 0, totalUv = 0;
         for (const p of this.partes) { total += p.pos.length; totalUv += p.uv.length; }
@@ -134,9 +173,24 @@ class CidadeAcumulador {
     }
 }
 
+// A geometria de uma forma-unidade, partilhada por todos os InstancedMesh dessa forma.
+CidadeAcumulador.geoUnidade = function (un) {
+    if (!un.geo) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(un.pos, 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(un.nor, 3));
+        g.setAttribute('uv', new THREE.BufferAttribute(un.uv, 2));
+        un.geo = g;
+    }
+    return un.geo;
+};
+
 const Cidade = {
     grupo: null,
     inventario: null,
+    gente: null,
+    dados: null,
+    _parados: null,
     edificios: [],        // pegadas {tipo, x0, x1, z0, z1, alt}, para os testes
     vias: [],
     reservas: [],
@@ -188,8 +242,10 @@ const Cidade = {
             caixa: nu(new THREE.BoxGeometry(1, 1, 1)),
             cil: nu(new THREE.CylinderGeometry(.5, .5, 1, 8, 1)),
             plano: nu(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)),
+            painel: nu(new THREE.PlaneGeometry(1, 1)),
             telhado: { pos: new Float32Array(P), nor: new Float32Array(N), uv: new Float32Array(P.length / 3 * 2) }
         };
+        for (const k of Object.keys(CidadeAcumulador.U)) CidadeAcumulador.U[k].nome = k;
         return CidadeAcumulador.U;
     },
 
@@ -214,6 +270,19 @@ const Cidade = {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = 4;
         return t;
+    },
+
+    // Disco de luz com queda suave, para as poças dos postes.
+    _texturaPoca() {
+        if (typeof document === 'undefined') return null;
+        const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+        const g = cv.getContext('2d');
+        const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+        gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+        gr.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+        return new THREE.CanvasTexture(cv);
     },
 
     _rotulo(texto, w, h, fundo, tinta, disco) {
@@ -246,6 +315,8 @@ const Cidade = {
             if (o.material && o.material.map && o.material.map.dispose) o.material.map.dispose();
         });
         this.grupo = null; this._veiculos = []; this._trens = []; this._noite = null;
+        if (this.gente && this.gente.limpar) this.gente.limpar();
+        this.gente = null; this.dados = null; this._parados = null;
     },
 
     construir(cena) {
@@ -256,24 +327,49 @@ const Cidade = {
         this._unidades();
 
         const comTex = typeof document !== 'undefined';
+        // A cor vem da instância (instanceColor). `fundido` é só para os comboios, que são uma malha.
         const mats = this._mats = {
-            liso: new THREE.MeshLambertMaterial({ vertexColors: true }),
+            liso: new THREE.MeshLambertMaterial({}),
             jan: new THREE.MeshLambertMaterial({
-                vertexColors: true, map: this._texturaJanelas(false),
+                map: this._texturaJanelas(false),
                 emissiveMap: this._texturaJanelas(true), emissive: 0xffffff, emissiveIntensity: 0
             }),
-            marc: new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-            lamp: new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0xffe2a0, emissiveIntensity: 0 }),
-            brilho: new THREE.MeshBasicMaterial({ vertexColors: true })
+            marc: new THREE.MeshLambertMaterial({ polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+            lamp: new THREE.MeshLambertMaterial({ emissive: 0xffe2a0, emissiveIntensity: 0 }),
+            brilho: new THREE.MeshBasicMaterial({}),
+            grade: new THREE.MeshLambertMaterial({ map: this._texturaGrade(), alphaTest: 0.5, side: THREE.DoubleSide }),
+            fundido: new THREE.MeshLambertMaterial({ vertexColors: true })
         };
-        if (!comTex) { mats.jan.map = null; mats.jan.emissiveMap = null; }
+        if (!comTex) { mats.grade.map = null; mats.jan.map = null; mats.jan.emissiveMap = null; }
+        // Uma instância da caixa é um cubo unitário esticado: o UV das janelas (e o das barras da
+        // grade) tem de sair da ESCALA da instância, o que só o vertex shader sabe.
+        const piso4 = (C.alturaPiso * 4).toFixed(2);
+        mats.jan.onBeforeCompile = sh => {
+            sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>
+                #ifdef USE_INSTANCING
+                float sxI = length(instanceMatrix[0].xyz), syI = length(instanceMatrix[1].xyz), szI = length(instanceMatrix[2].xyz);
+                if (abs(normal.y) > 0.5) vUv = vec2(0.01);
+                else if (abs(normal.x) > 0.5) vUv = vec2(uv.x * szI / 12.0, uv.y * syI / ${piso4});
+                else vUv = vec2(uv.x * sxI / 12.0, uv.y * syI / ${piso4});
+                #endif`);
+        };
+        mats.jan.customProgramCacheKey = () => 'cidade-janelas';
+        mats.grade.onBeforeCompile = sh => {
+            sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', `#include <uv_vertex>
+                #ifdef USE_INSTANCING
+                vUv = vec2(uv.x * length(instanceMatrix[0].xyz) / 0.25, uv.y);
+                #endif`);
+        };
+        mats.grade.customProgramCacheKey = () => 'cidade-grade';
 
         const liso = new CidadeAcumulador(), jan = new CidadeAcumulador(), marc = new CidadeAcumulador();
-        const lamp = new CidadeAcumulador(), brilho = new CidadeAcumulador();
+        const lamp = new CidadeAcumulador(), brilho = new CidadeAcumulador(), grade = new CidadeAcumulador();
         const grupo = new THREE.Group();
         grupo.name = 'Cidade';
         const extras = [];     // rótulos soltos
         const arvores = [], carrosParados = [];
+        const pocas = [];      // poças de luz no chão: [x, z, raio]
+        const zebras = [], corredores = [], portoesDados = [], bocasDados = [];
         const inv = {
             casas: 0, predios: 0, quarteiroes: 0, parques: 0, postes: 0, semaforos: 0, faixasPedestres: 0,
             paradasOnibus: 0, passarelas: 0, vagas: 0, carrosParados: 0, arvores: 0,
@@ -385,7 +481,7 @@ const Cidade = {
                     const d = alternar * (v.w / 2 + 2.6);
                     const [x, z] = pt(v, t, d);
                     if (reservado(x, z, 5) || dentroDeOutra(v, x, z, 0)) continue;
-                    paradas.push({ v, t, lado: alternar, x, z });
+                    paradas.push({ v, t, lado: alternar, x, z, esperando: [] });
                     reservar(x - 3.2, x + 3.2, z - 3.2, z + 3.2, false);
                     v.ocupa.push([t + 4, t + 10]);     // passadeira a meio, ao lado da parada
                 }
@@ -490,7 +586,8 @@ const Cidade = {
             return true;
         };
 
-        const arvore = (x, z, h, r, c) => arvores.push({ x, z, h, r, c });
+        // sp: 0 folhosa, 1 conífera, 2 palmeira (ver _geoArvores)
+        const arvore = (x, z, h, r, c, sp) => arvores.push({ x, z, h, r, c, sp: sp || 0 });
 
         const parque = (c, nPond) => {
             const x0 = c.x0 + C.calcada, x1 = c.x1 - C.calcada, z0 = c.z0 + C.calcada, z1 = c.z1 - C.calcada;
@@ -504,7 +601,7 @@ const Cidade = {
             for (let i = 0; i < n; i++) {
                 const x = x0 + 2 + rnd() * (x1 - x0 - 4), z = z0 + 2 + rnd() * (z1 - z0 - 4);
                 if (Math.abs(x - cx) < 2.5 || Math.abs(z - cz) < 2.5) continue;
-                arvore(x, z, 2 + rnd() * 1.5, 2.2 + rnd() * 2, null);
+                arvore(x, z, 2 + rnd() * 1.5, 2.2 + rnd() * 2, null, rnd() < 0.3 ? 1 : 0);
             }
             registar('parque', x0, x1, z0, z1, 0);
         };
@@ -588,6 +685,7 @@ const Cidade = {
                         }
                     }
                 } else {
+                    corredores.push({ L: lt.L, s: s + tamanho.a / 2, l0: L0 + 2, l1: L1 - 2, lote: lt });
                     for (let l = L0 + 14; l < L1 - 6; l += C.postes.passoEstacionamento) {
                         const [px, pz] = W(l, s + tamanho.a / 2);
                         postesEstac.push({ x: px, z: pz, eixo: lt.L === 'z' ? 'x' : 'z' });
@@ -598,6 +696,7 @@ const Cidade = {
         }
         // bilheteiras na esplanada
         for (const [kx, kz] of [[86.5, 70], [86.5, -70], [-86.5, 70], [-86.5, -70], [40, 106], [-40, -106]]) {
+            reservar(kx - 2.5, kx + 2.5, kz - 2.2, kz + 2.2, false);
             liso.caixa(kx, yCal, kz, 3.2, 2.8, 2.6, 0xe9e5d8);
             liso.caixa(kx, yCal + 2.8, kz, 4, 0.2, 3.4, 0x2d5f9a);
         }
@@ -609,6 +708,7 @@ const Cidade = {
             else marc.plano((t0 + t1) / 2, yPint, v.c + d, t1 - t0, larg, c);
         };
         const zebra = (v, t) => {
+            zebras.push({ v, t });
             const n = Math.floor((v.w - 1.2) / 1.0);
             for (let k = 0; k < n; k++) {
                 const d = -v.w / 2 + 0.6 + 0.5 + k * 1.0;
@@ -659,6 +759,7 @@ const Cidade = {
                 const ang = Math.atan2(bx, bz);
                 liso.caixa(x + bx / 2, alt - 0.1, z + bz / 2, 0.1, 0.1, comp, 0x5b6068, ang);
                 lamp.caixa(x + bx, alt - 0.25, z + bz, 0.5, 0.15, 0.9, 0xfff0c8, ang);
+                pocas.push([x + bx, z + bz, alt * 0.95]);
             }
             inv.postes++;
         };
@@ -713,11 +814,11 @@ const Cidade = {
                         if (rnd() < 0.18) continue;
                         const [x, z] = pt(v, t + (lado > 0 ? 8 : 0), lado * (v.w / 2 + 2.3));
                         if (reservado(x, z, 1.2) || perto(x, z, 1.6) || dentroDeOutra(v, x, z, 1.5)) continue;
-                        arvore(x, z, 2.2 + rnd() * 0.8, 2.6 + rnd() * 1.4, null);
+                        arvore(x, z, 2.2 + rnd() * 0.8, 2.6 + rnd() * 1.4, null, rnd() < 0.2 ? 1 : 0);
                     }
                     if (v.avenida && !v.metro) {
                         const [x, z] = pt(v, t + 4, 0);
-                        if (!reservado(x, z, 1.5) && !perto(x, z, 1.8)) arvore(x, z, 4.5, 2.4, 0x4f8f3a);
+                        if (!reservado(x, z, 1.5) && !perto(x, z, 1.8)) arvore(x, z, 4.5, 2.4, 0x4f8f3a, 2);
                     }
                 }
             }
@@ -794,23 +895,28 @@ const Cidade = {
             }
             // comboios
             const dimC = { l: 18, a: 3.4, w: 3.0 };
-            const ac = new CidadeAcumulador();
+            const ac = new CidadeAcumulador('fundido');
             for (let k = 0; k < M.carros; k++) {
                 const x = k * (dimC.l + 0.6);
                 ac.caixa(x, 0, 0, dimC.l, dimC.a, dimC.w, 0xd7dade);
                 ac.caixa(x, 1.9, 0, dimC.l - 1.2, 0.9, dimC.w + 0.04, 0x1d2630);
                 ac.caixa(x, 0.9, 0, dimC.l, 0.45, dimC.w + 0.03, 0x2f6fb5);
                 ac.caixa(x, dimC.a, 0, dimC.l - 2, 0.25, dimC.w - 0.8, 0x9ea4ab);
+                for (const o of [-4, 4]) for (const lado of [-1, 1]) {
+                    ac.caixa(x + o, 0.25, lado * (dimC.w / 2 + 0.03), 1.3, 2.4, 0.05, 0x2c4f73);
+                }
             }
-            const geoTrem = ac.malha(mats.liso);
+            const geoTrem = ac.malha(mats.fundido);
+            const centroLocal = (M.carros - 1) * (dimC.l + 0.6) / 2;
             for (let k = 0; k < M.trens; k++) {
                 const m = geoTrem.clone();
-                const dir = k % 2 === 0 ? 1 : -1;
-                const compTotal = M.carros * (dimC.l + 0.6);
-                m.userData = { dir, vel: M.velocidade, compTotal };
-                m.position.set(-R + k * 150, yT + 0.1, zc + (k % 2 === 0 ? -2.2 : 2.2));
-                if (dir < 0) { m.rotation.y = Math.PI; m.position.x = R - k * 120; }
-                m.matrixAutoUpdate = true;
+                const dir = k % 2 === 0 ? 1 : -1, lado = k % 2 === 0 ? -1 : 1;
+                m.userData = {
+                    dir, lado, vmax: M.velocidade, v: M.velocidade, estado: 'viaja', timer: 0,
+                    compTotal: M.carros * (dimC.l + 0.6), paragemX: M.estacaoX - dir * centroLocal, pax: []
+                };
+                m.position.set(dir > 0 ? -R : R + 60, yT + 0.1, zc + lado * 2.2);
+                if (dir < 0) m.rotation.y = Math.PI;
                 trens.push(m);
                 inv.metro.trens++;
             }
@@ -829,6 +935,7 @@ const Cidade = {
             const m = this._rotulo('M', 1.5, 1.5, '#d62828', '#ffffff', true);
             B.identity();
             if (m) { m.position.set(b.x + Math.sin(gira) * 1.0, yCal + 4.4, b.z + Math.cos(gira) * 1.0); m.rotation.y = gira; extras.push(m); }
+            bocasDados.push({ x: b.x, z: b.z, gira });
             inv.metro.bocas++;
         }
 
@@ -863,48 +970,255 @@ const Cidade = {
             inv.passarelas++;
         }
 
+        // ---- contorno do estádio: fachada e árvores da esplanada -----------
+        const FA = C.fachada;
+        // Polilinha densa do contorno arredondado, a `off` metros da parede.
+        const anel = (off) => {
+            const pts = [], r = FA.raio + off, passo = 0.5;
+            const cantos = [[1, 1, 0], [-1, 1, Math.PI / 2], [-1, -1, Math.PI], [1, -1, Math.PI * 1.5]];
+            for (const [sx, sz, a0] of cantos) {
+                const n = Math.max(4, Math.ceil(r * Math.PI / 2 / passo));
+                for (let i = 0; i <= n; i++) {
+                    const a = a0 + (i / n) * Math.PI / 2;
+                    pts.push([sx * FA.centroX + r * Math.cos(a), sz * FA.centroZ + r * Math.sin(a)]);
+                }
+            }
+            return pts;
+        };
+        if (FA.ativa) {
+            const ring = anel(0);
+            // densifica as rectas entre cantos (as arestas ligam o fim de um arco ao início do seguinte)
+            const dens = [];
+            for (let i = 0; i < ring.length; i++) {
+                const a = ring[i], b = ring[(i + 1) % ring.length];
+                const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                const k = Math.max(1, Math.ceil(d / 6));
+                for (let j = 0; j < k; j++) dens.push([a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k]);
+            }
+            const nP = dens.length;
+            // normal para fora de cada ponto: do centro do canto mais próximo
+            const fora = dens.map(([x, z]) => {
+                const cx = Math.abs(x) > FA.centroX ? Math.sign(x) * FA.centroX : x;
+                const cz = Math.abs(z) > FA.centroZ ? Math.sign(z) * FA.centroZ : z;
+                const dx = x - cx, dz = z - cz, l = Math.hypot(dx, dz) || 1;
+                return [dx / l, dz / l];
+            });
+            // perfil subdividido em bandas finas
+            const lin = [];
+            const pf = FA.perfil;
+            for (let i = 0; i < pf.length - 1; i++) {
+                const n = Math.max(1, Math.round((pf[i + 1][1] - pf[i][1]) / FA.passoBanda));
+                for (let j = 0; j < n; j++) {
+                    const u = j / n;
+                    lin.push([pf[i][0] + (pf[i + 1][0] - pf[i][0]) * u, pf[i][1] + (pf[i + 1][1] - pf[i][1]) * u]);
+                }
+            }
+            lin.push(pf[pf.length - 1]);
+            const nR = lin.length;
+            const pos = new Float32Array(nP * nR * 3), col = new Float32Array(nP * nR * 3);
+            const cA = new THREE.Color(FA.corClara), cB = new THREE.Color(FA.corEscura), cBase = new THREE.Color(FA.corBase);
+            const tmp = new THREE.Color();
+            for (let r = 0; r < nR; r++) {
+                const banda = r % 2;
+                const alt = lin[r][1], k = Math.min(1, alt / 27);
+                if (alt < 9) tmp.copy(cBase); else tmp.copy(banda ? cA : cB);
+                if (alt >= 9) tmp.multiplyScalar(0.85 + 0.25 * k);          // mais claro para cima
+                for (let i = 0; i < nP; i++) {
+                    const o = lin[r][0] + (banda ? FA.relevo : 0);
+                    const idx = (r * nP + i) * 3;
+                    pos[idx] = dens[i][0] + fora[i][0] * o;
+                    pos[idx + 1] = lin[r][1];
+                    pos[idx + 2] = dens[i][1] + fora[i][1] * o;
+                    col[idx] = tmp.r; col[idx + 1] = tmp.g; col[idx + 2] = tmp.b;
+                }
+            }
+            const ind = [];
+            for (let r = 0; r < nR - 1; r++) for (let i = 0; i < nP; i++) {
+                const a = r * nP + i, b = r * nP + (i + 1) % nP, c2 = (r + 1) * nP + i, d = (r + 1) * nP + (i + 1) % nP;
+                ind.push(a, c2, b, b, c2, d);
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+            g.setIndex(ind);
+            g.computeVertexNormals();
+            const casca = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+            casca.castShadow = false; casca.receiveShadow = false;
+            casca.name = 'FachadaEstadio';
+            extras.push(casca);
+            inv.fachada = true;
+        }
+        /*
+        COLUNAS E PORTÕES. A casca está a `vao` metros do chão, e por baixo
+        dela passa a torcida: colunas de aço a cada `passoColunas` m seguram-na,
+        e em `portoes` pontos do contorno há uma entrada/saída — pórtico com o
+        número, fila de catracas e grades a guiar a fila para fora.
+        */
+        if (FA.ativa) {
+            const foraDe = (x, z) => {
+                const cx = Math.abs(x) > FA.centroX ? Math.sign(x) * FA.centroX : x;
+                const cz = Math.abs(z) > FA.centroZ ? Math.sign(z) * FA.centroZ : z;
+                const dx = x - cx, dz = z - cz, l = Math.hypot(dx, dz) || 1;
+                return [dx / l, dz / l];
+            };
+            // Pontos do contorno a `off` m da parede, de `passo` em `passo` metros (por comprimento de arco).
+            const percorrer = (off, passo, desfasar) => {
+                const ring = anel(off), out = [];
+                let acum = 0, prox = desfasar;
+                for (let i = 0; i < ring.length; i++) {
+                    const a = ring[i], b = ring[(i + 1) % ring.length];
+                    const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                    while (acum + d >= prox) {
+                        const u = (prox - acum) / (d || 1);
+                        const x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u;
+                        out.push({ x, z, n: foraDe(x, z), s: prox });
+                        prox += passo;
+                    }
+                    acum += d;
+                }
+                return out;
+            };
+            const OFF = FA.perfil[0][0];
+            const perim = anel(OFF).reduce((s2, a, i, r) => {
+                const b = r[(i + 1) % r.length]; return s2 + Math.hypot(b[0] - a[0], b[1] - a[1]);
+            }, 0);
+            const portoes = percorrer(OFF, perim / FA.portoes, perim / FA.portoes / 2).slice(0, FA.portoes);
+            // colunas, menos na boca dos portões
+            const colunasPos = [];
+            for (const c of percorrer(OFF + 0.2, FA.passoColunas, 2)) {
+                if (portoes.some(g => Math.hypot(g.x - c.x, g.z - c.z) < 6.5)) continue;
+                liso.caixa(c.x, yCal, c.z, 0.7, FA.vao - yCal, 0.7, FA.corColuna);
+                colunasPos.push(c);
+                inv.colunasFachada = (inv.colunasFachada || 0) + 1;
+            }
+            portoes.forEach((g, n) => {
+                const ang = Math.atan2(g.n[0], g.n[1]);
+                const B = liso.base;
+                B.makeRotationY(ang).setPosition(g.x, 0, g.z);
+                // pórtico: dois pilares e a viga com o número
+                for (const sx of [-4.6, 4.6]) {
+                    liso.caixa(sx, yCal, 0.4, 0.7, 5.0, 0.8, FA.corColuna);
+                    lamp.caixa(sx, 5.0, 0.9, 0.5, 0.2, 0.3, 0xfff0c8);
+                    pocas.push([g.x + Math.cos(ang) * sx + g.n[0] * 0.9, g.z - Math.sin(ang) * sx + g.n[1] * 0.9, 6]);
+                }
+                liso.caixa(0, 4.1, 0.4, 10.2, 1.0, 1.0, 0x2f6fb5);
+                // catracas e piso de acesso
+                liso.plano(0, yCal + 0.03, 3.4, 10, 6.2, 0x9aa7b8);
+                for (let k = -3; k <= 3; k++) {
+                    liso.caixa(k * 1.3, yCal, 1.2, 0.18, 1.0, 1.0, 0x5d6673);
+                    liso.caixa(k * 1.3, yCal + 0.85, 1.2, 0.9, 0.06, 0.06, 0xc8ccd2);
+                }
+                // grades a guiar a fila para fora, com os seus postes
+                grade.base.copy(B);
+                for (const sx of [-5.3, 5.3]) {
+                    grade.painel(sx, 1.4, sx, 6.6, yCal, 1.2, 0xc8ccd2);
+                    for (let z = 1.4; z <= 6.7; z += 1.3) liso.caixa(sx, yCal, z, 0.12, 1.3, 0.12, 0x4a4f57);
+                }
+                grade.base.identity();
+                B.identity();
+                portoesDados.push({ x: g.x, z: g.z, n: g.n, ang, i: n });
+                reservar(g.x + g.n[0] * 4 - 7, g.x + g.n[0] * 4 + 7, g.z + g.n[1] * 4 - 7, g.z + g.n[1] * 4 + 7, false);
+                const rot = this._rotulo('PORTÃO ' + (n + 1), 8.6, 0.9, '#2f6fb5', '#ffffff', false);
+                if (rot) {
+                    rot.position.set(g.x + g.n[0] * 0.95, 4.1 + 0.5, g.z + g.n[1] * 0.95);
+                    rot.rotation.y = ang;
+                    extras.push(rot);
+                }
+                inv.portoes = (inv.portoes || 0) + 1;
+            });
+            // Grade contínua entre as colunas e os postes dos portões (nunca entre os
+            // dois postes do mesmo portão: é por aí que a torcida entra).
+            const pil = colunasPos.map(c => ({ s: c.s, x: c.x, z: c.z, g: -1 }));
+            portoes.forEach((g, n) => {
+                const ang = Math.atan2(g.n[0], g.n[1]), tx = Math.cos(ang), tz = -Math.sin(ang);
+                for (const sx of [-4.6, 4.6]) pil.push({ s: g.s + sx, x: g.x + tx * sx + g.n[0] * 0.4, z: g.z + tz * sx + g.n[1] * 0.4, g: n });
+            });
+            pil.sort((a, b) => a.s - b.s);
+            for (let i = 0; i < pil.length; i++) {
+                const a = pil[i], b = pil[(i + 1) % pil.length];
+                if (a.g >= 0 && a.g === b.g) continue;
+                if (Math.hypot(b.x - a.x, b.z - a.z) > 14) continue;
+                grade.painel(a.x, a.z, b.x, b.z, yCal + 0.1, 2.2, 0x4a4f57);
+                inv.paineisDeGrade = (inv.paineisDeGrade || 0) + 1;
+            }
+        }
+        // Árvores em canteiros circulares, em anel, a `recuo` da fachada.
+        {
+            const AE = C.arvoresEsplanada, ring = anel(AE.recuo);
+            let acum = 0, prox = AE.passo / 2;
+            for (let i = 0; i < ring.length; i++) {
+                const a = ring[i], b = ring[(i + 1) % ring.length];
+                const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                while (acum + d >= prox) {
+                    const u = (prox - acum) / (d || 1);
+                    const x = a[0] + (b[0] - a[0]) * u, z = a[1] + (b[1] - a[1]) * u;
+                    prox += AE.passo;
+                    if (reservado(x, z, 1.5)) continue;
+                    liso.cilindro(x, yCal, z, 3.4, 0.25, 0x9aa09a);
+                    liso.cilindro(x, yCal + 0.25, z, 3.0, 0.03, cor.relva);
+                    arvore(x, z, 2.4 + rnd() * 0.8, 2.8 + rnd() * 1.0, null);
+                    inv.arvoresEsplanada = (inv.arvoresEsplanada || 0) + 1;
+                }
+                acum += d;
+            }
+        }
+
         // ---- instanciados: árvores, carros ---------------------------------
         const dummy = new THREE.Object3D();
         const instancias = [];
         if (arvores.length) {
-            const tronco = new THREE.InstancedMesh(new THREE.CylinderGeometry(.5, .5, 1, 6, 1),
-                new THREE.MeshLambertMaterial({ color: 0x6b4a2f }), arvores.length);
-            const copa = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(.5, 1),
-                new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), arvores.length);
-            const verdes = [0x4f8f3a, 0x3f7d33, 0x5ea043, 0x2f6d33, 0x6aa84f];
+            const G = this._geoArvores();
+            const paletas = [
+                [0x5ea043, 0x4f8f3a, 0x6aa84f, 0x3f7d33, 0x7bb35a, 0x8aa83c],
+                [0x2f6d33, 0x28603a, 0x3a7a3e],
+                [0x5a9a3c, 0x4f8f3a]
+            ];
+            // Altura total pela do tronco: cada espécie tem a sua proporção.
+            const fatorAltura = [1 / 0.4, 3.2, 2.0];
             const cc = new THREE.Color();
-            arvores.forEach((a, i) => {
-                dummy.rotation.set(0, 0, 0);
-                dummy.position.set(a.x, a.h / 2 + C.alturaCalcada, a.z); dummy.scale.set(0.35, a.h, 0.35); dummy.updateMatrix();
-                tronco.setMatrixAt(i, dummy.matrix);
-                dummy.position.set(a.x, a.h + a.r * 0.45 + C.alturaCalcada, a.z); dummy.scale.set(a.r * 1.7, a.r * 1.5, a.r * 1.7); dummy.updateMatrix();
-                copa.setMatrixAt(i, dummy.matrix);
-                copa.setColorAt(i, cc.setHex(a.c || pick(verdes)));
-            });
-            inv.arvores = arvores.length;
-            instancias.push(tronco, copa);
+            for (let sp = 0; sp < 3; sp++) {
+                const lista = arvores.filter(a => a.sp === sp);
+                if (!lista.length) continue;
+                const tronco = new THREE.InstancedMesh(G[sp].tronco, G.matTronco, lista.length);
+                const copa = new THREE.InstancedMesh(G[sp].copa, sp === 2 ? G.matFolha2 : G.matFolha, lista.length);
+                lista.forEach((a, i) => {
+                    dummy.rotation.set(0, rnd() * Math.PI * 2, 0);
+                    dummy.position.set(a.x, C.alturaCalcada, a.z);
+                    const sx = a.r * 2 * (0.9 + rnd() * 0.2);
+                    dummy.scale.set(sx, a.h * fatorAltura[sp] * (0.92 + rnd() * 0.16), sx);
+                    dummy.updateMatrix();
+                    tronco.setMatrixAt(i, dummy.matrix);
+                    copa.setMatrixAt(i, dummy.matrix);
+                    copa.setColorAt(i, cc.setHex(a.c || pick(paletas[sp])));
+                });
+                inv.arvores += lista.length;
+                instancias.push(tronco, copa);
+            }
         }
-        const matCarro = new THREE.MeshLambertMaterial({ color: 0xffffff });
-        const matVidro = new THREE.MeshLambertMaterial({ color: 0x1d2630 });
-        const caixaUnit = new THREE.BoxGeometry(1, 1, 1);
+        // ---- veículos: modelos com rodas, vidros e faróis -----------------
+        const GV = this._geoVeiculos();
+        const cc2 = new THREE.Color();
         if (carrosParados.length) {
             const n = carrosParados.length;
-            const corpo = new THREE.InstancedMesh(caixaUnit, matCarro, n);
-            const cab = new THREE.InstancedMesh(caixaUnit, matVidro, n);
-            const cc = new THREE.Color();
+            const corpo = new THREE.InstancedMesh(GV.carro.corpo, GV.matCorpo, n);
+            const det = new THREE.InstancedMesh(GV.carro.det, GV.matDet, n);
+            const guardadas = [];
             carrosParados.forEach((c, i) => {
                 dummy.rotation.set(0, c.ry + (rnd() < 0.5 ? 0 : Math.PI), 0);
-                dummy.position.set(c.x, yEst + 0.6, c.z); dummy.scale.set(1.8, 0.8, 4.3); dummy.updateMatrix();
-                corpo.setMatrixAt(i, dummy.matrix); corpo.setColorAt(i, cc.setHex(c.c));
-                dummy.position.set(c.x, yEst + 1.25, c.z); dummy.scale.set(1.6, 0.6, 2.3); dummy.updateMatrix();
-                cab.setMatrixAt(i, dummy.matrix);
+                dummy.position.set(c.x, yEst, c.z); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+                corpo.setMatrixAt(i, dummy.matrix); det.setMatrixAt(i, dummy.matrix);
+                corpo.setColorAt(i, cc2.setHex(c.c));
+                guardadas.push(dummy.matrix.clone());
+                c.i = i; c.oculto = false;
             });
+            this._parados = { corpo, det, mats: guardadas, lista: carrosParados };
             inv.carrosParados = n;
-            instancias.push(corpo, cab);
-        }
-        // trânsito
+            instancias.push(corpo, det);
+        } else this._parados = null;
+        // trânsito: onibus e taxis só nas avenidas com parada, para pararem mesmo
         const TR = C.transito;
         const veic = [];
+        const viasParada = [...new Set(paradas.map(p => p.v))];
         const comp = vias.reduce((s, v) => s + (v.b - v.a), 0);
         const escolheVia = () => {
             let x = rnd() * comp;
@@ -913,37 +1227,72 @@ const Cidade = {
         };
         const nCarros = TR.carros, nOnibus = TR.onibus;
         for (let i = 0; i < nCarros + nOnibus; i++) {
-            const v = escolheVia(), dir = rnd() < 0.5 ? -1 : 1, onibus = i >= nCarros;
+            const onibus = i >= nCarros, taxi = !onibus && i < TR.taxis;
+            const servico = (onibus || taxi) && viasParada.length > 0;
+            const v = servico ? pick(viasParada) : escolheVia();
+            const dir = rnd() < 0.5 ? -1 : 1;
             const faixas = v.avenida ? [3.3, 6.8] : [2.8];
-            const off = dir * (onibus ? faixas[faixas.length - 1] : pick(faixas));
+            const off = dir * (servico ? faixas[faixas.length - 1] : pick(faixas));
+            const vel = onibus ? TR.velOnibus : TR.velMin + rnd() * (TR.velMax - TR.velMin);
             veic.push({
-                v, dir, off, onibus, t: v.a + rnd() * (v.b - v.a),
-                vel: onibus ? 8 : TR.velMin + rnd() * (TR.velMax - TR.velMin),
-                c: onibus ? pick([0xe8b923, 0x2f6fb5, 0xd0342c, 0x2f8a4f]) : pick(C.carros)
+                v, dir, off, onibus, taxi, t: v.a + rnd() * (v.b - v.a), vel, vAtual: vel,
+                estado: 'anda', timer: 0, ultima: null, paradaAtual: null, passageiros: [], x: 0, z: 0,
+                c: onibus ? pick([0xe8b923, 0x2f6fb5, 0xd0342c, 0x2f8a4f]) : (taxi ? 0xf2c200 : pick(C.carros))
             });
         }
-        const grupoVeic = (lista, dims, vidroDims) => {
+        const grupoVeic = (lista, geo) => {
             if (!lista.length) return null;
-            const corpo = new THREE.InstancedMesh(caixaUnit, matCarro, lista.length);
-            const vid = new THREE.InstancedMesh(caixaUnit, matVidro, lista.length);
-            const cc = new THREE.Color();
-            lista.forEach((c, i) => corpo.setColorAt(i, cc.setHex(c.c)));
-            corpo.frustumCulled = false; vid.frustumCulled = false;
-            return { corpo, vid, lista, dims, vidroDims };
+            const corpo = new THREE.InstancedMesh(geo.corpo, GV.matCorpo, lista.length);
+            const det = new THREE.InstancedMesh(geo.det, GV.matDet, lista.length);
+            lista.forEach((c, i) => corpo.setColorAt(i, cc2.setHex(c.c)));
+            corpo.frustumCulled = false; det.frustumCulled = false;
+            return { corpo, det, lista };
         };
-        const gCarros = grupoVeic(veic.filter(q => !q.onibus), [1.8, 1.0, 4.3, 0.7], [1.6, 0.6, 2.3, 1.45]);
-        const gOnibus = grupoVeic(veic.filter(q => q.onibus), [2.55, 2.9, 11.5, 1.6], [2.6, 0.9, 10.5, 2.2]);
+        const gCarros = grupoVeic(veic.filter(q => !q.onibus), GV.carro);
+        const gOnibus = grupoVeic(veic.filter(q => q.onibus), GV.onibus);
         this._veiculos = [gCarros, gOnibus].filter(Boolean);
-        for (const g of this._veiculos) instancias.push(g.corpo, g.vid);
+        for (const g of this._veiculos) instancias.push(g.corpo, g.det);
         this._trens = trens;
+        this.dados = {
+            vias, zebras, paradas, escadas: escadasEstacao, cruz, passarelas, corredores,
+            bocas: bocasDados, portoes: portoesDados, carrosParados, anel, pt, dentroDeOutra,
+            metro: viaMetro ? { zc: viaMetro.c, yT: M.alturaTopo, ex: M.estacaoX } : null
+        };
         this._atualizarVeiculos(0);
 
+
         // ---- monta ----------------------------------------------------------
-        for (const [acc, mat] of [[liso, mats.liso], [jan, mats.jan], [marc, mats.marc], [lamp, mats.lamp], [brilho, mats.brilho]]) {
+        // Poças de luz: os postes não têm luz real (seriam centenas de SpotLights);
+        // cada cabeça pinta um disco aditivo no chão, que só aparece de noite.
+        if (pocas.length) {
+            const n = pocas.length, pos = new Float32Array(n * 18), uv = new Float32Array(n * 12);
+            const cantos = [[-1, -1, 0, 0], [1, -1, 1, 0], [1, 1, 1, 1], [-1, -1, 0, 0], [1, 1, 1, 1], [-1, 1, 0, 1]];
+            pocas.forEach(([x, z, r], i) => {
+                cantos.forEach(([cx, cz, u, v], k) => {
+                    const o = (i * 6 + k) * 3;
+                    pos[o] = x + cx * r; pos[o + 1] = 0.27; pos[o + 2] = z + cz * r;
+                    uv[(i * 6 + k) * 2] = u; uv[(i * 6 + k) * 2 + 1] = v;
+                });
+            });
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+            mats.poca = new THREE.MeshBasicMaterial({
+                color: 0xffc870, map: this._texturaPoca(), transparent: true, opacity: 0.8,
+                blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+            });
+            const m = new THREE.Mesh(g, mats.poca);
+            m.renderOrder = 2; m.visible = false; m.name = 'PocasDeLuz';
+            m.frustumCulled = false;
+            grupo.add(m);
+        }
+        for (const [acc, mat] of [[liso, mats.liso], [jan, mats.jan], [marc, mats.marc], [lamp, mats.lamp], [brilho, mats.brilho], [grade, mats.grade]]) {
             const m = acc.malha(mat);
             if (m) grupo.add(m);
         }
-        for (const o of instancias) { o.castShadow = false; o.receiveShadow = false; grupo.add(o); }
+        // Sem frustum culling: o raio da esfera de um InstancedMesh é o da geometria na origem,
+        // e a cidade inteira desaparecia quando a origem saía do ecrã.
+        for (const o of instancias) { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; grupo.add(o); }
         for (const o of extras) grupo.add(o);
         for (const t of trens) grupo.add(t);
         grupo.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
@@ -953,7 +1302,207 @@ const Cidade = {
         if (cena) cena.add(grupo);
         this._noite = null;
         this._aplicarPeriodo(false);
+        if (typeof CidadeGente !== 'undefined' && C.gente && C.gente.ativa) {
+            this.gente = CidadeGente;
+            CidadeGente.construir(this, grupo, this._rng(C.semente + 11));
+        }
         return grupo;
+    },
+
+    // Ferramentas para fundir geometria com cor por vértice (árvores e veículos).
+    _ferr() {
+        const hash = (x, y, z) => { const v = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return v - Math.floor(v); };
+        const novo = () => ({ p: [], c: [] });
+        const juntar = (d, geo, M, corFn, deformar) => {
+            const g = geo.index ? geo.toNonIndexed() : geo.clone();
+            const a = g.attributes.position.array, v = new THREE.Vector3();
+            for (let i = 0; i < a.length; i += 3) {
+                v.set(a[i], a[i + 1], a[i + 2]);
+                if (deformar) v.multiplyScalar(1 + (hash(v.x, v.y, v.z) - 0.5) * deformar);
+                v.applyMatrix4(M);
+                const c = corFn(v);
+                d.p.push(v.x, v.y, v.z); d.c.push(c[0], c[1], c[2]);
+            }
+        };
+        const fechar = d => {
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(d.p), 3));
+            g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(d.c), 3));
+            g.computeVertexNormals();
+            return g;
+        };
+        const T = (x, y, z, sx, sy, sz, q) => new THREE.Matrix4().compose(
+            new THREE.Vector3(x, y, z), q || new THREE.Quaternion(), new THREE.Vector3(sx, sy, sz));
+        return { hash, novo, juntar, fechar, T };
+    },
+
+    /*
+    OS VEÍCULOS, de geometria fundida em duas partes: `corpo` (a pintura, que
+    leva a cor da instância) e `det` (vidros, rodas, faróis, pára-choques, que
+    ficam sempre iguais). A frente é +z; a base está em y = 0.
+    Carro 1.8 x 1.5 x 4.3 m: carroceria baixa, cabine trapezoidal envidraçada
+    com tecto da cor do carro, quatro rodas com calota, faróis e lanternas.
+    Ônibus 2.55 x 3.2 x 11.5 m: faixa de janelas com montantes, parabrisa,
+    letreiro, duas portas por lado, tecto com ar-condicionado e quatro rodas.
+    */
+    _geoVeiculos() {
+        if (this._geoV) return this._geoV;
+        const { novo, juntar, fechar, T } = this._ferr();
+        const caixa = () => new THREE.BoxGeometry(1, 1, 1);
+        const roda = () => new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1).rotateZ(Math.PI / 2);
+        const tronco = (kx, kz, dz) => {
+            const g = caixa(), a = g.attributes.position.array;
+            for (let i = 0; i < a.length; i += 3) if (a[i + 1] > 0) { a[i] *= kx; a[i + 2] = a[i + 2] * kz + dz; }
+            return g;
+        };
+        const lisa = (base, grad) => v => { const k = base + grad * Math.max(0, Math.min(1, v.y / 3.2)); return [k, k, k]; };
+        const fixo = (r, g, b) => () => [r, g, b];
+        const pneu = fixo(0.06, 0.06, 0.07), calota = fixo(0.62, 0.64, 0.67), vidro = fixo(0.09, 0.13, 0.19);
+
+        // ---- carro
+        const cc = novo(), cd = novo();
+        juntar(cc, caixa(), T(0, 0.56, 0, 1.8, 0.56, 4.3), lisa(0.82, 0.18));
+        juntar(cc, caixa(), T(0, 0.87, 1.45, 1.74, 0.07, 1.3), lisa(0.95, 0.05));          // capô
+        juntar(cc, caixa(), T(0, 0.87, -1.6, 1.74, 0.07, 0.9), lisa(0.95, 0.05));          // tampa
+        juntar(cd, tronco(0.84, 0.6, -0.1), T(0, 1.18, -0.15, 1.66, 0.62, 2.55), vidro);    // cabine
+        juntar(cc, caixa(), T(0, 1.5, -0.24, 1.36, 0.06, 1.45), lisa(0.92, 0.08));         // tecto
+        juntar(cd, caixa(), T(0, 0.27, 0, 1.7, 0.12, 4.2), fixo(0.05, 0.05, 0.06));        // fundo
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+            juntar(cd, roda(), T(sx * 0.88, 0.33, sz * 1.38, 0.26, 0.66, 0.66), pneu);
+            juntar(cd, roda(), T(sx * 0.9, 0.33, sz * 1.38, 0.27, 0.36, 0.36), calota);
+        }
+        juntar(cd, caixa(), T(0, 0.4, 2.17, 1.78, 0.2, 0.12), fixo(0.12, 0.12, 0.13));
+        juntar(cd, caixa(), T(0, 0.4, -2.17, 1.78, 0.2, 0.12), fixo(0.12, 0.12, 0.13));
+        juntar(cd, caixa(), T(0, 0.58, 2.16, 0.7, 0.14, 0.05), fixo(0.1, 0.1, 0.11));      // grade
+        for (const sx of [-1, 1]) {
+            juntar(cd, caixa(), T(sx * 0.62, 0.7, 2.16, 0.36, 0.14, 0.06), fixo(1, 0.96, 0.75));
+            juntar(cd, caixa(), T(sx * 0.66, 0.72, -2.16, 0.36, 0.12, 0.06), fixo(0.85, 0.05, 0.05));
+            juntar(cd, caixa(), T(sx * 0.95, 1.02, 1.0, 0.1, 0.08, 0.16), fixo(0.1, 0.1, 0.11)); // retrovisor
+        }
+
+        // ---- ônibus
+        const bc = novo(), bd = novo();
+        juntar(bc, caixa(), T(0, 1.9, 0, 2.55, 2.6, 11.5), lisa(0.8, 0.2));
+        juntar(bd, caixa(), T(0, 2.2, 0, 2.59, 0.95, 10.9), vidro);                         // faixa de janelas
+        for (let z = -4.8; z <= 4.9; z += 1.6) juntar(bc, caixa(), T(0, 2.2, z, 2.62, 0.97, 0.16), lisa(0.82, 0.12));
+        juntar(bd, caixa(), T(0, 0.66, 0, 2.58, 0.34, 11.52), fixo(0.2, 0.21, 0.23));       // saia
+        juntar(bc, caixa(), T(0, 3.22, 0, 2.4, 0.07, 11.2), lisa(0.95, 0.05));             // tecto
+        juntar(bd, caixa(), T(0, 3.4, -2.2, 1.5, 0.3, 2.6), fixo(0.72, 0.74, 0.77));        // ar-condicionado
+        juntar(bd, caixa(), T(0, 2.15, 5.77, 2.3, 1.6, 0.06), vidro);                       // parabrisa
+        juntar(bd, caixa(), T(0, 3.05, 5.78, 1.8, 0.24, 0.05), fixo(1, 0.6, 0.1));          // letreiro
+        juntar(bd, caixa(), T(0, 0.55, 5.8, 2.5, 0.28, 0.12), fixo(0.12, 0.12, 0.13));
+        juntar(bd, caixa(), T(0, 0.55, -5.8, 2.5, 0.28, 0.12), fixo(0.12, 0.12, 0.13));
+        juntar(bd, caixa(), T(0, 2.1, -5.77, 2.0, 1.15, 0.05), vidro);
+        for (const sx of [-1, 1]) {
+            juntar(bd, caixa(), T(sx * 0.9, 0.98, 5.79, 0.38, 0.22, 0.05), fixo(1, 0.95, 0.72));
+            juntar(bd, caixa(), T(sx * 1.0, 0.98, -5.79, 0.32, 0.22, 0.05), fixo(0.85, 0.05, 0.05));
+            for (const z of [3.6, -1.6]) juntar(bd, caixa(), T(sx * 1.29, 1.55, z, 0.06, 2.05, 1.15), fixo(0.12, 0.2, 0.3)); // portas
+            for (const z of [3.7, -3.5]) {
+                juntar(bd, roda(), T(sx * 1.2, 0.5, z, 0.32, 1.0, 1.0), pneu);
+                juntar(bd, roda(), T(sx * 1.22, 0.5, z, 0.33, 0.55, 0.55), calota);
+            }
+        }
+
+        const mat = o => new THREE.MeshLambertMaterial(Object.assign({ vertexColors: true }, o));
+        this._geoV = {
+            carro: { corpo: fechar(cc), det: fechar(cd) },
+            onibus: { corpo: fechar(bc), det: fechar(bd) },
+            matCorpo: mat({}), matDet: mat({})
+        };
+        return this._geoV;
+    },
+
+    // Grade: barras verticais e duas travessas, com transparência.
+    _texturaGrade() {
+        if (typeof document === 'undefined') return null;
+        const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+        const g = cv.getContext('2d');
+        g.clearRect(0, 0, 64, 64);
+        g.fillStyle = '#fff';
+        g.fillRect(29, 0, 6, 64);            // barra
+        g.fillRect(0, 2, 64, 5);             // travessa de cima
+        g.fillRect(0, 57, 64, 5);            // travessa de baixo
+        const t = new THREE.CanvasTexture(cv);
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.anisotropy = 4;
+        return t;
+    },
+
+    /*
+    AS ÁRVORES, em três espécies de geometria fundida (instanciada depois):
+    folhosa (tronco afunilado com raízes, três ramos e seis lóbulos de copa
+    deformados), conífera (quatro andares de cone) e palmeira (tronco com
+    anéis, cachos e nove folhas arqueadas). O tom da copa vem de um degradê no
+    vértice (sombra por baixo, luz por cima) multiplicado pela cor da instância.
+    Unidade: altura 1; diâmetro da copa 1.
+    */
+    _geoArvores() {
+        if (this._geoA) return this._geoA;
+        const { hash, novo, juntar, fechar, T } = this._ferr();
+        const casca = v => { const k = 0.7 + 0.3 * Math.min(1, v.y * 2); return [0.42 * k, 0.29 * k, 0.18 * k]; };
+        const folha = (base, topo, tom) => v => {
+            const t = Math.max(0, Math.min(1, (v.y - base) / (topo - base)));
+            const k = 0.6 + 0.5 * t + tom;
+            return [k, k, k];
+        };
+        const ramo = (d, x0, y0, z0, x1, y1, z1, r) => {
+            const dir = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0), len = dir.length();
+            const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+            juntar(d, new THREE.CylinderGeometry(0.5, 0.5, 1, 5, 1), T((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, r * 2, len, r * 2, q), casca);
+        };
+        // cilindro afunilado: raio r0 em baixo, r1 em cima
+        const afunilado = (d, r0, r1, h, y, seg) => juntar(d, new THREE.CylinderGeometry(r1, r0, h, seg, 1), T(0, y + h / 2, 0, 1, 1, 1), casca);
+
+        // 0: folhosa
+        const t0 = novo(), c0 = novo();
+        afunilado(t0, 0.050, 0.030, 0.42, 0.0, 7);
+        afunilado(t0, 0.085, 0.050, 0.07, 0.0, 7);
+        for (const [x, z, y] of [[0.16, 0.05, 0.64], [-0.13, -0.1, 0.6], [0.02, 0.16, 0.58]]) ramo(t0, 0, 0.3, 0, x, y, z, 0.014);
+        const lobos = [[0, .70, 0, .30], [.18, .62, .05, .22], [-.17, .64, -.08, .23], [.04, .62, .2, .21], [-.05, .82, -.12, .20], [.10, .86, .10, .17]];
+        lobos.forEach(([x, y, z, r], i) => juntar(c0, new THREE.IcosahedronGeometry(1, 1), T(x, y, z, r, r * 0.9, r),
+            folha(0.38, 1.0, (hash(i, 3, 7) - 0.5) * 0.14), 0.32));
+        // 1: conífera
+        const t1 = novo(), c1 = novo();
+        afunilado(t1, 0.04, 0.03, 0.2, 0.0, 6);
+        [[0.14, 0.50, 0.34], [0.34, 0.40, 0.30], [0.54, 0.30, 0.28], [0.74, 0.19, 0.26]].forEach(([y, r, h], i) =>
+            juntar(c1, new THREE.ConeGeometry(r, h, 9, 1), T(0, y + h / 2, 0, 1, 1, 1), folha(y, y + h, -0.05 * i), 0.18));
+        // 2: palmeira
+        const t2 = novo(), c2 = novo();
+        afunilado(t2, 0.034, 0.022, 0.8, 0.0, 8);
+        for (let k = 0; k < 4; k++) juntar(t2, new THREE.CylinderGeometry(0.036, 0.036, 0.012, 8, 1), T(0, 0.15 + k * 0.18, 0, 1, 1, 1), casca);
+        for (let k = 0; k < 3; k++) {
+            const a = k * 2.1;
+            juntar(t2, new THREE.IcosahedronGeometry(1, 0), T(Math.cos(a) * 0.03, 0.78, Math.sin(a) * 0.03, 0.025, 0.025, 0.025), () => [0.3, 0.2, 0.12]);
+        }
+        for (let f = 0; f < 9; f++) {
+            const fi = (f / 9) * Math.PI * 2 + (f % 2) * 0.2, cx = Math.cos(fi), cz = Math.sin(fi);
+            const px = -cz, pz = cx;
+            const amostras = [];
+            for (let s = 0; s <= 4; s++) {
+                const u = s / 4, rad = 0.52 * u;
+                const alt = 0.82 + 0.16 * u - 0.30 * u * u + (f % 3) * 0.02;
+                amostras.push([cx * rad, alt, cz * rad, 0.05 * (1 - u * 0.75)]);
+            }
+            for (let s = 0; s < 4; s++) {
+                const A = amostras[s], B = amostras[s + 1];
+                const P = (q, sg) => [q[0] + px * q[3] * sg, q[1], q[2] + pz * q[3] * sg];
+                const a1 = P(A, 1), a2 = P(A, -1), b1 = P(B, 1), b2 = P(B, -1);
+                for (const tri of [[a1, b1, a2], [a2, b1, b2]]) for (const q of tri) {
+                    const k = 0.62 + 0.4 * (s / 4) + (f % 2) * 0.08;
+                    c2.p.push(q[0], q[1], q[2]); c2.c.push(k, k, k);
+                }
+            }
+        }
+        const mat = o => new THREE.MeshLambertMaterial(Object.assign({ vertexColors: true }, o));
+        this._geoA = [
+            { tronco: fechar(t0), copa: fechar(c0) },
+            { tronco: fechar(t1), copa: fechar(c1) },
+            { tronco: fechar(t2), copa: fechar(c2) }
+        ];
+        this._geoA.matTronco = mat({});
+        this._geoA.matFolha = mat({});
+        this._geoA.matFolha2 = mat({ side: THREE.DoubleSide });
+        return this._geoA;
     },
 
     _aplicarPeriodo(noite) {
@@ -961,27 +1510,139 @@ const Cidade = {
         this._noite = noite;
         this._mats.jan.emissiveIntensity = noite ? 1.0 : 0;
         this._mats.lamp.emissiveIntensity = noite ? 1.2 : 0;
+        const poca = this.grupo && this.grupo.getObjectByName('PocasDeLuz');
+        if (poca) poca.visible = noite;
     },
 
     _atualizarVeiculos(dt) {
+        const D = this._dummy || (this._dummy = new THREE.Object3D());
+        const paradas = this.dados ? this.dados.paradas : [];
         for (const g of this._veiculos) {
-            const D = Cidade._dummy || (Cidade._dummy = new THREE.Object3D());
             g.lista.forEach((c, i) => {
-                c.t += c.dir * c.vel * dt;
-                if (c.t > c.v.b) c.t = c.v.a; else if (c.t < c.v.a) c.t = c.v.b;
+                if (dt > 0) this._passoVeiculo(c, dt, paradas);
                 const [x, z] = c.v.eixo === 'z' ? [c.v.c + c.off, c.t] : [c.t, c.v.c + c.off];
                 const ry = c.v.eixo === 'z' ? (c.dir > 0 ? 0 : Math.PI) : (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+                c.x = x; c.z = z;
                 D.rotation.set(0, ry, 0);
-                D.position.set(x, CidadeConfig.yAsfalto + 0.15 + g.dims[1] / 2, z);
-                D.scale.set(g.dims[0], g.dims[1], g.dims[2]); D.updateMatrix();
+                D.position.set(x, CidadeConfig.yAsfalto + 0.15, z);
+                D.scale.set(1, 1, 1); D.updateMatrix();
                 g.corpo.setMatrixAt(i, D.matrix);
-                D.position.set(x, CidadeConfig.yAsfalto + 0.15 + g.vidroDims[3], z);
-                D.scale.set(g.vidroDims[0], g.vidroDims[1], g.vidroDims[2]); D.updateMatrix();
-                g.vid.setMatrixAt(i, D.matrix);
+                g.det.setMatrixAt(i, D.matrix);
             });
             g.corpo.instanceMatrix.needsUpdate = true;
-            g.vid.instanceMatrix.needsUpdate = true;
+            g.det.instanceMatrix.needsUpdate = true;
         }
+    },
+
+    /*
+    Um veículo: cruza a via à sua velocidade e, se é ônibus ou táxi, trava
+    para a próxima parada do seu lado, espera, e arranca. Quem sobe e desce é
+    a CidadeGente (ver `aoVeiculoParar`). O táxi pára 7 m à frente da parada,
+    para não disputar a calçada com o ônibus.
+    */
+    _passoVeiculo(c, dt, paradas) {
+        const T = CidadeConfig.transito;
+        if (c.estado === 'parado') {
+            c.timer -= dt;
+            if (c.timer <= 0) {
+                const p = c.paradaAtual;
+                c.estado = 'anda'; c.ultima = p; c.paradaAtual = null;
+                if (this.gente) this.gente.aoVeiculoPartir(c, p);
+            }
+            return;
+        }
+        let vAlvo = c.vel;
+        if (c.onibus || c.taxi) {
+            const sgn = Math.sign(c.off);
+            let melhor = null, dm = 1e9;
+            for (const p of paradas) {
+                if (p.v !== c.v || p.lado !== sgn || p === c.ultima) continue;
+                const alvoT = c.onibus ? p.t : p.t + c.dir * 7;
+                const d = (alvoT - c.t) * c.dir;
+                if (d > -0.5 && d < dm) { dm = d; melhor = p; }
+            }
+            if (melhor && dm < 70) {
+                vAlvo = Math.min(c.vel, Math.sqrt(2 * 0.7 * T.freada * Math.max(dm, 0)) + 0.4);
+                if (dm < 0.6 && c.vAtual < 0.8) {
+                    c.estado = 'parado'; c.vAtual = 0; c.paradaAtual = melhor;
+                    c.timer = c.onibus ? T.paradaOnibus : T.paradaTaxi;
+                    if (this.gente) this.gente.aoVeiculoParar(c, melhor);
+                    return;
+                }
+            }
+        }
+        c.vAtual += Math.max(-T.freada * dt, Math.min(T.acel * dt, vAlvo - c.vAtual));
+        c.t += c.dir * c.vAtual * dt;
+        if (c.t > c.v.b) { c.t = c.v.a; c.ultima = null; }
+        else if (c.t < c.v.a) { c.t = c.v.b; c.ultima = null; }
+    },
+
+    // Posição da porta do veículo parado, do lado da calçada.
+    portaDoVeiculo(c) {
+        const lado = Math.sign(c.off);
+        const avancar = c.onibus ? 3.6 : 0.3;
+        const lateral = Math.abs(c.off) + (c.onibus ? 1.45 : 1.2);
+        const t = c.t + c.dir * avancar;
+        return c.v.eixo === 'z' ? [c.v.c + lado * lateral, t] : [t, c.v.c + lado * lateral];
+    },
+
+    /*
+    O comboio: chega depressa, FREIA com desaceleração constante até parar com
+    o centro na estação, fica `paragem` segundos de portas abertas, arranca e
+    sai. A velocidade na freada é v = sqrt(2·a·distância), que pára exactamente
+    no sítio, sem andar à procura dele.
+    */
+    _atualizarTrens(dt) {
+        const M = CidadeConfig.metro, R = CidadeConfig.meia;
+        for (const t of this._trens) {
+            const u = t.userData;
+            const lim = R + u.compTotal;
+            const dist = () => (u.paragemX - t.position.x) * u.dir;
+            if (u.estado === 'parado') {
+                u.timer -= dt;
+                if (u.timer <= 0) { u.estado = 'sai'; if (this.gente) this.gente.aoTremPartir(t); }
+                continue;
+            }
+            if (u.estado === 'freia') {
+                const d = Math.max(dist(), 0);
+                u.v = Math.max(0.5, Math.min(u.v, Math.sqrt(2 * M.freada * d)));
+                const passo = u.v * dt;
+                if (d <= passo + 0.02) {
+                    t.position.x = u.paragemX; u.v = 0; u.estado = 'parado'; u.timer = M.paragem;
+                    if (this.gente) this.gente.aoTremParar(t);
+                } else t.position.x += u.dir * passo;
+                continue;
+            }
+            u.v = Math.min(u.vmax, u.v + M.aceleracao * dt);
+            t.position.x += u.dir * u.v * dt;
+            if (u.estado === 'sai' && dist() < -2) u.estado = 'viaja';
+            if (u.dir > 0 && t.position.x > lim) { t.position.x = -lim; u.estado = 'viaja'; }
+            else if (u.dir < 0 && t.position.x < -lim) { t.position.x = lim; u.estado = 'viaja'; }
+            if (u.estado === 'viaja') {
+                const d = dist();
+                if (d > 0 && d <= u.v * u.v / (2 * M.freada)) u.estado = 'freia';
+            }
+        }
+    },
+
+    // Portas do comboio parado: [{x, z}] na plataforma, uma por porta.
+    portasDoTrem(t) {
+        const u = t.userData, M = CidadeConfig.metro;
+        const out = [];
+        for (let k = 0; k < M.carros; k++) for (const o of [-4, 4]) {
+            out.push({ x: t.position.x + u.dir * (k * 18.6 + o), z: this.dados.metro.zc + u.lado * 4.6 });
+        }
+        return out;
+    },
+
+    // Mostra/esconde um carro do estacionamento (saiu / voltou).
+    mostrarCarroParado(i, visivel) {
+        const P = this._parados;
+        if (!P) return;
+        const m = visivel ? P.mats[i] : (this._matNula || (this._matNula = new THREE.Matrix4().makeScale(0, 0, 0)));
+        P.corpo.setMatrixAt(i, m); P.det.setMatrixAt(i, m);
+        P.corpo.instanceMatrix.needsUpdate = true; P.det.instanceMatrix.needsUpdate = true;
+        P.lista[i].oculto = !visivel;
     },
 
     update(dt) {
@@ -989,13 +1650,8 @@ const Cidade = {
         const noite = (typeof Weather !== 'undefined') && Weather.periodo === 'noite';
         this._aplicarPeriodo(noite);
         this._atualizarVeiculos(dt);
-        for (const t of this._trens) {
-            const u = t.userData;
-            t.position.x += u.dir * u.vel * dt;
-            const lim = CidadeConfig.meia + u.compTotal;
-            if (u.dir > 0 && t.position.x > lim) t.position.x = -lim;
-            else if (u.dir < 0 && t.position.x < -lim) t.position.x = lim;
-        }
+        this._atualizarTrens(dt);
+        if (this.gente) this.gente.update(dt);
     }
 };
 if (typeof window !== 'undefined') window.Cidade = Cidade;

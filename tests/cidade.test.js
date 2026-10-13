@@ -24,8 +24,9 @@ const ler = f => semCR(fs.readFileSync(path.join(raiz, f), 'utf8'));
 const mod = new Function('THREE', 'console',
     `${ler('js/config/cidade.js')}
      ${ler('js/cidade.js')}
-     return { Cidade, CidadeConfig };`)(THREE, console);
-const { Cidade, CidadeConfig: C } = mod;
+     ${ler('js/cidade_gente.js')}
+     return { Cidade, CidadeConfig, CidadeGente };`)(THREE, console);
+const { Cidade, CidadeConfig: C, CidadeGente: G } = mod;
 
 let falhas = 0;
 const erro = m => { falhas++; console.error('  X ' + m); };
@@ -73,6 +74,18 @@ ok(naReserva === 0, naReserva + ' edifícios em cima de uma reserva');
 ok(sobrepoe === 0, sobrepoe + ' edifícios sobrepostos');
 ok(E.meiaX < X.meiaX && E.meiaZ < X.meiaZ, 'a pegada do estádio tem de caber na esplanada');
 
+// 2b. fachada: fecha as bancadas e cabe dentro do estacionamento
+const fach = grupo.getObjectByName('FachadaEstadio');
+ok(!!fach, 'falta a fachada');
+if (fach) {
+    fach.geometry.computeBoundingBox();
+    const bb = fach.geometry.boundingBox;
+    ok(bb.max.x > E.meiaX && bb.max.x < E.meiaX + C.estacionamento.recuoEstadio, 'fachada fora da zona: x ' + bb.max.x);
+    ok(bb.max.z > E.meiaZ && bb.max.z < E.meiaZ + C.estacionamento.recuoEstadio, 'fachada fora da zona: z ' + bb.max.z);
+    ok(bb.max.y > 26 && bb.max.y < 30, 'altura da fachada: ' + bb.max.y);
+}
+ok(inv.arvoresEsplanada >= 30, 'poucas árvores na esplanada: ' + inv.arvoresEsplanada);
+
 // 3. custo: tudo fundido
 let malhas = 0, tris = 0;
 grupo.traverse(o => { if (o.isMesh) { malhas++; tris += (o.geometry.attributes.position.count / 3) * (o.isInstancedMesh ? o.count : 1); } });
@@ -82,13 +95,56 @@ ok(malhas <= 40, 'draw calls a mais: ' + malhas);
 // 4. determinismo
 const assinatura = g => {
     let s = 0;
-    g.traverse(o => { if (o.isMesh) { const a = o.geometry.attributes.position.array; for (let i = 0; i < a.length; i += 37) s += a[i]; s += a.length; } });
+    g.traverse(o => { if (o.isMesh) { const a = o.geometry.attributes.position.array; for (let i = 0; i < a.length; i += 37) s += a[i]; s += a.length; if (o.isInstancedMesh) { const m = o.instanceMatrix.array; for (let i = 0; i < m.length; i += 29) s += m[i]; s += o.count; } } });
     return s;
 };
 const a1 = assinatura(grupo);
 Cidade.construir(null);
 ok(assinatura(Cidade.grupo) === a1, 'duas construções saíram diferentes');
 ok(cena.children.length === 0, 'o remover deixou lixo na cena');
+
+// 4b. a gente
+console.log('grafo:', G.nos.length, 'nós;', G.agentes.length, 'pessoas; portões', G.portoes.length);
+ok(G.agentes.length === C.gente.total, 'total de pessoas');
+let semAdj = G.adj.filter(a => a.length === 0).length;
+ok(semAdj === 0, semAdj + ' nós isolados');
+const raizNo = G.nosChao[0];
+const alcancaveis = id => !!G.caminho(raizNo, id);
+ok(G.portoes.every(g => alcancaveis(g.noId)), 'portão inalcançável');
+ok(G.bocas.every(b => alcancaveis(b.noFrente)), 'boca de metrô inalcançável');
+ok(cena.children.length === 0, 'cena');
+ok(Cidade.dados.paradas.every(p => alcancaveis(p.noEspera)), 'parada inalcançável');
+ok(alcancaveis(G.plat['-1'].nos[0]) && alcancaveis(G.plat['1'].nos[6]), 'plataforma inalcançável');
+ok(G.nosLote.every(id => alcancaveis(id)), 'corredor de estacionamento inalcançável');
+ok(Cidade.dados.passarelas.length === 4, 'passarelas nos dados');
+
+// a simulação: 5 minutos a 10 Hz. O comboio pára 10 s na estação; as trocas acontecem.
+Cidade.construir(null);
+const t0 = Cidade._trens[0];
+let paradoMax = 0, ciclo = 0, estPrev = t0.userData.estado, tPar = 0, maxV = 0, nan = 0, chegouParar = null, distParou = null;
+for (let i = 0; i < 3000; i++) {
+    Cidade.update(0.1);
+    const u = t0.userData;
+    maxV = Math.max(maxV, u.v);
+    if (u.estado === 'parado') { tPar += 0.1; if (chegouParar === null) { chegouParar = i * 0.1; distParou = Math.abs(t0.position.x - u.paragemX); } }
+    else if (estPrev === 'parado') { paradoMax = Math.max(paradoMax, tPar); tPar = 0; ciclo++; }
+    estPrev = u.estado;
+    for (const a of Cidade.gente.agentes) if (!isFinite(a.x + a.y + a.z)) nan++;
+}
+console.log('comboio: chegou a parar aos', chegouParar && chegouParar.toFixed(1), 's; parado', paradoMax.toFixed(1), 's; vmax', maxV, 'ciclos', ciclo);
+console.log('trocas:', JSON.stringify(Cidade.gente.estat));
+ok(nan === 0, 'posições inválidas nas pessoas');
+ok(chegouParar !== null && chegouParar < 40, 'o comboio demorou a chegar: ' + chegouParar);
+ok(distParou < 0.05, 'o comboio não parou no sítio: ' + distParou);
+ok(paradoMax >= 9.9 && paradoMax <= 10.3, 'tempo parado: ' + paradoMax);
+ok(maxV >= 25, 'velocidade máxima baixa: ' + maxV);
+const E2 = Cidade.gente.estat;
+ok(E2.embTrem > 0 && E2.desTrem > 0, 'ninguém entrou/saiu do comboio');
+ok(E2.embOnibus + E2.embTaxi > 0 && E2.desOnibus + E2.desTaxi > 0, 'ninguém entrou/saiu de ônibus/táxi');
+ok(E2.carros > 0 && E2.bocas > 0 && E2.estadio > 0, 'carros/bocas/estádio sem uso');
+const emFila = Cidade.gente.agentes.filter(a => a.modo === 'fila').length;
+console.log('em fila agora:', emFila);
+ok(emFila > 20, 'poucas pessoas em fila: ' + emFila);
 
 // 5. o update mexe sem rebentar e traz os comboios para dentro
 Cidade.update(1 / 60);

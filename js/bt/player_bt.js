@@ -2732,10 +2732,16 @@ function entradaDoEspaco(p, avancoMax, avancoMin) {
         .filter(o => o && o.model && o.role !== 'gk' && !o.expulso)
         .map(o => ({ x: o.model.position.x, z: o.model.position.z }));
     const c = Match.ballCarrier;
+    // Os alvos de quem da equipa ja corre ao espaco: ninguem escolhe o mesmo (ver raioEntreCorredores).
+    const companheirosEmCorrida = ((p.team === 'TeamA') ? Match.players : Match.opponents)
+        .filter(o => o && o !== p && o.runAlvo && o.fsm && o.fsm.currentState === 'RUN_INTO_SPACE')
+        .map(o => ({ x: o.runAlvo.x, z: o.runAlvo.z }));
     return {
         px: p.model.position.x, pz: p.model.position.z, dirZ: p.dirZ,
         adversarios: adversarios,
         portador: (c && c !== p && c.model) ? { x: c.model.position.x, z: c.model.position.z } : null,
+        bola: Match.ball ? { x: Match.ball.position.x } : null,
+        companheirosEmCorrida: companheirosEmCorrida,
         avancoMax: avancoMax, avancoMin: avancoMin, larguraCampo: CAMPO_LARG
     };
 }

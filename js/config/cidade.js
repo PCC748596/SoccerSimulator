@@ -35,6 +35,28 @@ const CidadeConfig = {
     // Limite interior da avenida de contorno: dentro dele é esplanada.
     esplanada: { meiaX: 123, meiaZ: 133 },
 
+    /*
+    FACHADA — a casca metálica que embrulha as bancadas, como na fotografia de
+    referência: cantos redondos, bojo a meio da altura, e bandas horizontais
+    em dois tons. A cobertura não muda; a casca fecha-se contra a aresta dela.
+
+    O contorno é o das bancadas: rectas entre quatro arcos de centros
+    (+-centroX, +-centroZ) — BANCADA_X - RAIO_PRIMEIRA_FILA e BANCADA_Z -
+    RAIO_PRIMEIRA_FILA do createField — e raio `raio` (o do fim do segundo
+    anel mais a parede). `perfil` é [afastamento da parede (m), altura (m)].
+    */
+    fachada: {
+        ativa: true,
+        centroX: 39.5, centroZ: 58.5, raio: 42.2,
+        perfil: [[1.3, 5.5], [2.0, 8], [2.6, 12], [2.8, 15], [2.5, 19], [1.7, 24], [0.9, 27], [0.1, 27.8]],
+        // A casca NÃO desce ao chão: o vão livre de baixo (m) é por onde passa a torcida; as colunas seguram-na.
+        vao: 5.5, passoColunas: 8, portoes: 12, corColuna: 0x4a4f57,
+        passoBanda: 0.55, relevo: 0.1,
+        corClara: 0xd2dae3, corEscura: 0x8794a6, corBase: 0x5d6673
+    },
+    // Árvores em canteiros na esplanada, em anel à volta da fachada.
+    arvoresEsplanada: { recuo: 5.4, passo: 9 },
+
     larguraAvenida: 24,
     larguraRua: 12,
 
@@ -87,7 +109,10 @@ const CidadeConfig = {
         // O viaduto elevado corre ao longo da via marcada `metro`.
         alturaTopo: 10.2, larguraTabuleiro: 9.6, espessura: 1.2,
         passoPilares: 24, estacaoX: 0, estacaoComp: 72, estacaoLarg: 14,
-        trens: 2, carros: 4, velocidade: 13,
+        trens: 2, carros: 4,
+        // O comboio chega a `velocidade` m/s, trava a `freada` m/s2 até parar com o centro na
+        // estação, fica `paragem` s de portas abertas e arranca a `aceleracao` m/s2.
+        velocidade: 26, freada: 1.8, aceleracao: 1.5, paragem: 10,
         // Bocas de metro subterrâneas na esplanada
         bocas: [
             { x: 86.5, z: 0 }, { x: -86.5, z: 0 },
@@ -106,7 +131,23 @@ const CidadeConfig = {
 
     postes: { altura: 8.5, passoRua: 18, passoAvenida: 26, passoEstacionamento: 26, alturaEstac: 9.5 },
     arvores: { passo: 16 },
-    transito: { carros: 60, onibus: 7, velMin: 7, velMax: 13 },
+    // Táxis e ônibus páram nas paradas das avenidas e deixam subir e descer gente.
+    transito: {
+        carros: 60, taxis: 8, onibus: 10, velMin: 7, velMax: 13, velOnibus: 9,
+        freada: 2.2, acel: 1.8, paradaOnibus: 9, paradaTaxi: 7
+    },
+
+    // A gente a circular (js/cidade_gente.js).
+    gente: {
+        ativa: true, total: 500,
+        velMin: 1.0, velMax: 1.6,
+        filasIniciais: 130,        // quantos já começam nas filas dos portões
+        pessoasPorFila: [3, 5],    // comprimento inicial de cada fila
+        servicoCatraca: [60, 100],    // s por pessoa a passar
+        tempoNoEstadio: [40, 160], // s lá dentro
+        tempoNoMetro: [10, 30],
+        tempoNoCarro: [25, 70]
+    },
 
     cores: {
         asfalto: 0x3a3e44, terra: 0x6f9152, calcada: 0xb9b8b0, esplanada: 0xcfccc3,

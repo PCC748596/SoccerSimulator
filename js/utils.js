@@ -3373,8 +3373,14 @@ function pontuarEspacoDeCorrida(o, x, avanco, E) {
     }
 
     const ganho = avanco - (o.pz * dirZ);
+    // Cada metro que o ponto o afasta da bola em X (so o que afasta; aproximar nao conta).
+    let longeDaBola = 0;
+    if (o.bola && typeof o.bola.x === 'number' && E.pesoLongeDaBola) {
+        longeDaBola = Math.max(0, Math.abs(x - o.bola.x) - Math.abs(o.px - o.bola.x));
+    }
     const score = folgaC + E.pesoPasse * passe - E.penalCaminho * bloqueios +
-        E.pesoAvanco * ganho - E.pesoLateral * Math.abs(x - o.px);
+        E.pesoAvanco * ganho - E.pesoLateral * Math.abs(x - o.px) -
+        (E.pesoLongeDaBola || 0) * longeDaBola;
     return { x: x, avanco: avanco, score: score, folga: folga, passe: passe, bloqueios: bloqueios };
 }
 
@@ -3393,6 +3399,7 @@ function espacoEntreAdversarios(o) {
     // trazer o seu (por posicao); sem nada, vale o do modelo, e sem esse, nao ha cone.
     const grauMin = (typeof o.anguloMin === 'number') ? o.anguloMin : (typeof E.anguloMin === 'number' ? E.anguloMin : 0);
     const grauMax = (typeof o.anguloMax === 'number') ? o.anguloMax : (typeof E.anguloMax === 'number' ? E.anguloMax : 90);
+    const companheiros = (o.companheirosEmCorrida && o.companheirosEmCorrida.length) ? o.companheirosEmCorrida : null;
     const tanMin = Math.tan(grauMin * Math.PI / 180);
     const tanMax = grauMax >= 90 ? Infinity : Math.tan(grauMax * Math.PI / 180);
     for (let a = o.avancoMax; a >= aFundo - 1e-6; a -= E.passoAvanco) {
@@ -3401,6 +3408,14 @@ function espacoEntreAdversarios(o) {
             // tan(angulo) = lado / avanco: compara-se sem atan2 (o avanco aqui e sempre > 0).
             const tanPonto = Math.abs(x - o.px) / (a - a0);
             if (tanPonto < tanMin - 1e-9 || tanPonto > tanMax + 1e-9) continue;
+            // Nao repete o alvo de um companheiro que ja corre (o.companheirosEmCorrida).
+            if (companheiros && E.raioEntreCorredores) {
+                let colado = false;
+                for (let k = 0; k < companheiros.length; k++) {
+                    if (Math.hypot(companheiros[k].x - x, companheiros[k].z * o.dirZ - a) < E.raioEntreCorredores) { colado = true; break; }
+                }
+                if (colado) continue;
+            }
             const r = pontuarEspacoDeCorrida(o, x, a, E);
             if (r.folga < E.folgaMin) continue;
             if (!melhor || r.score > melhor.score) melhor = r;

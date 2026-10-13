@@ -1487,7 +1487,24 @@ const RunIntoSpaceModel = {
         cone". Uma diagonal e, por exemplo, 25 a 60; uma corrida em profundidade, 0 a 15.
         */
         anguloMin: 25,
-        anguloMax: 60
+        anguloMax: 60,
+
+        /*
+        DOIS CORREDORES NAO VAO PARA O MESMO SITIO, e a corrida nao foge da bola.
+        Relato de 13 de Outubro de 2026: dois CM a correr para o mesmo lugar, e
+        para o lado oposto ao da bola.
+
+        `raioEntreCorredores`: nenhum ponto a menos disto (m) do alvo de um
+        companheiro que ja esta em RUN_INTO_SPACE. A escolha e determinista e dois
+        jogadores parecidos davam o mesmo ponto (116 a 212 amostras em 600 s).
+
+        `pesoLongeDaBola`: pontos de score por cada metro que o ponto afasta o
+        corredor da bola em X. So conta afastar, nao aproximar. O cone da diagonal
+        obriga a sair de lado e nao preferia lado nenhum: 41% das corridas iam para
+        longe da bola, 55-57% com o cone.
+        */
+        raioEntreCorredores: 8.0,
+        pesoLongeDaBola: 0.3
     }
 };
 
