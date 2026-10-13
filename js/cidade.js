@@ -1095,6 +1095,7 @@ const Cidade = {
                 const ang = Math.atan2(g.n[0], g.n[1]);
                 const B = liso.base;
                 B.makeRotationY(ang).setPosition(g.x, 0, g.z);
+                lamp.base.copy(B);      // as luminárias também estão em coordenadas do portão
                 // pórtico: dois pilares e a viga com o número
                 for (const sx of [-4.6, 4.6]) {
                     liso.caixa(sx, yCal, 0.4, 0.7, 5.0, 0.8, FA.corColuna);
@@ -1115,6 +1116,7 @@ const Cidade = {
                     for (let z = 1.4; z <= 6.7; z += 1.3) liso.caixa(sx, yCal, z, 0.12, 1.3, 0.12, 0x4a4f57);
                 }
                 grade.base.identity();
+                lamp.base.identity();
                 B.identity();
                 portoesDados.push({ x: g.x, z: g.z, n: g.n, ang, i: n });
                 reservar(g.x + g.n[0] * 4 - 7, g.x + g.n[0] * 4 + 7, g.z + g.n[1] * 4 - 7, g.z + g.n[1] * 4 + 7, false);

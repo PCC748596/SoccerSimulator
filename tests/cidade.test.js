@@ -21,11 +21,14 @@ const semCR = s => s.split(CR + LF).join(LF);
 const raiz = path.join(__dirname, '..');
 const ler = f => semCR(fs.readFileSync(path.join(raiz, f), 'utf8'));
 
+const merge = ler('js/utils.js').match(/function mergeNonIndexedGeometries[\s\S]*?\n}\n/)[0];
 const mod = new Function('THREE', 'console',
-    `${ler('js/config/cidade.js')}
+    `${merge}
+     ${ler('js/crowd.js')}
+     ${ler('js/config/cidade.js')}
      ${ler('js/cidade.js')}
      ${ler('js/cidade_gente.js')}
-     return { Cidade, CidadeConfig, CidadeGente };`)(THREE, console);
+     return { Cidade, CidadeConfig, CidadeGente, Crowd };`)(THREE, console);
 const { Cidade, CidadeConfig: C, CidadeGente: G } = mod;
 
 let falhas = 0;
@@ -104,6 +107,7 @@ ok(assinatura(Cidade.grupo) === a1, 'duas construções saíram diferentes');
 ok(cena.children.length === 0, 'o remover deixou lixo na cena');
 
 // 4b. a gente
+ok(G._modelo === 'jogador', 'a gente não usa o modelo do jogador: ' + G._modelo);
 console.log('grafo:', G.nos.length, 'nós;', G.agentes.length, 'pessoas; portões', G.portoes.length);
 ok(G.agentes.length === C.gente.total, 'total de pessoas');
 let semAdj = G.adj.filter(a => a.length === 0).length;

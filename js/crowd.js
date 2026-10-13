@@ -384,6 +384,10 @@ const Crowd = {
         canais[canalPerna] = canais[canalPerna] || [];
         canais[canalPe] = canais[canalPe] || [];
 
+        // Uma pose pode dar valores diferentes a cada lado (`ancaE`/`ancaD`, `joelhoE`/`joelhoD`,
+        // `ombroE`/`ombroD`, `cotoveloE`...): é o que faz um passo. Sem eles, os dois lados usam o valor único.
+        const por = (k, lado) => { const v = P[k + (lado < 0 ? 'E' : 'D')]; return v !== undefined ? v : P[k]; };
+
         const raiz = new THREE.Object3D();
 
         // Cada peça é uma caixa pendurada num Object3D; o `add` devolve o nó
@@ -436,12 +440,12 @@ const Crowd = {
         /* --- braços ---------------------------------------------------- */
         for (const lado of [-1, 1]) {
             const ombro = no(chest, lado * 0.8, 0.525, 0);
-            ombro.rotation.x = P.ombro;
+            ombro.rotation.x = por('ombro', lado);
             caixa(ombro, 'pele', u * 0.35, u * 1.0, u * 0.35, 0, -0.5, 0);
             caixa(ombro, 'camisa', u * 0.4, u * 0.5, u * 0.4, 0, -0.25, 0);
 
             const cotovelo = no(ombro, 0, -1.0, 0);
-            cotovelo.rotation.x = P.cotovelo;
+            cotovelo.rotation.x = por('cotovelo', lado);
             caixa(cotovelo, 'pele', u * 0.3, u * 0.8, u * 0.3, 0, -0.4, 0);
             caixa(cotovelo, 'pele', u * 0.35, u * 0.4, u * 0.2, 0, -0.9, 0);
         }
@@ -449,12 +453,12 @@ const Crowd = {
         /* --- pernas ---------------------------------------------------- */
         for (const lado of [-1, 1]) {
             const anca = no(pelvis, lado * 0.4, -0.3, 0);
-            anca.rotation.x = P.anca;
+            anca.rotation.x = por('anca', lado);
             caixa(anca, canalPerna, u * 0.45, u * 1.0, u * 0.45, 0, -0.5, 0);
             caixa(anca, 'calcao', u * 0.5, u * 0.5, u * 0.5, 0, -0.25, 0);
 
             const joelho = no(anca, 0, -1.0, 0);
-            joelho.rotation.x = P.joelho;
+            joelho.rotation.x = por('joelho', lado);
             caixa(joelho, canalPerna, u * 0.35, u * 0.9, u * 0.35, 0, -0.45, 0);
             // Pé, em pele escura (as chuteiras do modelo não valem a pena a
             // esta distância — um canal a mais por um par de caixas).

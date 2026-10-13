@@ -282,7 +282,7 @@ const CidadeGente = {
         const cores = {
             camisa: [0xd62828, 0x1d4ed8, 0xf5f5f5, 0x2a2a2a, 0xf2c200, 0x2f8a4f, 0x7b3fa0, 0xff7f2a, 0x4fb3d9, 0xd62828, 0x1d4ed8],
             calca: [0x20242c, 0x2f3e5a, 0x4a4a4a, 0x6b5a3a, 0x1a1a1a, 0x3a4a6a],
-            pele: [0xf0c8a0, 0xd9a577, 0xb07a4f, 0x7d5233, 0x4b2f1c]
+            pele: (typeof CrowdModel !== 'undefined' && CrowdModel.peles) ? CrowdModel.peles : [0xf0c8a0, 0xd9a577, 0xb07a4f, 0x7d5233, 0x4b2f1c]
         };
         const N = G.total;
         for (let i = 0; i < N; i++) {
@@ -292,17 +292,11 @@ const CidadeGente = {
                 ox: (rnd() - 0.5) * 1.1, oz: (rnd() - 0.5) * 1.1,
                 modo: 'oculto', t: 0, no: 0, pts: null, pi: 0, fim: null, oc: null, ref: null,
                 zerado: false, parada: null, gate: null, lane: null, naFrente: false, plataforma: 0,
-                camisa: pick(cores.camisa), calca: pick(cores.calca), pele: pick(cores.pele)
+                camisa: pick(cores.camisa), calca: pick(cores.calca), pele: pick(cores.pele),
+                cabelo: (typeof CrowdModel !== 'undefined' && CrowdModel.cabelos) ? pick(CrowdModel.cabelos) : 0x2a1d12, w: 0.5
             });
         }
-        const cc = new THREE.Color();
-        for (const a of this.agentes) {
-            this._mesh.roupa.setColorAt(a.i, cc.setHex(a.camisa));
-            this._mesh.cabeca.setColorAt(a.i, cc.setHex(a.pele));
-            this._mesh.pernaE.setColorAt(a.i, cc.setHex(a.calca));
-            this._mesh.pernaD.setColorAt(a.i, cc.setHex(a.calca));
-        }
-        for (const m of Object.values(this._mesh)) m.instanceColor.needsUpdate = true;
+        this._pintar();
 
         // distribuição inicial: filas, estádio, metrô, resto pelas calçadas
         let livre = 0;
@@ -334,7 +328,106 @@ const CidadeGente = {
         this._desenhar(0);
     },
 
+    /*
+    O MODELO É O DOS JOGADORES (e dos adeptos): o `Crowd._geometrias(pose)` junta o
+    corpo vestido — calças compridas e sapatos — numa geometria por canal de cor
+    (pele, camisa, calças, cabelo, sapatos), já à escala do jogo e com os pés no chão.
+
+    O PASSO: duas poses assadas, A (perna e braço de um lado à frente) e B (o
+    contrário). A geometria é a de A e leva a de B num atributo (`posB`); o vertex
+    shader faz `mix(position, posB, aW)`, com `aW` por pessoa (instanciado): 0 é A,
+    1 é B e 0.5, a meio, é o corpo direito e parado. A fase do passo faz `aW` oscilar
+    entre os dois; parada, `aW` volta devagar a 0.5. É a mesma ideia da bancada.
+
+    As cinco malhas PARTILHAM a matriz das instâncias e o `aW`: escreve-se uma vez
+    por frame, não cinco.
+    */
     _criarMalhas(grupo) {
+        if (typeof Crowd === 'undefined' || typeof CrowdModel === 'undefined' || typeof mergeNonIndexedGeometries === 'undefined') {
+            this._modelo = 'caixas';
+            return this._criarMalhasSimples(grupo);
+        }
+        this._modelo = 'jogador';
+        const N = CidadeConfig.gente.total;
+        const base = CrowdModel.poses.dePe;
+        const A = Object.assign({}, base, {
+            anca: 0, joelho: 0, ombro: -0.15, cotovelo: -0.25, tronco: 0.06, alturaBacia: 2.36,
+            ancaE: -0.5, ancaD: 0.42, joelhoE: 0.05, joelhoD: 0.55,
+            ombroE: 0.5, ombroD: -0.55, cotoveloE: -0.2, cotoveloD: -0.75
+        });
+        const B = Object.assign({}, A, {
+            ancaE: 0.42, ancaD: -0.5, joelhoE: 0.55, joelhoD: 0.05,
+            ombroE: -0.55, ombroD: 0.5, cotoveloE: -0.75, cotoveloD: -0.2
+        });
+        const gA = this._geometriasVestidas(A), gB = this._geometriasVestidas(B);
+        const matriz = new THREE.InstancedBufferAttribute(new Float32Array(N * 16), 16);
+        const aw = new THREE.InstancedBufferAttribute(new Float32Array(N).fill(0.5), 1);
+        matriz.setUsage(THREE.DynamicDrawUsage); aw.setUsage(THREE.DynamicDrawUsage);
+        this._matriz = matriz; this._aw = aw;
+        this._mesh = {};
+        for (const canal of Object.keys(gA)) {
+            const g = gA[canal];
+            g.setAttribute('posB', new THREE.BufferAttribute(new Float32Array(gB[canal].attributes.position.array), 3));
+            g.setAttribute('aW', aw);
+            const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+            mat.onBeforeCompile = sh => {
+                sh.vertexShader = 'attribute vec3 posB;\nattribute float aW;\n' +
+                    sh.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = mix(position, posB, aW);');
+            };
+            mat.customProgramCacheKey = () => 'cidade-gente-passo';
+            const m = new THREE.InstancedMesh(g, mat, N);
+            m.instanceMatrix = matriz;
+            m.frustumCulled = false; m.castShadow = false; m.receiveShadow = false; m.name = 'Gente_' + canal;
+            this._mesh[canal] = m;
+            grupo.add(m);
+        }
+        this._tmp = {
+            p: new THREE.Vector3(), qy: new THREE.Quaternion(), um: new THREE.Vector3(1, 1, 1), M: new THREE.Matrix4(),
+            eixoY: new THREE.Vector3(0, 1, 0), zero: new THREE.Matrix4().makeScale(0, 0, 0)
+        };
+    },
+
+    // Corpo vestido (calças compridas, sapatos) numa geometria por canal, à escala do jogo e com os pés no zero.
+    _geometriasVestidas(pose) {
+        const pecas = Crowd._pecas(pose, { perna: 'calcao', pe: 'sapato' });
+        const escala = (typeof ESCALA_CORPO === 'number') ? ESCALA_CORPO : 1.8 / 5.5;
+        const saida = {};
+        let minY = Infinity;
+        for (const canal in pecas) {
+            if (!pecas[canal].length) continue;
+            const g = mergeNonIndexedGeometries(pecas[canal]);
+            g.scale(escala, escala, escala);
+            g.computeBoundingBox();
+            minY = Math.min(minY, g.boundingBox.min.y);
+            saida[canal] = g;
+        }
+        for (const canal in saida) saida[canal].translate(0, -minY, 0);
+        return saida;
+    },
+
+    // Cor por pessoa em cada canal (instanceColor).
+    _pintar() {
+        const cc = new THREE.Color();
+        const mesh = this._mesh;
+        for (const a of this.agentes) {
+            if (this._modelo === 'jogador') {
+                if (mesh.pele) mesh.pele.setColorAt(a.i, cc.setHex(0xffffff).set(a.pele));
+                if (mesh.camisa) mesh.camisa.setColorAt(a.i, cc.set(a.camisa));
+                if (mesh.calcao) mesh.calcao.setColorAt(a.i, cc.set(a.calca));
+                if (mesh.cabelo) mesh.cabelo.setColorAt(a.i, cc.set(a.cabelo));
+                if (mesh.sapato) mesh.sapato.setColorAt(a.i, cc.set(0x1b1b1d));
+            } else {
+                mesh.roupa.setColorAt(a.i, cc.set(a.camisa));
+                mesh.cabeca.setColorAt(a.i, cc.set(a.pele));
+                mesh.pernaE.setColorAt(a.i, cc.set(a.calca));
+                mesh.pernaD.setColorAt(a.i, cc.set(a.calca));
+            }
+        }
+        for (const m of Object.values(this._mesh)) m.instanceColor.needsUpdate = true;
+    },
+
+    // Reserva: bonecos de caixas, se o crowd.js não estiver carregado.
+    _criarMalhasSimples(grupo) {
         const N = CidadeConfig.gente.total;
         const { novo, juntar, fechar, T } = this.cid._ferr();
         const caixa = () => new THREE.BoxGeometry(1, 1, 1);
@@ -731,6 +824,7 @@ const CidadeGente = {
     },
 
     _desenhar(dt) {
+        if (this._modelo === 'jogador') return this._desenharJogador(dt);
         const T = this._tmp, mesh = this._mesh;
         for (const a of this.agentes) {
             const oculto = a.modo === 'oculto' || a.modo === 'saindo';
@@ -759,6 +853,35 @@ const CidadeGente = {
             }
         }
         for (const m of Object.values(mesh)) m.instanceMatrix.needsUpdate = true;
+    },
+
+    // Modelo do jogador: uma matriz e um `aW` por pessoa, partilhados pelas cinco malhas.
+    _desenharJogador(dt) {
+        const T = this._tmp, arr = this._matriz.array, aw = this._aw.array;
+        for (const a of this.agentes) {
+            const i = a.i;
+            if (a.modo === 'oculto' || a.modo === 'saindo') {
+                if (!a.zerado) { arr.set(T.zero.elements, i * 16); a.zerado = true; }
+                continue;
+            }
+            a.zerado = false;
+            let w;
+            if (a.andando) {
+                w = 0.5 + 0.5 * Math.sin(a.fase);
+                a.w = w;
+            } else {
+                a.w += (0.5 - a.w) * Math.min(1, dt * 6);       // pára com as pernas juntas
+                w = a.w;
+            }
+            aw[i] = w;
+            const bob = a.andando ? Math.abs(Math.cos(a.fase)) * 0.03 : 0;
+            T.qy.setFromAxisAngle(T.eixoY, a.yaw);
+            T.p.set(a.x, a.y + bob, a.z);
+            T.M.compose(T.p, T.qy, T.um);
+            arr.set(T.M.elements, i * 16);
+        }
+        this._matriz.needsUpdate = true;
+        this._aw.needsUpdate = true;
     }
 };
 if (typeof window !== 'undefined') window.CidadeGente = CidadeGente;
