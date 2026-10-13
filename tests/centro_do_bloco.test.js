@@ -101,7 +101,8 @@ function avancoDoMeioCampo(atacando) {
 test('com a bola no miolo o centro fica centro.meio à frente dela', () => {
     const C = BlockShape.centro;
     assert.strictEqual(typeof C.meio, 'number');
-    const extra = avancoDoMeioCampo(true);
+    // + o avanço do rectângulo inteiro (BlockShape.avancoDoRetangulo), que vale em todas as fases.
+    const extra = avancoDoMeioCampo(true) + (BlockShape.avancoDoRetangulo || 0);
     for (const bolaZ of [-10, -5, 0, 5]) {
         assert.ok(Math.abs(bolaZ) <= C.faixaMeio, 'o cenário tem de estar na faixa central');
         const d = centroMenosBola(bolaZ, true);
@@ -134,7 +135,8 @@ test('no terço ofensivo o centro recua ao longo da rampa', () => {
 
     // Depois da rampa estabiliza: não continua a recuar para sempre.
     const alem = centroMenosBola(C.faixaMeio + C.rampa + 6, true);
-    assert.ok(Math.abs(alem - fim) < 0.3, 'o recuo do centro não pode crescer sem fim');
+    // 1.0 m e não 0.3: com o rectângulo 3 m à frente (avancoDoRetangulo) o limite do campo adversário entra mais cedo na rampa.
+    assert.ok(Math.abs(alem - fim) < 1.0, 'o recuo do centro não pode crescer sem fim');
 });
 
 test('sem bola o centro fica centro.semBola atrás da bola', () => {
@@ -143,7 +145,7 @@ test('sem bola o centro fica centro.semBola atrás da bola', () => {
     const avancoMeio = avancoDoMeioCampo(false);   // a defender o bloco é sempre short
     for (const bolaZ of [-10, -5, 0]) {
         const naFaixa = Math.abs(bolaZ) <= (BlockShape.faixaMeioCampo || 20);
-        const esperado = C.semBola + (naFaixa ? avancoMeio : 0);
+        const esperado = C.semBola + (naFaixa ? avancoMeio : 0) + (BlockShape.avancoDoRetangulo || 0);
         const d = centroMenosBola(bolaZ, false);
         assert.ok(Math.abs(d - esperado) < 0.01,
             `bola em ${bolaZ}: centro a ${d.toFixed(2)} m, esperado ${esperado.toFixed(2)}`);

@@ -1043,7 +1043,8 @@ function computeBlock(bb) {
         ? MentalidadeModel[Tatics.estilo].blocoZ : 0;
 
     const bolaZDir = bb.bolaZSuave * bb.dir;
-    let centroZ = bolaZDir + bb.blocoZSuave + mentalBloco;
+    // `avancoDoRetangulo`: o rectângulo inteiro 3 m à frente do que o resto da conta dá (pedido). Os limites abaixo continuam a valer.
+    let centroZ = bolaZDir + bb.blocoZSuave + mentalBloco + (B.avancoDoRetangulo || 0);
 
     let z0 = centroZ - (profundidade / 2);
     let z1 = centroZ + (profundidade / 2);
@@ -1107,7 +1108,8 @@ function computeBlock(bb) {
         O tecto e uma escolha do utilizador para o jogo todo; o avanco e uma
         resposta ao momento. Somam-se.
         */
-        const capLinha = capBase + mentalBloco * pesoMental + avancoMeio;
+        // O tecto sobe com o avanço do rectângulo, senão o `recuoDaUltimaLinha` desfazia os 3 m a defender.
+        const capLinha = capBase + mentalBloco * pesoMental + avancoMeio + (B.avancoDoRetangulo || 0);
 
         let maisRecuadoDir = null, pisoDir = null;
         if (bb.opp && bb.opp.length) {
@@ -2358,6 +2360,35 @@ O FACTOR DE FECHO de uma linha: 1.0 com a linha completa (e aí NADA muda), e
 menos por cada jogador em falta face ao que a formação lá põe. Ver
 LineShape.porFalta.
 */
+/*
+O estado do FECHAMENTO DO LADO FRACO, por equipa, actualizado uma vez por instante de jogo (os 10 jogadores
+chamam-no no mesmo frame). `lado` é o lado em que a equipa JÁ reagiu — 'esq'/'dir' (bandas do mundo, x < -10 /
+x > 10) ou 'centro' —, e só muda depois de a bola estar noutro sítio durante um atraso sorteado. `k` é o
+quanto fechar, de 0 a 1, e sobe/desce suavemente (`suavizacao`, em s) para ninguém saltar.
+*/
+function ladoDoFechamento(bb, FL) {
+    const T = (typeof Match !== 'undefined' && Match.tempoDeJogo !== undefined) ? Match.tempoDeJogo : 0;
+    if (bb._fechEst && bb._fechEst.t === T) return bb._fechEst;
+    const dt = (typeof Match !== 'undefined' && Match.delta) ? Match.delta : 0.016;
+    const e = bb._fechEst || (bb._fechEst = { lado: 'centro', cand: 'centro', espera: 0, atraso: 0, k: 0, t: -1 });
+    const bx = (typeof Match !== 'undefined' && Match.ball) ? Match.ball.position.x : 0;
+    const raw = bx < -10 ? 'esq' : (bx > 10 ? 'dir' : 'centro');
+    if (raw === e.lado) {
+        e.cand = raw; e.espera = 0;
+    } else {
+        if (raw !== e.cand) {
+            e.cand = raw; e.espera = 0;
+            e.atraso = FL.atrasoMin + Math.random() * (FL.atrasoMax - FL.atrasoMin);
+        }
+        e.espera += dt;
+        if (e.espera >= e.atraso) { e.lado = raw; e.espera = 0; }
+    }
+    const alvo = (e.lado !== 'centro' && bb.isAttacking) ? 1 : 0;
+    e.k += (alvo - e.k) * (1 - Math.exp(-dt / Math.max(0.05, FL.suavizacao)));
+    e.t = T;
+    return e;
+}
+
 function fechoPorOcupacao(bb, linha) {
     const L = (typeof LineShape !== 'undefined') ? LineShape : null;
     if (!L || !bb || !bb.linhas || typeof L.porFalta !== 'number') return 1.0;
@@ -2726,6 +2757,30 @@ const PosicionamentoAI = {
             const dxBola = molaX - Match.ball.position.x;
             if (Math.abs(dxBola) > tectoX) {
                 molaX = Match.ball.position.x + Math.sign(dxBola) * tectoX;
+            }
+        }
+
+        /*
+        O LADO FRACO FECHA. Pedido: *"com a bola na esquerda do ataque, os jogadores do lado direito podem
+        fechar uns 5 metros; o mesmo do outro lado; quando a bola vai para o corredor do meio, voltam às
+        posições, dando opção nas pontas. Com um delay de 5-10 s, para não ficarem a abrir e fechar quando se
+        muda o jogo de lado"*.
+
+        O `ladoDoFechamento` decide o lado com ATRASO (a bola tem de ficar no novo lado, ou no meio, um tempo
+        sorteado entre `atrasoMin` e `atrasoMax` antes de a equipa reagir) e devolve o quanto fechar, 0..1,
+        suavizado. Quem está do lado contrário e fora do corredor do meio aproxima-se `metros` da linha desse
+        corredor (`corredorX`), sem entrar nele. Só COM POSSE; quem tem tarefa de bola fica de fora.
+        */
+        const FL = (typeof BlockShape !== 'undefined') ? BlockShape.fechamentoLadoFraco : null;
+        if (FL && FL.activo && bb && !p.hasBall && !temTarefaDeBola &&
+            !(typeof Match !== 'undefined' && Match.intendedReceiver === p)) {
+            const est = ladoDoFechamento(bb, FL);
+            if (est.k > 0.001 && est.lado !== 'centro' && bb.isAttacking) {
+                const ladoFraco = (est.lado === 'esq') ? 1 : -1;
+                if (Math.sign(molaX) === ladoFraco && Math.abs(molaX) > FL.corredorX) {
+                    const fecha = Math.min(FL.metros * est.k, Math.abs(molaX) - FL.corredorX);
+                    molaX -= ladoFraco * fecha;
+                }
             }
         }
 
@@ -3249,7 +3304,21 @@ const PosicionamentoAI = {
                 // formação é espelhada por equipa (ver a nota no nível 1).
                 const meuLadoW = Math.sign(p.slotTarget ? p.slotTarget.x : p.baseTarget.x)
                     || Math.sign(p.dynamicTarget.x) || 1;
-                const piso = bb.isAttacking ? W.comBola : W.semBola;
+                let piso = bb.isAttacking ? W.comBola : W.semBola;
+                /*
+                O LADO FRACO FECHA TAMBÉM AQUI: este piso mantém as alas e os laterais abertos a 20-23 m e
+                desfaria o fecho de cima (ver `ladoDoFechamento`) para quem mais o deve fazer. Do lado contrário
+                à bola o piso desce o que a equipa já fechou, sem passar do corredor do meio.
+                */
+                const FLw = (typeof BlockShape !== 'undefined') ? BlockShape.fechamentoLadoFraco : null;
+                if (FLw && FLw.activo && bb.isAttacking && !p.hasBall &&
+                    !(typeof Match !== 'undefined' && Match.intendedReceiver === p)) {
+                    const estW = ladoDoFechamento(bb, FLw);
+                    if (estW.lado !== 'centro' && estW.k > 0.001 &&
+                        meuLadoW === ((estW.lado === 'esq') ? 1 : -1)) {
+                        piso = Math.max(FLw.corredorX, piso - FLw.metros * estW.k);
+                    }
+                }
                 const abertura = Math.max(meuLadoW * p.dynamicTarget.x, piso);
                 p.dynamicTarget.x = meuLadoW * Math.min(abertura, CAMPO_LARG / 2 - 1.5);
             }

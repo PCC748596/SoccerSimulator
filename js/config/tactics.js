@@ -462,6 +462,21 @@ const BlockShape = {
     avancoTiroMeta: 15.0,
 
     /*
+    O RECTÂNGULO DO TEAMBT, TODO 3 M À FRENTE (pedido: *"ajusta a posição do retângulo do TeamBT +3m à frente do
+    atual"*). Soma-se ao centro do bloco no `computeBlock`, em qualquer fase; o rectângulo continua rígido
+    e os limites do campo, da área e do fora-de-jogo continuam a mandar depois. 0 volta ao de antes.
+    */
+    avancoDoRetangulo: 3.0,
+
+    /*
+    O LADO FRACO FECHA (ver o bloco no `tickFinal`, team_bt.js). Com a bola numa ala, quem está do lado contrário
+    aproxima-se `metros` do corredor do meio (`corredorX` = o limite dele, |x| = 10), sem entrar nele. Só reage
+    depois de a bola estar no novo lado (ou no meio) entre `atrasoMin` e `atrasoMax` segundos — para não abrir e
+    fechar quando o jogo é mudado de lado — e o movimento é suavizado em `suavizacao` s.
+    */
+    fechamentoLadoFraco: { activo: true, metros: 5.0, corredorX: 10.0, atrasoMin: 5.0, atrasoMax: 10.0, suavizacao: 1.5 },
+
+    /*
     Profundidade do bloco (da última linha ao jogador mais avançado), por
     definição de compacidade do painel. A traseira deste rectângulo é a linha
     do fora-de-jogo da equipa — ver computeBlock em team_bt.js.
