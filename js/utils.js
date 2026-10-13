@@ -4954,7 +4954,8 @@ function atribuirApoios(o) {
         escolhidos.push({ id: c.id, x: actual.x, z: actual.z });
     }
 
-    const angulos = [-150, -110, -70, -35, 0, 35, 70, 110, 150];
+    // O leque vem do SupportModel (`angulos`); cada candidato pode restringi-lo (`c.angulos`, por posição).
+    const angulos = (o.angulos && o.angulos.length) ? o.angulos : [-150, -110, -70, -35, 0, 35, 70, 110, 150];
     const raios = [o.raioMin, (o.raioMin + o.raioMax) / 2, o.raioMax];
 
     const pontos = [];
@@ -4974,11 +4975,15 @@ function atribuirApoios(o) {
             pontos.push({
                 x: x,
                 z: z,
+                grau: grau,
                 folgaLinha: folgaDaLinha(port.x, port.z, x, z, o.adversarios),
                 folgaPonto: folgaPonto
             });
         }
     }
+
+    // Um candidato sem `angulos` aceita o leque todo.
+    const noLeque = (ponto, c) => !c.angulos || c.angulos.indexOf(ponto.grau) >= 0;
 
     const notaPara = (ponto, c) => notaPontoDeApoio({
         folgaLinha: ponto.folgaLinha,
@@ -4992,6 +4997,7 @@ function atribuirApoios(o) {
 
         let melhor = null, melhorNota = -Infinity;
         for (const ponto of pontos) {
+            if (!noLeque(ponto, c)) continue;
             if (!longeDosOutros(ponto.x, ponto.z)) continue;
             const custo = Math.hypot(ponto.x - c.slotX, ponto.z - c.slotZ);
             if (custo > o.desvioMax) continue;
@@ -5010,6 +5016,7 @@ function atribuirApoios(o) {
     for (const c of o.candidatos) {
         if (usados.has(c.id)) continue;
         for (let i = 0; i < pontos.length; i++) {
+            if (!noLeque(pontos[i], c)) continue;
             const custo = Math.hypot(pontos[i].x - c.slotX, pontos[i].z - c.slotZ);
             if (custo > o.desvioMax) continue;
             pares.push({ id: c.id, i: i, nota: notaPara(pontos[i], c) });

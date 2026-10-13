@@ -795,7 +795,19 @@ const SupportModel = {
         pesoFolgaLinha: 1.2,
         pesoFolgaPonto: 1.0,
         pesoCusto: 0.5,
-        folgaCap: 8.0
+        folgaCap: 8.0,
+
+        /*
+        O LEQUE DE ÂNGULOS do apoio, em graus em volta do portador: 0 é para a
+        frente (a baliza adversária), ±90 é ao lado, ±180 é para trás. Cruza com
+        `raioMin`/`raioMax` para dar os pontos candidatos (ver atribuirApoios).
+
+        `angulosPorPosicao` troca o leque para quem joga nessa posição (`p.pos`),
+        e tem de usar ângulos que existam em `angulos`. Sem entrada, a posição
+        usa o leque todo. Ex.: { LB: [70, 110, 150], RB: [-70, -110, -150] }.
+        */
+        angulos: [-150, -110, -70, -35, 0, 35, 70, 110, 150],
+        angulosPorPosicao: {}
     }
 };
 

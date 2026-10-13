@@ -2117,7 +2117,9 @@ function atribuirApoiosDaEquipa(lista, bb) {
             id: p.id,
             slotX: p.postoBase.x,
             slotZ: p.postoBase.z,
-            apoioActual: p.apoioPonto || null
+            apoioActual: p.apoioPonto || null,
+            // Leque de ângulos desta posição (SupportModel.circulacao.angulosPorPosicao); sem entrada, o leque todo.
+            angulos: (C.angulosPorPosicao && C.angulosPorPosicao[p.pos]) || null
         });
     }
     if (!candidatos.length) {
@@ -2133,6 +2135,7 @@ function atribuirApoiosDaEquipa(lista, bb) {
         maxApoios: C.maxApoios,
         raioMin: C.raioMin,
         raioMax: C.raioMax,
+        angulos: C.angulos,
         desvioMax: C.desvioMax,
         margemLinha: C.margemLinha,
         margemAdversario: C.margemAdversario,
