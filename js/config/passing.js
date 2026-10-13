@@ -351,6 +351,9 @@ const PassModel = {
     */
     bonusSectorActivo: 0.20,
 
+    // O LANÇAMENTO A QUEM ROMPE (RUN_INTO_SPACE, braço no ar): arranca de mais longe e a bola não precisa de 30 m.
+    distMinRuptura: 18.0,
+    throughBallGapRuptura: 24.0,
     distMinLonga: 30.0,
     throughBallCorredorLargura: 7.0,
     throughBallVaoMax: 13.0,
@@ -892,6 +895,10 @@ const PassTypeModel = {
     `liderancaCurta` é a distância cheia à frente do companheiro; perante um
     adversário encurta-se de `liderancaPasso` de cada vez, até `liderancaMin`.
     */
+    // Passe no espaço a mais de `leadMaxSemCorrida` m do companheiro: só se ele corre para lá (>= `corridaMin` m/s).
+    leadMaxSemCorrida: 6.0,
+    leadMaxDefesa: 8.0,     // quando quem passa é defesa o ponto no espaço nunca fica a mais disto do companheiro
+    corridaMin: 1.5,
     liderancaCurta: 4.0,
     liderancaPasso: 1.0,
     liderancaMin: 1.5,
@@ -1658,8 +1665,9 @@ const LancamentoDecisao = {
     aceita: function (estado) {
         const e = estado || {};
         if (!e.temPasseCurto) return true;
-        if (e.defesaNoProprioTerco) return false;
+        // Quem rompe e pede a bola ganha o lançamento, mesmo vindo de um defesa no próprio terço.
         if (e.receptorEmRuptura) return true;
+        if (e.defesaNoProprioTerco) return false;
         const agressao = (typeof e.agressao === 'number') ? e.agressao : 0.5;
         return agressao >= this.agressaoMinima;
     }

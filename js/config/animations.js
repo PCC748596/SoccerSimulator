@@ -1878,7 +1878,13 @@ const PedidoDeBola = {
     velMin: 1.0,
     finalizaDist: 22,
     finalizaLivre: 5,
-    z: 2.36,
+    /*
+    MAIS LEVANTADO (pedido: *"o braço pedindo bola tem que ser mais levantado, uns 80 graus, tá muito
+    baixo, parece que está apontando pra frente"*). Os 80 graus são de ELEVAÇÃO acima da horizontal,
+    ou seja a 10 graus da vertical: abdução de 90 + 80 = 170 graus = 2.97 rad (o limite do ombro são 180).
+    Eram 2.36 (45 graus da vertical, 135 de abdução). `x` a 0 mantém-no no plano lateral.
+    */
+    z: 2.97,
     x: 0.0,
     cotovelo: -0.10,
     // Suavização por frame, para o braço subir em vez de saltar.

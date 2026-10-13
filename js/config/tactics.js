@@ -1486,7 +1486,7 @@ limitado por `MarkingModel.distanciaMinimaEstilo`.
     orchestrator: {
         nome: 'Orchestrator', posicoes: ['CM', 'DM'],
         driblar: 0.5,
-        avanco: -5, passe: 1.35, lancar: 1.4, conduzir: 0.7, cadencia: 1.2,
+        avanco: -2, passe: 1.35, lancar: 1.4, conduzir: 0.7, cadencia: 1.2,
         /*
         A FAIXA DO ORQUESTRADOR (pedido: *"CM Orquestrador indo muito a frente. Ele tem que ficar entre a linha
         da sua area e a metade do campo adversario. Nao mais que isso"*): em metros no referencial de ataque da
@@ -1494,7 +1494,8 @@ limitado por `MarkingModel.distanciaMinimaEstilo`.
         E um tecto e um chao do ALVO de posicionamento, sempre (nao so quando o estilo esta activo): ver
         `aplicarTectoDoEstilo` (playing_styles.js).
         */
-        faixaDeJogo: { min: -36.5, max: 26.5 }
+        // `acimaDaDefesa`: o chão do alvo é a linha média dos defesas + isto (m): nunca atrás deles.
+        faixaDeJogo: { min: -36.5, max: 26.5, acimaDaDefesa: 4.0 }
     },
     anchor_man: {
         nome: 'Anchor Man', posicoes: ['DM'],

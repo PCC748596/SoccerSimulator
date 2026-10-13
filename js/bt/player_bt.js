@@ -284,10 +284,17 @@ function findThroughBall(ctx) {
 
     // Um defesa a lançar é o jogo directo que se quer evitar: a bola tem de
     // passar pelo meio-campo. O lançamento é arma de médios e avançados.
-    if (p.role === 'def' || p.role === 'gk') {
+    if (p.role === 'gk') {
         ctx._throughBall = null;
         return null;
     }
+    /*
+    ...EXCEPTO PARA QUEM JÁ ESTÁ A ROMPER. Relato: *"não consigo ver nenhum lançamento para quem está
+    pedindo bola"*: o defesa nunca lançava (era quem tinha a bola quando o infiltrado pedia) e a
+    distância mínima (30 m) deixava de fora o infiltrado que arranca a 20 m. Um defesa pode lançar
+    UM companheiro em RUN_INTO_SPACE (o braço no ar), e só esse.
+    */
+    const soParaRuptura = (p.role === 'def');
     const eeL = estiloDaEquipa(p.team);
     let chanceLanc = PassModel.throughBallChance * ((eeL && typeof eeL.lancamento === 'number') ? eeL.lancamento : 1);
     // No contra-ataque a bola nas costas procura-se ainda mais (TeamPlayStyles.contra).
@@ -314,6 +321,8 @@ function findThroughBall(ctx) {
     for (const mate of ctx.teammates) {
         if (mate === p || mate.role === 'gk') continue;
         if (mate.role === 'def') continue;              // defesas não fazem desmarcações
+        const emRuptura = !!(mate.fsm && mate.fsm.currentState === 'RUN_INTO_SPACE');
+        if (soParaRuptura && !emRuptura) continue;
 
         // Alvo do PositionBT, não a posição actual — ver alvoDePasse().
         const mateAlvo = alvoDePasse(mate);
@@ -325,7 +334,7 @@ function findThroughBall(ctx) {
         if (mateZ_current > linhaNoNosso + 0.5) continue; 
         
         // A folga avalia se o jogador já está razoavelmente perto da última linha para a conseguir romper.
-        if (mateZ_current < linhaNoNosso - PassModel.throughBallGap) continue;
+        if (mateZ_current < linhaNoNosso - (emRuptura ? (PassModel.throughBallGapRuptura || PassModel.throughBallGap) : PassModel.throughBallGap)) continue;
         
         // Bónus especial se ele já estiver em movimento de ruptura
         let sprintBonus = 0;
@@ -334,7 +343,8 @@ function findThroughBall(ctx) {
 
         const dist = p.model.position.distanceTo(mateAlvo);
         // Lançamento é bola longa: abaixo de distMinLonga é passe normal.
-        if (dist < PassModel.distMinLonga || dist > PassModel.throughBallMaxDist) continue;
+        const distMin = emRuptura ? (PassModel.distMinRuptura || PassModel.distMinLonga) : PassModel.distMinLonga;
+        if (dist < distMin || dist > PassModel.throughBallMaxDist) continue;
 
         /*
         E TEM DE RASGAR A LINHA. Longo nao chega: um lancamento sai por

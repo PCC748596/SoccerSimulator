@@ -240,11 +240,38 @@ const PassTypes = {
     `opponents` é opcional: sem ele não há como validar o ponto curto, e o
     comportamento é o antigo.
     */
-    pontoPara: function (tipo, pontos, mate, golZ, opponents) {
+    pontoPara: function (tipo, pontos, mate, golZ, opponents, passador) {
         let pt = null;
         if (tipo === this.SPACE) pt = this.pontoMediano(pontos, mate);
         else if (tipo === this.LEADING) pt = this.pontoMaisPertoDoGolo(pontos, golZ, mate);
         else return { tipo: this.DIRECT, ponto: null };
+
+        /*
+        O PASSE NO ESPAÇO SÓ VAI LONGE A QUEM CORRE PARA LÁ. O filtro de alcance do leque
+        (PassCandidates.alcancaOPonto) assume que o companheiro corre ao máximo para o ponto — mas
+        um meia parado no meio não corre. Medido (tools/headless/passe_para_ninguem.js): 30% dos
+        passes longos acabavam a mais de 8 m de qualquer companheiro, quase todos "no espaço", e era o
+        zagueiro a tocar a bola para o meio de campo vazio. Agora, a mais de `leadMaxSemCorrida` m
+        do companheiro, o ponto só vale se ele estiver a CORRER para lá (RUN_INTO_SPACE, ou
+        velocidade projectada no ponto >= `corridaMin`); senão o ponto é o curto, à frente dele.
+        */
+        const M = (typeof PassTypeModel !== 'undefined') ? PassTypeModel : null;
+        if (pt && !pt.curto && mate && mate.model && M && typeof M.leadMaxSemCorrida === 'number') {
+            const dx = pt.x - mate.model.position.x, dz = pt.z - mate.model.position.z;
+            const d = Math.hypot(dx, dz);
+            // Quem sai de trás (defesa) é ainda mais exigente: aí a bola no espaço é o que o rival corta.
+            const limite = (passador && passador.role === 'def' && typeof M.leadMaxDefesa === 'number')
+                ? M.leadMaxDefesa : M.leadMaxSemCorrida;
+            // Defesa: passe no espaço só curto, corra o companheiro ou não (a corrida é cortada em metade dos casos).
+            if (limite === M.leadMaxDefesa && d > limite) pt = null;
+            else if (d > limite) {
+                let corre = !!(mate.fsm && mate.fsm.currentState === 'RUN_INTO_SPACE');
+                if (!corre && mate.velocity && d > 0.001) {
+                    corre = (mate.velocity.x * dx + mate.velocity.z * dz) / d >= M.corridaMin;
+                }
+                if (!corre) pt = null;
+            }
+        }
 
         if (!pt && opponents) pt = this.pontoLiderancaCurta(mate, opponents);
 
@@ -277,7 +304,7 @@ const PassTypes = {
 
         const pontos = this.pontosPorMate(carrier)[mate.id] || [];
         const tipo = this.sortear(this.misturaPara(origem, destino, this.agressaoDe(carrier)), rnd);
-        const res = this.pontoPara(tipo, pontos, mate, golZ, opponents);
+        const res = this.pontoPara(tipo, pontos, mate, golZ, opponents, carrier);
 
         return { mate: mate, tipo: res.tipo, ponto: res.ponto };
     },
@@ -312,7 +339,7 @@ const PassTypes = {
         const pontos = (this.pontosPorMate(carrier)[mate.id]) || [];
         const tipo = this.sortear(this.misturaPara(origem, destino, this.agressaoDe(carrier)), rnd);
         const opponents = (carrier.team === 'TeamA') ? Match.opponents : Match.players;
-        return this.pontoPara(tipo, pontos, mate, carrier.targetGoalZ, opponents);
+        return this.pontoPara(tipo, pontos, mate, carrier.targetGoalZ, opponents, carrier);
     },
 
     /*
@@ -501,7 +528,7 @@ const PassTypes = {
             const pontos = mapa[mate.id] || [];
 
             const tipoSorteado = this.sortear(this.misturaPara(origem, destino, this.agressaoDe(carrier)), rnd);
-            let res = this.pontoPara(tipoSorteado, pontos, mate, golZ, opponents);
+            let res = this.pontoPara(tipoSorteado, pontos, mate, golZ, opponents, carrier);
 
             /*
             E O PONTO DE QUEDA, QUEM LÁ CHEGA PRIMEIRO?

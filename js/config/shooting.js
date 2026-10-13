@@ -438,7 +438,12 @@ const ShotModel = {
     Quem julga este numero e o lote.
     =========================================================================
     */
-    factorForca: 0.85,
+    /*
+    +15% SOBRE O DE HOJE (pedido: *"estou achando os chutes um pouco fracos, aumenta em 15% a força"*):
+    0.85 x 1.15 = 0.9775. É o fator da nota acima, aplicado depois do tecto de 36 m/s — por isso o remate
+    mais forte sai agora a 35.2 m/s (era 30.6) e a mediana (26 m/s antes do fator) passa de ~22.1 para ~25.4.
+    */
+    factorForca: 0.9775,
 
     /*
     Elevação de recurso, para quando nem no ângulo óptimo a bola chega ao alvo

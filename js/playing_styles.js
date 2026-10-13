@@ -1069,8 +1069,26 @@ function aplicarTectoDoEstilo(p, targetZ, bb) {
         const FJ = PlayingStyles.orchestrator && PlayingStyles.orchestrator.faixaDeJogo;
         if (FJ) {
             const zA = targetZ * p.dirZ;
+            /*
+            O CHÃO SOBE COM A DEFESA. O -36.5 (linha da própria área) é o limite absoluto, mas com a
+            equipa a construir os centrais estão bem à frente disso, e o Orquestrador (avanço -5 do
+            estilo) ia parar a 2 m ATRÁS deles — a "organizar" de um sítio onde não dá opção a ninguém.
+            Pedido: *"não precisa voltar tanto quando o time tem a bola; pode ficar mais no meio e um pouco
+            na defesa"*. Agora o chão é a linha média dos defesas MAIS `acimaDaDefesa` m: no máximo
+            à altura deles, nunca atrás.
+            */
+            let chao = FJ.min;
+            if (bb && bb.own && typeof FJ.acimaDaDefesa === 'number') {
+                let soma = 0, n = 0;
+                for (const o of bb.own) {
+                    if (!o || o.role !== 'def' || !o.model) continue;
+                    soma += o.model.position.z * o.dirZ; n++;
+                }
+                if (n) chao = Math.max(chao, soma / n + FJ.acimaDaDefesa);
+            }
+            if (chao > FJ.max) chao = FJ.max;
             if (zA > FJ.max) targetZ = FJ.max * p.dirZ;
-            else if (zA < FJ.min) targetZ = FJ.min * p.dirZ;
+            else if (zA < chao) targetZ = chao * p.dirZ;
         }
     }
 
