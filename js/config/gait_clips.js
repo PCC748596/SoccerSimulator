@@ -44,9 +44,44 @@ JOELHO. Dobra bem mais do que o seno em todos os andamentos (andar 1.07 contra
 dobra o joelho na fase de balanço (`max(0, sin)`), e a passada real dobra
 também no apoio, ao rolar o pé.
 
+O CORPO ASSENTA MAIS BAIXO A CORRER. Com o clip, a perna recolhe mais no voo e
+o ponto mais baixo do boneco sobe: medido com `tools/scratch/altura_corpo_clip.js`,
+a 8 m/s a mediana fica 4.2 cm acima do sítio onde as botas assentam de pé, e o
+pico chega a 9.1 cm. Relato: *"o jogador está um pouco acima do solo na corrida.
+Uns 10 cms"*.
+
+O `descidaExtra` corrige o corpo para a mediana voltar ao contacto. É um
+deslocamento com sinal: positivo baixa, negativo levanta.
+
+A correr baixa 4.2 cm (estava a flutuar). No trote faz o contrário — ali a
+mediana estava a -0.086, ou seja 3.6 cm ENTERRADA no relvado, e sobe outro
+tanto. Nos dois andamentos lentos o desvio é de 1 cm, abaixo do que se vê, e
+ficam a zero.
+
+Não substitui a `descida` do `GaitModel`, soma-se a ela: aquela foi medida para
+o modelo de senos e continua a valer quando o clip está desligado.
+
 SEM RESSALTO. O root dos clips não sobe nem desce — o eixo vertical é zero em
 todos os frames. O `ressalto` e a `descida` continuam a vir do
 `misturarAndamento`, que foi medido contra o relvado deste jogo.
+
+ABERTURA DA PERNA AFINADA À MÃO. O `ancaGanho` multiplica a oscilação da coxa
+em torno da `ancaMedia`, sem mexer na postura. Serve para afastar o clip da
+medida do original quando ela não serve ao jogo.
+
+A correr o clip abre 1.51 rad pico a pico e o modelo de senos abre 1.94
+(2 x anca). Pedido: *"pode usar um pouco mais: 1.72"* — ganho 1.136, que fica
+entre os dois. Os outros andamentos ficam a 1.0, na medida do original.
+
+Os braços seguem, porque são derivados da coxa (ver abaixo): mais abertura de
+perna dá mais balanço de braço, na mesma proporção.
+
+A `passada` NÃO muda com isto. No modelo de senos a abertura (`anca`) e o
+avanço por ciclo (`passada`) também são afinados em separado — a medição do
+`tools/scratch/passada_abertura.js` lê a distância pé-a-pé, não o avanço. Abrir
+a perna sem alongar a passada faz o pé viajar mais para o mesmo avanço, e a
+partir de certo ponto isso lê-se como patinagem. A 1.72 ainda está abaixo do
+que o modelo já fazia a 1.94, por isso não introduz nada que não existisse.
 
 BRAÇOS DERIVADOS DAS PERNAS. Os canais de braço do original vêm incompletos —
 no PES os braços são movidos por cadeias de IK e só parte do movimento está nos
@@ -83,6 +118,8 @@ const GaitClips = {
         {
         // parado — de pé, parado — o balanço de quem espera (42 frames)
         nome: 'idle',
+        descidaExtra: 0,    // quanto o corpo baixa, alem da `descida` do GaitModel
+        ancaGanho: 1.0,      // multiplica a abertura da coxa (1.0 = a do original)
         bracoGanho: 0.4,     // braco / anca deste andamento no GaitModel
         ancaMedia: -0.2085,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 0.0,
@@ -136,6 +173,8 @@ const GaitClips = {
         {
         // andar — passada de marcha (36 frames)
         nome: 'walk_1_1',
+        descidaExtra: 0,    // quanto o corpo baixa, alem da `descida` do GaitModel
+        ancaGanho: 1.0,      // multiplica a abertura da coxa (1.0 = a do original)
         bracoGanho: 0.4,     // braco / anca deste andamento no GaitModel
         ancaMedia: -0.1521,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 1.8,
@@ -183,6 +222,8 @@ const GaitClips = {
         {
         // trote — corrida moderada (21 frames)
         nome: 'run_3_3',
+        descidaExtra: -0.036,    // quanto o corpo baixa, alem da `descida` do GaitModel
+        ancaGanho: 1.0,      // multiplica a abertura da coxa (1.0 = a do original)
         bracoGanho: 0.776,     // braco / anca deste andamento no GaitModel
         ancaMedia: -0.1621,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 4.5,
@@ -215,6 +256,8 @@ const GaitClips = {
         {
         // correr — corrida a fundo (17 frames)
         nome: 'run_4_4_relax',
+        descidaExtra: 0.042,    // quanto o corpo baixa, alem da `descida` do GaitModel
+        ancaGanho: 1.136,      // multiplica a abertura da coxa (1.0 = a do original)
         bracoGanho: 1.031,     // braco / anca deste andamento no GaitModel
         ancaMedia: -0.1508,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 8.0,

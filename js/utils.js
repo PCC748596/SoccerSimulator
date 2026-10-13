@@ -154,10 +154,26 @@ function misturarClipsGait(t, vel) {
     A `ancaMedia` sai antes: é a postura do clip (coxas à frente), e se entrasse
     no balanço punha os dois braços puxados para o mesmo lado.
     */
-    const ganho = lerp(a.bracoGanho, b.bracoGanho, k);
     const media = lerp(a.ancaMedia, b.ancaMedia, k);
+
+    /*
+    ABERTURA DA PERNA. O `ancaGanho` abre ou fecha a oscilação da coxa em torno
+    da postura, sem lhe tocar — a correr o original abre menos do que este jogo
+    quer (ver gait_clips.js). Entra ANTES dos braços, para eles acompanharem.
+    */
+    const abertura = lerp(a.ancaGanho, b.ancaGanho, k);
+    if (abertura !== 1) {
+        r.lHip = media + (r.lHip - media) * abertura;
+        r.rHip = media + (r.rHip - media) * abertura;
+    }
+
+    const ganho = lerp(a.bracoGanho, b.bracoGanho, k);
     r.lArm = (r.rHip - media) * ganho;
     r.rArm = (r.lHip - media) * ganho;
+
+    // Quanto este ciclo precisa de baixar o corpo, além do que o GaitModel já
+    // baixa — a perna do clip recolhe mais no voo (ver gait_clips.js).
+    r.descidaExtra = lerp(a.descidaExtra, b.descidaExtra, k);
     return r;
 }
 
@@ -165,6 +181,7 @@ function getGaitPose(t, vel) {
     const g = misturarAndamento(vel);
     const r = poseDeSenos(t, g);
     let passada = g.passada;
+    let descidaExtra = 0;
 
     /*
     CICLO EXTRAÍDO, quando ligado. Substitui a pose inteira em toda a gama de
@@ -176,6 +193,7 @@ function getGaitPose(t, vel) {
         if (clipe) {
             for (const campo in r) r[campo] = clipe[campo];
             passada = clipe.passada;
+            descidaExtra = clipe.descidaExtra || 0;
         }
     }
 
@@ -186,7 +204,7 @@ function getGaitPose(t, vel) {
     // a cargo do modelo, ligado ou desligado (ver gait_clips.js).
     r.ressalto = g.ressalto * (1.0 + Math.sin(t * Math.PI * 4 + Math.PI)) * 0.5;
     // Quanto o corpo assenta mais abaixo neste andamento — ver GaitModel.descida.
-    r.descida = g.descida || 0;
+    r.descida = (g.descida || 0) + descidaExtra;
     r.passada = passada;
     return r;
 }
