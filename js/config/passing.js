@@ -1478,7 +1478,16 @@ const RunIntoSpaceModel = {
         passeMax: 6.0, pesoPasse: 0.8,
         raioCaminho: 1.6, penalCaminho: 4.0,
         pesoAvanco: 0.40, pesoLateral: 0.10, faixaAvanco: 8.0,
-        reavaliacao: 0.5, trocaMin: 0.25
+        reavaliacao: 0.5, trocaMin: 0.25,
+
+        /*
+        O CONE da corrida, em graus a partir da frente do corredor, em modulo (vale
+        para a esquerda e para a direita): 0 e a direito, para a baliza; 90 e de lado.
+        O ponto escolhido tem de cair entre `anguloMin` e `anguloMax`. 0 e 90 e "sem
+        cone". Uma diagonal e, por exemplo, 25 a 60; uma corrida em profundidade, 0 a 15.
+        */
+        anguloMin: 25,
+        anguloMax: 60
     }
 };
 

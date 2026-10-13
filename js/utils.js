@@ -3389,9 +3389,18 @@ function espacoEntreAdversarios(o) {
     // So perto do maximo: `faixaAvanco` m abaixo dele (a infiltracao e para ROMPER, e os
     // pontos mais vazios eram os rasos — medido: ganho de 13 m contra 17, toques na area -29%).
     const aFundo = Math.max(aMin, o.avancoMax - (E.faixaAvanco !== undefined ? E.faixaAvanco : 8.0));
+    // O cone, em graus a partir da frente do corredor (0 a direito, 90 de lado). A chamada pode
+    // trazer o seu (por posicao); sem nada, vale o do modelo, e sem esse, nao ha cone.
+    const grauMin = (typeof o.anguloMin === 'number') ? o.anguloMin : (typeof E.anguloMin === 'number' ? E.anguloMin : 0);
+    const grauMax = (typeof o.anguloMax === 'number') ? o.anguloMax : (typeof E.anguloMax === 'number' ? E.anguloMax : 90);
+    const tanMin = Math.tan(grauMin * Math.PI / 180);
+    const tanMax = grauMax >= 90 ? Infinity : Math.tan(grauMax * Math.PI / 180);
     for (let a = o.avancoMax; a >= aFundo - 1e-6; a -= E.passoAvanco) {
         for (let x = -meia; x <= meia + 1e-6; x += E.passoX) {
             if (Math.abs(x - o.px) > E.maxLateral) continue;
+            // tan(angulo) = lado / avanco: compara-se sem atan2 (o avanco aqui e sempre > 0).
+            const tanPonto = Math.abs(x - o.px) / (a - a0);
+            if (tanPonto < tanMin - 1e-9 || tanPonto > tanMax + 1e-9) continue;
             const r = pontuarEspacoDeCorrida(o, x, a, E);
             if (r.folga < E.folgaMin) continue;
             if (!melhor || r.score > melhor.score) melhor = r;
