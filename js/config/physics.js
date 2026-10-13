@@ -875,8 +875,8 @@ const PlacasPublicidade = {
     a par, que é o erro que a nota da bancada descreve.
     */
     raioCanto: 6.5,
-    // Um painel por cada `larguraPainel` metros, em blocos de cor alternados.
-    larguraPainel: 4.0,
+    // Um painel por cada `larguraPainel` metros (pedido: 5 m cada, ao longo das linhas), em blocos de cor alternados.
+    larguraPainel: 5.0,
     cores: ['#1f6fb2', '#e8e8ec', '#c8102e', '#f2c400', '#0f9d58']
 };
 if (typeof window !== 'undefined') window.PlacasPublicidade = PlacasPublicidade;

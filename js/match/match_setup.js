@@ -379,21 +379,30 @@ Object.assign(Match, {
             // a brilhar toda igual.
             ctxPP.fillStyle = 'rgba(0,0,0,0.35)';
             ctxPP.fillRect(0, 56, 256, 8);
+            // Junta fina entre painéis: cada bloco de cor é UM painel de `larguraPainel` m.
+            ctxPP.fillStyle = 'rgba(15,15,18,0.85)';
+            for (let i = 0; i < nCores; i++) ctxPP.fillRect(Math.round(i * 256 / nCores) - 1, 0, 2, 64);
 
             const fazerMaterial = (comprimento) => {
                 const tex = new THREE.CanvasTexture(cvsPP);
                 tex.wrapS = THREE.RepeatWrapping;
                 tex.wrapT = THREE.ClampToEdgeWrapping;
-                tex.repeat.set(Math.max(1, Math.round(comprimento / (PP.larguraPainel * nCores))), 1);
+                /*
+                CADA BLOCO É UM PAINEL DE `larguraPainel` m (5), ao longo da linha. O número
+                de painéis é o inteiro mais perto de comprimento/larguraPainel, e a largura
+                real divide o comprimento por igual (±3%): nenhum painel sai cortado a meio
+                na ponta. A faixa tem `nCores` blocos, daí o /nCores.
+                */
+                const nPaineis = Math.max(1, Math.round(comprimento / PP.larguraPainel));
+                tex.repeat.set(nPaineis / nCores, 1);
                 return new THREE.MeshStandardMaterial({
                     map: tex, roughness: 0.65, side: THREE.DoubleSide
                 });
             };
 
-            const matLateralPP = fazerMaterial(compLateral);
-            const matFundoPP = fazerMaterial(compFundo);
-
-            const addPlaca = (comprimento, mat, x, z, rodaY) => {
+            // O material é feito por peça: cada uma tem o seu comprimento, e portanto o seu nº de painéis.
+            const addPlaca = (comprimento, _mat, x, z, rodaY) => {
+                const mat = fazerMaterial(comprimento);
                 const m = new THREE.Mesh(
                     new THREE.BoxGeometry(comprimento, PP.altura, PP.espessura), mat);
                 m.position.set(x, PP.altura / 2, z);
@@ -412,17 +421,17 @@ Object.assign(Match, {
             const addPlacaLateral = (sinal) => {
                 const TJp = (typeof TunelJogadores !== 'undefined' && TunelJogadores.activo &&
                     TunelJogadores.lado === sinal) ? TunelJogadores : null;
-                if (!TJp) { addPlaca(compLateral, matLateralPP, sinal * xLateral, 0, Math.PI / 2); return; }
+                if (!TJp) { addPlaca(compLateral, null, sinal * xLateral, 0, Math.PI / 2); return; }
                 const meia = TJp.largura / 2 + TJp.folgaPlaca;
                 const len = compLateral / 2 - meia, c = (compLateral / 2 + meia) / 2;
-                addPlaca(len, matLateralPP, sinal * xLateral, c, Math.PI / 2);
-                addPlaca(len, matLateralPP, sinal * xLateral, -c, Math.PI / 2);
+                addPlaca(len, null, sinal * xLateral, c, Math.PI / 2);
+                addPlaca(len, null, sinal * xLateral, -c, Math.PI / 2);
             };
             addPlacaLateral(1);
             addPlacaLateral(-1);
             // Fundos: correm em X, sem rotacao.
-            addPlaca(compFundo, matFundoPP, 0, zFundo, 0);
-            addPlaca(compFundo, matFundoPP, 0, -zFundo, 0);
+            addPlaca(compFundo, null, 0, zFundo, 0);
+            addPlaca(compFundo, null, 0, -zFundo, 0);
 
             /*
             E OS QUATRO ARCOS. Um `CylinderGeometry` aberto e sem tampas e uma
@@ -449,9 +458,8 @@ Object.assign(Match, {
                 (de comprimento R*PI/2) mostrar N repeticoes da faixa e preciso
                 pedir 4*N ao `repeat`.
                 */
-                const nFaixas = Math.max(1, Math.round(
-                    (rc * Math.PI / 2) / (PP.larguraPainel * nCores)));
-                tex.repeat.set(4 * nFaixas, 1);
+                const nPaineisArco = Math.max(1, Math.round((rc * Math.PI / 2) / PP.larguraPainel));
+                tex.repeat.set(4 * nPaineisArco / nCores, 1);
                 const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
                     map: tex, roughness: 0.65, side: THREE.DoubleSide
                 }));

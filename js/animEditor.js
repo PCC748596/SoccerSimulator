@@ -80,6 +80,41 @@ const CLIPS = {
         },
         amostrar: (t) => amostrarClipDefesaGK(GkJumpClip, t)
     },
+    /*
+    As mesmas três defesas, mas com os clips extraídos (gk_clips_pes.js). Estão
+    aqui ao lado das originais de propósito: o editor é onde se vê a diferença
+    entre a pose à mão e a do original, no mesmo gesto e na mesma duração.
+    */
+    GkDiveBaixoPes: {
+        rotulo: 'Defesa baixa (extraída)',
+        clip: () => GkDiveBaixoPes,
+        duracao: () => GoalkeeperDive.tempoLer + GoalkeeperDive.tempoImpulso + GoalkeeperDive.vooMax,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseLancamentoGR(rig, K);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipDefesaGK(GkDiveBaixoPes, t)
+    },
+    GkDiveMedioPes: {
+        rotulo: 'Defesa média (extraída)',
+        clip: () => GkDiveMedioPes,
+        duracao: () => GoalkeeperDive.tempoLer + GoalkeeperDive.tempoImpulso + GoalkeeperDive.vooMax,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseLancamentoGR(rig, K);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipDefesaGK(GkDiveMedioPes, t)
+    },
+    GkDiveAltoPes: {
+        rotulo: 'Defesa alta (extraída)',
+        clip: () => GkDiveAltoPes,
+        duracao: () => GoalkeeperDive.tempoLer + GoalkeeperDive.tempoImpulso + GoalkeeperDive.vooMax,
+        aplicar: (rig, corpo, K) => {
+            aplicarPoseLancamentoGR(rig, K);
+            corpo.position.set(K.posX || 0, K.altura || 0, K.posZ || 0);
+        },
+        amostrar: (t) => amostrarClipDefesaGK(GkDiveAltoPes, t)
+    },
     GoalkeeperKickClip: {
         rotulo: 'Chutão do guarda-redes',
         clip: () => GoalkeeperKickClip,
