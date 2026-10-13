@@ -2033,3 +2033,26 @@ const FormationsData = {
         { x: 0, z: 0.6, role: 'atk', pos: 'CF', num: 9 }
     ]
 };
+
+/*
+=============================================================================
+CÂMARA CINEMATOGRÁFICA (tecla 9)
+=============================================================================
+Órbita lenta à volta do estádio e da cidade. `voltaSegundos` é o tempo de uma
+volta; o raio e a altura oscilam um pouco (`raioOscila`, `alturaOscila`, com os
+ritmos em rad/s) para o movimento não ser mecânico; o foco deriva `derivaFoco` m
+à volta do centro do estádio. `nevoeiro` alarga o nevoeiro (vezes) enquanto a
+vista está activa: com o das condições normais a cidade ficava toda no escuro
+do ar a 200 m.
+=============================================================================
+*/
+const CameraCinema = {
+    voltaSegundos: 200,
+    anguloInicial: Math.PI * 0.8,
+    raio: 215, raioOscila: 30, ritmoRaio: 0.06,
+    altura: 85, alturaOscila: 22, ritmoAltura: 0.045,
+    foco: { x: 0, y: 14, z: 0 },
+    derivaFoco: 12,
+    nevoeiro: 2.4
+};
+if (typeof window !== 'undefined') window.CameraCinema = CameraCinema;

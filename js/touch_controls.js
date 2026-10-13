@@ -401,7 +401,8 @@ const TouchControls = {
                 'sideline': 'Lateral',
                 'lateraltv': 'Lateral TV',
                 'topdown': 'Tática',
-                'orbit': 'Órbita 3D'
+                'orbit': 'Órbita 3D',
+                'cinema': 'Cinematográfica'
             };
             camLabel.textContent = names[window.cameraMode] || 'Câmera';
         }

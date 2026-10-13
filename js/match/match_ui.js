@@ -30,6 +30,8 @@ Object.assign(Match, {
             if (e.key === '7') this.setCameraMode('lateraltv');
             // A câmara da grua de televisão atrás da baliza (ver GruaDeCamera).
             if (e.key === '8') this.setCameraMode('grua');
+            // A câmara cinematográfica: gira devagar à volta do estádio e da cidade.
+            if (e.key === '9') this.setCameraMode('cinema');
             /*
             ESC SAI DA REPETICAO.
 
@@ -135,6 +137,23 @@ Object.assign(Match, {
         document.querySelectorAll('.btn-cam').forEach(b => b.classList.remove('active'));
         const btn = document.getElementById('cam-' + mode);
         if (btn) btn.classList.add('active');
+
+        // A cinematográfica começa a volta de sítio fixo, e alarga o nevoeiro para a cidade se ver.
+        const nev = window.sceneCore && window.sceneCore.fog;
+        if (mode === 'cinema') {
+            this._cineT = 0;
+            if (nev && nev.isFog && !this._nevoeiroCine) {
+                const f = CameraCinema.nevoeiro;
+                this._nevoeiroCine = { near: nev.near, far: nev.far, nearC: nev.near * f, farC: nev.far * f };
+                nev.near *= f; nev.far *= f;
+            }
+        } else if (this._nevoeiroCine) {
+            // Só repõe se o tempo não o mudou entretanto.
+            if (nev && nev.isFog && Math.abs(nev.far - this._nevoeiroCine.farC) < 1e-6) {
+                nev.near = this._nevoeiroCine.near; nev.far = this._nevoeiroCine.far;
+            }
+            this._nevoeiroCine = null;
+        }
 
         window.cameraCore.up.set(0, 1, 0);
         if (mode === 'topdown') {
@@ -399,6 +418,27 @@ Object.assign(Match, {
                 targetPos.set(9, 2.0, ladoBola * (CAMPO_COMP / 2 + 7));
             }
             lookTarget.copy(this.ball.position);
+        } else if (window.cameraMode === 'cinema') {
+            /*
+            A CÂMARA CINEMATOGRÁFICA (tecla 9): órbita lenta à volta do estádio, de cima, com
+            a cidade por trás. O raio e a altura respiram devagar (senão a volta é um
+            carrossel de altura fixa), e o foco deriva um pouco em torno do centro do
+            estádio. O zoom (scroll) multiplica o raio. Os números estão em CameraCinema
+            (config/tactics.js). Passa pela mesma suavização das outras vistas, que também
+            faz a transição para ela ser um voo e não um salto.
+            */
+            const CC = CameraCinema;
+            const dtC = (typeof window.lastFrameDelta === 'number') ? window.lastFrameDelta : (1 / 60);
+            this._cineT = (this._cineT || 0) + dtC;
+            const t = this._cineT;
+            const ang = CC.anguloInicial + t * (2 * Math.PI / CC.voltaSegundos);
+            const raio = (CC.raio + CC.raioOscila * Math.sin(t * CC.ritmoRaio)) * zoom;
+            const alt = (CC.altura + CC.alturaOscila * Math.sin(t * CC.ritmoAltura + 1.0)) * Math.max(0.6, zoom);
+            targetPos.set(Math.sin(ang) * raio, alt, Math.cos(ang) * raio);
+            lookTarget.set(
+                CC.foco.x + CC.derivaFoco * Math.sin(t * 0.09),
+                CC.foco.y + CC.derivaFoco * 0.4 * Math.sin(t * 0.11 + 2.0),
+                CC.foco.z + CC.derivaFoco * Math.cos(t * 0.07));
         } else if (window.cameraMode === 'topdown') {
             const aspect = window.innerWidth / window.innerHeight;
             // Campo deitado: precisamos caber (CAMPO_COMP + margem) na horizontal e (CAMPO_LARG + margem) na vertical
@@ -414,7 +454,7 @@ Object.assign(Match, {
         e, nas vistas laterais, a camara anda ao longo da linha com ele — a bola
         e a baliza cabem no mesmo plano. Ver CameraZoom.faltaDirectaDist.
         */
-        if (window.cameraMode !== 'topdown' && (this.state === 'FREE_KICK' || this.state === 'CORNER_KICK') && this.setPieceTaker) {
+        if (window.cameraMode !== 'topdown' && window.cameraMode !== 'cinema' && (this.state === 'FREE_KICK' || this.state === 'CORNER_KICK') && this.setPieceTaker) {
             const ZF = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
             const dMax = (ZF && ZF.faltaDirectaDist) || 35.0;
             const golZ = this.setPieceTaker.targetGoalZ;
