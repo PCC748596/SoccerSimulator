@@ -142,6 +142,22 @@ function misturarClipsGait(t, vel) {
     const r = {};
     for (const campo in pa) r[campo] = lerp(pa[campo], pb[campo], k);
     r.passada = lerp(a.passada, b.passada, k);
+
+    /*
+    OS BRAÇOS VÊM DAS PERNAS, não do clip — os canais de braço do original estão
+    incompletos porque lá os braços são movidos por IK (ver gait_clips.js).
+
+    Braço esquerdo com perna direita, que é o que acontece a andar. O ganho é o
+    rácio `braco / anca` do andamento, por isso a amplitude fica a que já estava
+    afinada; o que muda é seguir o tempo real da perna em vez de um seno.
+
+    A `ancaMedia` sai antes: é a postura do clip (coxas à frente), e se entrasse
+    no balanço punha os dois braços puxados para o mesmo lado.
+    */
+    const ganho = lerp(a.bracoGanho, b.bracoGanho, k);
+    const media = lerp(a.ancaMedia, b.ancaMedia, k);
+    r.lArm = (r.rHip - media) * ganho;
+    r.rArm = (r.lHip - media) * ganho;
     return r;
 }
 

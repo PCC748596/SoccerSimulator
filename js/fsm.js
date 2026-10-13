@@ -928,6 +928,31 @@ function temGestoComClip(estado) {
 
 
 /*
+ESTE ESTADO DEIXA O CORPO SEM CICLO DE PASSADA?
+
+Pergunta diferente da de cima. Ali é "consome o `actionState`"; aqui é "se este
+jogador andar, as pernas não se mexem". São duas razões distintas para o mesmo
+sintoma:
+
+  . os gestos com clip desenham o gesto e o ciclo não chega a entrar;
+  . o `TACKLE` e o `SLIDE_TACKLE` fazem o `animateBones` RETORNAR antes de
+    qualquer ramo de passada;
+  . o `CHEST_CONTROL` e o `DRIBBLE` têm ramos próprios que escrevem as pernas.
+
+Existe porque o reposicionamento das faltas tinha a lista escrita à mão e
+faltava-lhe o `SLIDE_TACKLE` — e a falta vem quase sempre a seguir a um
+carrinho, por isso era justamente o infractor que deslizava para o lugar sem
+animação. Relato: *"tem jogadores, no reposicionamento das faltas, que estão se
+movendo sem animação"*.
+*/
+function estadoSemPassada(estado) {
+    return temGestoComClip(estado) ||
+        estado === 'TACKLE' || estado === 'SLIDE_TACKLE' ||
+        estado === 'DRIBBLE' || estado === 'CHEST_CONTROL';
+}
+
+
+/*
 A QUE DISTANCIA DO ADVERSARIO A CONDUCAO VIRA 1x1.
 
 E `DribbleModel.triggerDist` em todo o campo, e `ultimoTerco.triggerDist` no

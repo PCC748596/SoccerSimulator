@@ -4771,15 +4771,22 @@ class FootballPlayer {
                 const B = BolaParadaAndada;
                 const pos = this.model.position;
                 /*
-                A CAMINHO DO LUGAR NAO PODE ESTAR NUM GESTO: quem fica com a FSM num estado de gesto (PASS,
-                BALL_CONTROL_RIGHT...) do lance anterior anda ate ao lugar com o animateBones a ignorar a
-                passada (esses estados nao a desenham) — relato "deslizam para as posicoes sem animacao
-                antes das faltas". Passa a SET_PIECE_WAIT e o ciclo de andar volta.
+                A CAMINHO DO LUGAR NAO PODE ESTAR NUM ESTADO SEM PASSADA: quem fica com a FSM num
+                desses estados do lance anterior anda ate ao lugar com o animateBones a ignorar a
+                passada — relato "deslizam para as posicoes sem animacao antes das faltas". Passa a
+                SET_PIECE_WAIT e o ciclo de andar volta.
+
+                A lista estava escrita a mao aqui e faltava-lhe o SLIDE_TACKLE, que e o estado em que
+                o infractor costuma estar quando a falta e marcada: era ele, justamente, que deslizava.
+                Passou para o `estadoSemPassada` (fsm.js), ao lado do `temGestoComClip`, para nao
+                haver duas listas a divergir outra vez.
                 */
                 {
                     const sg = this.fsm ? this.fsm.currentState : '';
-                    if (sg === 'PASS' || sg === 'BALL_CONTROL_RIGHT' || sg === 'SHOOT' || sg === 'SET_PIECE_KICK' ||
-                        sg === 'CROSS' || sg === 'DRIBBLE' || sg === 'CHEST_CONTROL' || sg === 'TACKLE') {
+                    if (typeof estadoSemPassada === 'function' ? estadoSemPassada(sg)
+                        : (sg === 'PASS' || sg === 'BALL_CONTROL_RIGHT' || sg === 'SHOOT' ||
+                           sg === 'SET_PIECE_KICK' || sg === 'CROSS' || sg === 'DRIBBLE' ||
+                           sg === 'CHEST_CONTROL' || sg === 'TACKLE')) {
                         this.actionState = null;
                         this.passeComClip = false;
                         this.fsm.changeState('SET_PIECE_WAIT');

@@ -48,6 +48,22 @@ SEM RESSALTO. O root dos clips não sobe nem desce — o eixo vertical é zero e
 todos os frames. O `ressalto` e a `descida` continuam a vir do
 `misturarAndamento`, que foi medido contra o relvado deste jogo.
 
+BRAÇOS DERIVADOS DAS PERNAS. Os canais de braço do original vêm incompletos —
+no PES os braços são movidos por cadeias de IK e só parte do movimento está nos
+canais. Mede-se: a andar, o braço esquerdo oscila 0.17 e o direito 0.38, uma
+assimetria de 2x que não existe numa passada real, e o rácio braço/perna fica em
+0.24 contra os 0.40 do modelo de senos. No sprint é pior: 0.38 contra 1.03.
+
+Por isso os braços NÃO vêm do clip. São derivados da perna oposta, que é o que
+acontece numa passada: braço esquerdo com perna direita. O `bracoGanho` é o
+rácio `braco / anca` do andamento correspondente do `GaitModel`, portanto o
+balanço fica igual ao que já estava afinado — o que muda é que agora segue o
+tempo real da perna em vez de um seno.
+
+A `ancaMedia` é o desvio de postura do clip (as coxas à frente, ver acima). É
+subtraída antes de derivar o braço, senão a postura entrava no balanço e os dois
+braços ficavam puxados para o mesmo lado.
+
 COTOVELO. O rig tem um só valor para os dois cotovelos (`P.cotovelo` vai para
 `lElbow` e `rElbow`), e no clip os dois braços dobram em sentidos opostos.
 Fica o do braço esquerdo, que é o que traz o sinal negativo que o rig espera.
@@ -67,6 +83,8 @@ const GaitClips = {
         {
         // parado — de pé, parado — o balanço de quem espera (42 frames)
         nome: 'idle',
+        bracoGanho: 0.4,     // braco / anca deste andamento no GaitModel
+        ancaMedia: -0.2085,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 0.0,
         passada: 1.55,          // metros por ciclo, medidos no root do clip
         fps: 30,
@@ -118,6 +136,8 @@ const GaitClips = {
         {
         // andar — passada de marcha (36 frames)
         nome: 'walk_1_1',
+        bracoGanho: 0.4,     // braco / anca deste andamento no GaitModel
+        ancaMedia: -0.1521,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 1.8,
         passada: 2.09,          // metros por ciclo, medidos no root do clip
         fps: 30,
@@ -163,6 +183,8 @@ const GaitClips = {
         {
         // trote — corrida moderada (21 frames)
         nome: 'run_3_3',
+        bracoGanho: 0.776,     // braco / anca deste andamento no GaitModel
+        ancaMedia: -0.1621,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 4.5,
         passada: 3.54,          // metros por ciclo, medidos no root do clip
         fps: 30,
@@ -193,6 +215,8 @@ const GaitClips = {
         {
         // correr — corrida a fundo (17 frames)
         nome: 'run_4_4_relax',
+        bracoGanho: 1.031,     // braco / anca deste andamento no GaitModel
+        ancaMedia: -0.1508,    // desvio de postura do clip, retirado antes de derivar o braco
         vel: 8.0,
         passada: 4.77,          // metros por ciclo, medidos no root do clip
         fps: 30,
