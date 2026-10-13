@@ -133,7 +133,7 @@ const CidadeConfig = {
     arvores: { passo: 16 },
     // Táxis e ônibus páram nas paradas das avenidas e deixam subir e descer gente.
     transito: {
-        carros: 60, taxis: 8, onibus: 10, velMin: 7, velMax: 13, velOnibus: 9,
+        carros: 240, taxis: 14, onibus: 18, velMin: 7, velMax: 13, velOnibus: 9,
         freada: 2.2, acel: 1.8, paradaOnibus: 9, paradaTaxi: 7
     },
 

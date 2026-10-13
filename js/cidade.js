@@ -1217,31 +1217,51 @@ const Cidade = {
             inv.carrosParados = n;
             instancias.push(corpo, det);
         } else this._parados = null;
-        // trânsito: onibus e taxis só nas avenidas com parada, para pararem mesmo
+        /*
+        TRÂNSITO: só nas vias que atravessam o mapa de ponta a ponta. As vias curtas
+        (que começam na esplanada) fariam os veículos aparecer e desaparecer à beira
+        do estacionamento. Cada pista (via, sentido, faixa) tem a sua velocidade e os
+        veículos nela ficam espaçados por igual, com um pouco de folga, para o trânsito
+        ser denso sem eles se sobreporem. Os ônibus e táxis andam na faixa da direita das
+        avenidas com parada, a que serve a calçada; os carros, nas outras.
+        */
         const TR = C.transito;
         const veic = [];
-        const viasParada = [...new Set(paradas.map(p => p.v))];
-        const comp = vias.reduce((s, v) => s + (v.b - v.a), 0);
-        const escolheVia = () => {
-            let x = rnd() * comp;
-            for (const v of vias) { x -= (v.b - v.a); if (x <= 0) return v; }
-            return vias[0];
-        };
-        const nCarros = TR.carros, nOnibus = TR.onibus;
-        for (let i = 0; i < nCarros + nOnibus; i++) {
-            const onibus = i >= nCarros, taxi = !onibus && i < TR.taxis;
-            const servico = (onibus || taxi) && viasParada.length > 0;
-            const v = servico ? pick(viasParada) : escolheVia();
-            const dir = rnd() < 0.5 ? -1 : 1;
-            const faixas = v.avenida ? [3.3, 6.8] : [2.8];
-            const off = dir * (servico ? faixas[faixas.length - 1] : pick(faixas));
-            const vel = onibus ? TR.velOnibus : TR.velMin + rnd() * (TR.velMax - TR.velMin);
-            veic.push({
-                v, dir, off, onibus, taxi, t: v.a + rnd() * (v.b - v.a), vel, vAtual: vel,
-                estado: 'anda', timer: 0, ultima: null, paradaAtual: null, passageiros: [], x: 0, z: 0,
-                c: onibus ? pick([0xe8b923, 0x2f6fb5, 0xd0342c, 0x2f8a4f]) : (taxi ? 0xf2c200 : pick(C.carros))
-            });
+        const viasParada = new Set(paradas.map(p => p.v));
+        const completas = vias.filter(v => v.a <= -R + 1 && v.b >= R - 1);
+        const pistas = [];
+        for (const v of completas) for (const dir of [-1, 1]) {
+            if (v.avenida) {
+                pistas.push({ v, dir, off: dir * 3.3, servico: false });
+                if (viasParada.has(v)) pistas.push({ v, dir, off: dir * 6.8, servico: true });
+                else pistas.push({ v, dir, off: dir * 6.8, servico: false });
+            } else pistas.push({ v, dir, off: dir * 2.8, servico: false });
         }
+        const pCarro = pistas.filter(q => !q.servico), pServico = pistas.filter(q => q.servico);
+        const cores = [0xe8b923, 0x2f6fb5, 0xd0342c, 0x2f8a4f];
+        const distribuir = (lista, n, fabricar) => {
+            if (!lista.length) return;
+            const porPista = lista.map(() => []);
+            for (let i = 0; i < n; i++) porPista[i % lista.length].push(i);
+            lista.forEach((q, k) => {
+                const ids = porPista[k];
+                if (!ids.length) return;
+                const vel = q.vel || (q.vel = TR.velMin + rnd() * (TR.velMax - TR.velMin));
+                const passo = (q.v.b - q.v.a) / ids.length, fase = rnd() * passo;
+                ids.forEach((id, j) => {
+                    const t = q.v.a + ((fase + j * passo + (rnd() - 0.5) * passo * 0.3) % (q.v.b - q.v.a));
+                    veic.push(Object.assign({
+                        v: q.v, dir: q.dir, off: q.off, t, vel, vAtual: vel, estado: 'anda', timer: 0,
+                        ultima: null, paradaAtual: null, passageiros: [], x: 0, z: 0
+                    }, fabricar(id)));
+                });
+            });
+        };
+        distribuir(pCarro, TR.carros - TR.taxis, () => ({ onibus: false, taxi: false, c: pick(C.carros) }));
+        const lenta = pServico.length ? pServico : pCarro;
+        for (const q of lenta) q.vel = TR.velOnibus;
+        distribuir(lenta, TR.taxis, () => ({ onibus: false, taxi: true, c: 0xf2c200 }));
+        distribuir(lenta, TR.onibus, () => ({ onibus: true, taxi: false, c: pick(cores) }));
         const grupoVeic = (lista, geo) => {
             if (!lista.length) return null;
             const corpo = new THREE.InstancedMesh(geo.corpo, GV.matCorpo, lista.length);

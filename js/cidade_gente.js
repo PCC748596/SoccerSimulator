@@ -513,7 +513,8 @@ const CidadeGente = {
         // Quem chega de metrô, comboio ou ônibus vai quase sempre para o estádio.
         if (a.rumoPortao && !a.semPortao && this.rnd() < 0.85) { a.rumoPortao = false; return this._irAoPortao(a); }
         a.rumoPortao = false;
-        const w = [0.14, 0.09, 0.10, 0.10, a.semPortao ? 0 : 0.47, 0.10];
+        // (o destino `carro` fica de fora de propósito: o carro desaparecia do estacionamento)
+        const w = [0.16, 0.10, 0.12, 0.12, a.semPortao ? 0 : 0.50, 0];
         a.semPortao = false;
         let r = this.rnd() * w.reduce((x, y) => x + y, 0);
         const fn = [this._passear, this._irAoMetro, this._irAPlataforma, this._irAParada, this._irAoPortao, this._irAoCarro];

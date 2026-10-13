@@ -145,7 +145,19 @@ ok(maxV >= 25, 'velocidade máxima baixa: ' + maxV);
 const E2 = Cidade.gente.estat;
 ok(E2.embTrem > 0 && E2.desTrem > 0, 'ninguém entrou/saiu do comboio');
 ok(E2.embOnibus + E2.embTaxi > 0 && E2.desOnibus + E2.desTaxi > 0, 'ninguém entrou/saiu de ônibus/táxi');
-ok(E2.carros > 0 && E2.bocas > 0 && E2.estadio > 0, 'carros/bocas/estádio sem uso');
+ok(E2.carros === 0, 'carros do estacionamento não devem sair');
+ok(E2.bocas > 0 && E2.estadio > 0, 'bocas/estádio sem uso');
+// o trânsito só anda nas vias de ponta a ponta, longe da esplanada, e é denso
+const veiculos = Cidade._veiculos.reduce((n, g) => n + g.lista.length, 0);
+ok(veiculos >= 250, 'pouco trânsito: ' + veiculos);
+ok(Cidade._veiculos.every(g => g.lista.every(c => c.v.a <= -C.meia + 1 && c.v.b >= C.meia - 1)), 'veículo numa via curta');
+const lim = C.esplanada;
+let dentroDaEsplanada = 0;
+for (let i = 0; i < 600; i++) {
+    Cidade.update(0.1);
+    for (const g of Cidade._veiculos) for (const c of g.lista) if (Math.abs(c.x) < lim.meiaX - 4 && Math.abs(c.z) < lim.meiaZ - 4) dentroDaEsplanada++;
+}
+ok(dentroDaEsplanada === 0, dentroDaEsplanada + ' veículos dentro do estacionamento');
 const emFila = Cidade.gente.agentes.filter(a => a.modo === 'fila').length;
 console.log('em fila agora:', emFila);
 ok(emFila > 20, 'poucas pessoas em fila: ' + emFila);
