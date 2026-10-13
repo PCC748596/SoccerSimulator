@@ -3258,7 +3258,7 @@ function actMarcar(ctx) {
     const hz = homem.model.position.z + (v ? v.z * 0.5 : 0);
 
     const ponto = pontoDeMarcacao(base.x, base.z, hx, hz,
-        p.ownGoalZ, dist, MarkingModel.biasMaxPara(base.z * p.dirZ));
+        p.ownGoalZ, dist, MarkingModel.biasMaxPara(base.z * p.dirZ), MarkingModel.anguloMax);
 
     /*
     E A MARCAÇÃO TAMBÉM NÃO SOBE NA TRANSIÇÃO.

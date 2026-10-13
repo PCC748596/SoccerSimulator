@@ -4908,9 +4908,17 @@ function recuoDaUltimaLinha(z0Dir, maisRecuadoDir, distancia, pisoDir, tectoDir)
 Onde este jogador se põe para acompanhar o homem: entre ele e a PRÓPRIA baliza,
 a `distancia` metros dele, e nunca mais de `biasMax` fora do slot.
 
+`anguloMax` (graus, opcional; MarkingModel.anguloMax) e o CONE em volta da recta
+homem -> baliza: o ponto fica a esse angulo ou menos dela (0 = em cima da recta,
+180 ou sem argumento = sem cone). Com o tecto apertado o ponto sai da recta e
+pode ficar AO LADO do homem; o cone traz-o de volta ao ponto do cone mais
+proximo (mesmo raio ao homem). O TECTO MANDA — e a forma do bloco —, por isso
+cone e tecto alternam-se uns passos e o ultimo e sempre o tecto: o cone aproxima
+da recta o que o tecto deixar, e nunca o rompe.
+
 Pura: sem Match, sem Tatics, sem THREE.
 */
-function pontoDeMarcacao(slotX, slotZ, alvoX, alvoZ, ownGoalZ, distancia, biasMax) {
+function pontoDeMarcacao(slotX, slotZ, alvoX, alvoZ, ownGoalZ, distancia, biasMax, anguloMax) {
     if (biasMax <= 0) return { x: slotX, z: slotZ };
 
     // Do homem para a própria baliza: é deste lado que se fica.
@@ -4929,6 +4937,32 @@ function pontoDeMarcacao(slotX, slotZ, alvoX, alvoZ, ownGoalZ, distancia, biasMa
     if (d > biasMax && d > 0.0001) {
         dx = (dx / d) * biasMax;
         dz = (dz / d) * biasMax;
+    }
+
+    if (typeof anguloMax === 'number' && anguloMax < 180 && gl > 0.0001) {
+        const maxRad = Math.max(0, anguloMax) * Math.PI / 180;
+        const cMax = Math.cos(maxRad), sMax = Math.sin(maxRad);
+        for (let i = 0; i < 4; i++) {
+            // O cone: se o ponto esta fora, roda-o em volta do homem para a borda.
+            const vx = slotX + dx - alvoX, vz = slotZ + dz - alvoZ;
+            const vl = Math.hypot(vx, vz);
+            if (vl > 0.0001) {
+                const cosA = (vx * gx + vz * gz) / vl;
+                if (cosA < cMax) {
+                    const lado = (gx * vz - gz * vx) >= 0 ? 1 : -1;
+                    const ex = gx * cMax - lado * gz * sMax;
+                    const ez = gz * cMax + lado * gx * sMax;
+                    dx = alvoX + ex * vl - slotX;
+                    dz = alvoZ + ez * vl - slotZ;
+                }
+            }
+            // O tecto, sempre por ultimo.
+            const dd = Math.hypot(dx, dz);
+            if (dd > biasMax && dd > 0.0001) {
+                dx = (dx / dd) * biasMax;
+                dz = (dz / dd) * biasMax;
+            }
+        }
     }
 
     return { x: slotX + dx, z: slotZ + dz };

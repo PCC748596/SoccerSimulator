@@ -1854,7 +1854,7 @@ function aplicarMarcacaoPosicional(p, bb, targetX, targetZ) {
 
     return pontoDeMarcacao(targetX, targetZ,
         px, pz,
-        p.ownGoalZ, distancia, biasMax);
+        p.ownGoalZ, distancia, biasMax, M.anguloMax);
 }
 
 /*

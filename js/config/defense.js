@@ -389,6 +389,15 @@ const MarkingModel = {
     */
     distanciaMinimaEstilo: 1.5,
 
+    /*
+    O CONE da marcacao, em graus em volta da recta homem -> propria baliza (ver
+    `pontoDeMarcacao`, utils.js): 0 e em cima da recta, 90 e ao lado do homem,
+    180 e "sem cone". Com o tecto `biasMax` apertado o marcador sai da recta e
+    pode ficar ao lado do homem em vez de entre ele e a baliza; o cone traz-o de
+    volta o que o tecto deixar. O tecto manda sempre.
+    */
+    anguloMax: 180,
+
     distanciaPara(zoneAhead) {
         return this.distancia;
     },
