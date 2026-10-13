@@ -360,7 +360,7 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
     } else {
         ctxS.fillStyle = corCamisa; ctxS.fillRect(0, 0, 256, 256); ctxS.fillStyle = '#ffffff'; ctxS.fillRect(0, 20, 256, 30); ctxS.fillRect(0, 70, 256, 15);
     }
-    ctxS.strokeStyle = '#2f3640'; ctxS.lineWidth = 4; ctxS.strokeRect(0, 0, 256, 256);
+    // (sem moldura: o contorno escuro pintado nas bordas da textura era o que marcava as arestas do meião)
     const sockTex = new THREE.CanvasTexture(cvsS);
     const sockMats = [new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ color: corMeiaoBase }), new THREE.MeshStandardMaterial({ color: corMeiaoBase }), new THREE.MeshStandardMaterial({ map: sockTex }), new THREE.MeshStandardMaterial({ map: sockTex })];
 
@@ -612,8 +612,10 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         pano por cima do braco em vez de tinta nele.
         */
         const alturaManga = mangaComprida ? 1.0 : 0.5;
-        const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * alturaManga, u * 0.4), mangaMat);
-        manga.position.y = mangaComprida ? 0.0 : 0.25;
+        // 1 cm a mais no TOPO (0.01 m / 0.33 m por unidade = 0.03): cobre o ombro e não deixa a pele aparecer.
+        const extraTopo = 0.03;
+        const manga = criarPeca(new THREE.BoxGeometry(u * 0.4, u * (alturaManga + extraTopo), u * 0.4), mangaMat);
+        manga.position.y = (mangaComprida ? 0.0 : 0.25) + extraTopo / 2;
         up.add(manga); grp.add(up);
         const elb = new THREE.Group(); elb.position.y = -1.0; elb.rotation.x = -0.3; grp.add(elb); elb.add(criarPeca(smallJointGeo, jointMat));
         const low = criarPeca(new THREE.BoxGeometry(u * 0.3, u * 0.8, u * 0.3), blockMat, true); low.position.y = -0.4; elb.add(low);
@@ -829,10 +831,12 @@ function construirCorpo(corCamisa, corCalcao, aparencia, uniforme) {
         coxa.add(shortL); grp.add(coxa);
         const joelho = new THREE.Group(); joelho.position.y = -1.6; grp.add(joelho); joelho.add(criarPeca(smallJointGeo, jointMat));
         const canela = criarPeca(new THREE.BoxGeometry(u * 0.35, u * 0.9, u * 0.35), blockMat, true); canela.position.y = -0.45;
-        const meiao = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 0.85, u * 0.4), sockMats); meiao.position.y = 0.0; canela.add(meiao); joelho.add(canela);
+        // 7 cm mais comprido para baixo (ESCALA_CORPO ~0.327 m/unidade: 0.07/0.327 = 0.214): o cano chega à chuteira.
+        const meiao = criarPeca(new THREE.BoxGeometry(u * 0.4, u * 1.064, u * 0.4), sockMats); meiao.position.y = -0.107; canela.add(meiao); joelho.add(canela);
         const peG = new THREE.Group(); peG.position.y = -0.9; joelho.add(peG);
 
-        const footGeo = new THREE.BoxGeometry(u * 0.45, u * 0.4, u * 1.0); const p = footGeo.attributes.position; for (let i = 0; i < p.count; i++) { if (p.getZ(i) > 0 && p.getY(i) > 0) p.setY(i, p.getY(i) - u * 0.25); } footGeo.computeVertexNormals();
+        // 2 cm mais larga de cada lado do meião (0.40): 0.02 m / 0.33 m por unidade = 0.06 -> 0.40 + 2*0.06 = 0.52. Cobre o meião.
+        const footGeo = new THREE.BoxGeometry(u * 0.52, u * 0.4, u * 1.0); const p = footGeo.attributes.position; for (let i = 0; i < p.count; i++) { if (p.getZ(i) > 0 && p.getY(i) > 0) p.setY(i, p.getY(i) - u * 0.25); } footGeo.computeVertexNormals();
         const chuteira = criarPeca(footGeo, bootMat, true); chuteira.position.set(0, -0.2, u * 0.25); peG.add(chuteira);
         // Guardada para o `assentarNoChao` (player.js) medir a SOLA: é a peça
         // mais baixa do corpo e é por ela que o jogador toca no relvado.

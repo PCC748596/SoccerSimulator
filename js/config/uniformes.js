@@ -295,7 +295,13 @@ O NUMERO NA FRENTE DO CALCAO — posicao na face (fraccoes 0..1 da textura: x da
 esquerda de quem olha, y de cima), tamanho da letra e espessura do contorno, em
 pixeis da textura de 256. Ver Player.pintarNumeroNoShort.
 */
-const ShortNumero = { x: 0.70, y: 0.38, tamanho: 96, contorno: 6 };
+/*
+Pedido: *"ajusta o número do short uns 4 cm para a direita, está pegando na dobra"*. 4 cm = 0.12
+unidades do corpo (1 unidade ~ 0.33 m) = 0.175 da face (0.68 de largura). Esta face aparece ESPELHADA
+em relação à textura: o número, a x = 0.70, via-se do lado esquerdo do short, colado à dobra — portanto
+"para a direita" no ecrã é x MENOR: 0.70 - 0.175 = 0.525.
+*/
+const ShortNumero = { x: 0.525, y: 0.38, tamanho: 96, contorno: 6 };
 if (typeof window !== 'undefined') window.ShortNumero = ShortNumero;
 
 /*
