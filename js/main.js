@@ -886,6 +886,7 @@ function animate(time) {
     window.lastFrameDelta = delta;
 
     if (typeof Weather !== 'undefined') Weather.update(delta);
+    if (typeof Cidade !== 'undefined') Cidade.update(delta);
 
     fpsFrames++;
     if (time - fpsLastTime >= 1000) {
@@ -1316,7 +1317,7 @@ document.addEventListener("DOMContentLoaded", () => {
         scene.background = new THREE.Color(0x87CEEB);
         window.sceneCore = scene;
 
-        cameraCore = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
+        cameraCore = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 800);
         window.cameraCore = cameraCore;
 
         const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 850);
@@ -1384,6 +1385,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ligarActualizacaoDoElenco();
         Match.init(scene);
         if (typeof Weather !== 'undefined') Weather.init(scene, cameraCore);
+        // A cidade à volta do estádio (js/cidade.js). O nevoeiro do Weather esbate o fim dela.
+        if (typeof Cidade !== 'undefined' && CidadeConfig.ativa) Cidade.construir(scene);
         
         if (isTouchDevice) {
             Match.setSpeed(0.9);

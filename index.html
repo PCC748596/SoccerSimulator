@@ -487,6 +487,7 @@
     <script src="js/config/player_behavior.js"></script>
     <script src="js/config/skill_map.js"></script>
     <script src="js/config/uniformes.js"></script>
+    <script src="js/config/cidade.js"></script>
     <script src="js/stats.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/controls.js"></script>
@@ -547,6 +548,10 @@
     <!-- Funcionários do estádio (colete laranja). Reaproveita as geometrias de
          pose do crowd.js, portanto vem depois dele. -->
     <script src="js/staff.js"></script>
+
+    <!-- A cidade de 500 x 500 m à volta do estádio (config/cidade.js). Construída
+         no DOMContentLoaded do main.js, depois do Match.init. -->
+    <script src="js/cidade.js"></script>
 
     <!-- Depende de FootballPlayer (player.js) e Sim (simulate.js) já existirem -->
     <script src="js/bt/btDebug.js"></script>

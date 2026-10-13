@@ -396,7 +396,7 @@ const MarkingModel = {
     pode ficar ao lado do homem em vez de entre ele e a baliza; o cone traz-o de
     volta o que o tecto deixar. O tecto manda sempre.
     */
-    anguloMax: 180,
+    anguloMax: 45,
 
     distanciaPara(zoneAhead) {
         return this.distancia;
