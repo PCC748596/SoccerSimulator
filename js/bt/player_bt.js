@@ -2354,6 +2354,24 @@ function actChaseBall(ctx) {
         }
     }
 
+    /*
+    FORA DA AREA TAMBEM: O LADO QUE FECHA O ANGULO (CorteDoMarcador, config/defense.js). Com um portador adversario e a
+    bola no chao o alvo e um ponto na recta portador -> propria baliza, a uma fraccao da distancia; perto, cola-se a ele.
+    */
+    if (portadorAdv && typeof CorteDoMarcador !== 'undefined' && CorteDoMarcador.activo &&
+        typeof p.ownGoalZ === 'number' && Match.ball.position.y <= BallPhysics.raio + 0.35) {
+        const K = CorteDoMarcador;
+        const bx = portadorAdv.model.position.x, bz = portadorAdv.model.position.z;
+        const dP = Math.hypot(p.model.position.x - bx, p.model.position.z - bz);
+        if (dP > K.distMin) {
+            const dG = Math.hypot(bx, p.ownGoalZ - bz) || 1;
+            const off = Math.max(K.min, Math.min(K.max, dP * K.fraccao));
+            p.dynamicTarget.set(bx + ((0 - bx) / dG) * off, ALTURA_BASE_Y, bz + ((p.ownGoalZ - bz) / dG) * off);
+            p.fsm.changeState('MOVE_TO_POS');
+            return;
+        }
+    }
+
     const noArChase = Match.ball.position.y > BallPhysics.raio + 0.35 &&
         Match.ballVel.lengthSq() > 1.0;
     const alvoAereo = noArChase ? alvoAereoDoJogador(p) : null;

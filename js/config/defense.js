@@ -178,6 +178,29 @@ const BloqueioRemate = {
 };
 if (typeof window !== 'undefined') window.BloqueioRemate = BloqueioRemate;
 
+/*
+=============================================================================
+O MARCADOR CORRE PELO LADO QUE FECHA O ANGULO, NAO ATRAS DO PORTADOR
+=============================================================================
+Pedido: *"quando o jogador sai na marcacao normalmente ele marca correndo atras do jogador com a bola. Ele deveria
+correr atras mas pelo lado da intercepcao entre a bola e o gol. Correr atras nao faz sentido: tem menos angulo para o
+corte"*. O `actChaseBall` apontava ao portador (a bola), e o BloqueioRemate (acima) so entra pelo lado de dentro nos
+ultimos `aplicaAte` m da propria baliza. No resto do campo o perseguidor ia a direito a bola.
+
+Agora, com um portador ADVERSARIO e a bola no chao, o alvo e um ponto na recta portador -> propria baliza, a
+`offset` m do portador, com offset = distancia * `fraccao` limitado a [`min`, `max`]: longe, aponta bem a frente dele
+(a cortar o caminho); ao chegar, o ponto cola-se ao portador e e o desarme. Abaixo de `distMin` ja e o desarme.
+=============================================================================
+*/
+const CorteDoMarcador = {
+    activo: true,
+    fraccao: 0.40,
+    min: 1.3,
+    max: 4.0,
+    distMin: 1.6
+};
+if (typeof window !== 'undefined') window.CorteDoMarcador = CorteDoMarcador;
+
 const CorteModel = {
     arrefecimentoMin: 3.0,
     arrefecimentoMax: 6.0
