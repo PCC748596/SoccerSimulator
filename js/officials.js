@@ -563,7 +563,7 @@ const RefereeModel = {
         O vermelho DIRECTO fica assim quase inalcançável — como deve ser:
         quase todos os vermelhos reais saem do segundo amarelo.
         */
-        limiarAmarelo: 0.75,   // 0.85 -> 0.75 (14 de Outubro): com ~15 faltas por 90 a fraccao que vira amarelo tem de subir para manter os ~5.2 amarelos
+        limiarAmarelo: 0.62,   // 0.85 -> 0.75 -> 0.62 (14 de Outubro): amarelos 3.0 por jogo, o pedido e 4-5 (com 13-18 faltas)
         /*
         SUBIR ESTE LIMIAR PARA CORTAR VERMELHOS FOI TENTADO E NAO SERVIU.
 
@@ -2865,6 +2865,9 @@ const Officials = {
     marcarFalta: function (infractor, vitima, dados) {
         if (!infractor || !vitima || infractor.expulso) return;
         if (typeof Match === 'undefined' || Match.state !== 'PLAY') return;
+        // O MANDO (config/mando.js): o arbitro deixa passar `arbitroCasa` das faltas da equipa da casa (segue o jogo).
+        if (typeof MandoModel !== 'undefined' && MandoModel.activo && infractor.team === MandoModel.equipa &&
+            Math.random() < MandoModel.arbitroCasa) return;
 
         const gravidade = this.gravidadeDaFalta(dados);
 

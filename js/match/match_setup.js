@@ -2084,8 +2084,10 @@ Object.assign(Match, {
         // do plantel dela e estes ficam por usar.
         const equipaA = this.equipaDoPlantel(this.equipaIdA);
         const equipaB = this.equipaDoPlantel(this.equipaIdB);
-        const onzeA = equipaA ? this.escolherOnze(equipaA.plantel, Tatics.formacaoA || '442') : null;
-        const onzeB = equipaB ? this.escolherOnze(equipaB.plantel, Tatics.formacaoB || '442') : null;
+        // Os SUSPENSOS (por cartao: js/config e o lote da liga) nao entram no onze: ver `Match.suspensos` { A: Set(ids), B: Set(ids) }.
+        const semSuspensos = (plantel, ids) => (ids && ids.size) ? plantel.filter(j => !ids.has(j.id)) : plantel;
+        const onzeA = equipaA ? this.escolherOnze(semSuspensos(equipaA.plantel, this.suspensos && this.suspensos.A), Tatics.formacaoA || '442') : null;
+        const onzeB = equipaB ? this.escolherOnze(semSuspensos(equipaB.plantel, this.suspensos && this.suspensos.B), Tatics.formacaoB || '442') : null;
         this.equipaInfoA = onzeA ? equipaA : null;
         this.equipaInfoB = onzeB ? equipaB : null;
 

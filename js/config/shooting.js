@@ -738,7 +738,7 @@ const ShotModel = {
         Aviso medido: a 1.31 o lote de 40 jogos ja dava 36.9% no alvo (benchmark 33.7%), 2.11 golos e 6.54
         no alvo contra 8.8; o que falta nao e pontaria, e volume de remates tentados.
         */
-        escalaGlobal: 0.98
+        escalaGlobal: 1.15   // 0.98 -> 1.15 (14 de Outubro de 2026): conversao remate -> golo alta (3.01 golos, 43.5% no alvo contra 33.7%); mais erro de execucao baixa os dois
     }
 };
 

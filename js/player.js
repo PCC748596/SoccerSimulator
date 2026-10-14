@@ -407,6 +407,11 @@ class FootballPlayer {
         if (S && S.ligada && S.quedaSkill && CAMPOS_CANSAVEIS[chave]) {
             base = Math.max(1, base - S.quedaSkill * (1 - this.energia));
         }
+        // O MANDO DE CAMPO (config/mando.js): a casa joga melhor, o visitante um pouco pior.
+        const MD = (typeof MandoModel !== 'undefined') ? MandoModel : null;
+        if (MD && MD.activo) {
+            base = (this.team === MD.equipa) ? Math.min(100, base * (1 + MD.bonusCasa)) : Math.max(1, base * (1 - MD.malusFora));
+        }
         return base;
     }
 

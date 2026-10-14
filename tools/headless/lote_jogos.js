@@ -34,10 +34,23 @@ const LIGA_NOMES = ['Palmeiras-SP', 'Grêmio-RS', 'Atlético-MG', 'Flamengo-RJ',
 const LIGA = process.env.LOTE_LIGA === '1';
 // Os pares (a, b, mandante) de uma liga de `n` times, a < b, o mandante alternando com a paridade de a + b.
 function calendarioDaLiga(n, turnos) {
+    /*
+    Metodo do circulo: n - 1 rodadas de n / 2 jogos, e em cada rodada cada time joga UMA vez (e e por isso que as
+    suspensoes por cartao se podem aplicar de uma rodada para a seguinte). O mandante alterna pela paridade da rodada e
+    da mesa. Com 2 turnos o returno repete as rodadas com o mando trocado. O indice do jogo e o da lista: o jogo i
+    pertence a rodada Math.floor(i / (n / 2)).
+    */
     const pares = [];
-    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) pares.push({ casa: ((a + b) % 2 === 0) ? a : b, fora: ((a + b) % 2 === 0) ? b : a });
-    // Com 2 turnos (a temporada: 380 jogos) o returno repete os pares com o mando trocado.
-    if ((turnos || 1) >= 2) { const n1 = pares.length; for (let i = 0; i < n1; i++) pares.push({ casa: pares[i].fora, fora: pares[i].casa }); }
+    const t = []; for (let k = 0; k < n; k++) t.push(k);
+    for (let r = 0; r < n - 1; r++) {
+        for (let k = 0; k < n / 2; k++) {
+            const x = t[k], y = t[n - 1 - k];
+            const casaX = ((r + k) % 2 === 0);
+            pares.push({ casa: casaX ? x : y, fora: casaX ? y : x, rodada: r });
+        }
+        t.splice(1, 0, t.pop());   // gira todos menos o primeiro
+    }
+    if ((turnos || 1) >= 2) { const n1 = pares.length; for (let i = 0; i < n1; i++) pares.push({ casa: pares[i].fora, fora: pares[i].casa, rodada: pares[i].rodada + (n - 1) }); }
     return pares;
 }
 const LIGA_TURNOS = Number(process.env.LOTE_TURNOS || (Number(process.argv[2]) > 190 ? 2 : 1));
@@ -169,6 +182,14 @@ if (process.env.LOTE_WORKER) {
             ligaB = SquadsData.equipas.find(e => e.nome === LIGA_NOMES[par.fora]);
             if (!ligaA || !ligaB) throw new Error('equipa da liga nao encontrada: ' + LIGA_NOMES[par.casa] + ' / ' + LIGA_NOMES[par.fora]);
         }
+        // As SUSPENSOES desta rodada (nomes de equipa -> ids dos jogadores que nao jogam): ver o pai.
+        const susp = process.env.LOTE_SUSPENSOS ? JSON.parse(process.env.LOTE_SUSPENSOS) : {};
+        const suspDe = (nome) => new Set((susp[nome] || []));
+        if (ligaA && ligaB) {
+            Match.suspensos = { A: suspDe(ligaA.nome), B: suspDe(ligaB.nome) };
+        } else {
+            Match.suspensos = null;
+        }
         if (ligaA && ligaB) {
             nomeA = ligaA.nome; nomeB = ligaB.nome; forcaA = ligaA.forca; forcaB = ligaB.forca;
             Match.trocarEquipas({ A: ligaA.id, B: ligaB.id });
@@ -266,6 +287,16 @@ if (process.env.LOTE_WORKER) {
             impedimentos: (A.impedimentos || 0) + (B.impedimentos || 0)
         };
         jogo.placar = { A: Match.placarA, B: Match.placarB };
+        // Os cartoes de cada jogador, para as suspensoes da rodada seguinte (e para o relatorio).
+        jogo.cartoes = [];
+        const todosOsJogadores = [].concat(Match.players, Match.opponents, Match.expulsos || []);
+        for (const p of todosOsJogadores) {
+            if (!p || !p.skills || p.skills.id === undefined) continue;
+            if (!p.temAmarelo && !p.expulso) continue;
+            jogo.cartoes.push({ id: p.skills.id, nome: p.skills.nome, equipa: p.team === 'TeamA' ? nomeA : nomeB,
+                amarelo: !!p.temAmarelo, vermelho: !!p.expulso, directo: !!(p.expulso && !p.temAmarelo) });
+        }
+        jogo.suspensosNesteJogo = { A: [...Match.suspensos ? Match.suspensos.A : []].length, B: [...Match.suspensos ? Match.suspensos.B : []].length };
         jogo.larguraMedia = jogo.largura.n ? jogo.largura.soma / jogo.largura.n : 0;
         delete jogo.largura;
 
@@ -278,50 +309,105 @@ if (process.env.LOTE_WORKER) {
 /* =====================================================================
    PAI — reparte os jogos, junta os resultados, escreve o relatório
    ===================================================================== */
-const porTrabalhador = [];
-for (let w = 0; w < WORKERS; w++) porTrabalhador.push([]);
-for (let i = 0; i < JOGOS; i++) porTrabalhador[i % WORKERS].push(i);
-
 const resultados = [];
-let vivos = 0;
 const inicio = Date.now();
+const LISTA_PARES = LIGA ? calendarioDaLiga(LIGA_NOMES.length, LIGA_TURNOS) : null;
+const COM_SUSPENSOES = LIGA && process.env.LOTE_SUSP !== '0';
+/*
+SUSPENSOES (liga): vermelho = 1 jogo de suspensao; 3 amarelos acumulados = 1 jogo (e o contador volta a zero). Quem esta
+suspenso nao entra no onze do jogo seguinte da equipa (Match.suspensos, createTeams); cumprida a suspensao, volta. O
+segundo amarelo de um jogo conta como vermelho (e nao como amarelo para a acumulacao), como na regra.
+*/
+const SUSP = { porEquipa: {}, amarelosAcum: {}, totalVermelhos: 0, totalPorAmarelos: 0, jogosPerdidos: 0, lista: [] };
 
-console.log(`Lote: ${JOGOS} jogos de ${MINUTOS} min em ${WORKERS} processos...`);
+function aoJogo(m) {
+    if (m.tipo !== 'jogo') return;
+    resultados.push(m.jogo);
+    const feitos = resultados.length;
+    /*
+    BARRA DE PROGRESSO com percentagem, tempo decorrido e tempo que falta — um lote demora dezenas de minutos
+    e sem isto parece que o computador travou. Num terminal reescreve-se a mesma linha; redireccionado
+    para ficheiro escreve-se uma linha de cada vez, a cada jogo que acaba.
+    */
+    const seg = (Date.now() - inicio) / 1000;
+    const falta = feitos > 0 ? seg / feitos * (JOGOS - feitos) : 0;
+    const fmt = (t) => { t = Math.round(t); const mm = Math.floor(t / 60), r = t % 60; return mm + 'm' + String(r).padStart(2, '0') + 's'; };
+    const larg = 30, cheio = Math.round(larg * feitos / JOGOS);
+    const linha = '  [' + '#'.repeat(cheio) + '-'.repeat(larg - cheio) + '] ' + (100 * feitos / JOGOS).toFixed(0).padStart(3) + '%  ' + feitos + '/' + JOGOS + ' jogos  decorrido ' + fmt(seg) + '  falta ~' + fmt(falta);
+    if (process.stdout.isTTY) {
+        process.stdout.write(String.fromCharCode(13) + linha + (feitos === JOGOS ? String.fromCharCode(10) : ''));
+    } else {
+        console.log(linha);
+    }
+}
 
-for (const lista of porTrabalhador) {
-    if (!lista.length) continue;
-    vivos++;
-    const filho = fork(path.join(__dirname, 'lote_jogos.js'), [], {
-        env: Object.assign({}, process.env, {
-            LOTE_WORKER: JSON.stringify(lista),
-            LOTE_MINUTOS: String(MINUTOS),
-            LOTE_JOGOS: String(JOGOS)
-        }),
-        stdio: ['ignore', 'inherit', 'inherit', 'ipc']
-    });
-    filho.on('message', (m) => {
-        if (m.tipo === 'jogo') {
-            resultados.push(m.jogo);
-            const feitos = resultados.length;
-            /*
-            BARRA DE PROGRESSO com percentagem, tempo decorrido e tempo que falta — um lote demora dezenas de minutos
-            e sem isto parece que o computador travou. Num terminal reescreve-se a mesma linha (``); redireccionado
-            para ficheiro escreve-se uma linha de cada vez, a cada jogo que acaba.
-            */
-            const seg = (Date.now() - inicio) / 1000;
-            const falta = feitos > 0 ? seg / feitos * (JOGOS - feitos) : 0;
-            const fmt = (t) => { t = Math.round(t); const m = Math.floor(t / 60), r = t % 60; return `${m}m${String(r).padStart(2, '0')}s`; };
-            const larg = 30, cheio = Math.round(larg * feitos / JOGOS);
-            const linha = `  [${'#'.repeat(cheio)}${'-'.repeat(larg - cheio)}] ${(100 * feitos / JOGOS).toFixed(0).padStart(3)}%  ${feitos}/${JOGOS} jogos  decorrido ${fmt(seg)}  falta ~${fmt(falta)}`;
-            if (process.stdout.isTTY) {
-                process.stdout.write(String.fromCharCode(13) + linha + (feitos === JOGOS ? String.fromCharCode(10) : ''));
-            } else {
-                console.log(linha);
-            }
+// Corre um conjunto de jogos (indices) repartidos pelos trabalhadores e devolve uma promessa para quando acabarem.
+function correrJogos(indices, suspensos) {
+    return new Promise((resolve) => {
+        const porTrabalhador = [];
+        for (let w = 0; w < WORKERS; w++) porTrabalhador.push([]);
+        indices.forEach((i, k) => porTrabalhador[k % WORKERS].push(i));
+        let vivos = 0;
+        for (const lista of porTrabalhador) {
+            if (!lista.length) continue;
+            vivos++;
+            const filho = fork(path.join(__dirname, 'lote_jogos.js'), [], {
+                env: Object.assign({}, process.env, {
+                    LOTE_WORKER: JSON.stringify(lista),
+                    LOTE_MINUTOS: String(MINUTOS),
+                    LOTE_JOGOS: String(JOGOS),
+                    LOTE_TURNOS: String(LIGA_TURNOS),
+                    LOTE_SUSPENSOS: JSON.stringify(suspensos || {})
+                }),
+                stdio: ['ignore', 'inherit', 'inherit', 'ipc']
+            });
+            filho.on('message', aoJogo);
+            filho.on('exit', () => { if (--vivos === 0) resolve(); });
         }
     });
-    filho.on('exit', () => { if (--vivos === 0) relatorio(); });
 }
+
+console.log('Lote: ' + JOGOS + ' jogos de ' + MINUTOS + ' min em ' + WORKERS + ' processos' + (COM_SUSPENSOES ? ' (por rodadas, com suspensoes)' : '') + '...');
+
+(async function () {
+    if (!COM_SUSPENSOES) {
+        const todos = []; for (let i = 0; i < JOGOS; i++) todos.push(i);
+        await correrJogos(todos, {});
+        relatorio();
+        return;
+    }
+    const porRodada = LIGA_NOMES.length / 2;
+    const rodadas = Math.min(JOGOS / porRodada, Number(process.env.LOTE_RODADAS || 1e9));
+    let suspensos = {};   // nome da equipa -> [ids] que nao jogam a rodada seguinte
+    for (let r = 0; r < rodadas; r++) {
+        const indices = []; for (let k = 0; k < porRodada; k++) indices.push(r * porRodada + k);
+        const antes = resultados.length;
+        await correrJogos(indices, suspensos);
+        const jogosDaRodada = resultados.slice(antes);
+        // quem cumpriu: as equipas que jogaram esta rodada deixam de ter suspensos
+        for (const j of jogosDaRodada) { SUSP.jogosPerdidos += (suspensos[j.equipaA] || []).length + (suspensos[j.equipaB] || []).length; delete suspensos[j.equipaA]; delete suspensos[j.equipaB]; }
+        // e quem viu cartoes nesta rodada
+        for (const j of jogosDaRodada) {
+            for (const c of (j.cartoes || [])) {
+                const chave = c.equipa + '#' + c.id;
+                if (c.vermelho) {
+                    (suspensos[c.equipa] = suspensos[c.equipa] || []).push(c.id);
+                    SUSP.totalVermelhos++;
+                    SUSP.lista.push({ rodada: r + 1, equipa: c.equipa, nome: c.nome, motivo: c.directo ? 'vermelho directo' : '2º amarelo' });
+                } else if (c.amarelo) {
+                    SUSP.amarelosAcum[chave] = (SUSP.amarelosAcum[chave] || 0) + 1;
+                    if (SUSP.amarelosAcum[chave] >= 3) {
+                        SUSP.amarelosAcum[chave] = 0;
+                        (suspensos[c.equipa] = suspensos[c.equipa] || []).push(c.id);
+                        SUSP.totalPorAmarelos++;
+                        SUSP.lista.push({ rodada: r + 1, equipa: c.equipa, nome: c.nome, motivo: '3 amarelos' });
+                    }
+                }
+            }
+        }
+    }
+    relatorio();
+})();
 
 /*
 OS ALVOS DO FUTEBOL A SÉRIO — os mesmos do painel do ecrã
@@ -383,6 +469,8 @@ function tabelaDePercentagens(fichas) {
 }
 
 function relatorio() {
+    // Guarda os resultados de cada jogo (para analisar depois sem repetir o lote).
+    try { require('fs').writeFileSync(path.join(__dirname, 'ultimo_lote.json'), JSON.stringify(resultados.map(r => ({ i: r.i, equipaA: r.equipaA, equipaB: r.equipaB, forcaA: r.forcaA, forcaB: r.forcaB, placar: r.placar, min: r.min, stats: r.stats })))); } catch (e) { /* so conveniencia */ }
     if (!resultados.length) {
         console.log('Nenhum jogo correu.');
         process.exit(1);
@@ -477,8 +565,7 @@ function relatorio() {
                 soma[c].B += (r.folhas.B[c] || 0) * k90;
             }
         }
-        console.log('
-TODAS AS ESTATÍSTICAS (média por jogo, por 90 min de relógio; ' + nj + ' jogos; A = mandante, B = visitante):');
+        console.log('\nTODAS AS ESTATÍSTICAS (média por jogo, por 90 min de relógio; ' + nj + ' jogos; A = mandante, B = visitante):');
         console.log('  ' + 'estatística'.padEnd(46) + 'mandante'.padStart(12) + 'visitante'.padStart(12) + 'média/equipa'.padStart(14));
         for (const c of [...chaves].sort()) {
             const a = soma[c].A / (nj || 1), b = soma[c].B / (nj || 1);
@@ -499,6 +586,11 @@ TODAS AS ESTATÍSTICAS (média por jogo, por 90 min de relógio; ' + nj + ' jogo
             }
         }
         const linhas = Object.values(tab).sort((a, b) => b.pts - a.pts || (b.gp - b.gc) - (a.gp - a.gc) || b.gp - a.gp);
+        if (COM_SUSPENSOES) {
+            console.log('\nSUSPENSOES: ' + SUSP.totalVermelhos + ' vermelhos + ' + SUSP.totalPorAmarelos + ' por 3 amarelos = ' + (SUSP.totalVermelhos + SUSP.totalPorAmarelos) + ' jogadores suspensos; ' + SUSP.jogosPerdidos + ' ausencias em jogos (titular/banco).');
+            const porEq = {}; for (const x of SUSP.lista) porEq[x.equipa] = (porEq[x.equipa] || 0) + 1;
+            console.log('   por equipa: ' + Object.entries(porEq).sort((a, b) => b[1] - a[1]).map(e => e[0] + ' ' + e[1]).join(', '));
+        }
         console.log('\nCLASSIFICAÇÃO (1 jogo por par, mando alternado; jogos de ' + MINUTOS + ' min de relógio):');
         console.log('   #  time                  forca  J   V  E  D   GP  GC   SG  Pts | casa: J Pts GP-GC | fora: J Pts GP-GC');
         linhas.forEach((t, k) => {
@@ -508,6 +600,44 @@ TODAS AS ESTATÍSTICAS (média por jogo, por 90 min de relógio; ' + nj + ' jogo
         });
         const sc = linhas.reduce((a, t) => a + t.casa.gp, 0), sf = linhas.reduce((a, t) => a + t.fora.gp, 0), jn = linhas.reduce((a, t) => a + t.casa.j, 0) || 1;
         console.log('   golos por jogo: mandante ' + (sc / jn).toFixed(2) + ' | visitante ' + (sf / jn).toFixed(2));
+
+        // PRIMEIRO E SEGUNDO TURNO lado a lado, e o quanto a ordem se repete (so com 2 turnos).
+        if (LIGA_TURNOS >= 2) {
+            const porTurno = (t) => {
+                const n1 = calendarioDaLiga(LIGA_NOMES.length, 1).length;
+                const m = {};
+                for (const j of resultados) {
+                    if (!j.placar || (t === 1 ? j.i >= n1 : j.i < n1)) continue;
+                    for (const [nome, gp, gc] of [[j.equipaA, j.placar.A, j.placar.B], [j.equipaB, j.placar.B, j.placar.A]]) {
+                        const x = m[nome] || (m[nome] = { nome: nome, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0, pts: 0 });
+                        x.j++; x.gp += gp; x.gc += gc;
+                        if (gp > gc) { x.v++; x.pts += 3; } else if (gp === gc) { x.e++; x.pts += 1; } else x.d++;
+                    }
+                }
+                return Object.values(m).sort((a, b) => b.pts - a.pts || (b.gp - b.gc) - (a.gp - a.gc) || b.gp - a.gp);
+            };
+            const t1 = porTurno(1), t2 = porTurno(2);
+            if (t1.length && t1.length === t2.length) {
+            const pos1 = {}, pos2 = {};
+            t1.forEach((x, k) => pos1[x.nome] = k + 1); t2.forEach((x, k) => pos2[x.nome] = k + 1);
+            console.log('\nPRIMEIRO TURNO (19 jogos por time)                          SEGUNDO TURNO (19 jogos por time, mando trocado)');
+            console.log('   #  time                  V  E  D   GP-GC  Pts  | pos  time                  V  E  D   GP-GC  Pts');
+            for (let k = 0; k < t1.length; k++) {
+                const a = t1[k], b = t2[k];
+                const fmt = (x) => x.nome.padEnd(20) + String(x.v).padStart(3) + String(x.e).padStart(3) + String(x.d).padStart(3) + (x.gp + '-' + x.gc).padStart(8) + String(x.pts).padStart(5);
+                console.log(String(k + 1).padStart(4) + '  ' + fmt(a) + '  | ' + String(k + 1).padStart(3) + '  ' + fmt(b));
+            }
+            // Correlacao de Spearman entre as posicoes dos dois turnos e diferenca de pontos por time.
+            const nomes = Object.keys(pos1), n = nomes.length;
+            let d2 = 0, difPts = 0, iguais = 0;
+            const pts1 = {}, pts2 = {};
+            t1.forEach(x => pts1[x.nome] = x.pts); t2.forEach(x => pts2[x.nome] = x.pts);
+            for (const nome of nomes) { const d = pos1[nome] - (pos2[nome] || 0); d2 += d * d; difPts += Math.abs(pts1[nome] - (pts2[nome] || 0)); if (d === 0) iguais++; }
+            const rho = 1 - 6 * d2 / (n * (n * n - 1));
+            console.log('   mesma posicao nos dois turnos: ' + iguais + ' de ' + n + ' | correlacao das posicoes (Spearman): ' + rho.toFixed(2) + ' | diferenca media de pontos por time entre os turnos: ' + (difPts / n).toFixed(1));
+            console.log('   (o mesmo time faz em media ' + (nomes.reduce((a, x) => a + pts1[x], 0) / n).toFixed(1) + ' pontos no 1o turno e ' + (nomes.reduce((a, x) => a + pts2[x], 0) / n).toFixed(1) + ' no 2o)');
+            }
+        }
     }
     // Resultados: A joga "em casa". So tem sentido em jogos de ~90 min.
     {
