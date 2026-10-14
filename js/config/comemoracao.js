@@ -40,9 +40,9 @@ const ComemoracaoGol = {
         // A corrida até ao ponto de partida: para o lado da linha lateral mais perto, um pouco para trás.
         corrida: { min: 5.0, max: 12.0, margemLinha: 5.0, recuoDaBaliza: 0.6, velocidade: 7.5, prazo: 6.0 },
         // O deslize em si.
-        velocidadeDeslize: 7.0,   // m/s à entrada; cai ao longo do deslize
+        velocidadeDeslize: 8.5,   // m/s à entrada; cai ao longo do deslize
         tQueda: 0.60,             // quadro 4: vai-se abaixando a correr
-        tDeslize: 1.35,           // quadros 3 e 2: desliza de joelhos
+        tDeslize: 1.9,            // quadros 3 e 2: desliza de joelhos
         tBracos: 0.45,            // quadro 1: os braços sobem
         tManter: 2.2,             // fica assim
         tLevantar: 0.8,           // e levanta-se

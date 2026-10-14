@@ -2714,8 +2714,10 @@ class PlayerFSM {
                             bracoEx: 0, bracoEz: 0.1, cotoveloE: -0.1, bracoDx: 0, bracoDz: 0.1, cotoveloD: -0.1
                         };
                         let P, baixo;
-                        if (t < t1) { P = this._poseMistura(DE_PE, PJ.queda, suave(t / t1)); baixo = t / t1; }
-                        else if (t < t2) { P = this._poseMistura(PJ.queda, PJ.deslize, suave((t - t1) / (0.6 * J.tDeslize))); baixo = 1; }
+                        // Primeiro DE JOELHOS (queda: a descer e a sentar nos calcanhares), so depois escorrega.
+                        if (t < 0.5 * t1) { P = this._poseMistura(DE_PE, PJ.queda, suave(t / (0.5 * t1))); baixo = t / t1; }
+                        else if (t < t1) { P = this._poseMistura(PJ.queda, PJ.deslize, suave((t - 0.5 * t1) / (0.5 * t1))); baixo = t / t1; }
+                        else if (t < t2) { P = PJ.deslize; baixo = 1; }
                         else if (t < t3) { P = this._poseMistura(PJ.deslize, PJ.bracosAcima, suave((t - t2) / J.tBracos)); baixo = 1; }
                         else if (t < t4) { P = PJ.bracosAcima; baixo = 1; }
                         else if (t < t5) { const u = suave((t - t4) / J.tLevantar); P = this._poseMistura(PJ.bracosAcima, DE_PE, u); baixo = 1 - u; }
@@ -2723,8 +2725,9 @@ class PlayerFSM {
                         this._escreverPoseComemorar(P);
 
                         // O deslize: a velocidade cai ate parar, sempre na direccao da corrida; nao sai da linha lateral.
-                        if (t < t2) {
-                            const u = Math.min(1, t / t2);
+                        // Parado na queda; o escorregao so comeca com os joelhos no relvado (t1).
+                        if (t >= t1 && t < t2) {
+                            const u = Math.min(1, (t - t1) / (t2 - t1));
                             const v = J.velocidadeDeslize * Math.pow(1 - u, 1.6);
                             p.velocity.set(c.dx * v, 0, c.dz * v);
                             if (Math.abs(p.model.position.x) > J.limiteLateral && p.model.position.x * c.dx > 0) {

@@ -2055,6 +2055,38 @@ function direccaoDoCarrinho(p) {
     return 'a_cortar';
 }
 
+/*
+O DEFENSOR ESTA ONDE O CARRINHO FUNCIONA? (SlideTackleModel.alinhamentoMax)
+Carrinho frontal (dentro do cone, a vir de frente ao atacante) vale sempre. Os outros deslizam a 90 graus da linha
+bola->baliza: so servem a quem tem a bola quase em cima dessa perpendicular, senao o deslize passa ao lado.
+*/
+function carrinhoAlinhado(p, alvo) {
+    const S = (typeof SlideTackleModel !== 'undefined') ? SlideTackleModel : null;
+    if (!S || typeof S.alinhamentoMax !== 'number' || !alvo || !alvo.model) return true;
+    const bola = Match.ball.position;
+    // A frente do defensor, virado para a bola (como no direccaoDoCarrinho).
+    let fx = bola.x - p.model.position.x, fz = bola.z - p.model.position.z;
+    const nf = Math.hypot(fx, fz);
+    if (nf < 1e-6) return true;
+    fx /= nf; fz /= nf;
+    let ax, az;
+    if (alvo.velocity && alvo.velocity.lengthSq() > 0.1) { ax = alvo.velocity.x; az = alvo.velocity.z; }
+    else { _v3.set(0, 0, 1).applyQuaternion(alvo.model.quaternion); ax = _v3.x; az = _v3.z; }
+    const na = Math.hypot(ax, az);
+    const cone = (typeof S.anguloFrontalGraus === 'number') ? S.anguloFrontalGraus : 30;
+    if (na > 1e-6 && (fx * -ax + fz * -az) / na >= Math.cos(cone * Math.PI / 180)) return true;
+
+    const golZ = (typeof alvo.targetGoalZ === 'number') ? alvo.targetGoalZ : -p.targetGoalZ;
+    let lx = -bola.x, lz = golZ - bola.z;
+    const nl = Math.hypot(lx, lz);
+    if (nl < 1e-6) return true;
+    lx /= nl; lz /= nl;
+    const rx = bola.x - p.model.position.x, rz = bola.z - p.model.position.z;
+    const ao = Math.abs(rx * lx + rz * lz);          // desvio ao longo da linha
+    const atravessa = Math.abs(rx * lz - rz * lx);   // o que tem de deslizar de lado
+    return ao <= S.alinhamentoMax && atravessa >= S.distPerpMin && atravessa <= S.distPerpMax;
+}
+
 function actSlideTackle(ctx) {
     const p = ctx.p;
     /*
@@ -4507,6 +4539,8 @@ const PlayerBT = sel('PlayerRoot',
 
                     // Carrinho (1.4 a 3.0 m): na própria área não sai de todo.
                     if (naPropriaArea && CautelaNaArea.semCarrinho) return false;
+                    // Fora do cone frontal só se atira quem está na perpendicular à linha bola-baliza.
+                    if (dist >= 1.4 && !carrinhoAlinhado(ctx.p, carrier)) return false;
 
                     // Se estiver no alcance do carrinho (1.4 a 3.0m), tem uma chance por frame.
                     // A probabilidade escala com o atributo DEF e com a distância (quanto mais perto, mais provável).

@@ -75,7 +75,7 @@ const Comemoracao = {
         dx /= l; dz /= l;
 
         // Onde vai parar: o deslize percorre ~ v0 * tDeslize / 2.6 (a velocidade cai com expoente 1.6).
-        const desliza = J.velocidadeDeslize * (J.tQueda + J.tDeslize) / 2.6;
+        const desliza = J.velocidadeDeslize * J.tDeslize / 2.6;
         const E = new THREE.Vector3(
             THREE.MathUtils.clamp(S.x + dx * desliza, -J.limiteLateral, J.limiteLateral), ALTURA_BASE_Y, S.z + dz * desliza);
 

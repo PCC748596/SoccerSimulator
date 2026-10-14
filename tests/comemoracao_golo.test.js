@@ -65,7 +65,7 @@ ok(entrou, 'o autor nunca entrou no estado COMEMORAR');
 ok(joelhoMax > 1.3, 'o joelho não dobrou para o deslize: ' + joelhoMax);
 ok(bracoMax > 2.4, 'os braços não subiram: ' + bracoMax);
 ok(corrida >= 4, 'o autor quase não correu até ao ponto de partida: ' + corrida.toFixed(1) + ' m');
-ok(deslizou >= 2.5 && deslizou <= 7, 'o deslize anda ' + deslizou.toFixed(1) + ' m (esperado 3-6)');
+ok(deslizou >= 4.5 && deslizou <= 8, 'o deslize anda ' + deslizou.toFixed(1) + ' m (esperado 3-6)');
 ok(apoios >= 1, 'nenhum companheiro correu a festejar com ele');
 ok(apoios <= ComemoracaoGol.apoio.max, 'mais companheiros do que o máximo: ' + apoios);
 ok(nan === 0, 'posições inválidas');

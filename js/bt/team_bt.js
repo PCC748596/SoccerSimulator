@@ -2800,6 +2800,21 @@ const PosicionamentoAI = {
         }
 
         /*
+        O CENTRAL CONDUZ, OS MEIAS SOBEM COM ELE (BlockShape.meiasComBola.aSeguirODefesa): com um defesa na bola o meia
+        central fica no minimo `lead` m a frente dele. Depois do tecto acima (que o segurava atras) e antes do corte do
+        fora-de-jogo, que continua a mandar.
+        */
+        {
+            const SD = (typeof BlockShape !== 'undefined' && BlockShape.meiasComBola) ? BlockShape.meiasComBola.aSeguirODefesa : null;
+            const port = (typeof Match !== 'undefined') ? Match.ballCarrier : null;
+            if (SD && SD.activo && port && port !== p && port.team === p.team && port.role === 'def' && port.model &&
+                p.role === 'mid' && SD.posicoes.indexOf(p.pos) >= 0 && !p.hasBall && Match.state === 'PLAY') {
+                const piso = port.model.position.z * p.dirZ + SD.lead;
+                if (finalZ * p.dirZ < piso) finalZ = piso * p.dirZ;
+            }
+        }
+
+        /*
         Respeito ao limite legal de fora-de-jogo (offside) mesmo com inércia.
 
         O limite é o que ELE julga que é: `offsideBias` é o erro de leitura da

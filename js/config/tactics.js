@@ -676,7 +676,12 @@ const BlockShape = {
     (portador, receptor, quem vai a bola). Os alas (RM/LM) ficam de fora. `activo: false` desliga.
     */
     meiasCentrais: { activo: true, xMax: 12.0 },
-    meiasComBola: { activo: true, tercoDefensivo: -17.5, bolaAtaque: 8.0, frenteDefesa: 9.0, frenteMeio: 16.0, frenteAtaque: 28.0 },
+    /*
+    `aSeguirODefesa`: com um DEFESA (nao o GR) a conduzir a bola, os meias centrais nao ficam atras dele — o central
+    passava-os, abria-se um buraco no meio-campo e o passe seguinte saia nos pes do adversario. Cada meia (CM/DM/AM)
+    e empurrado para `lead` m a frente do portador, no minimo (so ate ao limite legal de fora-de-jogo).
+    */
+    meiasComBola: { aSeguirODefesa: { activo: true, lead: 7.0, posicoes: ['CM', 'DM', 'CDM', 'AM', 'CAM'] }, activo: true, tercoDefensivo: -17.5, bolaAtaque: 8.0, frenteDefesa: 9.0, frenteMeio: 16.0, frenteAtaque: 28.0 },
     folgaAlemDaBola: 1.5,
     recuamAlemDaBola: ['def', 'mid'],
 

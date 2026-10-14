@@ -223,6 +223,18 @@ const SlideTackleModel = {
     =========================================================================
     */
     anguloFrontalGraus: 30,
+    /*
+    O DEFENSOR TEM DE ESTAR NA PERPENDICULAR PARA SE ATIRAR. Relato: carrinhos "completamente fora da realidade".
+    O deslize vai a 90 graus da linha bola->baliza (ver acima), mas o carrinho era decidido a 1.4-3 m do portador
+    estivesse o defensor onde estivesse — atras ou adiante da bola ao longo da linha. Deslizar a direito a partir
+    ai passa ao lado da bola (a falta de alinhamento era o desvio). Agora, fora do cone frontal, so se atira
+    quem tem a bola quase em cima da perpendicular a ele: no maximo `alinhamentoMax` m desviado ao longo da
+    linha, e a `distPerpMin`..`distPerpMax` m de lado (o que o deslize consegue cobrir). Os outros continuam a
+    correr (ate chegar a posicao) ou desarmam de pe.
+    */
+    alinhamentoMax: 1.0,
+    distPerpMin: 0.8,
+    distPerpMax: 3.2,
 
     lancamento: 0.15,
     deslize: 0.95,

@@ -1690,8 +1690,8 @@ const GoalkeeperDive = {
         // Com um defesa dele a menos disto da bola, é o defesa que disputa.
         defesaPerto: 1.5,
         pesoGK: 0.40,
-        tAgachar: 0.12,
-        tVoo: 0.25,
+        tAgachar: 0.28,            // F1 -> F2: da passada ao joelho no relvado
+        tVoo: 0.30,                // F2 -> F3: do joelho ao tombo de lado
         tDeslize: 0.35,
         tChao: 0.55,
         tLevantar: 0.55,
