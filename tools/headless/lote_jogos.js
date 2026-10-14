@@ -186,6 +186,9 @@ if (process.env.LOTE_WORKER) {
         números diferentes para a mesma coisa.
         */
         jogo.ficha = MatchStats.porJogo(Match.tempoDeJogo);
+        // O processo que escreve o relatorio nao carrega o jogo: leva daqui o ritmo do relogio (ver `x real/min`).
+        jogo.timeScale = MatchDuration.timeScale;
+        jogo.razoes = MatchStats.RAZOES;
         jogo.stats = {
             golos: A.remates.golos + B.remates.golos,
             remates: A.remates.tentados + B.remates.tentados,
@@ -363,9 +366,10 @@ function relatorio() {
     const seg = ((Date.now() - inicio) / 1000).toFixed(0);
 
     console.log(`\n=== ${n} jogos de ${MINUTOS} min (${seg}s de relógio) ===`);
-    console.log('por 90 minutos, média dos jogos:');
+    const TS = resultados[0].timeScale || 1, RAZOES = resultados[0].razoes || [];
+    console.log('por 90 minutos de RELÓGIO, média dos jogos  (90 min de relógio = ' + (90 / TS).toFixed(1) + ' min simulados; "x real/min" = quantas vezes o ritmo real por minuto):');
     console.log('');
-    console.log('                          medido       alvo   % do alvo');
+    console.log('                          medido       alvo   % do alvo   x real/min');
     for (const l of tabelaDePercentagens(resultados.map(r => r.ficha).filter(Boolean))) {
         const rot = l.m.rotulo.padEnd(22);
         if (l.medido === null || l.medido === undefined) {
@@ -377,7 +381,9 @@ function relatorio() {
         const pct = (l.pct === null || l.pct === undefined) ? '—'.padStart(10) : (l.pct.toFixed(0) + '%').padStart(10);
         const nota = l.m.provisorio ? '   (sem alvo acordado)'
             : (l.sinal === 'ok' ? '   ok' : (l.sinal === '~' ? '   ~' : (l.sinal === 'X' ? '   <-- fora' : '')));
-        console.log('  ' + rot + medido + alvo + pct + nota);
+        const vez = (RAZOES.indexOf(l.m.campo) >= 0 || !l.m.alvo) ? null : (l.medido / l.m.alvo) * TS;
+        const vezTxt = (vez === null) ? '—'.padStart(10) : (vez.toFixed(1) + 'x').padStart(10);
+        console.log('  ' + rot + medido + alvo + pct + vezTxt + nota);
     }
     // Resultados: A joga "em casa". So tem sentido em jogos de ~90 min.
     {

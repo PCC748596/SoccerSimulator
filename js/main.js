@@ -167,7 +167,7 @@ function updatePainelEstatisticas(deltaReal, forcar) {
         const min = Math.floor(segundos / 60), seg = Math.floor(segundos % 60);
         const txt = `${min}'${String(seg).padStart(2, '0')} jogados`;
         relogio.textContent = s.escalado
-            ? `${txt} — extrapolado para 90'`
+            ? `${txt} — extrapolado para 90' (90' de relogio = ${MatchStats.minutosFisicosDeUmJogo().toFixed(1)} min simulados)`
             : `${txt} — pouco jogo para extrapolar`;
     }
 
@@ -191,8 +191,11 @@ function updatePainelEstatisticas(deltaReal, forcar) {
             ? '—'
             : m.alvo.toFixed(m.casas) + (m.sufixo || '') + (m.provisorio ? '?' : '');
 
+        // O ritmo por minuto fisico: quantas vezes o real (ver MatchStats.vezesORitmoReal).
+        const vezes = (valor === null || valor === undefined) ? null : MatchStats.vezesORitmoReal(m.campo, valor, m.alvo);
+        const ritmo = (vezes === null) ? '—' : vezes.toFixed(1) + '×';
         linhas.push(`<tr class="${classe}"><td>${m.rotulo}</td>` +
-            `<td>${medido}</td><td>${alvo}</td></tr>`);
+            `<td>${medido}</td><td>${alvo}</td><td title="quantas vezes o ritmo real por minuto de simulacao">${ritmo}</td></tr>`);
     }
     tbody.innerHTML = linhas.join('');
 }

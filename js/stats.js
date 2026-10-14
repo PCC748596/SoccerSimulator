@@ -918,6 +918,33 @@ const MatchStats = {
     =========================================================================
     */
     MINIMO_PARA_ESCALAR: 60,
+
+    /*
+    =========================================================================
+    O RITMO POR MINUTO FISICO — a outra leitura dos mesmos numeros
+    =========================================================================
+    O `porJogo` normaliza pelo RELOGIO DO JOGO: 90 minutos de relogio. Mas o relogio anda `MatchDuration.timeScale`
+    (~4.5) vezes mais depressa que a simulacao, e a fisica (velocidades, tempos de voo) e a de segundos reais: 90
+    minutos de relogio sao so ~20 minutos de jogo a sério. Os totais por jogo batem com o futebol real, mas CADA MINUTO
+    FISICO tem mais eventos do que um minuto real: medido (lote 60/20), golos ~5x, faltas ~3.5x, finalizacoes ~3x,
+    passes ~1.5x. (Pedido: "o jogo roda mais rapido por minuto que na vida real; as estatisticas tem de mostrar isso".)
+
+    `vezesORitmoReal` = quantas vezes o ritmo real por minuto: (medido / alvo) * timeScale, ja que os dois sao por 90.
+    Para as razoes (percentagens, xG por remate) nao ha ritmo: devolve null.
+    `minutosFisicosDeUmJogo` = quantos minutos de simulacao tem um jogo de 90 de relogio.
+    =========================================================================
+    */
+    RAZOES: ['pctPassesCertos', 'pctRematesNoAlvo', 'pctPosseCasa', 'xgPorRemate'],
+    minutosFisicosDeUmJogo: function () {
+        const ts = (typeof MatchDuration !== 'undefined' && MatchDuration.timeScale) ? MatchDuration.timeScale : 1;
+        return 90 / ts;
+    },
+    vezesORitmoReal: function (campo, medido, alvo) {
+        if (this.RAZOES.indexOf(campo) >= 0) return null;
+        if (typeof medido !== 'number' || !isFinite(medido) || !alvo) return null;
+        const ts = (typeof MatchDuration !== 'undefined' && MatchDuration.timeScale) ? MatchDuration.timeScale : 1;
+        return (medido / alvo) * ts;
+    },
     SEGUNDOS_DE_UM_JOGO: 90 * 60,
 
     porJogo: function (segundosJogados) {
