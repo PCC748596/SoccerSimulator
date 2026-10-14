@@ -166,8 +166,8 @@ grupo.children.forEach((g, i) => {
 /* --- A lança sobe e desce com a bola ---------------------------------- */
 {
     const G = GruaDeCamera;
-    if (G.alturaMin !== 2.0 || G.alturaMax !== 6.0) {
-        erro(`altura pedida 2-6 m, config diz ${G.alturaMin}-${G.alturaMax}`);
+    if (G.alturaMin !== 2.0 || G.alturaMax !== 7.0) {
+        erro(`altura pedida 2-7 m (max +1 m), config diz ${G.alturaMin}-${G.alturaMax}`);
     }
 
     // Deixa assentar: a subida é suavizada ao tempo, de propósito.

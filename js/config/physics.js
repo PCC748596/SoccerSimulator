@@ -1374,7 +1374,7 @@ const GruaDeCamera = {
     metros por frame, e uma jib não se mexe assim.
     */
     alturaMin: 2.0,
-    alturaMax: 6.0,
+    alturaMax: 7.0,           // +1 m (era 6.0)
     distanciaMin: 16.5,
     distanciaMax: 75.0,
     suavizacao: 0.06,

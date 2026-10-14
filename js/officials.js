@@ -126,10 +126,15 @@ const RefereeModel = {
         panoZonaMorta: 0.15, panoSuavizacao: 0.12,
         // A correr o pano muda de lado conforme a ponta da haste vai para a frente ou para tras (m/s ao longo do corpo).
         panoVelMin: 0.4,
+        // O pano pende para baixo quando a haste esta esticada: |componente vertical da haste| abaixo disto (acima, e quase vertical).
+        panoPendeAte: 0.9,
         // APONTAR a bandeira (canto: para o canto; tiro de meta: para a quina da pequena area): braco quase horizontal.
         apontarX: -1.45, apontarZ: -0.06, apontarCotovelo: -0.05,
         // O antebraco/haste aponta ~17 graus para fora do ombro (medido): correccao em rad somada ao azimute.
-        apontarCorrecao: -0.30
+        apontarCorrecao: -0.30,
+        // Canto e tiro de meta: fica no sitio com a bandeira apontada `tApontarMax` s (ou ate o lance recomecar) e volta
+        // a vigiar a linha de impedimento (pedido: uns 7 s).
+        tApontarMax: 7.0
     },
 
     /*
@@ -1255,6 +1260,14 @@ const Officials = {
         }
         // Direccao desejada do pano no mundo, tirada a componente ao longo da haste.
         v.w.copy(v.f).multiplyScalar(o.panoLado);
+        /*
+        COM A HASTE ESTICADA (apontar / horizontal) O PANO PENDE PARA BAIXO — pedido: *"quando o bandeirinha estica
+        a haste da bandeira o pano tem que ficar para baixo"*. A direcção do pano é o "para baixo" do mundo tirada a
+        componente ao longo da haste; com a haste quase vertical (erguida) isso não existe e fica a regra do vento.
+        */
+        if (o.bandeira && Math.abs(v.a.y) < B.panoPendeAte) {
+            v.w.set(0, -1, 0);
+        }
         v.w.addScaledVector(v.a, -v.w.dot(v.a));
         if (v.w.lengthSq() < 1e-4) return;
         v.w.normalize();
@@ -1339,7 +1352,7 @@ const Officials = {
             // Apontar: erguer -> manter (horizontal) ate o lance recomecar -> guardar.
             if (b.fase === 'erguer' && b.t >= B.tErguer) { b.fase = 'horizontal'; b.t = 0; }
             else if (b.fase === 'horizontal' &&
-                ((typeof Match !== 'undefined' && Match.state !== b.estado) || b.t >= B.tHorizontalMax)) { b.fase = 'guardar'; b.t = 0; }
+                ((typeof Match !== 'undefined' && Match.state !== b.estado) || b.t >= (B.tApontarMax || B.tHorizontalMax))) { b.fase = 'guardar'; b.t = 0; }
             else if (b.fase === 'guardar' && b.t >= B.tGuardar) { o.bandeira = null; return; }
         } else if (b.fase === 'erguer' && b.t >= B.tErguer) { b.fase = 'segurar'; b.t = 0; }
         else if (b.fase === 'segurar' && b.t >= B.tSegurar) { b.fase = 'baixar'; b.t = 0; }
