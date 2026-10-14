@@ -464,20 +464,50 @@ Object.assign(Match, {
         e, nas vistas laterais, a camara anda ao longo da linha com ele — a bola
         e a baliza cabem no mesmo plano. Ver CameraZoom.faltaDirectaDist.
         */
+        const ZF = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
+        const dtFalta = (typeof window.lastFrameDelta === 'number') ? window.lastFrameDelta : (1 / 60);
+        let faltaAplica = false;
         if (window.cameraMode !== 'topdown' && window.cameraMode !== 'cinema' && (this.state === 'FREE_KICK' || this.state === 'CORNER_KICK') && this.setPieceTaker) {
-            const ZF = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
             const dMax = (ZF && ZF.faltaDirectaDist) || 35.0;
             const golZ = this.setPieceTaker.targetGoalZ;
             // No canto vale sempre (a bola esta na bandeirola, ~34 m do centro da baliza).
             if (typeof golZ === 'number' && (this.state === 'CORNER_KICK' ||
                 Math.hypot(foco.x, golZ - foco.z) <= dMax)) {
+                faltaAplica = true;
+                this._faltaGolZ = golZ;
+            }
+        }
+        /*
+        O ENQUADRAMENTO ENTRA E SAI DEVAGAR. Relato: *"a camera se posiciona no meio do caminho entre a bola e o gol,
+        mas assim que a falta e cobrada volta instantaneamente para a posicao normal"*. Era um interruptor: no frame
+        em que o estado deixava de ser FREE_KICK/CORNER_KICK o alvo saltava para o normal. Agora ha um peso `_faltaK`
+        (0..1) que sobe em `faltaCamEntrada` s e desce em `faltaCamSaida` s (suavizado), e o ponto medio continua a ser
+        calculado com a bola VIVA e a baliza que tinha, por isso na saida a camera larga o meio-caminho aos poucos
+        enquanto acompanha a bola. Fora dos modos que o usam, o peso cai a zero logo.
+        */
+        {
+            const tIn = (ZF && ZF.faltaCamEntrada) || 0.6, tOut = (ZF && ZF.faltaCamSaida) || 2.5;
+            const modoOk = (window.cameraMode !== 'topdown' && window.cameraMode !== 'cinema');
+            const k0 = this._faltaK || 0;
+            let k = k0;
+            if (!modoOk) k = 0;
+            else if (faltaAplica) k = Math.min(1, k0 + dtFalta / tIn);
+            else k = Math.max(0, k0 - dtFalta / tOut);
+            this._faltaK = k;
+            if (k > 0 && typeof this._faltaGolZ === 'number') {
+                const w = k * k * (3 - 2 * k);
                 const mx = foco.x * 0.5;
-                const mz = (foco.z + golZ) * 0.5;
+                const mz = (foco.z + this._faltaGolZ) * 0.5;
                 if (window.cameraMode === 'grua') {
-                    lookTarget.set(mx, foco.y, mz);
+                    lookTarget.x += (mx - lookTarget.x) * w;
+                    lookTarget.y += (foco.y - lookTarget.y) * w;
+                    lookTarget.z += (mz - lookTarget.z) * w;
                 } else {
-                    targetPos.z += mz - lookTarget.z;
-                    lookTarget.set(mx, foco.y, mz);
+                    const lz0 = lookTarget.z;
+                    targetPos.z += (mz - lz0) * w;
+                    lookTarget.x += (mx - lookTarget.x) * w;
+                    lookTarget.y += (foco.y - lookTarget.y) * w;
+                    lookTarget.z = lz0 + (mz - lz0) * w;
                 }
             }
         }

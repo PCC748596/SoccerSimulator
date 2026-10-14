@@ -8271,8 +8271,19 @@ class FootballPlayer {
             — ficam no `playerKick`: nao sao tiros de meta, nao ha bola parada
             nem corrida de aproximacao.
             */
-            this.gkKickClipNome = 'goalKick';
-            this.gkKickAction = new ActionState('goalKick', {
+            /*
+            O GESTO SEGUE A DECISAO. Relato: *"se o goleiro vai dar um passe curto tem que executar a animacao de passe
+            curto; se for chutar para a frente, a do lancamento. Esta dando bico em todo tiro de meta"*. Era sempre o
+            `goalKick` (o bico) e a decisao (GoalKickPlan: curto a um defesa, ou longo a um meio/avancado) so se tomava
+            no contacto, depois do gesto escolhido. Agora decide-se aqui: curto = o gesto do PASSE; longo = o do
+            LANCAMENTO (o mesmo dos jogadores); sem plano (sem receptor) fica o pontape de sempre. No contacto a
+            velocidade recalcula-se com o MESMO modo (`gkModoTM`), porque os colegas andaram entretanto.
+            */
+            const planoInicial = this.planearTiroDeMeta();
+            this.gkModoTM = planoInicial ? planoInicial.modo : undefined;
+            const nomeGesto = (this.gkModoTM === 'curto') ? 'pass' : (this.gkModoTM === 'longo') ? 'lancamento' : 'goalKick';
+            this.gkKickClipNome = nomeGesto;
+            this.gkKickAction = new ActionState(nomeGesto, {
                 onContact: () => {
                     // So o tiro de meta e tiro de meta: a mesma cadeia serve a
                     // falta na propria area, e essa nao o anuncia.
@@ -9462,9 +9473,13 @@ class FootballPlayer {
                 `PlayerKickClip`, que e tambem o da falta e do penalti. Quem
                 arrancou o gesto deixou o nome em `gkKickClipNome`.
                 */
-                const ehTiroDeMeta = (this.gkKickClipNome === 'goalKick');
-                const K = ehTiroDeMeta
-                    ? amostrarClipGoalKick(normK)
+                const nomeClip = this.gkKickClipNome;
+                const ehTiroDeMeta = (nomeClip === 'goalKick');
+                const ehPasse = (nomeClip === 'pass');
+                const ehLancamento = (nomeClip === 'lancamento');
+                const K = ehTiroDeMeta ? amostrarClipGoalKick(normK)
+                    : ehPasse ? amostrarClipPasse(normK)
+                    : ehLancamento ? amostrarClipLancamento(normK)
                     : amostrarClipPlayerKick(normK);
 
                 /*
@@ -9481,12 +9496,16 @@ class FootballPlayer {
                 */
                 const B = this.gkKickBlend;
                 if (B) {
-                    B.w = (typeof K.avanco === 'number') ? K.avanco : 1;
+                    // O passe nao traz `avanco`: o corpo chega ao pe de apoio suavemente, ate ao contacto.
+                    B.w = (typeof K.avanco === 'number') ? K.avanco
+                        : (ehPasse ? Math.min(1, normK / 0.35) * Math.min(1, normK / 0.35) * (3 - 2 * Math.min(1, normK / 0.35)) : 1);
                     gkCorpo.position.x = B.origemX + (B.plantX - B.origemX) * B.w;
                     gkCorpo.position.z = B.origemZ + (B.plantZ - B.origemZ) * B.w;
                 }
 
                 if (ehTiroDeMeta) aplicarPoseGoalKick(gkRig, K, gkCorpo);
+                else if (ehLancamento) { escreverPoseBolaParada(gkRig, K, gkCorpo, LancamentoClip.pernaChute); }
+                else if (ehPasse) { aplicarPoseRemate(gkRig, K); gkCorpo.position.y = ALTURA_BASE_Y + (K.altura || 0); }
                 else aplicarPosePlayerKick(gkRig, K, gkCorpo);
             } else {
                 // CHUTÃO DAS MÃOS (Punt em jogo corrido)
@@ -9566,7 +9585,9 @@ class FootballPlayer {
             */
             if (isGroundKick && this.gkKickBlend && gkRig) {
                 const BP = this.gkKickBlend;
-                const clipPe = (this.gkKickClipNome === 'goalKick') ? GoalKickClip : PlayerKickClip;
+                const clipPe = (this.gkKickClipNome === 'goalKick') ? GoalKickClip
+                    : (this.gkKickClipNome === 'lancamento') ? LancamentoClip
+                    : (this.gkKickClipNome === 'pass') ? PassClip : PlayerKickClip;
                 const peApoio = (clipPe.pernaChute === 'r')
                     ? (gkRig.lBota || gkRig.lFoot) : (gkRig.rBota || gkRig.rFoot);
                 if (peApoio) {
@@ -10193,7 +10214,8 @@ class FootballPlayer {
     O DESTINO DO TIRO DE META (GoalKickPlan, config/goalkeeper.js): `{ alvo, vel: Vector3 }` ou null (pontape cego de sempre).
     Positional / Possession: passe curto a um defesa livre; os outros estilos: bola longa a um meio ou avancado livre.
     */
-    planearTiroDeMeta() {
+    // `modoForcado` ('curto' | 'longo'): o modo ja decidido quando o gesto arrancou (ver o estado 'tiro_meta').
+    planearTiroDeMeta(modoForcado) {
         const P = (typeof GoalKickPlan !== 'undefined') ? GoalKickPlan : null;
         if (!P || !P.activo || typeof Match === 'undefined' || Match.state !== 'GOAL_KICK') return null;
         const estilo = (typeof estiloDaEquipaDe === 'function') ? estiloDaEquipaDe(this.team) : null;
@@ -10219,7 +10241,7 @@ class FootballPlayer {
         const chanceCurto = chaveCurto
             ? (P.chanceCurtoEstilo !== undefined ? P.chanceCurtoEstilo : 1)
             : (P.chanceCurtoOutros !== undefined ? P.chanceCurtoOutros : 0);
-        const saiCurto = Math.random() < chanceCurto;
+        const saiCurto = modoForcado ? (modoForcado === 'curto') : (Math.random() < chanceCurto);
         // O ALVO LONGO: um ponto sorteado no rectângulo dos médios e avançados dele; o receptor é o mais perto.
         let pontoLongo = null;
         const escolherLongo = () => {
@@ -10283,7 +10305,8 @@ class FootballPlayer {
 
     kickFromGround() {
         const gGrav = BallPhysics.gravidade;
-        const planoTM = this.planearTiroDeMeta();
+        const planoTM = this.planearTiroDeMeta(this.gkModoTM);
+        this.gkModoTM = undefined;
         // Ângulo ajustado entre 25 e 35 graus
         const anguloGraus = 25 + Math.random() * 10;
         const elev = THREE.MathUtils.degToRad(anguloGraus);

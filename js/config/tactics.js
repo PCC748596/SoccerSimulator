@@ -303,6 +303,9 @@ const CameraZoom = {
     passe, nao um remate.
     */
     faltaDirectaDist: 35.0,
+    // O enquadramento da falta/canto entra em `faltaCamEntrada` s e sai em `faltaCamSaida` s (e nao de um frame para o outro).
+    faltaCamEntrada: 0.6,
+    faltaCamSaida: 2.5,
     passoRoda: 0.001        // por unidade de `deltaY` da roda do rato
 };
 if (typeof window !== 'undefined') window.CameraZoom = CameraZoom;
