@@ -976,6 +976,22 @@ function gatilhoDribleDe(p) {
 }
 if (typeof window !== 'undefined') window.gatilhoDribleDe = gatilhoDribleDe;
 
+/*
+QUEM PODE DRIBLAR NA CONDUCAO. O gatilho do CARRY nao olhava a funcao do jogador: o goleiro e os centrais tambem
+driblavam (medido: 1 drible de GK e ate 5 de CB por 45 min), contra a regra do ramo Driblar da arvore (um defesa nao
+dribla). Agora: o goleiro nunca; os defesas so se forem laterais (DribbleModel.lateraisNoUltimoTerco) e ja no
+ultimo terco. Os outros (meias, alas, avancados) como sempre.
+*/
+function podeDribleNaConducao(p) {
+    if (!p) return false;
+    if (p.role === 'gk') return false;
+    if (p.role !== 'def') return true;
+    const LT = (typeof DribbleModel !== 'undefined') ? DribbleModel.lateraisNoUltimoTerco : null;
+    if (!LT || !LT.activo || LT.posicoes.indexOf(p.pos) < 0 || !p.model) return false;
+    return p.model.position.z * p.dirZ > (typeof CAMPO_COMP === 'number' ? CAMPO_COMP : 106) / 6;
+}
+if (typeof window !== 'undefined') window.podeDribleNaConducao = podeDribleNaConducao;
+
 class PlayerFSM {
     constructor(player) {
         this.p = player; this.currentState = 'IDLE'; this.timer = 0;
@@ -2006,7 +2022,7 @@ class PlayerFSM {
                     } else if (nearestOppDist > 5) {
                         // 5 a 10 metros — toque curto
                         leadDist = CarryModel.touchShort;
-                    } else if (nearestOppDist > gatilhoDribleDe(p)) {
+                    } else if (nearestOppDist > gatilhoDribleDe(p) || !podeDribleNaConducao(p)) {
                         /*
                         0 a 5 metros — toque curto, mas A FRENTE DO PE.
 

@@ -639,7 +639,8 @@ oposto (30-45°). Se tentar ir reto, probabilidade de perda é muito maior.
 jogador e pela proximidade do adversário.
 */
 const DribbleModel = {
-    triggerDist: 3.2,     // distância para activar drible 1v1 (adversário à frente)
+    // 3.2 -> 4.4 (a mesma do ultimo terco): fora dele quase nao havia dribles — medido, +55% em 3 x 45 min. Ver `ultimoTerco.triggerDist`.
+    triggerDist: 4.4,     // distância para activar drible 1v1 (adversário à frente)
     angleSide: 0.6,       // ângulo lateral do toque (~35°, entre 30 e 45)
 
     /*
@@ -729,6 +730,20 @@ const DribbleModel = {
     `tecMin` é o "de acordo com a técnica": driblar o guarda-redes é a mais
     difícil das quatro, e um jogador sem pé não a tenta — remata.
     */
+    /*
+    FORA DO ULTIMO TERCO, O ESPACO ATRAS DO ADVERSARIO PEDE MENOS (pedido: afrouxar o 6.5 m / 3.2 m). `espacoAtras` e
+    `larguraAtras` substituem os 6.5 / 3.2 que estavam escritos a mao no `podeDriblar` — o mesmo sentido do
+    `ultimoTerco`: quanto MENOR, mais facil e o espaco contar como livre.
+    */
+    foraDoTerco: { activo: true, espacoAtras: 4.5, larguraAtras: 2.4 },
+    /*
+    LATERAIS E ALAS DRIBLAM NO ULTIMO TERCO. O `podeDriblar` cortava todo o `role: def` (o central nao dribla; tira a
+    bola da zona). Os laterais (LB / RB) sobem ate ao terco final e la o 1x1 e o gesto certo — com o campo aberto a
+    ala. `posicoes` diz quais dos defesas podem; os alas (LM, RM, LW, RW) ja nao eram cortados, e continuam a ter a
+    barreira do `ultimoTerco`.
+    */
+    lateraisNoUltimoTerco: { activo: true, posicoes: ['LB', 'RB'] },
+
     aoGuardaRedes: {
         espacoAtras: 15.0,    // metros entre o guarda-redes e a própria linha
         /*

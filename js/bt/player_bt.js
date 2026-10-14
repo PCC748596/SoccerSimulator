@@ -1680,7 +1680,9 @@ function podeDriblar(ctx) {
     // Um defesa não dribla, em zona nenhuma do campo: tira a bola da zona a
     // passar. Perder o duelo com a bola ao pé de um central é golo do outro
     // lado, e o ganho de um drible bem sucedido ali é nenhum.
-    if (p.role === 'def') return false;
+    const LT = (typeof DribbleModel !== 'undefined') ? DribbleModel.lateraisNoUltimoTerco : null;
+    const lateralNoTerco = !!(LT && LT.activo && noUltimoTerco && LT.posicoes.indexOf(p.pos) >= 0);
+    if (p.role === 'def' && !lateralNoTerco) return false;
 
     // Verificar se há adversário próximo à sua frente bloqueando a passagem
     // No último terço a janela de distância para engajar o drible é mais ampla (até 5.5m)
@@ -1708,8 +1710,9 @@ function podeDriblar(ctx) {
     const oppZ = oppProximo.model.position.z;
     const oppX = oppProximo.model.position.x;
     let espacoAtrasLivre = true;
-    const distAtrasTol = noUltimoTerco ? UT.espacoAtras : 6.5;
-    const dxAtrasTol = noUltimoTerco ? UT.larguraAtras : 3.2;
+    const FT = (typeof DribbleModel !== 'undefined') ? DribbleModel.foraDoTerco : null;
+    const distAtrasTol = noUltimoTerco ? UT.espacoAtras : ((FT && FT.activo) ? FT.espacoAtras : 6.5);
+    const dxAtrasTol = noUltimoTerco ? UT.larguraAtras : ((FT && FT.activo) ? FT.larguraAtras : 3.2);
 
     for (const opp2 of ctx.opponents) {
         if (opp2 === oppProximo || opp2.role === 'gk') continue;
