@@ -130,6 +130,9 @@ const RefereeModel = {
         panoPendeAte: 0.9,
         // APONTAR a bandeira (canto: para o canto; tiro de meta: para a quina da pequena area): braco quase horizontal.
         apontarX: -1.45, apontarZ: -0.06, apontarCotovelo: -0.05,
+        // A haste aponta para o alvo (canto / quina da pequena area) com este angulo ABAIXO da horizontal (graus). Pedido:
+        // *"na sinalizacao do corner o bandeirinha aponta a bandeira para o corner num angulo de 45 graus para baixo"*.
+        apontarGrausAbaixo: 45,
         // O antebraco/haste aponta ~17 graus para fora do ombro (medido): correccao em rad somada ao azimute.
         apontarCorrecao: -0.30,
         // Canto e tiro de meta: fica no sitio com a bandeira apontada `tApontarMax` s (ou ate o lance recomecar) e volta
@@ -1318,6 +1321,49 @@ const Officials = {
         o.bandeira = { fase: 'erguer', t: 0, pose: null };
     },
 
+    /*
+    OS ANGULOS DO OMBRO QUE APONTAM A HASTE. A haste e o eixo -y da mao, que tem o seu proprio rolamento (rest z) e
+    fica ~17 graus para fora do antebraco (medido), por isso a conta nao e a do braco esticado: calcula-se a direccao
+    da haste no espaco do CORPO para cada (x, z) do ombro, com a mesma ordem de Euler do rig (XYZ), e procura-se o par
+    que a poe no azimute `azRel` (positivo = a esquerda do corpo) e `grausAbaixo` abaixo da horizontal. Grelha e depois
+    refinamento; guardado por azimute, para nao refazer a procura todos os frames.
+    */
+    _ombroParaApontar: function (o, azRel, grausAbaixo) {
+        const chave = Math.round(azRel * 200) + ':' + grausAbaixo;
+        const cache = this._cacheOmbro || (this._cacheOmbro = {});
+        if (cache[chave]) return cache[chave];
+        const rig = o.rig;
+        // A haste no referencial da mao: -y; a mao roda em z (rest) e o cotovelo dobra em x (apontarCotovelo).
+        const u = new THREE.Vector3(0, -1, 0)
+            .applyEuler(new THREE.Euler(rig.rHand.rotation.x, rig.rHand.rotation.y, rig.rHand.rotation.z, rig.rHand.rotation.order))
+            .applyEuler(new THREE.Euler(RefereeModel.bandeira.apontarCotovelo, 0, 0, 'XYZ'));
+        const e = new THREE.Euler(0, 0, 0, 'XYZ'), d = new THREE.Vector3();
+        const alvoEl = grausAbaixo * Math.PI / 180;
+        const erro = (x, z) => {
+            e.set(x, 0, z, 'XYZ');
+            d.copy(u).applyEuler(e);
+            const el = Math.asin(Math.max(-1, Math.min(1, -d.y)));
+            const az = Math.atan2(d.x, d.z);
+            const da = Math.atan2(Math.sin(az - azRel), Math.cos(az - azRel));
+            return da * da + (el - alvoEl) * (el - alvoEl);
+        };
+        let melhor = { x: -1.0, z: 0, e: Infinity };
+        for (let x = -2.2; x <= 0.2; x += 0.05) for (let z = -1.9; z <= 1.5; z += 0.05) {
+            const v = erro(x, z); if (v < melhor.e) melhor = { x: x, z: z, e: v };
+        }
+        for (let passo = 0.025; passo > 0.0005; passo *= 0.5) {
+            for (let it = 0; it < 12; it++) {
+                let mudou = false;
+                for (const [dx, dz] of [[passo, 0], [-passo, 0], [0, passo], [0, -passo]]) {
+                    const v = erro(melhor.x + dx, melhor.z + dz);
+                    if (v < melhor.e) { melhor = { x: melhor.x + dx, z: melhor.z + dz, e: v }; mudou = true; }
+                }
+                if (!mudou) break;
+            }
+        }
+        return (cache[chave] = melhor);
+    },
+
     // A coreografia da bandeira (ver RefereeModel.bandeira). A pose tem memoria propria porque o `mover` reescreve os bracos.
     tickBandeira: function (o, dt) {
         const B = RefereeModel.bandeira;
@@ -1361,8 +1407,14 @@ const Officials = {
             ((typeof Match !== 'undefined' && Match.state !== 'FREE_KICK') || b.t >= B.tHorizontalMax)) { b.fase = 'guardar'; b.t = 0; }
         else if (b.fase === 'guardar' && b.t >= B.tGuardar) { o.bandeira = null; return; }
 
+        // Ombro (x, z) que poe a HASTE no azimute do alvo e `apontarGrausAbaixo` abaixo da horizontal (ver _ombroParaApontar).
+        let apX = B.apontarX, apZ = relBraco + (B.apontarCorrecao || 0);
+        if (b.alvo && b.estado === 'CORNER_KICK' && typeof B.apontarGrausAbaixo === 'number') {
+            const sol = this._ombroParaApontar(o, relBraco, B.apontarGrausAbaixo);
+            apX = sol.x; apZ = sol.z;
+        }
         const alvo = b.alvo && b.fase !== 'guardar'
-            ? { x: B.apontarX, z: relBraco + (B.apontarCorrecao || 0), c: B.apontarCotovelo }
+            ? { x: apX, z: apZ, c: B.apontarCotovelo }
             : (b.fase === 'erguer' || b.fase === 'segurar')
             ? { x: B.erguerX, z: B.erguerZ, c: B.erguerCotovelo }
             : (b.fase === 'guardar' ? { x: 0, z: -0.08, c: -0.3 } : { x: B.horizX, z: B.horizZ, c: B.horizCotovelo });
