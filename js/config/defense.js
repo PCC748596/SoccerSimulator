@@ -51,7 +51,7 @@ const CautelaNaArea = {
     guarda-redes com a bola nas maos fora dos choques, 24 jogos davam 0.54
     penaltis por jogo, 6 deles de contacto (1.4% dos contactos faltosos).
     */
-    factorContacto: 0.06,
+    factorContacto: 0.04,   // 0.06 -> 0.04 (14 de Outubro): penaltis 0.43 -> 0.32 por jogo (alvo 0.28)
     /*
     E NO DUELO PERDIDO (Officials.avaliarDueloPerdido). As duas primeiras
     regras cortam as TENTATIVAS de desarme na area; esta corta a fraccao das
@@ -59,7 +59,7 @@ const CautelaNaArea = {
     faltas de desarme, 11 delas penalti (9%). Com 0.30 ficavam 7 em 135 (5%)
     em 24 jogos; passou a 0.15.
     */
-    factorFaltaDuelo: 0.15
+    factorFaltaDuelo: 0.10  // 0.15 -> 0.10 (14 de Outubro)
 };
 
 if (typeof window !== 'undefined') window.CautelaNaArea = CautelaNaArea;

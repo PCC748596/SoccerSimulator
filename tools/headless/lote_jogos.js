@@ -33,12 +33,15 @@ const LIGA_NOMES = ['Palmeiras-SP', 'Grêmio-RS', 'Atlético-MG', 'Flamengo-RJ',
     'Vasco-RJ', 'Bahia-BA', 'Santos-SP', 'Goiás-GO', 'Coritiba-PR', 'América-MG'];
 const LIGA = process.env.LOTE_LIGA === '1';
 // Os pares (a, b, mandante) de uma liga de `n` times, a < b, o mandante alternando com a paridade de a + b.
-function calendarioDaLiga(n) {
+function calendarioDaLiga(n, turnos) {
     const pares = [];
     for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) pares.push({ casa: ((a + b) % 2 === 0) ? a : b, fora: ((a + b) % 2 === 0) ? b : a });
+    // Com 2 turnos (a temporada: 380 jogos) o returno repete os pares com o mando trocado.
+    if ((turnos || 1) >= 2) { const n1 = pares.length; for (let i = 0; i < n1; i++) pares.push({ casa: pares[i].fora, fora: pares[i].casa }); }
     return pares;
 }
-const JOGOS = LIGA ? calendarioDaLiga(LIGA_NOMES.length).length : Number(process.env.LOTE_JOGOS || process.argv[2] || 60);
+const LIGA_TURNOS = Number(process.env.LOTE_TURNOS || (Number(process.argv[2]) > 190 ? 2 : 1));
+const JOGOS = LIGA ? calendarioDaLiga(LIGA_NOMES.length, LIGA_TURNOS).length : Number(process.env.LOTE_JOGOS || process.argv[2] || 60);
 const MINUTOS = Number(process.env.LOTE_MINUTOS || process.argv[3] || 18);
 const WORKERS = Number(process.argv[4] || Math.min(8, Math.max(1, os.cpus().length - 2)));
 
@@ -81,6 +84,22 @@ if (process.env.LOTE_WORKER) {
     };
 
     require('./harness.js');
+    /*
+    LOTE_SET="ShotModel.factorForca=0.9;RefereeModel.faltas.escala=5.8": sobrepoe numeros da configuracao SO neste lote
+    (caminho com pontos = valor numerico, separados por ';'), para afinar sem editar ficheiros a cada tentativa.
+    */
+    if (process.env.LOTE_SET) {
+        for (const par of process.env.LOTE_SET.split(';')) {
+            const [caminho, valor] = par.split('=');
+            if (!caminho || valor === undefined) continue;
+            const partes = caminho.trim().split('.');
+            let o = global[partes[0]] || (typeof window !== 'undefined' ? window[partes[0]] : undefined);
+            if (!o) { try { o = (0, eval)(partes[0]); } catch (e) { o = undefined; } }
+            if (!o) { console.error('LOTE_SET: nao encontrei ' + partes[0]); continue; }
+            for (let k = 1; k < partes.length - 1; k++) o = o[partes[k]];
+            o[partes[partes.length - 1]] = Number(valor);
+        }
+    }
     // Sobreposicoes para A/B sem tocar na configuracao: LOTE_VEL (maximo m/s), LOTE_SEMMEIAS=1 (desliga o tecto dos meias), LOTE_SEMATERRAGEM=1.
     if (process.env.LOTE_VEL) { VelocidadeHumana.maximo = Number(process.env.LOTE_VEL); VelocidadeHumana.amplitude = Number(process.env.LOTE_VEL) * (2.2 / 9.5); }
     if (process.env.LOTE_SEMMEIAS === '1') BlockShape.meiasComBola.activo = false;
@@ -145,7 +164,7 @@ if (process.env.LOTE_WORKER) {
         let nomeA = 'genérica A', nomeB = 'genérica B', forcaA = null, forcaB = null;
         let ligaA = null, ligaB = null;
         if (LIGA && typeof SquadsData !== 'undefined' && SquadsData.equipas) {
-            const par = calendarioDaLiga(LIGA_NOMES.length)[i];
+            const par = calendarioDaLiga(LIGA_NOMES.length, LIGA_TURNOS)[i];
             ligaA = SquadsData.equipas.find(e => e.nome === LIGA_NOMES[par.casa]);
             ligaB = SquadsData.equipas.find(e => e.nome === LIGA_NOMES[par.fora]);
             if (!ligaA || !ligaB) throw new Error('equipa da liga nao encontrada: ' + LIGA_NOMES[par.casa] + ' / ' + LIGA_NOMES[par.fora]);
@@ -231,6 +250,9 @@ if (process.env.LOTE_WORKER) {
         */
         jogo.ficha = MatchStats.porJogo(Match.tempoDeJogo);
         // O processo que escreve o relatorio nao carrega o jogo: leva daqui o ritmo do relogio (ver `x real/min`).
+        // TODOS os contadores do MatchStats (folhas numericas), para a tabela completa no fim.
+        const folhas = (o, pre, out) => { for (const k in o) { const v = o[k]; if (typeof v === 'number' && isFinite(v)) out[pre + k] = v; else if (v && typeof v === 'object' && !Array.isArray(v)) folhas(v, pre + k + '.', out); } return out; };
+        jogo.folhas = { A: folhas(MatchStats.TeamA, '', {}), B: folhas(MatchStats.TeamB, '', {}) };
         jogo.timeScale = MatchDuration.timeScale;
         jogo.razoes = MatchStats.RAZOES;
         jogo.stats = {
@@ -438,6 +460,30 @@ function relatorio() {
         const vez = (RAZOES.indexOf(l.m.campo) >= 0 || !l.m.alvo) ? null : (l.medido / l.m.alvo) * TS;
         const vezTxt = (vez === null) ? '—'.padStart(10) : (vez.toFixed(1) + 'x').padStart(10);
         console.log('  ' + rot + medido + alvo + pct + vezTxt + nota);
+    }
+    {
+        // TODAS AS ESTATISTICAS: media por jogo, escalada a 90 min de relogio, do mandante (equipa A) e do visitante (B).
+        const chaves = new Set();
+        for (const r of resultados) if (r.folhas) for (const t of ['A', 'B']) for (const k in r.folhas[t]) chaves.add(k);
+        const soma = {};
+        let nj = 0;
+        for (const r of resultados) {
+            if (!r.folhas || !(r.min > 0)) continue;
+            nj++;
+            const k90 = 90 / r.min;
+            for (const c of chaves) {
+                soma[c] = soma[c] || { A: 0, B: 0 };
+                soma[c].A += (r.folhas.A[c] || 0) * k90;
+                soma[c].B += (r.folhas.B[c] || 0) * k90;
+            }
+        }
+        console.log('
+TODAS AS ESTATÍSTICAS (média por jogo, por 90 min de relógio; ' + nj + ' jogos; A = mandante, B = visitante):');
+        console.log('  ' + 'estatística'.padEnd(46) + 'mandante'.padStart(12) + 'visitante'.padStart(12) + 'média/equipa'.padStart(14));
+        for (const c of [...chaves].sort()) {
+            const a = soma[c].A / (nj || 1), b = soma[c].B / (nj || 1);
+            console.log('  ' + c.padEnd(46) + a.toFixed(2).padStart(12) + b.toFixed(2).padStart(12) + ((a + b) / 2).toFixed(2).padStart(14));
+        }
     }
     if (LIGA) {
         const tab = {};

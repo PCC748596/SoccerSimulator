@@ -377,7 +377,8 @@ const RefereeModel = {
         Os vermelhos sao efeito colateral e nao foram pedidos: tratam-se no
         `limiarVermelho`, logo abaixo, e nao aqui.
         */
-        escala: 4.62,
+        // 14 de Outubro de 2026: 4.62 -> 5.8 deu 26 faltas por 90; o alvo passou a ~15 (pedido: "muita falta, o alvo para o nosso jogo deveria ser umas 15") -> 3.4.
+        escala: 3.4,
 
         /*
         FONTE A — o duelo perdido. O desfecho já existe (venceuDuelo, em
@@ -562,7 +563,7 @@ const RefereeModel = {
         O vermelho DIRECTO fica assim quase inalcançável — como deve ser:
         quase todos os vermelhos reais saem do segundo amarelo.
         */
-        limiarAmarelo: 0.85,
+        limiarAmarelo: 0.75,   // 0.85 -> 0.75 (14 de Outubro): com ~15 faltas por 90 a fraccao que vira amarelo tem de subir para manter os ~5.2 amarelos
         /*
         SUBIR ESTE LIMIAR PARA CORTAR VERMELHOS FOI TENTADO E NAO SERVIU.
 
