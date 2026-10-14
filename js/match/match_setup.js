@@ -2404,6 +2404,8 @@ Object.assign(Match, {
 
     resetPlay: function (forcingKickoffTeam = null) {
         this.mudarEstado('PLAY', 'reset_play'); this.ballVel.set(0, 0, 0);
+        // Uma saida de bola nova: o tempo por corredor so volta a contar quando a bola chegar a um corredor pedido.
+        if (typeof TempoPorCorredor !== 'undefined') TempoPorCorredor.novaSaidaDeBola();
 
         /*
         Disciplina zerada e expulsos de volta ao plantel. O `Sim` chama isto

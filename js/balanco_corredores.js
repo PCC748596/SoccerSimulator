@@ -18,7 +18,25 @@ const TempoPorCorredor = {
         return { atual: 'cen', fatia: { esq: a.esq, cen: a.cen, dir: a.dir }, acum: { esq: 0, cen: 0, dir: 0 }, total: 0 };
     },
 
-    reset() { this._est = { TeamA: this._novo(), TeamB: this._novo() }; },
+    reset() {
+        this._est = { TeamA: this._novo(), TeamB: this._novo() };
+        this.novaSaidaDeBola();
+    },
+
+    /*
+    A SAIDA DE BOLA NAO CONTA. A bola sai do centro e fica no corredor central ate o time a levar para o lado: esse
+    tempo e do apito, nao da tatica, e inflava o centro. Depois de cada saida de bola (inicio do jogo, do segundo
+    tempo, depois de um golo) cada equipa so comeca a contar quando a bola chegar a um corredor que o treinador
+    pediu: um dos ligados no painel; sem nenhum ligado, qualquer corredor lateral. (`_espera`, por equipa.)
+    */
+    novaSaidaDeBola() { this._espera = { TeamA: true, TeamB: true }; },
+
+    // O corredor `cor` (da bola, no referencial da equipa) liberta a contagem de depois da saida de bola?
+    _liberta(cor) {
+        const s = (typeof Tatics !== 'undefined' && Tatics.setores) ? Tatics.setores : [];
+        if (s.length === 0 || s.length >= 3) return cor !== 'cen';
+        return s.indexOf(cor) >= 0;
+    },
 
     _de(team) {
         if (!this._est) this.reset();
@@ -75,6 +93,14 @@ const TempoPorCorredor = {
         const e = this._de(team);
         const xAtk = Match.ball.position.x * dirZ;
         e.atual = this._corredorComHisterese(e.atual, xAtk);
+        // Depois da saida de bola: so conta quando a bola chegar a um corredor pedido.
+        if (this._espera && this._espera[team]) {
+            if (this._liberta(e.atual)) this._espera[team] = false; else return;
+        }
+        // O guarda-redes com a bola (nas maos ou aos pes) nao conta: e tempo de reposicao, nao de jogo por um corredor.
+        const port = Match.ballCarrier;
+        if ((Match.gkHoldingBall && (Match.gkHoldingBall.TeamA || Match.gkHoldingBall.TeamB)) ||
+            (port && port.role === 'gk')) return;
         const alfa = 1 - Math.exp(-dt / Math.max(1, C.janela));
         for (const k of ['esq', 'cen', 'dir']) e.fatia[k] += ((k === e.atual ? 1 : 0) - e.fatia[k]) * alfa;
         e.acum[e.atual] += dt;

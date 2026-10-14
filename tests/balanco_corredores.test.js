@@ -81,5 +81,38 @@ for (let i = 0; i < 60 * 20; i++) TempoPorCorredor.tick(1 / 60);
 const depois = TempoPorCorredor.estado('TeamA', 'dir').fatia;
 if (!(depois > antes + 0.08)) erro(`a fatia da direita nao subiu com a bola la (${antes.toFixed(2)} -> ${depois.toFixed(2)})`);
 
+// --- a saida de bola e o guarda-redes nao contam
+Tatics.setores = ['esq', 'dir'];
+TempoPorCorredor.reset();
+Match.state = 'PLAY'; Match.possessionTeam = 'TeamA';
+Match.ball.position.set(0, 0.2, 0);
+for (let i = 0; i < 60 * 5; i++) TempoPorCorredor.tick(1 / 60);
+if (TempoPorCorredor._de('TeamA').total > 0) erro('com a bola no centro apos a saida de bola o tempo contou: ' + TempoPorCorredor._de('TeamA').total);
+Match.ball.position.set(22 * dir, 0.2, 0);
+TempoPorCorredor.tick(1 / 60);
+if (!(TempoPorCorredor._de('TeamA').total > 0)) erro('com a bola no corredor lateral pedido o tempo devia comecar');
+const t0 = TempoPorCorredor._de('TeamA').total;
+Match.gkHoldingBall.TeamA = true;
+for (let i = 0; i < 60; i++) TempoPorCorredor.tick(1 / 60);
+if (TempoPorCorredor._de('TeamA').total !== t0) erro('com o guarda-redes a segurar a bola o tempo contou');
+Match.gkHoldingBall.TeamA = false;
+// depois de liberta, o centro conta
+Match.ball.position.set(0, 0.2, 0);
+TempoPorCorredor.tick(1 / 60);
+if (!(TempoPorCorredor._de('TeamA').total > t0)) erro('depois de libertar, o centro devia contar');
+// uma nova saida de bola volta a esperar
+TempoPorCorredor.novaSaidaDeBola();
+const t1 = TempoPorCorredor._de('TeamA').total;
+TempoPorCorredor.tick(1 / 60);
+if (TempoPorCorredor._de('TeamA').total !== t1) erro('apos nova saida de bola, o centro nao devia contar');
+// sem nenhum ligado: qualquer lateral liberta; com so o centro ligado, o centro liberta logo
+Tatics.setores = [];
+TempoPorCorredor.novaSaidaDeBola();
+if (TempoPorCorredor._liberta('cen')) erro('sem nenhum ligado o centro nao devia libertar');
+if (!TempoPorCorredor._liberta('esq')) erro('sem nenhum ligado um lateral devia libertar');
+Tatics.setores = ['cen'];
+if (!TempoPorCorredor._liberta('cen')) erro('com so o centro ligado o centro devia libertar');
+Tatics.setores = ['esq', 'dir'];
+
 if (falhas) { console.error(falhas + ' falha(s)'); process.exit(1); }
 console.log('OK balanco_corredores');
