@@ -2187,7 +2187,10 @@ const GoalkeeperDive = {
     e o cotovelo bem dobrado traz a mao de volta ao peito — e o encaixe.
     =========================================================================
     */
-    bolaNoPeito: { x: 0.0, y: 0.06, z: 0.30 },
+    // A bola vai para o ponto medio das duas maos, `paraOPeito` m puxada para o peito (ver gk_dive.js).
+    bolaEntreAsMaos: { activo: true, paraOPeito: 0.03 },
+    // Encostada ao peito (era z 0.30, a pairar a frente dele).
+    bolaNoPeito: { x: 0.0, y: 0.08, z: 0.22 },
     // De peito para baixo (frente do peito com y < -fwdY) a bola passa para o relvado, `avanco` m a frente do peito.
     /*
     A DEFESA BAIXA OU A MEIA ALTURA COM A BOLA NAS MAOS CAI DE LADO — pedido, com a fotografia 3021: *"quando o
@@ -2229,7 +2232,22 @@ const GoalkeeperDive = {
     lado da bola, a um raio dela (0.11 m), e a mesma altura. E o encaixe: duas
     maos a fechar sobre a bola, nao dois bracos a apontar para ela.
     */
-    abracoBola: { ombroX: -0.25, ombroZ: -0.20, cotovelo: -1.05 },
+    /*
+    O ENCAIXE (foto BF600): a bola ao peito e os ANTEBRACOS PELA FRENTE dela. Relato: *"os bracos tem que estar um
+    pouco mais abertos e os antebracos mais fechados, com a bola encostada no peito e os antebracos pela frente da
+    bola"*. Medido com tools/scratch/gk_encaixe_bracos.js, no referencial do peito: as maos ficam a x +-0.17, z 0.30
+    (a frente do centro da bola, z 0.22), os cotovelos a x +-0.17, z 0.03 (ao lado do peito) — a bola fica entre os
+    dois antebracos, que a fecham por tras e pelos lados. Antes: ombroZ -0.20 / cotovelo -1.05 (maos coladas a bola
+    pelos lados, antebraco aberto).
+    */
+    abracoBola: { ombroX: -0.10, ombroZ: -0.08, cotovelo: -1.60 },
+    /*
+    O LEVANTAR COM A BOLA: ela fica no encaixe com o braco DIREITO, e a mao ESQUERDA apoia-se no relvado ao lado do
+    peito para empurrar o corpo. O apoio pesa 1 enquanto o corpo esta quase deitado (s < `ate`) e desfaz-se em
+    `desfaz` (fracao do levantar) ate a mao voltar ao encaixe.
+    */
+    // `apoio`: os angulos do braco esquerdo a empurrar o relvado (ombro a frente e um pouco para fora, braco quase esticado).
+    levantarComBola: { activo: true, ate: 0.45, desfaz: 0.30, apoio: { ombroX: -0.75, ombroZ: 0.30, cotovelo: -0.25 } },
 
     pesoIK: 0.45,          // suavização do IK dos braços por frame
 

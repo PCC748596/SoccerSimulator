@@ -72,7 +72,7 @@ const FICHEIROS = [
     'js/match/match_state.js', 'js/match/match_setup.js', 'js/match/match_physics.js',
     'js/match/match_setpieces.js', 'js/match/match_falta_rotinas.js', 'js/match/match_loop.js', 'js/match/match_ui.js',
     'js/pose.js', 'js/player.js', 'js/gk_saida_aos_pes.js',
-    'js/fsm.js', 'js/comemoracao.js', 'js/officials.js', 'js/tunel.js', 'js/abertura.js'
+    'js/fsm.js', 'js/comemoracao.js', 'js/officials.js', 'js/officials_olham_a_bola.js', 'js/tunel.js', 'js/abertura.js'
 ];
 
 for (const f of FICHEIROS) {

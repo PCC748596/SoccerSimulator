@@ -38,6 +38,7 @@ const GkDive = {
     _matPeito: new THREE.Matrix4(),
     _vLocal: new THREE.Vector3(),
     _cima: new THREE.Vector3(0, 1, 0),
+    _maoB: new THREE.Vector3(),
     _eixoZ: new THREE.Vector3(0, 0, 1),
     _qTilt: new THREE.Quaternion(),
     // A viragem da barriga, que entra por cima do tombo no fim do voo.
@@ -627,7 +628,7 @@ const GkDive = {
                     rig.neck.rotation.z = lerpTo(rig.neck.rotation.z, 0, 0.35);
                 }
                 this.poseLevantar(rig, s, d.agarrou);
-                if (d.agarrou) this.poseAbracoBola(rig, d, s);
+                if (d.agarrou) { this.poseAbracoBola(rig, d, s); this.apoiarMaoEsquerdaNoLevantar(rig, s); }
                 if (!d.ladoComBola) this.maosForaDoRelvado(rig);
 
                 if (d.t >= D.tempoLevantar) {
@@ -819,7 +820,7 @@ const GkDive = {
         quem a segura passa a ser o ramo 'segurando' (player.js), que a poe ao
         peito dele tambem — a passagem nao tem salto.
         */
-        if (d.agarrou && d.ladoComBola && rig.lHand && rig.rHand) {
+        if (false && d.agarrou && d.ladoComBola && rig.lHand && rig.rHand) {
             // De lado com a bola em V: ela vai no ponto medio das duas maos, e nunca abaixo do relvado.
             rig.lHand.getWorldPosition(this._v);
             rig.rHand.getWorldPosition(this._vLocal);
@@ -842,6 +843,22 @@ const GkDive = {
             rig.chest.getWorldQuaternion(this._qOsso);
             this._vLocal.set(BP.x, BP.y, BP.z).applyQuaternion(this._qOsso);
             Match.ball.position.copy(this._v).add(this._vLocal);
+            /*
+            ENTRE AS MAOS. Relato (com capturas): a bola ficava um pouco fora das maos depois de segurada — a frente
+            do peito e um ponto fixo, e a pose do mergulho nem sempre poe as maos exactamente nele. O que se quer e
+            a bola ENTRE as duas maos: com as duas maos no rig, vai para o ponto medio delas (puxada `paraOPeito` m
+            em direcao ao peito, para ficar encostada e nao a pairar a frente).
+            */
+            if (D.bolaEntreAsMaos && D.bolaEntreAsMaos.activo && rig.lHand && rig.rHand) {
+                rig.lHand.getWorldPosition(this._vLocal);
+                rig.rHand.getWorldPosition(this._maoB);
+                this._vLocal.add(this._maoB).multiplyScalar(0.5);
+                // Para o peito: do ponto medio das maos para a posicao do peito (this._v), `paraOPeito` m.
+                this._maoB.subVectors(this._v, this._vLocal);
+                const dp = this._maoB.length();
+                if (dp > 1e-6) this._maoB.multiplyScalar(Math.min(D.bolaEntreAsMaos.paraOPeito, dp) / dp);
+                Match.ball.position.copy(this._vLocal).add(this._maoB);
+            }
             /*
             E NAO AFUNDA NO RELVADO. Deitado de lado, a frente do peito pode
             apontar ao chao, e o ponto do abraco ia com ela — medido, a bola
@@ -1593,6 +1610,27 @@ const GkDive = {
     },
 
     /*
+    LEVANTAR COM A BOLA: a mao ESQUERDA apoia-se no relvado ao lado do peito e empurra (GoalkeeperDive.levantarComBola);
+    o braco direito fica no encaixe, que o `poseAbracoBola` acabou de escrever. `s` e o progresso do levantar (0..1).
+    O IK corre com peso 1 enquanto o corpo esta quase deitado e desfaz-se a medida que ele sobe, ate a mao voltar ao
+    encaixe — sem salto, porque quem escreve o encaixe todos os frames e o `poseAbracoBola`.
+    */
+    apoiarMaoEsquerdaNoLevantar(rig, s) {
+        const K = GoalkeeperDive.levantarComBola;
+        if (!K || !K.activo || !rig.lArm || !rig.lElbow) return;
+        const w = (s <= K.ate) ? 1 : Math.max(0, 1 - (s - K.ate) / Math.max(1e-6, K.desfaz));
+        if (w <= 0.001) return;
+        const e = w * w * (3 - 2 * w);
+        // ANGULOS DIRECTOS, sem IK: o IK escreve Euler a partir de um quaternio e dava saltos de sinal (o braco "da
+        // uma volta", medido). O braco esquerdo vai do encaixe (acabado de escrever) para a pose de apoio e volta.
+        const P = K.apoio, H = GoalkeeperDive.abracoBola;
+        rig.lArm.rotation.x = H.ombroX + (P.ombroX - H.ombroX) * e;
+        rig.lArm.rotation.y = 0;
+        rig.lArm.rotation.z = H.ombroZ * (1 - e) + P.ombroZ * e;
+        rig.lElbow.rotation.x = H.cotovelo + (P.cotovelo - H.cotovelo) * e;
+    },
+
+    /*
     O ENCAIXE: os dois bracos fechados sobre a bola, ao peito.
 
     Os MESMOS angulos nos dois lados, de proposito — e a simetria que os faz
@@ -1604,27 +1642,6 @@ const GkDive = {
     poseAbracoBola(rig, d, mix) {
         const P = GoalkeeperDive.abracoBola;
         if (!P || !rig) return;
-        /*
-        DE LADO COM A BOLA: os dois bracos a frente em V (GoalkeeperDive.quedaDeLadoComBola), e a levantar (`mix` 0..1) fecham-se ao
-        abraco do peito. A pose V escreve-se directa, como o abraco (ver a nota abaixo sobre os saltos de Euler).
-        */
-        const QL = GoalkeeperDive.quedaDeLadoComBola;
-        if (d && d.ladoComBola && QL) {
-            const m = Math.max(0, Math.min(1, mix || 0));
-            const baixoEhDireito = (d.ladoLocal === undefined) || d.ladoLocal >= 0;
-            for (const lado of [['lArm', 'lElbow', 1], ['rArm', 'rElbow', -1]]) {
-                const ombro = rig[lado[0]], cot = rig[lado[1]];
-                const ehBaixo = (lado[2] === -1) === baixoEhDireito;
-                const zV = ehBaixo ? QL.bracos.zBaixo : QL.bracos.zCima;
-                if (ombro) {
-                    ombro.rotation.x = QL.bracos.x + (P.ombroX - QL.bracos.x) * m;
-                    ombro.rotation.y = 0;
-                    ombro.rotation.z = lado[2] * (zV + (P.ombroZ - zV) * m);
-                }
-                if (cot) cot.rotation.x = QL.bracos.cotovelo + (P.cotovelo - QL.bracos.cotovelo) * m;
-            }
-            return;
-        }
         /*
         ESCRITA DIRECTA, todos os frames — nao ha lerp nenhum aqui, e e de
         proposito.
