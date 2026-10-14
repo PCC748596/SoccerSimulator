@@ -112,6 +112,14 @@ manípula que mais mexe no resultado.
 =============================================================================
 */
 const SkillCalib = {
+    /*
+    O FATOR DE FORCA DOS TIMES REAIS. Pedido: *"acho os times brasileiros muito fortes na comparacao mundial; da para
+    reduzir uns 8% na forca"*. Multiplica TODAS as skills dos plantéis reais (gerados por tools/gen_squads.js) depois
+    da calibracao abaixo: 0.92 = -8%. Os genericos do player_skills.js (que o jogo usa fora dos plantéis reais) nao
+    mudam. Mexer aqui obriga a correr `node tools/gen_squads.js` outra vez; o lote de jogos (tools/headless/lote_jogos.js)
+    le este fator para manter o "nivel 80 da Serie A" no mesmo sitio da escala.
+    */
+    fatorForca: 0.92,
     alvo: {
         gk: { media: 97.5, desvio: 3 },
         tec: { media: 82, desvio: 8 },

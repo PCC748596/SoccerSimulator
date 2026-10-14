@@ -90,8 +90,25 @@ if (process.env.LOTE_WORKER) {
     sabe se um número fora de banda é dos planteis ou do jogo.
     */
     const genericas = process.env.LOTE_GENERICAS === '1';
-    const equipas = (!genericas && typeof SquadsData !== 'undefined' && SquadsData.equipas)
+    const todas = (!genericas && typeof SquadsData !== 'undefined' && SquadsData.equipas)
         ? SquadsData.equipas : [];
+    /*
+    O NIVEL DAS EQUIPAS: so jogam entre si equipas do nivel pedido. Relato: *"estou a ajustar o jogo para partidas
+    entre times da Serie A, de nivel 80 em media; se ajusto para um time de media 80, fica mais dificil para um de 70"*.
+    O lote misturava os 57 plantéis (forca 75-88) em pares ao acaso, e a calibracao ficava a perseguir a mistura.
+    Agora (por omissao) so entram equipas com `forca` a `LOTE_BANDA` (2) do `LOTE_NIVEL` (80); a banda alarga-se de 1 em
+    1 se houver menos de 8 equipas. `LOTE_NIVEL=0` volta a usar todas. Quem for mais fraco tem mais dificuldade e quem for
+    mais forte menos, naturalmente — o ajuste e para o padrao.
+    */
+    // O "80 da Serie A" acompanha o fator de forca dos plantéis (SkillCalib.fatorForca em skill_map.js): reduzidos 8%, o 80 passa a 73.6.
+    const fatorForca = require('../../js/config/skill_map.js').SkillCalib.fatorForca || 1;
+    const nivel = (process.env.LOTE_NIVEL !== undefined) ? Number(process.env.LOTE_NIVEL) : 80 * fatorForca;
+    let banda = (process.env.LOTE_BANDA !== undefined) ? Number(process.env.LOTE_BANDA) : 2;
+    let equipas = todas;
+    if (nivel > 0 && todas.length) {
+        equipas = todas.filter(e => Math.abs(e.forca - nivel) <= banda);
+        while (equipas.length < 8 && banda < 20) { banda++; equipas = todas.filter(e => Math.abs(e.forca - nivel) <= banda); }
+    }
 
     for (const i of indices) {
         /*
@@ -108,11 +125,11 @@ if (process.env.LOTE_WORKER) {
 
         // Equipas reais, um par diferente por jogo. Sem planteis carregados,
         // corre com as genéricas de sempre — o lote continua a valer.
-        let nomeA = 'genérica A', nomeB = 'genérica B';
+        let nomeA = 'genérica A', nomeB = 'genérica B', forcaA = null, forcaB = null;
         if (equipas.length >= 2) {
             const a = equipas[(i * 2) % equipas.length];
             const b = equipas[(i * 2 + 1) % equipas.length];
-            nomeA = a.nome; nomeB = b.nome;
+            nomeA = a.nome; nomeB = b.nome; forcaA = a.forca; forcaB = b.forca;
             Match.trocarEquipas({ A: a.id, B: b.id });
         } else {
             Match.trocarEquipas({});
@@ -122,7 +139,7 @@ if (process.env.LOTE_WORKER) {
         Match.placarA = 0; Match.placarB = 0;
 
         const jogo = {
-            i: i, equipaA: nomeA, equipaB: nomeB,
+            i: i, equipaA: nomeA, equipaB: nomeB, forcaA: forcaA, forcaB: forcaB, banda: banda, nivelPedido: nivel, equipasNoNivel: equipas.length,
             peitos: 0, gestosArbitro: 0,
             foraDoCampo: 0, naoNumerico: 0,
             paradoFrames: 0, maiorParagem: 0,
@@ -367,6 +384,14 @@ function relatorio() {
 
     console.log(`\n=== ${n} jogos de ${MINUTOS} min (${seg}s de relógio) ===`);
     const TS = resultados[0].timeScale || 1, RAZOES = resultados[0].razoes || [];
+    {
+        const fs = resultados.flatMap(r => [r.forcaA, r.forcaB]).filter(v => typeof v === 'number');
+        if (fs.length) {
+            const med = fs.reduce((a, b) => a + b, 0) / fs.length;
+            const dif = resultados.filter(r => typeof r.forcaA === 'number').map(r => Math.abs(r.forcaA - r.forcaB));
+            console.log(`Nível das equipas: média ${med.toFixed(1)} (mín ${Math.min(...fs)}, máx ${Math.max(...fs)}), pedido ${resultados[0].nivelPedido} ±${resultados[0].banda} (${resultados[0].equipasNoNivel} equipas); diferença média entre as duas do jogo ${(dif.reduce((a, b) => a + b, 0) / dif.length).toFixed(1)}`);
+        }
+    }
     console.log('por 90 minutos de RELÓGIO, média dos jogos  (90 min de relógio = ' + (90 / TS).toFixed(1) + ' min simulados; "x real/min" = quantas vezes o ritmo real por minuto):');
     console.log('');
     console.log('                          medido       alvo   % do alvo   x real/min');

@@ -148,6 +148,8 @@ function calibrarPlanteis(todos, titulares) {
             const alvo = SkillCalib.alvo[chave];
             if (!alvo) continue;
             j[chave] = calibrarSkill(j[chave], pop[chave], alvo);
+            // O fator de forca dos times reais (SkillCalib.fatorForca): -8% em todas as skills.
+            if (typeof j[chave] === 'number' && SkillCalib.fatorForca) j[chave] = Math.max(1, Math.min(100, Math.round(j[chave] * SkillCalib.fatorForca)));
         }
     }
     return pop;
