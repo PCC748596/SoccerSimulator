@@ -283,6 +283,7 @@ pela caixa do modelo (a sola, não o tornozelo), com o jogador PARADO:
     MARKING          0.04 m de média, 0.11 no pior caso
     SET_PIECE_WAIT   0.05                0.24
     SUPPORT_PASS     0.07                0.13
+    SUP_TO_INVERT    (como o SUPPORT_PASS: mesma locomocao)
     IDLE             0.01                0.21
     BLOCKING        -0.05 (enterrado)
 

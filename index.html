@@ -139,7 +139,7 @@
                 <option value="high">High (2s)</option>
             </select>
 
-            <label id="lbl-setores">Setor do campo (2)</label>
+            <label id="lbl-setores">Setor do campo (0-2)</label>
             <div style="display: flex; gap: 4px; margin-bottom: 8px;">
                 <button type="button" class="btn-sector active" id="sec-esq"
                     onclick="Tatics.toggleSector('esq')">Left</button>
@@ -493,6 +493,7 @@
     <script src="js/config/uniformes.js"></script>
     <script src="js/config/cidade.js"></script>
     <script src="js/config/comemoracao.js"></script>
+    <script src="js/config/balanco_corredores.js"></script>
     <script src="js/stats.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/controls.js"></script>
@@ -540,6 +541,10 @@
     <script src="js/player.js"></script>
     <!-- A saida aos pes do guarda-redes (metodos do FootballPlayer; carrega depois do player.js) -->
     <script src="js/gk_saida_aos_pes.js"></script>
+    <!-- O tempo de posse por corredor (Left/Center/Right) e o empurrao do passe; config em config/balanco_corredores.js -->
+    <script src="js/balanco_corredores.js"></script>
+    <!-- A inversao sinalizada e o apoio SUP_TO_INVERT (usa o TempoPorCorredor) -->
+    <script src="js/inversao_sinalizada.js"></script>
     <script src="js/fsm.js"></script>
     <!-- O controlador das comemoracoes de golo (config/comemoracao.js; o estado COMEMORAR e do fsm.js) -->
     <script src="js/comemoracao.js"></script>

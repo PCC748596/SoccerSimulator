@@ -1848,13 +1848,21 @@ const Tatics = {
     // Cada sector liga/desliga independentemente agora (antes era sempre
     // exactamente 2 de 3, um forçava o outro a sair) — nunca deixa ficar
     // com zero activos.
+    /*
+    Os corredores ligados: 0, 1 ou 2. Ligar o terceiro e o mesmo que nenhum — o painel limpa os tres (ver
+    BalancoCorredores, config/balanco_corredores.js: tres ligados teriam o alvo de nenhum).
+    */
     toggleSector: function (sector) {
         const idx = this.setores.indexOf(sector);
         if (idx >= 0) {
-            if (this.setores.length <= 1) return;
             this.setores.splice(idx, 1);
         } else {
             this.setores.push(sector);
+            if (this.setores.length >= 3) this.setores.length = 0;
+        }
+        for (const s of ['esq', 'cen', 'dir']) {
+            const e = (typeof document !== 'undefined') ? document.getElementById('sec-' + s) : null;
+            if (e) e.classList.toggle('active', this.setores.includes(s));
         }
         const el = document.getElementById('sec-' + sector);
         if (el) el.classList.toggle('active', this.setores.includes(sector));

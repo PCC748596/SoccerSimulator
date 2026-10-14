@@ -931,6 +931,9 @@ Object.assign(Match, {
             if (this.passLineVisual) this.passLineVisual.visible = false;
         }
 
+        // O tempo de posse por corredor (Left/Center/Right): ver js/balanco_corredores.js.
+        if (typeof TempoPorCorredor !== 'undefined') TempoPorCorredor.tick(dt);
+
         // Arbitragem: fora das listas de jogadores, corre à parte (officials.js).
         if (typeof Officials !== 'undefined') Officials.update(dt);
 
@@ -1230,6 +1233,11 @@ Object.assign(Match, {
         */
         atribuirApoiosDaEquipa(this.players, bbA);
         atribuirApoiosDaEquipa(this.opponents, bbB);
+        // A inversao sinalizada e quem recua para a permitir (SUP_TO_INVERT): ver js/inversao_sinalizada.js.
+        if (typeof InversaoSinalizada !== 'undefined') {
+            InversaoSinalizada.tick(this.players, bbA);
+            InversaoSinalizada.tick(this.opponents, bbB);
+        }
 
         /*
         Nao ha mais nada a mexer nos alvos depois disto.

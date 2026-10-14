@@ -3106,9 +3106,25 @@ class FootballPlayer {
                 inversao = bBola !== bAlvo && relX >= IV.larguraMin && cBola >= IV.congestaoMin &&
                     cAlvo <= cBola - IV.folgaCongestao && progression >= -IV.recuoMax &&
                     distMarcEf >= IV.livreMin;
+                /*
+                A INVERSAO SINALIZADA (js/inversao_sinalizada.js): a equipa avisou que a jogada e uma inversao — o passe ao
+                apoio que recuou (SUP_TO_INVERT), o dele para o outro lado, ou um directo a um colega livre no corredor de
+                destino. Conta como inversao mesmo recuando, sem pedir congestao.
+                */
+                if (!inversao && typeof InversaoSinalizada !== 'undefined' && distMarcEf >= 2.5 &&
+                    InversaoSinalizada.favorece(this, opt, optPos, dirZ)) inversao = true;
                 if (inversao) score += IV.bonus * Math.max(fiab, IV.fiabMin);
             }
             
+            /*
+            O BALANCO POR CORREDOR (BalancoCorredores): o destino num corredor onde a equipa ja passou do alvo do
+            treinador (mais a margem de tempo) perde pontos; onde falta tempo, ganha. Aditivo, e vale tambem para o
+            passe que mantem a bola no mesmo corredor — que e o que o faz inverter mesmo sem congestao.
+            */
+            if (typeof TempoPorCorredor !== 'undefined') {
+                score += TempoPorCorredor.ajusteDePasse(this.team, optPos.x * dirZ);
+            }
+
             // MULTIPLICADORES DE TENDÊNCIA POR POSIÇÃO
             if (typeof getPositionalTendency === 'function') {
                 const isForwardPass = progression > 2.0;
@@ -5460,7 +5476,7 @@ class FootballPlayer {
         let lookTarget = target;
         if (this.fsm && Match.ball) {
             const s = this.fsm.currentState;
-            if (s === 'MARKING' || s === 'BLOCKING' || s === 'SUPPORT_PASS' || (typeof Match !== 'undefined' && Match.intendedReceiver === this)) {
+            if (s === 'MARKING' || s === 'BLOCKING' || s === 'SUPPORT_PASS' || s === 'SUP_TO_INVERT' || (typeof Match !== 'undefined' && Match.intendedReceiver === this)) {
                 lookTarget = Match.ball.position;
 
                 if (typeof LateralGait !== 'undefined' && d > 0.0001) {

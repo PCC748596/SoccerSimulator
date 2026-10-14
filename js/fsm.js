@@ -1592,6 +1592,8 @@ class PlayerFSM {
             // locomocao; estado proprio para se ver no debug quem se esta a
             // oferecer (ver atribuirApoiosDaEquipa).
             case 'SUPPORT_PASS':
+            // SUP_TO_INVERT: o apoio que recua para permitir a inversao de jogo (js/inversao_sinalizada.js).
+            case 'SUP_TO_INVERT':
                 p.velocity = p.steerArrive(p.dynamicTarget, p.speedMult);
                 break;
 

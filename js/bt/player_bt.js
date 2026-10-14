@@ -2958,6 +2958,24 @@ function actInfiltrar(ctx) {
     return;
 }
 
+/*
+SUP_TO_INVERT — o apoio que recua para permitir a inversao de jogo (js/inversao_sinalizada.js). O ponto vem da equipa
+(`p.apoioInverter`): atras da bola, num espaco livre, para o lado do corredor de destino. Aqui e so execucao.
+*/
+function podeApoiarInversao(ctx) {
+    const p = ctx.p;
+    if (!p.apoioInverter || p.role === 'gk' || p === Match.ballCarrier) return false;
+    return true;
+}
+
+function actApoioInversao(ctx) {
+    const p = ctx.p;
+    p.dynamicTarget.set(p.apoioInverter.x, ALTURA_BASE_Y, p.apoioInverter.z);
+    p.speedMult = (6.2 + ((ctx.skillSpeed - 50) / 50) * 1.3) * 1.25 * 0.9;
+    p.apoioAtivo = false;
+    p.fsm.changeState('SUP_TO_INVERT');
+}
+
 function actApoioCirculacao(ctx) {
     const p = ctx.p;
     p.dynamicTarget.set(p.apoioPonto.x, ALTURA_BASE_Y, p.apoioPonto.z);
@@ -4723,6 +4741,10 @@ const PlayerBT = sel('PlayerRoot',
 
                 
                 sel('DecisaoAtacando',
+                seq('ApoioDeInversao',
+                    cond('inversaoSinalizada', podeApoiarInversao),
+                    act('apoiarInversao', actApoioInversao)
+                ),
                 seq('Infiltracao',
                     cond('querInfiltrar', podeInfiltrar),
                     act('infiltrar', actInfiltrar)

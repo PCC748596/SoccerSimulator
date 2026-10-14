@@ -61,7 +61,7 @@ const FICHEIROS = [
     'js/config/physics.js', 'js/config/animations.js', 'js/config/gait.js',
     'js/config/tactics.js', 'js/config/passing.js', 'js/config/shooting.js', 'js/config/falta_rotinas.js', 'js/config/tunel.js',
     'js/config/defense.js', 'js/config/goalkeeper.js', 'js/config/player_behavior.js',
-    'js/config/skill_map.js', 'js/config/comemoracao.js',
+    'js/config/skill_map.js', 'js/config/comemoracao.js', 'js/config/balanco_corredores.js',
     'js/stats.js',
     'js/utils.js', 'js/ik.js', 'js/reach.js', 'js/gk_dive.js',
     'js/bt/action_state.js', 'js/perception.js', 'js/playing_styles.js',
@@ -71,7 +71,7 @@ const FICHEIROS = [
     // O monólito js/match.js foi dividido; a ordem é a do index.html.
     'js/match/match_state.js', 'js/match/match_setup.js', 'js/match/match_physics.js',
     'js/match/match_setpieces.js', 'js/match/match_falta_rotinas.js', 'js/match/match_loop.js', 'js/match/match_ui.js',
-    'js/pose.js', 'js/player.js', 'js/gk_saida_aos_pes.js',
+    'js/pose.js', 'js/player.js', 'js/gk_saida_aos_pes.js', 'js/balanco_corredores.js', 'js/inversao_sinalizada.js',
     'js/fsm.js', 'js/comemoracao.js', 'js/officials.js', 'js/officials_olham_a_bola.js', 'js/tunel.js', 'js/abertura.js'
 ];
 
