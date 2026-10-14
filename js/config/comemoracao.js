@@ -41,7 +41,7 @@ const ComemoracaoGol = {
         corrida: { min: 5.0, max: 12.0, margemLinha: 5.0, recuoDaBaliza: 0.6, velocidade: 7.5, prazo: 6.0 },
         // O deslize em si.
         velocidadeDeslize: 7.0,   // m/s à entrada; cai ao longo do deslize
-        tQueda: 0.30,             // quadro 4: o joelho vai ao chão
+        tQueda: 0.60,             // quadro 4: vai-se abaixando a correr
         tDeslize: 1.35,           // quadros 3 e 2: desliza de joelhos
         tBracos: 0.45,            // quadro 1: os braços sobem
         tManter: 2.2,             // fica assim
@@ -49,29 +49,30 @@ const ComemoracaoGol = {
         limiteLateral: 31.0,      // |x| máximo onde pode parar (a linha lateral é 34)
         // As três poses (quadros 4, 3-2 e 1). `k` mistura-as; zero é a de pé.
         pose: {
-            // 4: o joelho de trás vai ao chão, o da frente dobrado; braços para trás.
+            // 4: a descer a correr — corpo a baixar, pernas dobradas, tronco ainda em frente, braços soltos.
             queda: {
-                pelvisX: 0.15, peitoX: 0.25, pescocoX: -0.10,
-                coxaE: -1.10, joelhoE: 1.20, peE: 0.0,
-                coxaD: 0.35, joelhoD: 1.90, peD: 0.5,
-                bracoEx: 0.60, bracoEz: 0.25, cotoveloE: -0.30,
-                bracoDx: 0.60, bracoDz: 0.25, cotoveloD: -0.30
+                pelvisX: 0.10, peitoX: 0.15, pescocoX: -0.05,
+                coxaE: -0.75, joelhoE: 1.35, peE: 0.2,
+                coxaD: -0.55, joelhoD: 1.55, peD: 0.3,
+                bracoEx: 0.45, bracoEz: 0.20, cotoveloE: -0.30,
+                bracoDx: 0.45, bracoDz: 0.20, cotoveloD: -0.30
             },
-            // 3 e 2: os dois joelhos no relvado, as canelas atrás, o tronco inclinado para trás, braços abertos.
+            // 3 e 2: SENTADO NOS CALCANHARES a deslizar (coxa à frente, canela deitada atrás, joelho muito
+            // dobrado), tronco levemente para trás, braços ao lado do corpo.
             deslize: {
-                pelvisX: -0.05, peitoX: -0.38, pescocoX: -0.25,
-                coxaE: 0.15, joelhoE: 1.50, peE: 0.6,
-                coxaD: 0.15, joelhoD: 1.50, peD: 0.6,
-                bracoEx: 0.35, bracoEz: 1.15, cotoveloE: -0.20,
-                bracoDx: 0.35, bracoDz: 1.15, cotoveloD: -0.20
+                pelvisX: 0.0, peitoX: -0.18, pescocoX: -0.08,
+                coxaE: -0.90, joelhoE: 2.45, peE: 0.9,
+                coxaD: -0.90, joelhoD: 2.45, peD: 0.9,
+                bracoEx: 0.25, bracoEz: 0.30, cotoveloE: -0.15,
+                bracoDx: 0.25, bracoDz: 0.30, cotoveloD: -0.15
             },
-            // 1: de joelhos, o peito para cima, os braços esticados no ar em V.
+            // 1: ainda sentado nos calcanhares, tronco levemente para trás, braços levantados para cima.
             bracosAcima: {
-                pelvisX: -0.10, peitoX: -0.22, pescocoX: -0.38,
-                coxaE: 0.15, joelhoE: 1.50, peE: 0.6,
-                coxaD: 0.15, joelhoD: 1.50, peD: 0.6,
-                bracoEx: -0.25, bracoEz: 2.70, cotoveloE: -0.05,
-                bracoDx: -0.25, bracoDz: 2.70, cotoveloD: -0.05
+                pelvisX: 0.0, peitoX: -0.22, pescocoX: -0.20,
+                coxaE: -0.90, joelhoE: 2.45, peE: 0.9,
+                coxaD: -0.90, joelhoD: 2.45, peD: 0.9,
+                bracoEx: -0.15, bracoEz: 2.85, cotoveloE: -0.05,
+                bracoDx: -0.15, bracoDz: 2.85, cotoveloD: -0.05
             }
         }
     },

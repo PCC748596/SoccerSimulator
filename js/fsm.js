@@ -2701,7 +2701,7 @@ class PlayerFSM {
                     const semDesenho = (typeof Sim !== 'undefined' && Sim.running);
                     if (!c.entrou) {
                         c.entrou = true;
-                        p.model.rotation.y = Math.atan2(c.dx, c.dz);
+                        if (c.tipo === 'joelhos') p.model.rotation.y = Math.atan2(c.dx, c.dz);
                     }
 
                     if (c.tipo === 'joelhos') {
@@ -2715,7 +2715,7 @@ class PlayerFSM {
                         };
                         let P, baixo;
                         if (t < t1) { P = this._poseMistura(DE_PE, PJ.queda, suave(t / t1)); baixo = t / t1; }
-                        else if (t < t2) { P = this._poseMistura(PJ.queda, PJ.deslize, suave((t - t1) / (0.5 * J.tDeslize))); baixo = 1; }
+                        else if (t < t2) { P = this._poseMistura(PJ.queda, PJ.deslize, suave((t - t1) / (0.6 * J.tDeslize))); baixo = 1; }
                         else if (t < t3) { P = this._poseMistura(PJ.deslize, PJ.bracosAcima, suave((t - t2) / J.tBracos)); baixo = 1; }
                         else if (t < t4) { P = PJ.bracosAcima; baixo = 1; }
                         else if (t < t5) { const u = suave((t - t4) / J.tLevantar); P = this._poseMistura(PJ.bracosAcima, DE_PE, u); baixo = 1 - u; }

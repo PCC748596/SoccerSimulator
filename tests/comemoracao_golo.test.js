@@ -51,7 +51,7 @@ for (let i = 0; i < 60 * 30; i++) {
         apoios = Math.max(apoios, n);
         for (const p of lista) {
             const q = p.model.position;
-            if (!isFinite(q.x + q.y + q.z)) nan++;
+            if (!isFinite(q.x + q.y + q.z + p.model.rotation.y)) nan++;
             if (Math.abs(q.x) > CAMPO_LARG / 2 + 1 || Math.abs(q.z) > CAMPO_COMP / 2 + 2) { if (p === autor) erro('o autor saiu do campo: ' + q.x.toFixed(1) + ', ' + q.z.toFixed(1)); }
         }
         estados.add(Match.goalSequenceStage);

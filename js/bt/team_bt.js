@@ -497,7 +497,9 @@ function pickChaser(bb) {
         dir: bb.dir,
         pressaoAlta: (typeof Tatics !== 'undefined' && Tatics.pressaoDefensiva === 'high'),
         gkTemBola: (bb.oppCarrier && bb.oppCarrier.role === 'gk') ||
-            (bb.carrier && bb.carrier.role === 'gk')
+            (bb.carrier && bb.carrier.role === 'gk') ||
+            // Bola na mão de um guarda-redes (de qualquer equipa): é intocável, ninguém a persegue.
+            !!(Match.gkHoldingBall && (Match.gkHoldingBall.TeamA || Match.gkHoldingBall.TeamB))
     });
     if (!podeIr) { bb.chaser = null; return; }
 
