@@ -2207,6 +2207,7 @@ Object.assign(Match, {
         [{ list: this.players, dir: Lados.dirDe('TeamA') }, { list: this.opponents, dir: Lados.dirDe('TeamB') }].forEach(({ list, dir }) => {
             list.forEach(p => {
                 if (!p || p.role === 'gk') return;   // o GK volta pela lerp do updateGK
+                if (p.comemorando) return;           // a festa de golo ainda o tem (ver js/comemoracao.js)
 
                 let alvo;
                 if (plano && p === plano.taker) alvo = plano.takerPos;
@@ -2433,6 +2434,7 @@ Object.assign(Match, {
         this.counterAttackTeam = null;
         this.counterAttackTimer = 0;
         this.goalSequenceStage = undefined;
+        if (typeof Comemoracao !== 'undefined') Comemoracao.limpar();
         this.tempoParada = 0;
 
         document.getElementById('alerta-golo').style.opacity = '0';

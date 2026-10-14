@@ -522,7 +522,7 @@ class FootballPlayer {
         if (this.jumpTimer > 0) return;                    // o cabeceio escreve a cabeça
         const st = this.fsm ? this.fsm.currentState : null;
         if (st === 'SHOOT' || st === 'SET_PIECE_KICK' || st === 'LATERAL' ||
-            st === 'SLIDE_TACKLE' ||
+            st === 'SLIDE_TACKLE' || st === 'COMEMORAR' ||
             st === 'CHEST_CONTROL' || st === 'BALL_CONTROL_RIGHT') return;
 
         const neck = this.rig.neck;
@@ -577,7 +577,7 @@ class FootballPlayer {
             (this.gkEstado === 'mergulho' || this.gkEstado === 'salto_alto' ||
              this.gkEstado === 'saida_pes')) return;
         const st = this.fsm ? this.fsm.currentState : null;
-        if (st === 'SLIDE_TACKLE') return;
+        if (st === 'SLIDE_TACKLE' || st === 'COMEMORAR') return;
         /*
         ACIMA DA `velMax` O ASSENTO NÃO DESLIGA — fica só num sentido.
 
@@ -6261,7 +6261,7 @@ class FootballPlayer {
         if (s === 'BALL_CONTROL_RIGHT') {
             return;
         }
-        if (s !== 'TACKLE' && s !== 'SLIDE_TACKLE' && s !== 'SHOOT' && s !== 'SET_PIECE_KICK' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
+        if (s !== 'TACKLE' && s !== 'SLIDE_TACKLE' && s !== 'COMEMORAR' && s !== 'SHOOT' && s !== 'SET_PIECE_KICK' && this.jumpTimer <= 0 && (this.role !== 'gk' || (this.gkEstado !== 'mergulho' && this.gkEstado !== 'salto_alto'))) {
             rig.pelvis.rotation.x = lerpTo(rig.pelvis.rotation.x, 0, 0.25);
             rig.pelvis.rotation.y = lerpTo(rig.pelvis.rotation.y, 0, 0.25);
             rig.pelvis.rotation.z = lerpTo(rig.pelvis.rotation.z, 0, 0.25);
@@ -6456,7 +6456,7 @@ class FootballPlayer {
         } else if (rig.neck && this.fsm.currentState === 'LATERAL') {
             rig.neck.rotation.y = lerpTo(rig.neck.rotation.y, 0, 0.35);
             this.cinturaAlvoY = 0;
-        } else if (rig.neck && Match.ball && this.fsm.currentState !== 'TACKLE' && this.fsm.currentState !== 'SLIDE_TACKLE') {
+        } else if (rig.neck && Match.ball && this.fsm.currentState !== 'TACKLE' && this.fsm.currentState !== 'SLIDE_TACKLE' && this.fsm.currentState !== 'COMEMORAR') {
             _v1.subVectors(Match.ball.position, this.model.position);
             _v1.y = 0;
             if (_v1.lengthSq() > 0.01) {
@@ -6480,7 +6480,7 @@ class FootballPlayer {
             }
         }
 
-        if (this.fsm.currentState === 'TACKLE' || this.fsm.currentState === 'SLIDE_TACKLE') {
+        if (this.fsm.currentState === 'TACKLE' || this.fsm.currentState === 'SLIDE_TACKLE' || this.fsm.currentState === 'COMEMORAR') {
             return;
         }
 

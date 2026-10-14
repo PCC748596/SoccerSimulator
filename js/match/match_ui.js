@@ -279,6 +279,8 @@ Object.assign(Match, {
         if (window.cameraMode === 'orbit') return;
 
         if (!this.ball) return;
+        // Durante a comemoracao de golo a camara segue o autor, e nao a bola parada na rede.
+        const foco = (typeof Comemoracao !== 'undefined' && Comemoracao.foco()) || this.ball.position;
         const zoom = window.cameraZoom || 1.0;
         if (!this._cTPos) { this._cTPos = new THREE.Vector3(); this._cLTar = new THREE.Vector3(); this._cFwd = new THREE.Vector3(); } let targetPos = this._cTPos;
         let lookTarget = this._cLTar;
@@ -299,13 +301,13 @@ Object.assign(Match, {
             Era "na altura do ultimo degrau" da bancada; a 34 fica um degrau
             mais abaixo.
             */
-            lookTarget.copy(this.ball.position);
+            lookTarget.copy(foco);
             // O ZOOM APROXIMA DA BOLA e nao do centro do campo: posicao = bola + (base - bola) * zoom.
             // Com a bola a caminho da lateral da camara (+X) ela baixa e recua (ver CameraCentroLado).
             let baseX = 58, baseY = 34;
             const CL = (typeof CameraCentroLado !== 'undefined') ? CameraCentroLado : null;
             if (CL && CL.activo) {
-                const k = THREE.MathUtils.clamp((this.ball.position.x - CL.xInicio) / (CL.xFim - CL.xInicio), 0, 1);
+                const k = THREE.MathUtils.clamp((foco.x - CL.xInicio) / (CL.xFim - CL.xInicio), 0, 1);
                 baseX += CL.recua * k;
                 baseY -= CL.baixa * k;
             }
@@ -314,7 +316,7 @@ Object.assign(Match, {
                 lookTarget.z + (0 - lookTarget.z) * zoom);
         } else if (window.cameraMode === 'sideline') {
             // Câmara Lateral bem mais próxima, acompanhando a bola no eixo Z
-            let bz = THREE.MathUtils.clamp(this.ball.position.z, -45, 45);
+            let bz = THREE.MathUtils.clamp(foco.z, -45, 45);
             /*
             ENTRE 10 E 30 M DA BOLA — pedidos: *"fica sempre a 30 metros da bola"*
             e depois *"ajusta o zoom da Camera (5) para 10-30 metros da bola"*.
@@ -325,24 +327,24 @@ Object.assign(Match, {
             // Com a bola a caminho da lateral +X ela esta quase por cima da camera: recua e baixa (ver CameraCentroLado).
             const CLm = (typeof CameraCentroLado !== 'undefined' && CameraCentroLado.activo) ? CameraCentroLado : null;
             let kLado = 0;
-            if (CLm) kLado = THREE.MathUtils.clamp((this.ball.position.x - CLm.xInicio) / (CLm.xFim - CLm.xInicio), 0, 1);
+            if (CLm) kLado = THREE.MathUtils.clamp((foco.x - CLm.xInicio) / (CLm.xFim - CLm.xInicio), 0, 1);
             targetPos.set(35 + (CLm ? CLm.lateralMovel.recua * kLado : 0), 14 - (CLm ? CLm.lateralMovel.baixa * kLado : 0), bz);
-            lookTarget.copy(this.ball.position);
+            lookTarget.copy(foco);
             // Pedido seguinte: o zoom volta a contar, mas SO ENTRE 10 E 30 M da bola.
             const ZC = (typeof CameraZoom !== 'undefined') ? CameraZoom : null;
             const afasta = 1 + (CLm ? CLm.lateralMovel.afasta * kLado : 0);
             const dMin = ((ZC && typeof ZC.movelMin === 'number') ? ZC.movelMin : 10.0) * afasta;
             const dMax = ((ZC && typeof ZC.movelMax === 'number') ? ZC.movelMax : 30.0) * afasta;
             const dMovel = THREE.MathUtils.clamp(Math.hypot(35, 14) * zoom * afasta, dMin, dMax);
-            this._cFwd.subVectors(targetPos, this.ball.position);
+            this._cFwd.subVectors(targetPos, foco);
             if (this._cFwd.lengthSq() > 1e-6) {
                 this._cFwd.normalize().multiplyScalar(dMovel);
-                targetPos.copy(this.ball.position).add(this._cFwd);
+                targetPos.copy(foco).add(this._cFwd);
             }
         } else if (window.cameraMode === 'lateraltv') {
             // Mistura de TV Centro e Lateral Móvel
             // Acompanha até metade do meio-campo, depois fica parada e só roda
-            let bz = THREE.MathUtils.clamp(this.ball.position.z, -26.5, 26.5);
+            let bz = THREE.MathUtils.clamp(foco.z, -26.5, 26.5);
             /*
             ALTURA 20 E NAO 30 — dois pedidos seguidos de "baixar cinco
             metros", 10 m ao todo.
@@ -353,13 +355,13 @@ Object.assign(Match, {
             afastamento lateral (48) nao se mexeu: baixar a camara e descer o
             ponto de vista, nao aproxima-lo.
             */
-            lookTarget.copy(this.ball.position);
+            lookTarget.copy(foco);
             // O ZOOM APROXIMA DA BOLA (era do eixo x=0,y=0): posicao = bola + (base - bola) * zoom.
             // Com a bola a caminho da lateral +X a camara baixa e recua (ver CameraCentroLado).
             let baseX7 = 48, baseY7 = 20;
             const CL7 = (typeof CameraCentroLado !== 'undefined' && CameraCentroLado.activo) ? CameraCentroLado : null;
             if (CL7) {
-                const k7 = THREE.MathUtils.clamp((this.ball.position.x - CL7.xInicio) / (CL7.xFim - CL7.xInicio), 0, 1);
+                const k7 = THREE.MathUtils.clamp((foco.x - CL7.xInicio) / (CL7.xFim - CL7.xInicio), 0, 1);
                 baseX7 += CL7.lateralTV.recua * k7;
                 baseY7 -= CL7.lateralTV.baixa * k7;
             }
@@ -412,7 +414,7 @@ Object.assign(Match, {
             const GR = (typeof GruasDeCamera !== 'undefined') ? GruasDeCamera : null;
             const lista = (GR && GR.cameras) ? GR.cameras : null;
             if (lista && lista.length) {
-                const ladoBola = Math.sign(this.ball.position.z) || 1;
+                const ladoBola = Math.sign(foco.z) || 1;
                 const escolhida = lista.find(c => c.ladoZ === ladoBola) || lista[0];
                 targetPos.copy(escolhida.pos);
             } else {
@@ -422,10 +424,10 @@ Object.assign(Match, {
                 fica o ponto onde a grua estaria, atrás da baliza mais perto da
                 bola.
                 */
-                const ladoBola = Math.sign(this.ball.position.z) || 1;
+                const ladoBola = Math.sign(foco.z) || 1;
                 targetPos.set(9, 2.0, ladoBola * (CAMPO_COMP / 2 + 7));
             }
-            lookTarget.copy(this.ball.position);
+            lookTarget.copy(foco);
         } else if (window.cameraMode === 'cinema') {
             /*
             A CÂMARA CINEMATOGRÁFICA (tecla 9): órbita lenta à volta do estádio, de cima, com
@@ -468,14 +470,14 @@ Object.assign(Match, {
             const golZ = this.setPieceTaker.targetGoalZ;
             // No canto vale sempre (a bola esta na bandeirola, ~34 m do centro da baliza).
             if (typeof golZ === 'number' && (this.state === 'CORNER_KICK' ||
-                Math.hypot(this.ball.position.x, golZ - this.ball.position.z) <= dMax)) {
-                const mx = this.ball.position.x * 0.5;
-                const mz = (this.ball.position.z + golZ) * 0.5;
+                Math.hypot(foco.x, golZ - foco.z) <= dMax)) {
+                const mx = foco.x * 0.5;
+                const mz = (foco.z + golZ) * 0.5;
                 if (window.cameraMode === 'grua') {
-                    lookTarget.set(mx, this.ball.position.y, mz);
+                    lookTarget.set(mx, foco.y, mz);
                 } else {
                     targetPos.z += mz - lookTarget.z;
-                    lookTarget.set(mx, this.ball.position.y, mz);
+                    lookTarget.set(mx, foco.y, mz);
                 }
             }
         }

@@ -982,7 +982,7 @@ class PlayerFSM {
     }
     changeState(newState) {
         if (this.currentState === newState) return;
-        if (this.currentState === 'SLIDE_TACKLE' || this.currentState === 'TACKLE' ||
+        if (this.currentState === 'SLIDE_TACKLE' || this.currentState === 'COMEMORAR' || this.currentState === 'TACKLE' ||
             this.currentState === 'SHOOT' || this.currentState === 'SET_PIECE_KICK' ||
             this.currentState === 'PASS') {
             this.p.resetBonesToDefault();
@@ -1190,6 +1190,33 @@ class PlayerFSM {
                 rig.chest.rotation.z -= s * Math.min(0.25, (ALTURA_BASE_Y - fundo) * 2.0);
             }
         }
+    }
+
+    /*
+    A COMEMORACAO — mistura de duas poses (ComemoracaoGol.joelhos.pose) e escrita no rig.
+    `k` vai de 0 (a) a 1 (b); os campos que faltam numa das poses ficam como na outra.
+    */
+    _poseMistura(a, b, k) {
+        const r = {};
+        for (const c in a) r[c] = a[c] + ((b[c] !== undefined ? b[c] : a[c]) - a[c]) * k;
+        return r;
+    }
+
+    _escreverPoseComemorar(P) {
+        const rig = this.p.rig;
+        if (!rig) return;
+        rig.pelvis.rotation.set(P.pelvisX, 0, 0);
+        rig.chest.rotation.set(P.peitoX, 0, 0);
+        if (rig.neck) rig.neck.rotation.set(P.pescocoX, 0, 0);
+        rig.lLeg.rotation.set(P.coxaE, 0, 0); rig.rLeg.rotation.set(P.coxaD, 0, 0);
+        rig.lKnee.rotation.set(P.joelhoE, 0, 0); rig.rKnee.rotation.set(P.joelhoD, 0, 0);
+        if (rig.lFoot) rig.lFoot.rotation.x = P.peE;
+        if (rig.rFoot) rig.rFoot.rotation.x = P.peD;
+        // rotation.z "para fora" e positivo no braco esquerdo e negativo no direito.
+        rig.lArm.rotation.set(P.bracoEx, 0, P.bracoEz);
+        rig.rArm.rotation.set(P.bracoDx, 0, -P.bracoDz);
+        rig.lElbow.rotation.x = P.cotoveloE;
+        rig.rElbow.rotation.x = P.cotoveloD;
     }
 
     update(dt) {
@@ -2655,6 +2682,87 @@ class PlayerFSM {
                     if (tSlide >= S.levantar) {
                         p.model.position.y = ALTURA_BASE_Y;
                         this.changeState('MOVE_TO_POS');
+                    }
+                }
+                break;
+
+            case 'COMEMORAR':
+                {
+                    /*
+                    A COMEMORACAO DE GOLO (ver ComemoracaoGol, config/comemoracao.js, e o `Comemoracao` em
+                    js/comemoracao.js, que mete o jogador aqui). Duas variantes: `joelhos` (o autor: queda,
+                    deslize de joelhos, bracos no ar, levanta-se) e `abraco` (quem corre ate ele: bracos no ar
+                    e saltinhos). O estado escreve a pose e a altura, como o carrinho; `p.comemoracao.fim` diz ao
+                    controlador que acabou.
+                    */
+                    const CG = ComemoracaoGol, c = p.comemoracao;
+                    if (!c) { this.changeState('MOVE_TO_POS'); break; }
+                    const t = this.timer;
+                    const semDesenho = (typeof Sim !== 'undefined' && Sim.running);
+                    if (!c.entrou) {
+                        c.entrou = true;
+                        p.model.rotation.y = Math.atan2(c.dx, c.dz);
+                    }
+
+                    if (c.tipo === 'joelhos') {
+                        const J = CG.joelhos, PJ = J.pose;
+                        const t1 = J.tQueda, t2 = t1 + J.tDeslize, t3 = t2 + J.tBracos,
+                            t4 = t3 + J.tManter, t5 = t4 + J.tLevantar;
+                        const suave = (u) => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+                        const DE_PE = {
+                            pelvisX: 0, peitoX: 0, pescocoX: 0, coxaE: 0, joelhoE: 0, peE: 0, coxaD: 0, joelhoD: 0, peD: 0,
+                            bracoEx: 0, bracoEz: 0.1, cotoveloE: -0.1, bracoDx: 0, bracoDz: 0.1, cotoveloD: -0.1
+                        };
+                        let P, baixo;
+                        if (t < t1) { P = this._poseMistura(DE_PE, PJ.queda, suave(t / t1)); baixo = t / t1; }
+                        else if (t < t2) { P = this._poseMistura(PJ.queda, PJ.deslize, suave((t - t1) / (0.5 * J.tDeslize))); baixo = 1; }
+                        else if (t < t3) { P = this._poseMistura(PJ.deslize, PJ.bracosAcima, suave((t - t2) / J.tBracos)); baixo = 1; }
+                        else if (t < t4) { P = PJ.bracosAcima; baixo = 1; }
+                        else if (t < t5) { const u = suave((t - t4) / J.tLevantar); P = this._poseMistura(PJ.bracosAcima, DE_PE, u); baixo = 1 - u; }
+                        else { P = DE_PE; baixo = 0; }
+                        this._escreverPoseComemorar(P);
+
+                        // O deslize: a velocidade cai ate parar, sempre na direccao da corrida; nao sai da linha lateral.
+                        if (t < t2) {
+                            const u = Math.min(1, t / t2);
+                            const v = J.velocidadeDeslize * Math.pow(1 - u, 1.6);
+                            p.velocity.set(c.dx * v, 0, c.dz * v);
+                            if (Math.abs(p.model.position.x) > J.limiteLateral && p.model.position.x * c.dx > 0) {
+                                p.velocity.x = 0;
+                            }
+                        } else p.velocity.set(0, 0, 0);
+
+                        // A altura: o corpo desce ate os joelhos tocarem o relvado.
+                        p.model.position.y = ALTURA_BASE_Y - 0.5 * baixo;
+                        if (!semDesenho && typeof p.assentarCorpoInteiro === 'function' && baixo > 0.01) {
+                            p.assentarCorpoInteiro([rig.lArm, rig.rArm]);
+                        }
+                        if (t >= t5) {
+                            p.model.position.y = ALTURA_BASE_Y;
+                            c.fim = true;
+                            p.resetBonesToDefault();
+                            this.changeState('MOVE_TO_POS');
+                        }
+                    } else {
+                        // abraco: de pe, bracos no ar, saltinhos, virado para o autor
+                        const A = CG.abraco;
+                        p.velocity.set(0, 0, 0);
+                        if (c.mira) {
+                            const ya = Math.atan2(c.mira.x - p.model.position.x, c.mira.z - p.model.position.z);
+                            p.model.rotation.y += Math.atan2(Math.sin(ya - p.model.rotation.y), Math.cos(ya - p.model.rotation.y)) * Math.min(1, dt * 8);
+                        }
+                        rig.lArm.rotation.set(A.bracoX, 0, A.bracoZ);
+                        rig.rArm.rotation.set(A.bracoX, 0, -A.bracoZ);
+                        rig.lElbow.rotation.x = A.cotovelo; rig.rElbow.rotation.x = A.cotovelo;
+                        rig.lLeg.rotation.x = 0; rig.rLeg.rotation.x = 0;
+                        rig.lKnee.rotation.x = 0.1; rig.rKnee.rotation.x = 0.1;
+                        p.model.position.y = ALTURA_BASE_Y + Math.abs(Math.sin(t * A.saltoRitmo)) * A.saltoAltura;
+                        if (t >= CG.apoio.festa) {
+                            p.model.position.y = ALTURA_BASE_Y;
+                            c.fim = true;
+                            p.resetBonesToDefault();
+                            this.changeState('MOVE_TO_POS');
+                        }
                     }
                 }
                 break;

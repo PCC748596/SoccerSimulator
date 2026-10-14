@@ -259,6 +259,16 @@ Object.assign(Match, {
                             p.speedMult = 6.0; // Corrida rápida de regresso à formação
                         });
                     });
+
+                    /*
+                    A COMEMORAÇÃO do autor (e de quem corre até ele) vem POR CIMA da volta ao meio-campo
+                    escrita acima: quem participa fica de fora dela até acabar. Autogolo: sem festa.
+                    */
+                    if (typeof Comemoracao !== 'undefined') {
+                        const lt = this.lastTouchedPlayer;
+                        const autor = (lt && lt.team === this.golMarcadoPor && this.lastTouchedTeam === this.golMarcadoPor) ? lt : null;
+                        Comemoracao.iniciar(autor, zSinal);
+                    }
                 }
 
                 } else {
@@ -332,6 +342,7 @@ Object.assign(Match, {
                 this.goalSequenceStage = 0;
                 this.tempoParada = 0;
             }
+            if (typeof Comemoracao !== 'undefined' && Comemoracao.ativa) Comemoracao.update(this.delta);
             
             /*
             OS 22 VOLTAM A PE, e nao de um salto. O alvo tem de ser reescrito
@@ -346,7 +357,8 @@ Object.assign(Match, {
             if (this.goalSequenceStage === 0) {
                 // Estágio 0: A bola fica na baliza e a câmara foca a bola enquanto os jogadores se dirigem para as suas posições
                 this.tempoParada += this.delta;
-                if (this.tempoParada >= 4.5) {
+                // A festa do autor segura a sequência (até ao tecto da ComemoracaoGol.tempoMax).
+                if (this.tempoParada >= 4.5 && !(typeof Comemoracao !== 'undefined' && Comemoracao.emCurso())) {
                     this.tempoParada = 0;
                     this.goalSequenceStage = 1;
 

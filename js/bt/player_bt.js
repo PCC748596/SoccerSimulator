@@ -3733,7 +3733,7 @@ function tratarBolaParada(p) {
         }
         aproximarNoLateral(p);
     } else if (Match.state === 'GOAL') {
-        if (s !== 'MOVE_TO_POS') {
+        if (s !== 'MOVE_TO_POS' && s !== 'COMEMORAR') {
             fsm.changeState('IDLE');
         }
     } else {
