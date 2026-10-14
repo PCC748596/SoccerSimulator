@@ -777,7 +777,8 @@ const MatchStats = {
     não precisa de as ter todas para as medianas serem estáveis.
     */
     amostrasPasse: [],
-    maxAmostrasPasse: 4000,
+    // Cabe um lote de 100 jogos (~250 passes cada): com 4000 o fim do lote ficava de fora e as contagens por faixa mentiam.
+    maxAmostrasPasse: 40000,
 
     /*
     Relógio em segundos SIMULADOS, contados aqui. `Match.tempoDeJogo` não
@@ -804,11 +805,11 @@ const MatchStats = {
     bola chegar tão devagar que dá tempo de a cortar.
     */
     resumoPasses: function () {
+        // Curtos < 20 m, médios 20-35 m, longos > 35 m (pedido). Eram 0-8 / 8-15 / 15-25 / 25+.
         const faixas = [
-            { nome: '0-8m', min: 0, max: 8 },
-            { nome: '8-15m', min: 8, max: 15 },
-            { nome: '15-25m', min: 15, max: 25 },
-            { nome: '25m+', min: 25, max: Infinity }
+            { nome: 'curtos <20m', min: 0, max: 20 },
+            { nome: 'médios 20-35m', min: 20, max: 35 },
+            { nome: 'longos >35m', min: 35, max: Infinity }
         ];
         const mediana = (arr) => {
             if (!arr.length) return null;
@@ -817,6 +818,7 @@ const MatchStats = {
             return Math.round((o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2) * 10) / 10;
         };
         const linhas = [];
+        const total = this.amostrasPasse.length;
         for (const f of faixas) {
             const amostra = this.amostrasPasse.filter(a => a.dist >= f.min && a.dist < f.max);
             if (!amostra.length) continue;
@@ -824,6 +826,7 @@ const MatchStats = {
             linhas.push({
                 faixa: f.nome,
                 n: amostra.length,
+                pctDosPasses: Math.round(1000 * amostra.length / Math.max(1, total)) / 10,
                 pctAlto: Math.round(100 * amostra.filter(a => a.alto).length / amostra.length),
                 vSaidaMediana: mediana(amostra.map(a => a.vSaida)),
                 vChegadaMediana: mediana(amostra.filter(a => a.vChegada !== null).map(a => a.vChegada)),
