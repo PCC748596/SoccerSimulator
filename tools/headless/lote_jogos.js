@@ -21,7 +21,24 @@ const { fork } = require('child_process');
 const os = require('os');
 const path = require('path');
 
-const JOGOS = Number(process.env.LOTE_JOGOS || process.argv[2] || 60);
+/*
+A LIGA (LOTE_LIGA=1): os 20 times do campeonato, TODOS CONTRA TODOS, UM JOGO POR PAR (190 jogos), com o MANDO
+alternado: quem joga em casa e a equipa A (a primeira do jogo), e o mandante de cada par alterna com a paridade dos
+indices, para cada time ter 9 ou 10 jogos em casa e os outros fora. Pedido: *"um jogo para cada com cada rival, um em
+casa e outro fora alternando; o mando de campo tambem afeta os resultados"*. No fim sai a classificacao, e a
+diferenca dos resultados em casa e fora.
+*/
+const LIGA_NOMES = ['Palmeiras-SP', 'Grêmio-RS', 'Atlético-MG', 'Flamengo-RJ', 'Botafogo-RJ', 'Bragantino-SP', 'Fluminense-RJ',
+    'Atlético-PR', 'Internacional-RS', 'Fortaleza-CE', 'São Paulo-SP', 'Cuiabá-MT', 'Corinthians-SP', 'Cruzeiro-MG',
+    'Vasco-RJ', 'Bahia-BA', 'Santos-SP', 'Goiás-GO', 'Coritiba-PR', 'América-MG'];
+const LIGA = process.env.LOTE_LIGA === '1';
+// Os pares (a, b, mandante) de uma liga de `n` times, a < b, o mandante alternando com a paridade de a + b.
+function calendarioDaLiga(n) {
+    const pares = [];
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) pares.push({ casa: ((a + b) % 2 === 0) ? a : b, fora: ((a + b) % 2 === 0) ? b : a });
+    return pares;
+}
+const JOGOS = LIGA ? calendarioDaLiga(LIGA_NOMES.length).length : Number(process.env.LOTE_JOGOS || process.argv[2] || 60);
 const MINUTOS = Number(process.env.LOTE_MINUTOS || process.argv[3] || 18);
 const WORKERS = Number(process.argv[4] || Math.min(8, Math.max(1, os.cpus().length - 2)));
 
@@ -126,7 +143,17 @@ if (process.env.LOTE_WORKER) {
         // Equipas reais, um par diferente por jogo. Sem planteis carregados,
         // corre com as genéricas de sempre — o lote continua a valer.
         let nomeA = 'genérica A', nomeB = 'genérica B', forcaA = null, forcaB = null;
-        if (equipas.length >= 2) {
+        let ligaA = null, ligaB = null;
+        if (LIGA && typeof SquadsData !== 'undefined' && SquadsData.equipas) {
+            const par = calendarioDaLiga(LIGA_NOMES.length)[i];
+            ligaA = SquadsData.equipas.find(e => e.nome === LIGA_NOMES[par.casa]);
+            ligaB = SquadsData.equipas.find(e => e.nome === LIGA_NOMES[par.fora]);
+            if (!ligaA || !ligaB) throw new Error('equipa da liga nao encontrada: ' + LIGA_NOMES[par.casa] + ' / ' + LIGA_NOMES[par.fora]);
+        }
+        if (ligaA && ligaB) {
+            nomeA = ligaA.nome; nomeB = ligaB.nome; forcaA = ligaA.forca; forcaB = ligaB.forca;
+            Match.trocarEquipas({ A: ligaA.id, B: ligaB.id });
+        } else if (equipas.length >= 2) {
             const a = equipas[(i * 2) % equipas.length];
             const b = equipas[(i * 2 + 1) % equipas.length];
             nomeA = a.nome; nomeB = b.nome; forcaA = a.forca; forcaB = b.forca;
@@ -384,6 +411,8 @@ function relatorio() {
 
     console.log(`\n=== ${n} jogos de ${MINUTOS} min (${seg}s de relógio) ===`);
     const TS = resultados[0].timeScale || 1, RAZOES = resultados[0].razoes || [];
+    const forcas = {};
+    for (const r of resultados) { if (typeof r.forcaA === 'number') { forcas[r.equipaA] = r.forcaA; forcas[r.equipaB] = r.forcaB; } }
     {
         const fs = resultados.flatMap(r => [r.forcaA, r.forcaB]).filter(v => typeof v === 'number');
         if (fs.length) {
@@ -409,6 +438,30 @@ function relatorio() {
         const vez = (RAZOES.indexOf(l.m.campo) >= 0 || !l.m.alvo) ? null : (l.medido / l.m.alvo) * TS;
         const vezTxt = (vez === null) ? '—'.padStart(10) : (vez.toFixed(1) + 'x').padStart(10);
         console.log('  ' + rot + medido + alvo + pct + vezTxt + nota);
+    }
+    if (LIGA) {
+        const tab = {};
+        const T = (nome) => tab[nome] || (tab[nome] = { nome: nome, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0, pts: 0, casa: { j: 0, pts: 0, gp: 0, gc: 0 }, fora: { j: 0, pts: 0, gp: 0, gc: 0 } });
+        for (const j of resultados) {
+            if (!j.placar) continue;
+            const c = T(j.equipaA), f = T(j.equipaB);
+            const gc = j.placar.A, gf = j.placar.B;
+            for (const [t, gp, ctr, lado] of [[c, gc, gf, 'casa'], [f, gf, gc, 'fora']]) {
+                const pts = gp > ctr ? 3 : (gp === ctr ? 1 : 0);
+                t.j++; t.gp += gp; t.gc += ctr; t.pts += pts; if (pts === 3) t.v++; else if (pts === 1) t.e++; else t.d++;
+                t[lado].j++; t[lado].pts += pts; t[lado].gp += gp; t[lado].gc += ctr;
+            }
+        }
+        const linhas = Object.values(tab).sort((a, b) => b.pts - a.pts || (b.gp - b.gc) - (a.gp - a.gc) || b.gp - a.gp);
+        console.log('\nCLASSIFICAÇÃO (1 jogo por par, mando alternado; jogos de ' + MINUTOS + ' min de relógio):');
+        console.log('   #  time                  forca  J   V  E  D   GP  GC   SG  Pts | casa: J Pts GP-GC | fora: J Pts GP-GC');
+        linhas.forEach((t, k) => {
+            console.log(String(k + 1).padStart(4) + '  ' + t.nome.padEnd(20) + String(forcas[t.nome] || '').padStart(5) + String(t.j).padStart(4) + String(t.v).padStart(5) + String(t.e).padStart(3) + String(t.d).padStart(3) +
+                String(t.gp).padStart(5) + String(t.gc).padStart(4) + String((t.gp - t.gc >= 0 ? '+' : '') + (t.gp - t.gc)).padStart(5) + String(t.pts).padStart(5) +
+                ' |' + String(t.casa.j).padStart(10) + String(t.casa.pts).padStart(4) + (' ' + t.casa.gp + '-' + t.casa.gc).padStart(7) + ' |' + String(t.fora.j).padStart(10) + String(t.fora.pts).padStart(4) + (' ' + t.fora.gp + '-' + t.fora.gc).padStart(7));
+        });
+        const sc = linhas.reduce((a, t) => a + t.casa.gp, 0), sf = linhas.reduce((a, t) => a + t.fora.gp, 0), jn = linhas.reduce((a, t) => a + t.casa.j, 0) || 1;
+        console.log('   golos por jogo: mandante ' + (sc / jn).toFixed(2) + ' | visitante ' + (sf / jn).toFixed(2));
     }
     // Resultados: A joga "em casa". So tem sentido em jogos de ~90 min.
     {
