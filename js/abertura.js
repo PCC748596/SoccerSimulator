@@ -26,6 +26,8 @@ const Abertura = {
     fase: null,
     t: 0,
     tEspera: 0,
+    // O manager (js/narracao/ponte.js) segura os times alinhados ate o utilizador dar a saida: com isto verdadeiro a espera nao acaba sozinha.
+    aguardarSaida: false,
     partes: [],
     _v: null,
 
@@ -250,7 +252,7 @@ const Abertura = {
             }
         } else if (this.fase === 'espera') {
             this.tEspera += dt;
-            if (this.tEspera >= AM.esperaAlinhados) { this.terminar(); return; }
+            if (this.tEspera >= AM.esperaAlinhados && !this.aguardarSaida) { this.terminar(); return; }
         }
         if (this.activa && this.modo === 'inicio') this._bolaNaMao();
     },

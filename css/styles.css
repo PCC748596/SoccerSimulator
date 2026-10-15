@@ -937,6 +937,7 @@ desvio ao alvo — verde dentro de 15%, amarelo até 40%, vermelho acima disso
 body.embutido #painel-comandos,
 body.embutido #coluna-direita,
 body.embutido #painel-jogadores,
+body.embutido #placar-linha,
 body.embutido #hud-jogador-esq,
 body.embutido #hud-jogador-dir {
     display: none !important;

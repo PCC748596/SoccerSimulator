@@ -2129,14 +2129,14 @@ Object.assign(Match, {
             (typeof corDoUniforme === 'function') ? corDoUniforme(uniA, '#3498db') : '#3498db',
             (typeof corDoUniforme === 'function') ? corDoUniforme(uniB, '#e74c3c') : '#e74c3c'
         ];
-        const uniGKcomLuvas = () => (uniGK && typeof sortearLuvas === 'function')
-            ? Object.assign({}, uniGK, { luvas: sortearLuvas(camisasEmCampo) }) : uniGK;
+        // `outro`: o uniforme de guarda-redes proprio da equipa (o manager escolhe um por clube); sem ele vale o de sempre.
+        const uniGKcomLuvas = (outro) => { const base = outro || uniGK; return (base && typeof sortearLuvas === 'function') ? Object.assign({}, base, { luvas: sortearLuvas(camisasEmCampo) }) : base; };
 
         for (let i = 0; i < 11; i++) {
             let corCamisa = (i === 0) ? '#f1c40f' : '#3498db';
             let corCalcao = (i === 0) ? '#1e1b18' : '#34495e';
             let p = new FootballPlayer(i, corCamisa, corCalcao, 'TeamA',
-                (i === 0) ? uniGKcomLuvas() : uniA);
+                (i === 0) ? uniGKcomLuvas(this.uniformeGKA) : uniA);
             p.skills = skillsA ? skillsA[i] : null;
             // O estilo que o jogador traz nos dados manda sobre o estilo por
             // omissão da posição — ver aplicarPlayingStyle.
@@ -2149,7 +2149,7 @@ Object.assign(Match, {
             let corCamisa = (i === 0) ? '#e67e22' : '#e74c3c';
             let corCalcao = (i === 0) ? '#111111' : '#ffffff';
             let p = new FootballPlayer(i + 20, corCamisa, corCalcao, 'TeamB',
-                (i === 0) ? uniGKcomLuvas() : uniB);
+                (i === 0) ? uniGKcomLuvas(this.uniformeGKB) : uniB);
             p.skills = skillsB ? skillsB[i] : null;
             p.playingStyleFixo = (p.skills && p.skills.estilo) ? p.skills.estilo : null;
             this.opponents.push(p);
@@ -2173,6 +2173,51 @@ Object.assign(Match, {
     e e por isso que o clamp usa z*dir <= -margem.
     */
     posicaoDeSaida: function (p, dir) {
+        const bruta = this._saidaBruta(p, dir);
+        if (p.role === 'gk') return bruta;
+        const lista = (p.team === 'TeamA') ? this.players : this.opponents;
+        const i = lista.indexOf(p);
+        if (i < 0) return bruta;
+        return this._saidaSeparada(lista, dir)[i];
+    },
+
+    /*
+    SEM DOIS JOGADORES NO MESMO SITIO NA SAIDA. Os postos vem da formacao e, com formacoes que o treinador monta (o manager tem sete), dois
+    postos podem cair juntos depois do clamp ao proprio campo: o AM e o ponta-de-lanca, os dois em x = 0, ficavam a 0-0,9 m um do outro, ou
+    em cima do batedor da saida. Aqui percorre-se o onze por ordem e quem ficar a menos de `SEPARACAO_SAIDA` de um ja colocado (ou do
+    batedor e do apoio da saida, quando o plano ja existe) e empurrado para o lado.
+    */
+    _saidaSeparada: function (lista, dir) {
+        const SEP = 2.2, xMax = (CAMPO_LARG / 2) - 1.5;
+        const plano = this.saidaPlano || null;
+        const ocupados = [];
+        const fora = [];
+        if (plano && plano.takerPos) ocupados.push(plano.takerPos);
+        if (plano && plano.apoioPos) ocupados.push(plano.apoioPos);
+        lista.forEach((q, k) => {
+            const b = this._saidaBruta(q, dir);
+            if (q.role === 'gk' || (plano && (q === plano.taker || q === plano.apoio))) { fora.push(b); return; }
+            let x = b.x;
+            for (let volta = 0; volta < 6; volta++) {
+                let mexeu = false;
+                for (const o of ocupados) {
+                    if (Math.hypot(x - o.x, b.z - o.z) < SEP) {
+                        const lado = (x - o.x) !== 0 ? Math.sign(x - o.x) : ((k % 2) ? 1 : -1);
+                        const dx = Math.sqrt(Math.max(0, SEP * SEP - (b.z - o.z) * (b.z - o.z)));
+                        x = Math.max(-xMax, Math.min(xMax, o.x + lado * (dx + 0.05)));
+                        mexeu = true;
+                    }
+                }
+                if (!mexeu) break;
+            }
+            const r = { x: x, z: b.z };
+            ocupados.push(r);
+            fora.push(r);
+        });
+        return fora;
+    },
+
+    _saidaBruta: function (p, dir) {
         const margem = 1.5;
         if (p.role === 'gk') return { x: 0, z: -48 * dir };
 

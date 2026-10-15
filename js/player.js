@@ -6783,8 +6783,8 @@ class FootballPlayer {
         }
         const base = new THREE.Color(F.cor);
         const claro = (0.2126 * base.r + 0.7152 * base.g + 0.0722 * base.b) > 0.5;
-        const corTexto = (this.uniforme && this.uniforme.numero) ? this.uniforme.numero : (claro ? '#000000' : '#ffffff');
-        const corContorno = (this.uniforme && this.uniforme.contorno) ? this.uniforme.contorno : (claro ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)');
+        const corTexto = (this.uniforme && this.uniforme.numeroCalcao) ? this.uniforme.numeroCalcao : (this.uniforme && this.uniforme.numero) ? this.uniforme.numero : (claro ? '#000000' : '#ffffff');
+        const corContorno = (this.uniforme && this.uniforme.contornoCalcao) ? this.uniforme.contornoCalcao : (this.uniforme && this.uniforme.contorno) ? this.uniforme.contorno : (claro ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)');
         ctx.save();
         ctx.scale(1.10 / 0.68, 1);
         ctx.font = 'bold ' + SN.tamanho + 'px sans-serif';

@@ -1,0 +1,12 @@
+require('../headless/harness.js');
+const { FORM, equipaMgr } = require('../headless/fixtures_manager.js');
+global.Sim = global.Sim || {}; Sim.running = false;
+Match.init(new THREE.Scene());
+Officials.arbitro = null; Officials.init(new THREE.Scene());
+const c = equipaMgr('Fluminense-RJ', FORM['4-4-2']), f = equipaMgr('Internacional-RS', FORM['4-3-3']);
+Ponte.saida = () => {};
+AdaptadorManager.prepararPartida({ equipa: c.equipa, jogadoresPorId: c.porId, formacao: { nome: 'a', slots: FORM['4-4-2'] } }, { equipa: f.equipa, jogadoresPorId: f.porId, formacao: { nome: 'b', slots: FORM['4-3-3'] } }, {});
+Abertura.jaCorreu = false; Abertura.activa = false;
+console.log('AM', typeof AberturaModel !== 'undefined' && AberturaModel.activa, 'T', typeof TunelJogadores !== 'undefined' && TunelJogadores.activo, 'arb', !!Officials.arbitro, 'sim', Sim.running);
+console.log('iniciar ->', Abertura.iniciar(), Match.state);
+process.exit(0);

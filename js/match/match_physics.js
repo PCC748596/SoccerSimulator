@@ -417,7 +417,8 @@ Object.assign(Match, {
             } else if (this.goalSequenceStage === 2) {
                 // Pequena pausa (1s) e inicia o kickoff
                 this.tempoParada += this.delta;
-                if (this.tempoParada > 1.0) {
+                // `segurarSaida` (ponte.js): o manager tem os times nos postos de saida a espera de o utilizador dar a saida.
+                if (this.tempoParada > 1.0 && !this.segurarSaida) {
                     this.tempoParada = 0;
                     this.goalSequenceStage = undefined;
                     this.resetPlay(this.nextKickoffTeam);

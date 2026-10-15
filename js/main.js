@@ -880,6 +880,7 @@ function updateCameraFrustum() {
     window.cameraFrustum.setFromProjectionMatrix(window.cameraProjMatrix);
 }
 
+const _embutidoSemCidade = /[?&]embutido/.test(location.search) && !/[?&](cidade|oculto)/.test(location.search);
 function animate(time) {
     requestAnimationFrame(animate);
 
@@ -896,7 +897,21 @@ function animate(time) {
     window.lastFrameDelta = delta;
 
     if (typeof Weather !== 'undefined') Weather.update(delta);
-    if (typeof Cidade !== 'undefined') Cidade.update(delta);
+    /*
+    A CIDADE SO QUANDO APARECE. Embutido no manager (?embutido=1) as cameras normais (TV, lateral, centro) nao a mostram (o estadio tapa-a)
+    e ela pesa (500 torcedores a andar, transito). So se constroi (uma vez) e so se desenha e actualiza nas cameras que a veem
+    (cinema, grua, orbita), ou sempre com ?cidade=1.
+    */
+    if (typeof Cidade !== 'undefined') {
+        if (_embutidoSemCidade) {
+            const ve = ['cinema', 'grua', 'orbit'].indexOf(window.cameraMode) >= 0;
+            if (ve && !Cidade.grupo && typeof CidadeConfig !== 'undefined' && CidadeConfig.ativa && Match.scene) Cidade.construir(Match.scene);
+            if (Cidade.grupo) Cidade.grupo.visible = ve;
+            if (ve) Cidade.update(delta);
+        } else {
+            Cidade.update(delta);
+        }
+    }
 
     fpsFrames++;
     if (time - fpsLastTime >= 1000) {
@@ -1333,7 +1348,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 850);
         rendererCore = new THREE.WebGLRenderer({ antialias: !isTouchDevice, powerPreference: "high-performance" });
         // Max pixel ratio of 1.0 on tablets to save fill rate
-        rendererCore.setPixelRatio(isTouchDevice ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
+        // Embutido no manager (?embutido=1): pixel ratio 1 (o iframe divide a GPU com a pagina do manager).
+        rendererCore.setPixelRatio((isTouchDevice || /[?&]embutido/.test(location.search)) ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
         rendererCore.setSize(window.innerWidth, window.innerHeight);
         rendererCore.shadowMap.enabled = true;
         rendererCore.shadowMap.type = THREE.PCFShadowMap; // Better performance
@@ -1398,7 +1414,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // A cidade à volta do estádio (js/cidade.js). O nevoeiro do Weather esbate o fim dela.
         // ?oculto=1 (a partida dentro do iframe do manager, sem desenhar): a cidade nao se constroi.
         const _params = new URLSearchParams(location.search);
-        if (typeof Cidade !== 'undefined' && CidadeConfig.ativa && !_params.has('oculto')) Cidade.construir(scene);
+        if (typeof Cidade !== 'undefined' && CidadeConfig.ativa && !_params.has('oculto') && (!_params.has('embutido') || _params.has('cidade'))) Cidade.construir(scene);
         
         if (isTouchDevice) {
             Match.setSpeed(0.9);

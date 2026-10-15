@@ -48,6 +48,7 @@ const Ponte = {
         if (!m || m.para !== 'simulador3d') return;
         try {
             if (m.tipo === 'iniciar') this.iniciar(m);
+            else if (m.tipo === 'preparar') this.preparar(m);
             else if (m.tipo === 'pausar') this.pausar();
             else if (m.tipo === 'continuar') this.continuar();
             else if (m.tipo === 'parar') this.parar();
@@ -56,6 +57,45 @@ const Ponte = {
             this.enviar('erro', { mensagem: String(e && e.message || e) });
         }
     },
+
+    // So monta as equipas no campo (para o 3D mostrar os times certos antes da saida); nao arranca a partida.
+    // No modo visivel a ENTRADA DOS TIMES corre ja aqui (ao abrir o 3D) e os times esperam alinhados pela saida (`iniciar`).
+    preparar(m) {
+        AdaptadorManager.prepararPartida(m.casa, m.fora, { taticaDe: m.taticaDe || 'casa', escala: m.escala });
+        this._preparada = this._chave(m);
+        this._medir();
+        // O som do estadio e do publico (desligado por omissao no jogo solto) liga-se: o clique do utilizador no manager desbloqueia-o (iframe allow=autoplay).
+        if (typeof AmbienteSonoro !== 'undefined' && AmbienteSonoro.setLigado) { AmbienteSonoro.setLigado(true); if (AmbienteSonoro.tentarTocar) AmbienteSonoro.tentarTocar(); }
+        if (typeof Sim === 'undefined') global_Sim();
+        Sim.running = false;
+        if (typeof Abertura !== 'undefined') {
+            Abertura.aguardarSaida = false; Match.segurarSaida = true; Abertura.jaCorreu = false; Abertura.activa = false;
+            window.isPaused = false;
+            Abertura.iniciar();
+        }
+    },
+    /*
+    MEDIDOR DE DESEMPENHO (so no browser, modo visivel): de 2 em 2 s envia { fps, msJogo } — os quadros por segundo e o tempo medio que
+    o Match.update gasta por quadro. fps baixo com msJogo baixo = o peso e o desenho (GPU); msJogo alto = e a logica do jogo.
+    */
+    _medir() {
+        if (this._medidor || (typeof process !== 'undefined' && process.versions && process.versions.node) || typeof requestAnimationFrame !== 'function' || /jsdom/i.test((navigator && navigator.userAgent) || '')) return;
+        this._medidor = true;
+        const orig = Match.update.bind(Match);
+        let acc = 0, n = 0, quadros = 0, t0 = performance.now();
+        Match.update = function (dt) { const a = performance.now(); orig(dt); acc += performance.now() - a; n++; };
+        const volta = () => {
+            quadros++;
+            const t = performance.now();
+            if (t - t0 >= 2000) {
+                Ponte.enviar('perf', { fps: Math.round(quadros * 1000 / (t - t0)), msJogo: n ? Math.round(acc / n * 10) / 10 : 0, passosPorQuadro: Math.round(n / Math.max(1, quadros) * 10) / 10 });
+                acc = 0; n = 0; quadros = 0; t0 = t;
+            }
+            requestAnimationFrame(volta);
+        };
+        requestAnimationFrame(volta);
+    },
+    _chave(m) { return m.casa.equipa.name + '|' + m.fora.equipa.name; },
 
     iniciar(m) {
         this.parar();
@@ -67,7 +107,12 @@ const Ponte = {
         this._ultimoEstado = -1;
 
         // A partida no motor: elencos, escalacao, formacoes e tatica.
-        AdaptadorManager.prepararPartida(m.casa, m.fora, { taticaDe: m.taticaDe || 'casa', escala: m.escala });
+        // Se o `preparar` ja montou esta partida (e a entrada dos times esta a correr), nao se refaz nada: so se solta a espera.
+        const jaPreparada = (this.modo === 'visivel' && this._preparada === this._chave(m));
+        if (!jaPreparada) AdaptadorManager.prepararPartida(m.casa, m.fora, { taticaDe: m.taticaDe || 'casa', escala: m.escala });
+        this._preparada = null;
+        if (typeof Abertura !== 'undefined') Abertura.aguardarSaida = false;
+        Match.segurarSaida = false;
         MatchStats.reset();
         Match.tempoDeJogo = 0; Match.placarA = 0; Match.placarB = 0;
         Match.primeiroTempoAcabou = false;
@@ -80,12 +125,15 @@ const Ponte = {
         // O modo decide quem conduz o tick: o lote (oculto, sem desenhar) ou o animate (visivel).
         if (typeof Sim === 'undefined') global_Sim();
         Sim.running = (this.modo === 'oculto');
+        if (this.modo === 'visivel') window.isPaused = false;
         if (this.modo === 'visivel' && typeof window !== 'undefined') window.speedMultiplier = this.velocidade;
         window.comemoracaoNaSimulacao = false;
 
         this.estado = 'a_correr';
         this.enviar('iniciada', { minuto: 1 });
         Eventos.registar('INICIO', {});
+        // No modo visivel as equipas entram pelo tunel (js/abertura.js) antes da saida de bola, como no jogo normal; o relogio so corre depois.
+        if (this.modo === 'visivel' && !jaPreparada && typeof Abertura !== 'undefined') { Abertura.jaCorreu = false; Abertura.activa = false; Abertura.iniciar(); }
         if (this.modo === 'oculto') this._arrancarCiclo();
         else this._arrancarVigia();
     },
@@ -173,7 +221,7 @@ const Ponte = {
     _limpar(ev) { return JSON.parse(JSON.stringify(ev, (k, v) => (k === '_idade' ? undefined : v))); },
 
     _estadoPeriodico() {
-        const min = Math.floor(Match.tempoDeJogo / 60 / 5) * 5;
+        const min = Math.floor(Match.tempoDeJogo / 60);
         if (min === this._ultimoEstado) return;
         this._ultimoEstado = min;
         const posseA = MatchStats.TeamA.posseSegundos || 0, posseB = MatchStats.TeamB.posseSegundos || 0;

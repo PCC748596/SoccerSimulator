@@ -165,7 +165,10 @@ const Uniformes = {
         corPrincipal: '#7a1b2b',
         // Numero BRANCO (pedido), com contorno escuro para se ler sobre o branco das listras.
         numero: '#ffffff',
-        contorno: 'rgba(0,0,0,0.85)'
+        contorno: 'rgba(0,0,0,0.85)',
+        // O numero do CALCAO e verde escuro (pedido): o calcao e branco, onde o branco do numero da camisa nao se leria.
+        numeroCalcao: '#0f6b3a',
+        contornoCalcao: 'rgba(0,0,0,0.25)'
     },
 
     /*

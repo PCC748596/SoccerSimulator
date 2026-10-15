@@ -157,6 +157,25 @@ const AdaptadorManager = {
         Tatics.formacaoA = kC; Tatics.formacaoB = kF;
         const t = ((opcoes.taticaDe || 'casa') === 'casa' ? casa : fora).equipa.tactics;
         if (t && this.ESTILO_DO_MANAGER[t.style]) Tatics.estilo = this.ESTILO_DO_MANAGER[t.style];
+        // A CASA a esquerda do ecra, como no placar do manager: a camera lateral TV fica em +X, onde a esquerda e +Z; o TeamA ataca +Z
+        // no 1.o tempo (`Lados.trocados` falso), por isso a casa so fica a esquerda com os lados trocados.
+        if (typeof Lados !== 'undefined') Lados.trocados = true;
+        // Os uniformes que o treinador escolheu (kit 1/2/3): o desenho de linha entra na tabela `Uniformes` pelo nome da equipa; o do
+        // guarda-redes vai em `Match.uniformeGKA/B` (match_setup.js).
+        // O kit 1 (titular) de um clube que ja tem desenho feito a mao no simulador (config/uniformes.js, ex.: o tricolor do Fluminense) fica com
+        // esse desenho; os outros kits, e os clubes sem desenho, vestem a conversao do kit do manager. O original guarda-se para voltar a ele.
+        this._originais = this._originais || {};
+        const uni = (lado, eq) => {
+            if (!lado.uniforme || typeof Uniformes === 'undefined') return;
+            if (!(eq.nome in this._originais)) this._originais[eq.nome] = Uniformes[eq.nome] || null;
+            const orig = this._originais[eq.nome];
+            if (lado.uniforme.titular && orig) Uniformes[eq.nome] = orig;
+            else if (lado.uniforme.linha) Uniformes[eq.nome] = lado.uniforme.linha;
+            else if (orig) Uniformes[eq.nome] = orig; else delete Uniformes[eq.nome];
+        };
+        uni(casa, eC); uni(fora, eF);
+        Match.uniformeGKA = (casa.uniforme && casa.uniforme.gk) || null;
+        Match.uniformeGKB = (fora.uniforme && fora.uniforme.gk) || null;
         Match.trocarEquipas({ A: eC.id, B: eF.id });
         return { chaveCasa: kC, chaveFora: kF, equipaCasa: eC, equipaFora: eF };
     }
