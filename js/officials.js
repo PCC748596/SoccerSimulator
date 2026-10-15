@@ -564,14 +564,15 @@ const RefereeModel = {
         quase todos os vermelhos reais saem do segundo amarelo.
         */
         /*
-        FALTAS SEGUIDAS SEM GRAVIDADE TAMBEM DAO AMARELO (Lei 12: infraccoes repetidas). Pedido: *"varias faltas seguidas sem
-        gravidade tambem devem gerar amarelos; assim nao se mexe no limiar"*. Cada falta de um jogador entra numa lista e
-        sai dela passados `janelaSegundos` segundos de RELOGIO do jogo; se ele chega a `faltas` faltas sem ter visto
-        cartao, a ultima da amarelo (ou vermelho, se ja tinha amarelo: o segundo amarelo, como sempre). Um cartao,
-        por qualquer regra, limpa a lista. Isto acrescenta amarelos sem tocar no limiar de gravidade nem no do vermelho.
+        FALTAS SEGUIDAS DA MESMA EQUIPA DAO AMARELO (Lei 12: infraccoes repetidas, o jogo "picotado"). Pedido: *"nao e o mesmo
+        jogador fazer 3 faltas: sao faltas seguidas do mesmo time, tentando picotar o jogo"*. Conta-se a SEQUENCIA de
+        faltas da equipa: cada falta seguinte da mesma equipa, a menos de `janelaSegundos` (relogio do jogo) da anterior e
+        sem nenhuma falta do adversario pelo meio, soma 1; a `faltas`-esima da sequencia da amarelo a quem a cometeu
+        (vermelho se ele ja tinha amarelo: o segundo amarelo). Um cartao zera a sequencia, e uma falta do adversario
+        ou o tempo tambem. Acrescenta amarelos sem tocar nos limiares de gravidade nem no do vermelho.
         */
-        reincidencia: { activo: true, faltas: 3, janelaSegundos: 1800 },
-        limiarAmarelo: 0.85,   // voltou a 0.85 (14 de Outubro): os amarelos que faltam vem da reincidencia (faltas seguidas), nao de baixar o limiar
+        reincidencia: { activo: true, faltas: 4, janelaSegundos: 600 },   // 3 -> 4 faltas seguidas (15 de Outubro de 2026): com 3 saiam 6.9 amarelos por jogo (pedido: 4-5)
+        limiarAmarelo: 0.68,   // 0.85 -> 0.68 (-20%, pedido de 15 de Outubro de 2026)
         /*
         SUBIR ESTE LIMIAR PARA CORTAR VERMELHOS FOI TENTADO E NAO SERVIU.
 
@@ -586,7 +587,7 @@ const RefereeModel = {
 
         Volta a 0.95. O corte faz-se onde a expulsao nasce.
         */
-        limiarVermelho: 0.95,
+        limiarVermelho: 0.76,   // 0.95 -> 0.76 (-20%, pedido de 15 de Outubro de 2026)
 
         /*
         O LIMIAR DO SEGUNDO AMARELO — mais baixo que o do primeiro, e nao o
@@ -648,7 +649,7 @@ const RefereeModel = {
         e "nenhum" de "cinco", e foi so isso que se usou para escolher — nao
         se persegue aqui nada mais fino.
         */
-        cautelaDoAdvertido: 0.70,
+        cautelaDoAdvertido: 0.70,   // 0.85 -> 0.75 (15 de Outubro de 2026): com 0.85 os vermelhos foram a 0.43 por jogo (alvo ~0.20)
 
         /*
         Ate onde atras e que um ataque ainda conta como promissor, em metros a
@@ -656,7 +657,7 @@ const RefereeModel = {
         Uma falta a 40 m da baliza adversaria trava um ataque; a mesma falta a
         cinco metros da propria area trava uma saida a jogar, que nao e o mesmo.
         */
-        zMinAtaquePromissor: 15.0,
+        zMinAtaquePromissor: 25.0,   // 15 -> 25 (15 de Outubro de 2026): mais faltas contam como travar um ataque promissor
 
         /*
         Velocidade minima, em m/s, com que o portador tem de ir para a frente
@@ -673,7 +674,7 @@ const RefereeModel = {
             velMin 5.0   11.4%
             velMin 6.0    2.9%
         */
-        velMinAtaquePromissor: 4.5
+        velMinAtaquePromissor: 4.0   // 4.5 -> 3.5 -> 4.0 (15 de Outubro de 2026): com 3.5 e a reincidencia saiam 6.5 amarelos por jogo (pedido: 4-5)
     },
 
     /*
@@ -2703,17 +2704,18 @@ const Officials = {
     O SEGUNDO AMARELO é o que produz quase todos os vermelhos: o vermelho
     directo exige uma gravidade que quase nenhum lance atinge.
     */
-    // Regista uma falta do jogador e diz se ja chegou a `faltas` dentro da janela (relogio do jogo, em segundos).
+    // Regista a falta da EQUIPA do jogador e diz se a sequencia de faltas seguidas dessa equipa ja chegou a `faltas`.
     _reincidente: function (jogador) {
         const R = RefereeModel.faltas.reincidencia;
-        if (!R || !R.activo || !jogador) return false;
-        const agora = (typeof Match !== 'undefined' && typeof Match.tempoDeJogo === 'number') ? Match.tempoDeJogo : 0;
-        const l = jogador._faltasRecentes || (jogador._faltasRecentes = []);
-        while (l.length && agora - l[0] > R.janelaSegundos) l.shift();
-        l.push(agora);
-        return l.length >= R.faltas;
+        if (!R || !R.activo || !jogador || typeof Match === 'undefined') return false;
+        const agora = (typeof Match.tempoDeJogo === 'number') ? Match.tempoDeJogo : 0;
+        const q = Match._seqFaltas || (Match._seqFaltas = { team: null, n: 0, t: -1e9 });
+        if (q.team === jogador.team && agora - q.t <= R.janelaSegundos) q.n++;
+        else { q.team = jogador.team; q.n = 1; }
+        q.t = agora;
+        return q.n >= R.faltas;
     },
-    _limparReincidencia: function (jogador) { if (jogador && jogador._faltasRecentes) jogador._faltasRecentes.length = 0; },
+    _limparReincidencia: function (jogador) { if (typeof Match !== 'undefined' && Match._seqFaltas) { Match._seqFaltas.n = 0; } },
 
     decidirCartao: function (gravidade, jogador, travouAtaque) {
         const F = RefereeModel.faltas;
@@ -2899,7 +2901,8 @@ const Officials = {
         let cartao = this.decidirCartao(gravidade, infractor, !!(dados && dados.travouAtaque));
         // As faltas SEGUIDAS (reincidencia): ver RefereeModel.faltas.reincidencia.
         if (cartao) this._limparReincidencia(infractor);
-        else if (this._reincidente(infractor)) { cartao = infractor.temAmarelo ? 'vermelho' : 'amarelo'; this._limparReincidencia(infractor); }
+        // So da AMARELO: a sequencia de faltas nao expulsa por si (o segundo amarelo por reincidencia deixava 0.43 vermelhos por jogo, alvo 0.20); quem ja tem amarelo so zera a sequencia.
+        else if (this._reincidente(infractor)) { if (!infractor.temAmarelo) cartao = 'amarelo'; this._limparReincidencia(infractor); }
         if (cartao === 'amarelo') {
             infractor.temAmarelo = true;
             if (typeof MatchStats !== 'undefined') MatchStats[infractor.team].cartoes.amarelos++;
