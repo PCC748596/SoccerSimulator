@@ -1933,8 +1933,9 @@ const Tatics = {
     },
 
     update: function () {
-        this.formacaoA = document.getElementById('t-formacao-A').value;
-        this.formacaoB = document.getElementById('t-formacao-B').value;
+        // `formacaoFixaA/B` (adaptador_manager.js): a formacao do manager; o select do painel so conhece 3 e nao a pode repor.
+        this.formacaoA = this.formacaoFixaA || document.getElementById('t-formacao-A').value;
+        this.formacaoB = this.formacaoFixaB || document.getElementById('t-formacao-B').value;
         this.estilo = document.getElementById('t-estilo').value;
         const teamStyleEl = document.getElementById('t-team-style');
         if (teamStyleEl) this.teamPlayStyle = teamStyleEl.value;

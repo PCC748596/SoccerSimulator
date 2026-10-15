@@ -2608,7 +2608,7 @@ Object.assign(Match, {
             // Ele é quem dá a saída — pode ficar no campo de ataque, encostado
             // à bola (~0.4m), diferente do resto da equipa que fica atrás.
             if (Math.hypot(taker.model.position.x - plano.takerPos.x,
-                taker.model.position.z - plano.takerPos.z) > TOLERANCIA_SAIDA) {
+                taker.model.position.z - plano.takerPos.z) > 0.4) {
                 taker.model.position.set(plano.takerPos.x, ALTURA_BASE_Y, plano.takerPos.z);
             }
             taker.fsm.changeState('IDLE');
@@ -2616,7 +2616,7 @@ Object.assign(Match, {
         if (apoio) {
             // Posição sorteada uma vez no plano — perto do taker, mas nunca igual.
             if (Math.hypot(apoio.model.position.x - plano.apoioPos.x,
-                apoio.model.position.z - plano.apoioPos.z) > TOLERANCIA_SAIDA) {
+                apoio.model.position.z - plano.apoioPos.z) > 0.4) {
                 apoio.model.position.set(plano.apoioPos.x, ALTURA_BASE_Y, plano.apoioPos.z);
             }
             apoio.fsm.changeState('IDLE');
@@ -2627,6 +2627,25 @@ Object.assign(Match, {
             apoio.tacticalTarget = apoio.model.position.clone();
         }
         if (taker) lookAtBola(taker.model, apoio ? apoio.model.position : this.ball.position);
+
+        /*
+        NINGUEM ENCOSTADO AO BATEDOR NEM AO APOIO. O "quem ja la chegou fica onde esta" (TOLERANCIA_SAIDA, 2 m) deixava um jogador do
+        batedor, ou do outro time, parado em cima da bola — visto no arranque do jogo, quando alguem ainda estava na origem (0, 0) —
+        e nao se percebia quem dava a saida. Quem ficar a menos de 2,4 m dos dois e posto a 2,4 m, para o lado de onde veio.
+        */
+        const pontosLivres = [plano.takerPos, plano.apoioPos].filter(Boolean);
+        [...this.players, ...this.opponents].forEach(p => {
+            if (p.role === 'gk' || p === taker || p === apoio) return;
+            const pos = p.model.position;
+            for (const o of pontosLivres) {
+                const dx = pos.x - o.x, dz = pos.z - o.z, d = Math.hypot(dx, dz);
+                if (d < 2.4) {
+                    const ux = d > 0.001 ? dx / d : ((p.id % 2) ? 1 : -1), uz = d > 0.001 ? dz / d : 0;
+                    pos.x = o.x + ux * 2.4; pos.z = o.z + uz * 2.4;
+                    p.dynamicTarget = pos.clone();
+                }
+            }
+        });
 
         // Time que NÃO dá a saída fica todo fora do círculo central — só o
         // taker (e o apoio, na prática) podem ficar perto da bola.

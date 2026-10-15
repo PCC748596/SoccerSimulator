@@ -933,12 +933,18 @@ desvio ao alvo — verde dentro de 15%, amarelo até 40%, vermelho acima disso
 #estat-tabela tr.estat-longe   td:nth-child(2) { color: #e74c3c; }
 #estat-tabela tr.estat-semdado td { color: #7f8c8d; font-style: italic; }
 
-/* O MODO EMBUTIDO (index.html?embutido=1, aberto dentro do manager - ver js/narracao/ponte.js): sem os paineis de comandos, as colunas da direita e o painel de jogadores; ficam o campo e o placar. */
-body.embutido #painel-comandos,
-body.embutido #coluna-direita,
-body.embutido #painel-jogadores,
-body.embutido #placar-linha,
-body.embutido #hud-jogador-esq,
-body.embutido #hud-jogador-dir {
+/* O MODO EMBUTIDO (index.html?embutido=1, aberto dentro do manager - ver js/narracao/ponte.js): os paineis do 3D ficam; so some o placar antigo, porque o manager tem o dele. */
+body.embutido #placar-linha {
+    display: none !important;
+}
+/* Os botoes de camara ficam no manager (barra por cima do 3D); em tela cheia (classe posta pela ponte) voltam para o painel. */
+body.embutido:not(.tela-cheia) .btn-cam,
+body.embutido:not(.tela-cheia) div:has(> .btn-cam),
+body.embutido:not(.tela-cheia) label:has(+ div > .btn-cam) {
+    display: none !important;
+}
+/* O formato das formacoes vem do manager: os selects de formacao do painel nao se usam. */
+body.embutido #t-formacao-A, body.embutido #t-formacao-B,
+body.embutido label:has(+ #t-formacao-A), body.embutido label:has(+ #t-formacao-B) {
     display: none !important;
 }

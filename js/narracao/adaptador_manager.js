@@ -137,6 +137,48 @@ const AdaptadorManager = {
     _contaId: 9000000,
     _novoId() { return ++this._contaId; },
 
+    /*
+    Trocar `Lados.trocados` pede o mesmo que a troca do intervalo (Match.iniciarSegundoTempo): o sentido de ataque esta guardado em cada
+    jogador (dirZ, balizas) e no quadro de cada equipa (TeamAI). Sem refazer isso a IA ataca para o lado antigo.
+    */
+    _refrescarLados() {
+        [...Match.players, ...Match.opponents].forEach(p => {
+            p.dirZ = Lados.dirDe(p.team);
+            p.targetGoalZ = (CAMPO_COMP / 2) * p.dirZ;
+            p.ownGoalZ = -(CAMPO_COMP / 2) * p.dirZ;
+        });
+        if (typeof TeamAI !== 'undefined' && TeamAI.blackboards) {
+            ['TeamA', 'TeamB'].forEach(t => {
+                const bb = TeamAI.blackboards[t];
+                if (!bb) return;
+                bb.dir = Lados.dirDe(t);
+                bb.ownGoalZ = (typeof ownGoalZCenter === 'function') ? ownGoalZCenter(t) : -(CAMPO_COMP / 2) * bb.dir;
+                bb.atkGoalZ = -bb.ownGoalZ;
+            });
+        }
+    },
+
+    /*
+    O PAINEL ESQUERDO DO 3D mostra as equipas da partida: Equipa A = a que joga em casa, Equipa B = a visitante. Os selects so conhecem o
+    catalogo do simulador, por isso a equipa do manager entra como uma opcao propria (nome e forca) e fica escolhida. Ficam
+    desativados: trocar a equipa por aqui desfaria a escalacao do manager.
+    */
+    mostrarNoPainel(eC, eF) {
+        if (typeof document === 'undefined') return;
+        [['t-equipa-A', eC], ['t-equipa-B', eF]].forEach(([id, eq]) => {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            [...sel.options].filter(o => o.dataset && o.dataset.manager).forEach(o => o.remove());
+            const o = document.createElement('option');
+            o.value = String(eq.id); o.textContent = eq.nome + ' (' + eq.forca + ')'; o.dataset.manager = '1';
+            sel.appendChild(o);
+            sel.value = o.value;
+            sel.disabled = true;
+        });
+        const bloco = document.getElementById('bloco-equipas');
+        if (bloco) bloco.style.display = '';
+    },
+
     // Estilo de jogo do manager -> o do motor (so o estilo geral: ver os LIMITES no topo).
     ESTILO_DO_MANAGER: { 'Very Defensive': 'muito_defensiva', 'Defensive': 'defesa', 'Balanced': 'balanceado', 'Offensive': 'ataque', 'Very Offensive': 'muito_ofensiva' },
 
@@ -155,11 +197,12 @@ const AdaptadorManager = {
         const kC = this.formacaoDeSlots(casa.formacao.nome, casa.formacao.slots);
         const kF = this.formacaoDeSlots(fora.formacao.nome + '#fora', fora.formacao.slots);
         Tatics.formacaoA = kC; Tatics.formacaoB = kF;
+        Tatics.formacaoFixaA = kC; Tatics.formacaoFixaB = kF;
         const t = ((opcoes.taticaDe || 'casa') === 'casa' ? casa : fora).equipa.tactics;
         if (t && this.ESTILO_DO_MANAGER[t.style]) Tatics.estilo = this.ESTILO_DO_MANAGER[t.style];
         // A CASA a esquerda do ecra, como no placar do manager: a camera lateral TV fica em +X, onde a esquerda e +Z; o TeamA ataca +Z
         // no 1.o tempo (`Lados.trocados` falso), por isso a casa so fica a esquerda com os lados trocados.
-        if (typeof Lados !== 'undefined') Lados.trocados = true;
+        if (typeof Lados !== 'undefined') Lados.trocados = (opcoes.casaEsquerda !== false);
         // Os uniformes que o treinador escolheu (kit 1/2/3): o desenho de linha entra na tabela `Uniformes` pelo nome da equipa; o do
         // guarda-redes vai em `Match.uniformeGKA/B` (match_setup.js).
         // O kit 1 (titular) de um clube que ja tem desenho feito a mao no simulador (config/uniformes.js, ex.: o tricolor do Fluminense) fica com
@@ -177,6 +220,8 @@ const AdaptadorManager = {
         Match.uniformeGKA = (casa.uniforme && casa.uniforme.gk) || null;
         Match.uniformeGKB = (fora.uniforme && fora.uniforme.gk) || null;
         Match.trocarEquipas({ A: eC.id, B: eF.id });
+        this._refrescarLados();
+        this.mostrarNoPainel(eC, eF);
         return { chaveCasa: kC, chaveFora: kF, equipaCasa: eC, equipaFora: eF };
     }
 };

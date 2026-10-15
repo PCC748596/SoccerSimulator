@@ -1,0 +1,13 @@
+require('../headless/harness.js');
+const { FORM, equipaMgr } = require('../headless/fixtures_manager.js');
+global.Sim = global.Sim || {}; Sim.running = false;
+Match.init(new THREE.Scene());
+if (process.argv[2] === 'sem') AdaptadorManager._refrescarLados = () => {};
+Officials.arbitro = null; Officials.init(new THREE.Scene());
+for (let k = 0; k < 120; k++) Match.update(1 / 60);
+const c = equipaMgr('Fluminense-RJ', FORM['4-3-3']), f = equipaMgr('Internacional-RS', FORM['4-4-2']);
+AdaptadorManager.prepararPartida({ equipa: c.equipa, jogadoresPorId: c.porId, formacao: { nome: '4-3-3', slots: FORM['4-3-3'] } }, { equipa: f.equipa, jogadoresPorId: f.porId, formacao: { nome: '4-4-2', slots: FORM['4-4-2'] } }, {});
+for (let k = 0; k < 120; k++) Match.update(1 / 60);
+const bb = TeamAI.blackboards;
+console.log('Lados A', Lados.dirDe('TeamA'), 'bb.A.dir', bb.TeamA && bb.TeamA.dir, 'bb.A.ownGoalZ', bb.TeamA && bb.TeamA.ownGoalZ, 'p.dirZ', Match.players[9].dirZ, 'p.ownGoalZ', Match.players[9].ownGoalZ, 'GK z', Match.players[0].model.position.z.toFixed(0));
+process.exit(0);

@@ -49,6 +49,10 @@ const Ponte = {
         try {
             if (m.tipo === 'iniciar') this.iniciar(m);
             else if (m.tipo === 'preparar') this.preparar(m);
+            else if (m.tipo === 'camera') this.camera(m.modo);
+            else if (m.tipo === 'zoom') this.zoom(m.fator);
+            else if (m.tipo === 'tela_cheia') document.body.classList.toggle('tela-cheia', !!m.ligada);
+            else if (m.tipo === 'tatica') this.aplicarTatica(m);
             else if (m.tipo === 'pausar') this.pausar();
             else if (m.tipo === 'continuar') this.continuar();
             else if (m.tipo === 'parar') this.parar();
@@ -58,12 +62,85 @@ const Ponte = {
         }
     },
 
+    // A camara e o zoom a pedido do manager (os botoes ficam fora do 3D).
+    camera(modo) { if (typeof Match !== 'undefined' && Match.setCameraMode && modo) Match.setCameraMode(modo); },
+    zoom(fator) {
+        if (!(fator > 0) || typeof CameraZoom === 'undefined') return;
+        window.cameraZoom = Math.max(CameraZoom.min, Math.min(CameraZoom.max, (window.cameraZoom || 1) * fator));
+    },
+
+    /*
+    A TATICA, NOS DOIS SENTIDOS. Manager -> motor (`tatica`): { estilo, linhaDefensiva, pressaoDefensiva, teamPlayStyle, setores } nos
+    nomes do motor; vai para os selects do painel e passa por `Tatics.update` (assim o painel mostra o que o manager mandou). Motor ->
+    manager (`tatica_alterada`): quando o utilizador mexe no painel do 3D, as mesmas chaves voltam. `_aplicando` evita o eco.
+    */
+    aplicarTatica(m) {
+        if (typeof Tatics === 'undefined') return;
+        this._aplicando = true;
+        try {
+            const pOk = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+            pOk('t-estilo', m.estilo); pOk('t-linha', m.linhaDefensiva); pOk('t-team-style', m.teamPlayStyle);
+            Tatics.update();
+            // A mentalidade impoe pressao e profundidade ao passar por update(); o que o manager pediu manda sobre isso.
+            if (m.pressaoDefensiva) { Tatics.pressaoDefensiva = m.pressaoDefensiva; pOk('t-pressao-def', m.pressaoDefensiva); }
+            if (Array.isArray(m.setores)) {
+                Tatics.setores.length = 0;
+                m.setores.forEach(x => Tatics.setores.push(x));
+                if (Tatics.setores.length >= 3) Tatics.setores.length = 0;
+                for (const sc of ['esq', 'cen', 'dir']) {
+                    const e = document.getElementById('sec-' + sc);
+                    if (e) e.classList.toggle('active', Tatics.setores.includes(sc));
+                }
+            }
+        } finally { this._aplicando = false; }
+    },
+    // Liga o painel do 3D ao manager (uma vez): cada alteracao do utilizador sai como `tatica_alterada`.
+    _ligarPainel() {
+        if (this._painelLigado || typeof Tatics === 'undefined') return;
+        this._painelLigado = true;
+        const avisar = () => {
+            if (this._aplicando) return;
+            this.enviar('tatica_alterada', { estilo: Tatics.estilo, linhaDefensiva: Tatics.linhaDefensiva, pressaoDefensiva: Tatics.pressaoDefensiva,
+                teamPlayStyle: Tatics.teamPlayStyle, setores: Tatics.setores.slice() });
+        };
+        const upd = Tatics.update.bind(Tatics);
+        Tatics.update = function () { const r = upd.apply(this, arguments); avisar(); return r; };
+        const tog = Tatics.toggleSector.bind(Tatics);
+        Tatics.toggleSector = function () { const r = tog.apply(this, arguments); avisar(); return r; };
+    },
+
+    /*
+    SAIDA E PAUSA PELO MANAGER. O ESC (pular a entrada) e o Pause/Continue do painel do 3D nao mexem no jogo sozinhos: pedem ao manager
+    (`saida_pedida` / `alternar_pausa`), que e quem manda no relogio e no botao SAIDA/PAUSAR/CONTINUAR, e ele devolve `iniciar`,
+    `pausar` ou `continuar`. Assim o botao do manager e o jogo nunca ficam desencontrados.
+    */
+    _ligarControles() {
+        if (this._controlesLigados) return;
+        this._controlesLigados = true;
+        if (typeof Abertura !== 'undefined') {
+            const canc = Abertura.cancelar.bind(Abertura);
+            Abertura.cancelar = () => {
+                if (this.estado === 'parado' || this.estado === 'terminado') { this.enviar('saida_pedida', {}); return; }
+                return canc();
+            };
+        }
+        if (typeof Match !== 'undefined' && Match.togglePause) {
+            const tog = Match.togglePause.bind(Match);
+            Match.togglePause = (...a) => {
+                if (this.modo === 'visivel') { this.enviar('alternar_pausa', {}); return; }
+                return tog(...a);
+            };
+        }
+    },
+
     // So monta as equipas no campo (para o 3D mostrar os times certos antes da saida); nao arranca a partida.
     // No modo visivel a ENTRADA DOS TIMES corre ja aqui (ao abrir o 3D) e os times esperam alinhados pela saida (`iniciar`).
     preparar(m) {
         AdaptadorManager.prepararPartida(m.casa, m.fora, { taticaDe: m.taticaDe || 'casa', escala: m.escala });
         this._preparada = this._chave(m);
         this._medir();
+        this._ligarPainel();
+        this._ligarControles();
         // O som do estadio e do publico (desligado por omissao no jogo solto) liga-se: o clique do utilizador no manager desbloqueia-o (iframe allow=autoplay).
         if (typeof AmbienteSonoro !== 'undefined' && AmbienteSonoro.setLigado) { AmbienteSonoro.setLigado(true); if (AmbienteSonoro.tentarTocar) AmbienteSonoro.tentarTocar(); }
         if (typeof Sim === 'undefined') global_Sim();
