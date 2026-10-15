@@ -505,6 +505,13 @@ Object.assign(Match, {
 
         if (marcou === 'TeamA') this.placarA++; else this.placarB++;
         this.updatePlacar();
+        // O registo da partida (js/narracao/eventos.js): o autor e quem fez o passe (o ultimo passador da equipa, enquanto o prazo corre).
+        if (typeof Eventos !== 'undefined') {
+            const autor = this.lastTouchedPlayer || null;
+            const ass = (!proprioGolo && this.ultimoPassador && this.ultimoPassador.team === marcou && this.ultimoPassador !== autor &&
+                (this.ultimoPassadorTimer || 0) > 0) ? this.ultimoPassador : null;
+            Eventos.golo(marcou, autor, ass, proprioGolo);
+        }
     },
 
     resolveBallContact: function () {

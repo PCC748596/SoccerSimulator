@@ -685,6 +685,8 @@ function executeShotGameplay(p) {
         if (MatchStats.registarRemateNaFicha) {
             MatchStats.registarRemateNaFicha(p.team, xgDeste, false);
         }
+        // O registo da partida (js/narracao/eventos.js): quem rematou, e de que qualidade.
+        if (typeof Eventos !== 'undefined') Eventos.remate(p, xgDeste);
     }
 
     const opponentsShoot = (p.team === 'TeamA') ? Match.opponents : Match.players;
@@ -738,6 +740,7 @@ function executeShotGameplay(p) {
             // contadores diferentes (ver MatchStats.registarRemateBloqueado).
             MatchStats.registarRemateBloqueado(bloqueador.team, p.team);
         }
+        if (typeof Eventos !== 'undefined') Eventos.fecharRemate('bloqueado', { bloqueador: Eventos._jog(bloqueador) });
         // O tecto vive no config — ver ShotModel.potenciaMax e a medicao que o
         // motivou. Aplica-se nos DOIS sitios que compoem a potencia.
         const potenciaDoRemate = forcaDoRemate(Math.max(ShotModel.potenciaMin,

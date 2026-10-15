@@ -9856,6 +9856,7 @@ class FootballPlayer {
         Match.lastTouchedTeam = this.team;
         if (typeof MatchStats !== 'undefined' && MatchStats.registarDefesa) {
             MatchStats.registarDefesa(this.team);
+            if (typeof Eventos !== 'undefined') Eventos.defesa(this);
         }
         if (typeof MatchStats !== 'undefined' && MatchStats[this.team] &&
             typeof MatchStats[this.team].cruzamentosCortadosGK === 'number') {
@@ -9950,6 +9951,7 @@ class FootballPlayer {
         */
         if (typeof MatchStats !== 'undefined' && MatchStats.registarDefesa) {
             MatchStats.registarDefesa(this.team);
+            if (typeof Eventos !== 'undefined') Eventos.defesa(this);
         }
 
         // Um toque que não pode agarrar (a perna da barreira) vira espalmada.

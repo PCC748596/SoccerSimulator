@@ -217,6 +217,7 @@ const MatchStats = {
         this.TeamB = novoContadorEquipa();
         if (typeof TempoPorCorredor !== 'undefined') TempoPorCorredor.reset();
         if (typeof InversaoSinalizada !== 'undefined') InversaoSinalizada.reset();
+        if (typeof Eventos !== 'undefined') Eventos.reset();
         this._pendingPassType = null;
         this._pendingPassTeam = null;
         this._pendingSample = null;

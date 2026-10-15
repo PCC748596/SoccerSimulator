@@ -173,6 +173,9 @@ Object.assign(Match, {
 
         if (typeof MatchStats !== 'undefined' && MatchStats[team]) {
             if (type === 'CORNER_KICK') MatchStats[team].cantos++;
+            if (typeof Eventos !== 'undefined' && (type === 'CORNER_KICK' || type === 'THROW_IN' || type === 'GOAL_KICK')) {
+                Eventos.registar(type === 'CORNER_KICK' ? 'CANTO' : (type === 'THROW_IN' ? 'LATERAL' : 'TIRO_META'), { equipa: team });
+            }
             // O `pontapesBaliza` estava declarado e exportado sem NINGUEM o
             // incrementar — o zero do relatorio nao era um resultado.
             if (type === 'GOAL_KICK') MatchStats[team].pontapesBaliza++;

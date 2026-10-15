@@ -1174,6 +1174,7 @@ const Officials = {
         if (typeof MatchStats !== 'undefined' && MatchStats.registarImpedimento) {
             MatchStats.registarImpedimento(marca.team);
         }
+        if (typeof Eventos !== 'undefined') Eventos.registar('IMPEDIMENTO', { equipa: marca.team });
 
         Match.ball.position.set(marca.x, BallPhysics.raio, marca.z);
         Match.ballVel.set(0, 0, 0);
