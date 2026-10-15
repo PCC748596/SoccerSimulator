@@ -563,7 +563,15 @@ const RefereeModel = {
         O vermelho DIRECTO fica assim quase inalcançável — como deve ser:
         quase todos os vermelhos reais saem do segundo amarelo.
         */
-        limiarAmarelo: 0.62,   // 0.85 -> 0.75 -> 0.62 (14 de Outubro): amarelos 3.0 por jogo, o pedido e 4-5 (com 13-18 faltas)
+        /*
+        FALTAS SEGUIDAS SEM GRAVIDADE TAMBEM DAO AMARELO (Lei 12: infraccoes repetidas). Pedido: *"varias faltas seguidas sem
+        gravidade tambem devem gerar amarelos; assim nao se mexe no limiar"*. Cada falta de um jogador entra numa lista e
+        sai dela passados `janelaSegundos` segundos de RELOGIO do jogo; se ele chega a `faltas` faltas sem ter visto
+        cartao, a ultima da amarelo (ou vermelho, se ja tinha amarelo: o segundo amarelo, como sempre). Um cartao,
+        por qualquer regra, limpa a lista. Isto acrescenta amarelos sem tocar no limiar de gravidade nem no do vermelho.
+        */
+        reincidencia: { activo: true, faltas: 3, janelaSegundos: 1800 },
+        limiarAmarelo: 0.85,   // voltou a 0.85 (14 de Outubro): os amarelos que faltam vem da reincidencia (faltas seguidas), nao de baixar o limiar
         /*
         SUBIR ESTE LIMIAR PARA CORTAR VERMELHOS FOI TENTADO E NAO SERVIU.
 
@@ -2695,6 +2703,18 @@ const Officials = {
     O SEGUNDO AMARELO é o que produz quase todos os vermelhos: o vermelho
     directo exige uma gravidade que quase nenhum lance atinge.
     */
+    // Regista uma falta do jogador e diz se ja chegou a `faltas` dentro da janela (relogio do jogo, em segundos).
+    _reincidente: function (jogador) {
+        const R = RefereeModel.faltas.reincidencia;
+        if (!R || !R.activo || !jogador) return false;
+        const agora = (typeof Match !== 'undefined' && typeof Match.tempoDeJogo === 'number') ? Match.tempoDeJogo : 0;
+        const l = jogador._faltasRecentes || (jogador._faltasRecentes = []);
+        while (l.length && agora - l[0] > R.janelaSegundos) l.shift();
+        l.push(agora);
+        return l.length >= R.faltas;
+    },
+    _limparReincidencia: function (jogador) { if (jogador && jogador._faltasRecentes) jogador._faltasRecentes.length = 0; },
+
     decidirCartao: function (gravidade, jogador, travouAtaque) {
         const F = RefereeModel.faltas;
         if (gravidade >= F.limiarVermelho) return 'vermelho';
@@ -2876,7 +2896,10 @@ const Officials = {
             MatchStats[vitima.team].faltas.sofridas++;
         }
 
-        const cartao = this.decidirCartao(gravidade, infractor, !!(dados && dados.travouAtaque));
+        let cartao = this.decidirCartao(gravidade, infractor, !!(dados && dados.travouAtaque));
+        // As faltas SEGUIDAS (reincidencia): ver RefereeModel.faltas.reincidencia.
+        if (cartao) this._limparReincidencia(infractor);
+        else if (this._reincidente(infractor)) { cartao = infractor.temAmarelo ? 'vermelho' : 'amarelo'; this._limparReincidencia(infractor); }
         if (cartao === 'amarelo') {
             infractor.temAmarelo = true;
             if (typeof MatchStats !== 'undefined') MatchStats[infractor.team].cartoes.amarelos++;
