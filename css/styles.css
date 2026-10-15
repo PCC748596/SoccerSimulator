@@ -932,3 +932,12 @@ desvio ao alvo — verde dentro de 15%, amarelo até 40%, vermelho acima disso
 #estat-tabela tr.estat-perto   td:nth-child(2) { color: #f1c40f; }
 #estat-tabela tr.estat-longe   td:nth-child(2) { color: #e74c3c; }
 #estat-tabela tr.estat-semdado td { color: #7f8c8d; font-style: italic; }
+
+/* O MODO EMBUTIDO (index.html?embutido=1, aberto dentro do manager - ver js/narracao/ponte.js): sem os paineis de comandos, as colunas da direita e o painel de jogadores; ficam o campo e o placar. */
+body.embutido #painel-comandos,
+body.embutido #coluna-direita,
+body.embutido #painel-jogadores,
+body.embutido #hud-jogador-esq,
+body.embutido #hud-jogador-dir {
+    display: none !important;
+}

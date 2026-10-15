@@ -1396,7 +1396,9 @@ document.addEventListener("DOMContentLoaded", () => {
         Match.init(scene);
         if (typeof Weather !== 'undefined') Weather.init(scene, cameraCore);
         // A cidade à volta do estádio (js/cidade.js). O nevoeiro do Weather esbate o fim dela.
-        if (typeof Cidade !== 'undefined' && CidadeConfig.ativa) Cidade.construir(scene);
+        // ?oculto=1 (a partida dentro do iframe do manager, sem desenhar): a cidade nao se constroi.
+        const _params = new URLSearchParams(location.search);
+        if (typeof Cidade !== 'undefined' && CidadeConfig.ativa && !_params.has('oculto')) Cidade.construir(scene);
         
         if (isTouchDevice) {
             Match.setSpeed(0.9);
@@ -1414,7 +1416,12 @@ document.addEventListener("DOMContentLoaded", () => {
         popularPainelJogadores();
         actualizarNomesNoPlacar();
         // A entrada pelo tunel (js/abertura.js): so no browser, uma vez, ao carregar a pagina.
-        if (typeof Abertura !== 'undefined') Abertura.iniciar();
+        // ?embutido=1 (aberto pelo manager, js/narracao/ponte.js): sem tunel nem paineis; o jogo so arranca quando a ponte o mandar.
+        if (_params.has('embutido')) {
+            document.body.classList.add('embutido');
+        } else if (typeof Abertura !== 'undefined') {
+            Abertura.iniciar();
+        }
         requestAnimationFrame(animate);
     } catch (err) {
         console.error("Erro crítico de inicialização:", err);
