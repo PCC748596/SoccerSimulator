@@ -1,0 +1,195 @@
+Lote: 190 jogos de 20 min em 10 processos (por rodadas, com suspensoes)...
+
+=== 190 jogos de 20 min (3631s de relógio) ===
+Nível das equipas: média 79.0 (mín 77, máx 81), pedido 73.60000000000001 ±2 (25 equipas); diferença média entre as duas do jogo 1.3
+por 90 minutos de RELÓGIO, média dos jogos  (90 min de relógio = 19.8 min simulados; "x real/min" = quantas vezes o ritmo real por minuto):
+
+                          medido       alvo   % do alvo   x real/min
+  golos                     2.86      2.52      113%      5.2x   ok
+  finalizações             21.18     26.10       81%      3.7x   ~
+  finalizações no alvo      8.59      8.80       98%      4.4x   ok
+  % no alvo                 40.7      33.7      121%         —   ~
+  xG total                  3.24      2.84      114%      5.2x   ok
+  xG por remate            0.152     0.109      140%         —   ~
+  escanteios                9.24      9.92       93%      4.2x   ok
+  faltas                   17.29     27.63       63%      2.8x   ~
+  amarelos                  5.11      5.22       98%      4.5x   ok
+  vermelhos                 0.20      0.20      101%      4.6x   ok
+  impedimentos              1.46      3.20       45%      2.1x   <-- fora
+  ataques                  137.2     176.6       78%      3.5x   ~
+  ataques perigosos         55.6      77.8       71%      3.2x   ~
+  passes tentados/time       136       375       36%      1.7x   <-- fora
+  % passes certos           67.9      80.0       85%         —   ~
+  posse da casa (A) %       48.7      51.0       95%         —   ok
+  defesas (GR)              2.99      6.20       48%      2.2x   <-- fora
+  finalizações bloqueadas    2.91      7.00       42%      1.9x   <-- fora
+  penaltis                  0.21      0.28       76%      3.4x   ~
+  entradas na área (mín.)    25.5      15.0      170%      7.7x   ok
+
+TODAS AS ESTATÍSTICAS (média por jogo, por 90 min de relógio; 190 jogos; A = mandante, B = visitante):
+  estatística                                       mandante   visitante  média/equipa
+  afastamentos                                          5.17        5.82          5.49
+  assistencias                                          0.40        0.24          0.32
+  ataques.naArea                                       14.35       11.18         12.76
+  ataques.perigosos                                    29.48       26.07         27.78
+  ataques.totais                                       68.58       68.64         68.61
+  bloqueiosFeitos                                       1.39        1.52          1.45
+  cantos                                                5.06        4.17          4.62
+  caraACara                                             1.27        1.11          1.19
+  carrinhos.sucesso                                     1.67        1.25          1.46
+  carrinhos.tentados                                    4.13        3.77          3.95
+  cartoes.amarelos                                      2.28        2.83          2.56
+  cartoes.vermelhos                                     0.08        0.12          0.10
+  cortes                                               30.27       29.87         30.07
+  cruzamentos.certos                                    1.26        0.69          0.98
+  cruzamentos.tentados                                  3.43        2.00          2.72
+  cruzamentosCortadosGK                                 0.52        0.74          0.63
+  defesas                                               1.26        1.73          1.49
+  desarmes.sucesso                                      9.04        7.66          8.35
+  desarmes.tentados                                    24.74       24.05         24.39
+  disputasFalhadas                                      5.30        4.96          5.13
+  distanciaPercorrida                               36336.41    35743.69      36040.05
+  dominios                                             84.61       96.22         90.42
+  dribles.sucesso                                      20.02       18.85         19.43
+  dribles.tentados                                     25.03       24.13         24.58
+  duelos.ganhos                                        10.98        9.09         10.04
+  duelos.perdidos                                       9.09       10.98         10.04
+  duelosAereos.ganhos                                   0.28        0.19          0.23
+  duelosAereos.perdidos                                 0.19        0.28          0.23
+  entradasUltimoTerco                                  29.67       26.21         27.94
+  errosQueGeraramRemate                                 1.55        2.15          1.85
+  faltas.cometidas                                      8.30        9.00          8.65
+  faltas.sofridas                                       9.00        8.30          8.65
+  golosSofridos                                         1.22        1.64          1.43
+  grandesChances                                        2.34        2.35          2.35
+  grandesChancesConvertidas                             0.59        0.62          0.60
+  impedimentos                                          0.83        0.63          0.73
+  lancamentos.certos                                    6.78        7.09          6.94
+  lancamentos.tentados                                 14.94       16.16         15.55
+  overlaps                                              3.68        3.25          3.47
+  passes.certos                                        85.76       83.75         84.76
+  passes.tentados                                     118.93      117.30        118.12
+  passesNoTercoFinal                                   16.32       13.41         14.87
+  passesParaFinalizacao                                 4.74        3.20          3.97
+  passesProgressivos                                   28.13       26.77         27.45
+  passesQuebraLinhas                                   31.93       28.59         30.26
+  passesSobPressao                                     25.91       21.86         23.88
+  penaltis                                              0.13        0.08          0.11
+  perdasDePosse                                        55.55       56.37         55.96
+  perdasZonaPerigosa                                    2.93        3.70          3.32
+  pontapesBaliza                                        2.29        2.63          2.46
+  posseSegundos                                       178.34      187.73        183.04
+  pressoes                                            174.16      179.15        176.66
+  primeiraTocada                                       35.42        1.60         18.51
+  progressaoComBolaM                                  605.60      591.93        598.77
+  recuperacoes                                         56.84       56.16         56.50
+  recuperacoesAtaque                                    3.70        2.93          3.32
+  remateBloqueados                                      1.52        1.39          1.45
+  remates.furados                                       0.47        0.40          0.44
+  remates.golos                                         1.64        1.22          1.43
+  remates.noAlvo                                        5.14        3.45          4.29
+  remates.tentados                                     11.97        9.21         10.59
+  saidasDoGolo                                          1.04        1.04          1.04
+  tabelinhas                                           13.72       12.21         12.96
+  tercoSegundos.atk                                    32.56       29.47         31.02
+  tercoSegundos.def                                    48.23       54.02         51.13
+  tercoSegundos.mid                                    97.54      104.24        100.89
+  toquesNaArea                                          9.19        7.55          8.37
+  trocasChaser                                        156.81      156.73        156.77
+  trocasMarcacao                                      369.52      386.42        377.97
+  trocasSupportMid                                     21.66       22.71         22.18
+  xg                                                    1.71        1.53          1.62
+
+SUSPENSOES: 16 vermelhos + 42 por 3 amarelos = 58 jogadores suspensos; 52 ausencias em jogos (titular/banco).
+   por equipa: Grêmio-RS 6, Atlético-MG 6, Bragantino-SP 5, Coritiba-PR 5, Fortaleza-CE 5, Cuiabá-MT 4, Bahia-BA 4, Corinthians-SP 4, Botafogo-RJ 3, Vasco-RJ 3, Flamengo-RJ 3, Goiás-GO 2, Fluminense-RJ 2, Atlético-PR 2, Internacional-RS 1, América-MG 1, Santos-SP 1, Palmeiras-SP 1
+
+CLASSIFICAÇÃO (1 jogo por par, mando alternado; jogos de 20 min de relógio):
+   #  time                  forca  J   V  E  D   GP  GC   SG  Pts | casa: J Pts GP-GC | fora: J Pts GP-GC
+   1  América-MG             79  19   10  7  2   35  21  +14   37 |        18  37  34-18 |         1   0    1-3
+   2  Bahia-BA               78  19   11  2  6   27  19   +8   35 |        14  29  22-10 |         5   6    5-9
+   3  Atlético-PR            79  19   11  2  6   33  26   +7   35 |         6  12   10-7 |        13  23  23-19
+   4  Fortaleza-CE           78  19    9  5  5   27  20   +7   32 |         8   9    7-9 |        11  23  20-11
+   5  Botafogo-RJ            80  19    9  4  6   25  16   +9   31 |        16  31  24-12 |         3   0    1-4
+   6  Atlético-MG            81  19    9  3  7   29  23   +6   30 |        18  30  29-21 |         1   0    0-2
+   7  Corinthians-SP         79  19    8  5  6   29  23   +6   29 |         8  14   11-8 |        11  15  18-15
+   8  Goiás-GO               78  19    8  4  7   30  25   +5   28 |        16  27  29-21 |         3   1    1-4
+   9  São Paulo-SP           80  19    6  8  5   26  20   +6   26 |        10  15   15-6 |         9  11  11-14
+  10  Internacional-RS       80  19    7  5  7   37  34   +3   26 |        12  19  28-23 |         7   7   9-11
+  11  Coritiba-PR            78  19    7  5  7   25  35  -10   26 |         2   1    3-6 |        17  25  22-29
+  12  Cuiabá-MT              79  19    6  7  6   27  24   +3   25 |        10  14  12-10 |         9  11  15-14
+  13  Cruzeiro-MG            78  19    6  7  6   31  32   -1   25 |        12  17  23-20 |         7   8   8-12
+  14  Vasco-RJ               77  19    5  7  7   27  26   +1   22 |         6  10   12-5 |        13  12  15-21
+  15  Fluminense-RJ          77  19    6  3 10   22  27   -5   21 |        14  18  20-19 |         5   3    2-8
+  16  Grêmio-RS              79  19    5  6  8   20  31  -11   21 |         0   0    0-0 |        19  21  20-31
+  17  Santos-SP              80  19    6  2 11   16  24   -8   20 |         4   7    6-4 |        15  13  10-20
+  18  Flamengo-RJ            81  19    6  2 11   20  37  -17   20 |         2   0    0-3 |        17  20  20-34
+  19  Palmeiras-SP           79  19    6  1 12   27  42  -15   19 |        10   9  14-22 |         9  10  13-20
+  20  Bragantino-SP          80  19    5  3 11   24  32   -8   18 |         4   9    9-5 |        15   9  15-27
+   golos por jogo: mandante 1.62 | visitante 1.21
+
+resultados (casa/empate/fora): 46% / 23% / 31%   alvo 50 / 26 / 24   (jogos de 20 min: so indicativo)
+
+fora da ficha (não há alvo de futebol real para comparar):
+  matadas no peito      4.83 por jogo
+  |x| dos alas          17.87 m
+  tempo parado          8.42%
+
+PENDÊNCIAS (58):
+  - jogo 2 (Atlético-MG x Goiás-GO): golos/90 = 0.0
+  - jogo 5 (Vasco-RJ x Bragantino-SP): golos/90 = 5.1
+  - jogo 8 (Internacional-RS x Cuiabá-MT): golos/90 = 6.1
+  - jogo 10 (Coritiba-PR x Palmeiras-SP): golos/90 = 5.1
+  - jogo 14 (Vasco-RJ x Flamengo-RJ): só 1 matadas no peito
+  - jogo 15 (Botafogo-RJ x Cruzeiro-MG): golos/90 = 0.0
+  - jogo 15 (Botafogo-RJ x Cruzeiro-MG): só 0 matadas no peito
+  - jogo 31 (Goiás-GO x Bahia-BA): golos/90 = 5.1
+  - jogo 33 (América-MG x Cruzeiro-MG): golos/90 = 5.1
+  - jogo 35 (Atlético-MG x Cuiabá-MT): só 1 matadas no peito
+  - jogo 37 (Botafogo-RJ x Fortaleza-CE): só 1 matadas no peito
+  - jogo 39 (Fluminense-RJ x Atlético-PR): golos/90 = 5.1
+  - jogo 40 (Palmeiras-SP x Bahia-BA): só 1 matadas no peito
+  - jogo 44 (América-MG x Cuiabá-MT): golos/90 = 6.1
+  - jogo 46 (Atlético-MG x Fortaleza-CE): golos/90 = 5.1
+  - jogo 47 (Internacional-RS x Flamengo-RJ): golos/90 = 5.1
+  - jogo 48 (Botafogo-RJ x Atlético-PR): golos/90 = 5.1
+  - jogo 50 (Vasco-RJ x Palmeiras-SP): golos/90 = 5.1
+  - jogo 50 (Vasco-RJ x Palmeiras-SP): só 0 matadas no peito
+  - jogo 54 (São Paulo-SP x Coritiba-PR): golos/90 = 7.1
+  - jogo 56 (Internacional-RS x Grêmio-RS): golos/90 = 6.1
+  - jogo 58 (Fluminense-RJ x Flamengo-RJ): golos/90 = 5.1
+  - jogo 60 (Palmeiras-SP x Cruzeiro-MG): golos/90 = 6.1
+  - jogo 62 (Bahia-BA x Cuiabá-MT): só 0 matadas no peito
+  - jogo 68 (Atlético-MG x Bragantino-SP): golos/90 = 5.1
+  - jogo 70 (Corinthians-SP x Palmeiras-SP): golos/90 = 5.1
+  - jogo 74 (Internacional-RS x Santos-SP): remates/90 = 10
+  - jogo 75 (Goiás-GO x Atlético-PR): golos/90 = 5.1
+  - jogo 76 (Fluminense-RJ x Coritiba-PR): golos/90 = 5.1
+  - jogo 77 (América-MG x Bragantino-SP): golos/90 = 0.0
+  - jogo 81 (São Paulo-SP x Corinthians-SP): golos/90 = 0.0
+  - jogo 83 (Internacional-RS x Vasco-RJ): golos/90 = 6.1
+  - jogo 89 (Atlético-MG x Grêmio-RS): golos/90 = 5.1
+  - jogo 90 (São Paulo-SP x Palmeiras-SP): remates/90 = 8
+  - jogo 94 (Fluminense-RJ x Vasco-RJ): golos/90 = 5.1
+  - jogo 100 (Palmeiras-SP x Fortaleza-CE): golos/90 = 5.1
+  - jogo 110 (Internacional-RS x Palmeiras-SP): golos/90 = 5.1
+  - jogo 111 (Fortaleza-CE x Atlético-PR): remates/90 = 11
+  - jogo 115 (Cruzeiro-MG x Flamengo-RJ): golos/90 = 7.1
+  - jogo 120 (Palmeiras-SP x Atlético-PR): golos/90 = 5.1
+  - jogo 123 (Botafogo-RJ x São Paulo-SP): só 1 matadas no peito
+  - jogo 129 (Goiás-GO x Santos-SP): golos/90 = 5.1
+  - jogo 133 (Fortaleza-CE x Flamengo-RJ): só 0 matadas no peito
+  - jogo 135 (Cuiabá-MT x Grêmio-RS): golos/90 = 5.1
+  - jogo 137 (Cruzeiro-MG x Coritiba-PR): golos/90 = 6.1
+  - jogo 144 (Fortaleza-CE x Grêmio-RS): golos/90 = 0.0
+  - jogo 147 (Goiás-GO x Corinthians-SP): golos/90 = 6.1
+  - jogo 151 (Bragantino-SP x Flamengo-RJ): golos/90 = 5.1
+  - jogo 151 (Bragantino-SP x Flamengo-RJ): faltas/90 = 7
+  - jogo 152 (Atlético-MG x Fluminense-RJ): só 1 matadas no peito
+  - jogo 158 (Bahia-BA x Corinthians-SP): golos/90 = 5.1
+  - jogo 167 (Bahia-BA x São Paulo-SP): remates/90 = 11
+  - jogo 169 (Cruzeiro-MG x Corinthians-SP): golos/90 = 5.1
+  - jogo 170 (Atlético-MG x Palmeiras-SP): golos/90 = 5.1
+  - jogo 172 (América-MG x Botafogo-RJ): só 1 matadas no peito
+  - jogo 175 (Atlético-PR x Santos-SP): só 1 matadas no peito
+  - jogo 181 (América-MG x Atlético-MG): só 1 matadas no peito
+  - jogo 187 (Cruzeiro-MG x Internacional-RS): golos/90 = 6.1

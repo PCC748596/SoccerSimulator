@@ -403,7 +403,7 @@ const ShotModel = {
     A zero ou negativo, desliga.
     =========================================================================
     */
-    potenciaMax: 36.0,
+    potenciaMax: 30.0,   // 36 -> 30 (15 de Outubro de 2026)
 
     /*
     =========================================================================
@@ -443,7 +443,7 @@ const ShotModel = {
     0.85 x 1.15 = 0.9775. É o fator da nota acima, aplicado depois do tecto de 36 m/s — por isso o remate
     mais forte sai agora a 35.2 m/s (era 30.6) e a mediana (26 m/s antes do fator) passa de ~22.1 para ~25.4.
     */
-    factorForca: 0.90,   // 0.9775 -> 0.90 (14 de Outubro): golos 2.99 -> 2.71 por jogo (alvo 2.52)
+    factorForca: 0.85,   // 0.90 -> 0.80 -> 0.85 (15 de Outubro de 2026): com 0.80 os golos foram a 2.11 (alvo 2.52); 0.85 fica a meio
 
     /*
     Elevação de recurso, para quando nem no ângulo óptimo a bola chega ao alvo
@@ -615,10 +615,10 @@ const ShotModel = {
             rasteiro  0.50-0.90  ->  0.43-0.77
         */
         fraccaoCanto: {
-            forca: { min: 0.23, max: 0.69 },
-            colocado: { min: 0.50, max: 0.77 },
-            rasteiro: { min: 0.43, max: 0.77 },
-            chapeu: { min: 0.09, max: 0.41 }
+            forca: { min: 0.207, max: 0.621 },     // -10% (15 de Outubro de 2026): mira mais para dentro, mais bolas defendiveis
+            colocado: { min: 0.450, max: 0.693 },
+            rasteiro: { min: 0.387, max: 0.693 },
+            chapeu: { min: 0.081, max: 0.369 }
         },
         alturaRasteira: 0.30,
         alturaMeia: 1.05,

@@ -1123,7 +1123,7 @@ const GoalkeeperDive = {
     GK 0. Com o gesto por cima dá 0.27 a 0.63 s, que é o tempo de reacção de
     um guarda-redes a sério.
     */
-    reaccaoBase: 0.28,
+    reaccaoBase: 0.25,   // 0.28 -> 0.25 (15 de Outubro de 2026): o goleiro defende mais (defesas 3.4 por jogo, real ~6.2)
     reaccaoPorSkill: 0.18,
 
     /*
@@ -1323,7 +1323,7 @@ const GoalkeeperDive = {
     */
     vooMin: 0.28,
     vooMax: 0.85,
-    velLateral: 6.0,       // velocidade lateral base do salto (m/s)
+    velLateral: 6.6,       // velocidade lateral base do salto (m/s)
     velLateralSkill: 4.0,  // ± conforme a skill de GK
 
     /*
@@ -1375,7 +1375,7 @@ const GoalkeeperDive = {
     reaccao, portanto o que muda sao as bolas que passavam a um palmo da mao —
     que e onde estao as defesas que faltavam.
     */
-    alcanceBraco: 0.92,
+    alcanceBraco: 1.01,   // 0.92 -> 1.01 (+10%, 15 de Outubro de 2026)
 
     /*
     =====================================================================
